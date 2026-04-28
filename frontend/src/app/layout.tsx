@@ -1,0 +1,36 @@
+import type { Metadata } from "next";
+import type { ReactNode } from "react";
+
+import "@/app/globals.css";
+import { ThemeProvider, ToasterProvider } from "@/components/organisms";
+import { DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/themes";
+
+export const metadata: Metadata = {
+  title: "Project Manager FG",
+  description: "Interfaccia frontend per la gestione progetti Birgus",
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  const themeInitScript = `(() => {
+    try {
+      const stored = localStorage.getItem("${THEME_STORAGE_KEY}") || "${DEFAULT_THEME}";
+      document.documentElement.setAttribute("data-theme", stored);
+    } catch {
+      document.documentElement.setAttribute("data-theme", "${DEFAULT_THEME}");
+    }
+  })();`;
+
+  return (
+    <html lang="it" data-theme={DEFAULT_THEME} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
+      <body>
+        <ThemeProvider>
+          {children}
+          <ToasterProvider />
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+}

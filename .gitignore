@@ -1,0 +1,12 @@
+node_modules
+.env
+.env.*
+.prisma
+prisma/migrations
+dist
+.DS_Store
+postgres_data/
+garage/meta/
+garage/data/
+frontend/.next/
+frontend/node_modules/

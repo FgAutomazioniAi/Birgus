@@ -1,0 +1,14 @@
+.git
+.gitignore
+.next
+node_modules
+postgres_data
+garage/meta
+garage/data
+documents/*
+!documents/.gitkeep
+py_orchestrator/.venv
+py_orchestrator/__pycache__
+py_orchestrator/**/*.py[cod]
+*.log
+.env

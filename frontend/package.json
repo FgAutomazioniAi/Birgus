@@ -1,0 +1,38 @@
+{
+  "name": "birgus",
+  "private": true,
+  "version": "1.1.2",
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0 --port 3100",
+    "build": "next build",
+    "start": "next start --port 3100",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1026.0",
+    "@prisma/client": "^6.16.2",
+    "clsx": "^2.1.1",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
+    "lucide-react": "^0.487.0",
+    "next": "^15.2.4",
+    "nodemailer": "^8.0.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.55.0",
+    "sonner": "^2.0.3",
+    "tailwind-merge": "^3.2.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.12",
+    "@types/node": "^22.13.11",
+    "@types/nodemailer": "^7.0.11",
+    "@types/react": "^18.3.21",
+    "@types/react-dom": "^18.3.6",
+    "prisma": "^6.16.2",
+    "tailwindcss": "^4.1.12",
+    "tsx": "^4.21.0",
+    "typescript": "^5.8.2"
+  }
+}

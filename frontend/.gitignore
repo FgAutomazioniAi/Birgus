@@ -1,0 +1,57 @@
+# =========================
+# Dependencies
+# =========================
+node_modules/
+
+# =========================
+# Build outputs / caches
+# =========================
+.next/
+out/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# =========================
+# Runtime logs
+# =========================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Environment / secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Local runtime data
+# =========================
+postgres_data/
+documents/*
+!documents/.gitkeep
+garage/meta/*
+garage/data/*
+!garage/meta/.gitkeep
+!garage/data/.gitkeep
+
+# =========================
+# Python orchestrator artifacts
+# =========================
+py_orchestrator/.venv/
+py_orchestrator/__pycache__/
+py_orchestrator/**/*.py[cod]
+
+# =========================
+# IDE / OS artifacts
+# =========================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

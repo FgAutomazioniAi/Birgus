@@ -1,0 +1,276 @@
+@import "tailwindcss";
+
+:root,
+[data-theme="predefinito"] {
+  --font-size-base: 16px;
+
+  --token-color-brand-primary: #1e3a8a;
+  --token-color-brand-primary-hover: #1e40af;
+  --token-color-brand-accent: #f97316;
+  --token-color-brand-accent-hover: #ea580c;
+
+  --token-color-bg-page: #f8fafc;
+  --token-color-bg-surface: #ffffff;
+  --token-color-bg-muted: #f8fafc;
+  --token-color-bg-subtle: #f1f5f9;
+  --token-color-bg-overlay: rgba(15, 23, 42, 0.5);
+
+  --token-color-text-primary: #0f172a;
+  --token-color-text-secondary: #334155;
+  --token-color-text-muted: #64748b;
+  --token-color-text-inverse: #ffffff;
+
+  --token-color-border-default: #e2e8f0;
+  --token-color-border-subtle: #f1f5f9;
+  --token-color-ring-primary: rgba(59, 130, 246, 0.2);
+
+  --token-color-status-info-bg: #dbeafe;
+  --token-color-status-info-text: #1d4ed8;
+  --token-color-status-success-bg: #dcfce7;
+  --token-color-status-success-text: #15803d;
+  --token-color-status-warn-bg: #ffedd5;
+  --token-color-status-warn-text: #c2410c;
+  --token-color-status-progress-bg: #e0e7ff;
+  --token-color-status-progress-text: #4338ca;
+  --token-color-status-danger-bg: #fee2e2;
+  --token-color-status-danger-text: #dc2626;
+
+  --token-radius-sm: 0.5rem;
+  --token-radius-md: 0.75rem;
+  --token-radius-lg: 1rem;
+  --token-radius-xl: 1.5rem;
+
+  --token-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --token-shadow-elevated: 0 20px 40px rgba(148, 163, 184, 0.25);
+  --token-shadow-brand: 0 12px 28px rgba(30, 58, 138, 0.2);
+  --token-shadow-accent: 0 12px 28px rgba(249, 115, 22, 0.2);
+
+  --space-gutter: 2rem;
+}
+
+[data-theme="grafite"] {
+  --token-color-brand-primary: #232323;
+  --token-color-brand-primary-hover: #050505;
+  --token-color-brand-accent: #656565;
+  --token-color-brand-accent-hover: #232323;
+
+  --token-color-bg-page: #f5f5f5;
+  --token-color-bg-surface: #ffffff;
+  --token-color-bg-muted: #efefef;
+  --token-color-bg-subtle: #e5e5e5;
+  --token-color-bg-overlay: rgba(35, 35, 35, 0.55);
+
+  --token-color-text-primary: #111111;
+  --token-color-text-secondary: #2f2f2f;
+  --token-color-text-muted: #666666;
+  --token-color-text-inverse: #ffffff;
+
+  --token-color-border-default: #d7d7d7;
+  --token-color-border-subtle: #ececec;
+  --token-color-ring-primary: rgba(101, 101, 101, 0.25);
+
+  --token-color-status-info-bg: #ececec;
+  --token-color-status-info-text: #232323;
+  --token-color-status-success-bg: #e7f3ea;
+  --token-color-status-success-text: #21663a;
+  --token-color-status-warn-bg: #f5ede3;
+  --token-color-status-warn-text: #7a4d1a;
+  --token-color-status-progress-bg: #efefef;
+  --token-color-status-progress-text: #3e3e3e;
+  --token-color-status-danger-bg: #fde8e8;
+  --token-color-status-danger-text: #b62828;
+
+  --token-shadow-card: 0 1px 2px rgba(35, 35, 35, 0.1);
+  --token-shadow-elevated: 0 20px 40px rgba(80, 80, 80, 0.2);
+  --token-shadow-brand: 0 12px 28px rgba(35, 35, 35, 0.25);
+  --token-shadow-accent: 0 12px 28px rgba(101, 101, 101, 0.22);
+}
+
+[data-theme="lavanda"] {
+  --token-color-brand-primary: #161443;
+  --token-color-brand-primary-hover: #120f3e;
+  --token-color-brand-accent: #9aadd7;
+  --token-color-brand-accent-hover: #818fba;
+
+  --token-color-bg-page: #eef1fa;
+  --token-color-bg-surface: #ffffff;
+  --token-color-bg-muted: #e8ecf8;
+  --token-color-bg-subtle: #dbe2f4;
+  --token-color-bg-overlay: rgba(22, 20, 67, 0.5);
+
+  --token-color-text-primary: #161443;
+  --token-color-text-secondary: #393c6a;
+  --token-color-text-muted: #68759d;
+  --token-color-text-inverse: #ffffff;
+
+  --token-color-border-default: #ced7ec;
+  --token-color-border-subtle: #e3e9f6;
+  --token-color-ring-primary: rgba(57, 60, 106, 0.25);
+
+  --token-color-status-info-bg: #dfe7f8;
+  --token-color-status-info-text: #2f3f79;
+  --token-color-status-success-bg: #e2f5ec;
+  --token-color-status-success-text: #1d7249;
+  --token-color-status-warn-bg: #fff1dc;
+  --token-color-status-warn-text: #ad5e00;
+  --token-color-status-progress-bg: #e4e6ff;
+  --token-color-status-progress-text: #393c86;
+  --token-color-status-danger-bg: #fde6ec;
+  --token-color-status-danger-text: #b83f5a;
+
+  --token-shadow-card: 0 1px 2px rgba(22, 20, 67, 0.1);
+  --token-shadow-elevated: 0 20px 40px rgba(129, 143, 186, 0.24);
+  --token-shadow-brand: 0 12px 28px rgba(22, 20, 67, 0.24);
+  --token-shadow-accent: 0 12px 28px rgba(154, 173, 215, 0.3);
+}
+
+[data-theme="oceano"] {
+  --token-color-brand-primary: #23549a;
+  --token-color-brand-primary-hover: #205298;
+  --token-color-brand-accent: #9aadd7;
+  --token-color-brand-accent-hover: #7a94c6;
+
+  --token-color-bg-page: #edf3fb;
+  --token-color-bg-surface: #ffffff;
+  --token-color-bg-muted: #e8f0fb;
+  --token-color-bg-subtle: #dae7f7;
+  --token-color-bg-overlay: rgba(35, 84, 154, 0.5);
+
+  --token-color-text-primary: #14345f;
+  --token-color-text-secondary: #28507d;
+  --token-color-text-muted: #607ea5;
+  --token-color-text-inverse: #ffffff;
+
+  --token-color-border-default: #cdddf2;
+  --token-color-border-subtle: #e2ecf9;
+  --token-color-ring-primary: rgba(35, 84, 154, 0.2);
+
+  --token-color-status-info-bg: #dbeafe;
+  --token-color-status-info-text: #1f4c88;
+  --token-color-status-success-bg: #def5e9;
+  --token-color-status-success-text: #1b7647;
+  --token-color-status-warn-bg: #fff2de;
+  --token-color-status-warn-text: #ad6107;
+  --token-color-status-progress-bg: #e0e7ff;
+  --token-color-status-progress-text: #314e9d;
+  --token-color-status-danger-bg: #fde7ea;
+  --token-color-status-danger-text: #b13d48;
+
+  --token-shadow-card: 0 1px 2px rgba(35, 84, 154, 0.1);
+  --token-shadow-elevated: 0 20px 40px rgba(122, 148, 198, 0.22);
+  --token-shadow-brand: 0 12px 28px rgba(35, 84, 154, 0.24);
+  --token-shadow-accent: 0 12px 28px rgba(154, 173, 215, 0.28);
+}
+
+[data-theme="ambra"] {
+  --token-color-brand-primary: #161443;
+  --token-color-brand-primary-hover: #101144;
+  --token-color-brand-accent: #f68621;
+  --token-color-brand-accent-hover: #ca7029;
+
+  --token-color-bg-page: #fff4e9;
+  --token-color-bg-surface: #ffffff;
+  --token-color-bg-muted: #fff0e1;
+  --token-color-bg-subtle: #ffe6cc;
+  --token-color-bg-overlay: rgba(22, 20, 67, 0.5);
+
+  --token-color-text-primary: #231d36;
+  --token-color-text-secondary: #463852;
+  --token-color-text-muted: #7f6a6d;
+  --token-color-text-inverse: #ffffff;
+
+  --token-color-border-default: #f3d8bf;
+  --token-color-border-subtle: #fcead8;
+  --token-color-ring-primary: rgba(246, 134, 33, 0.25);
+
+  --token-color-status-info-bg: #e4e8ff;
+  --token-color-status-info-text: #353991;
+  --token-color-status-success-bg: #e8f7e6;
+  --token-color-status-success-text: #2c7a2c;
+  --token-color-status-warn-bg: #ffe5cb;
+  --token-color-status-warn-text: #a05206;
+  --token-color-status-progress-bg: #efe6ff;
+  --token-color-status-progress-text: #5b3b93;
+  --token-color-status-danger-bg: #fee6df;
+  --token-color-status-danger-text: #b43d24;
+
+  --token-shadow-card: 0 1px 2px rgba(22, 20, 67, 0.08);
+  --token-shadow-elevated: 0 20px 40px rgba(124, 72, 53, 0.2);
+  --token-shadow-brand: 0 12px 28px rgba(22, 20, 67, 0.24);
+  --token-shadow-accent: 0 12px 28px rgba(246, 134, 33, 0.26);
+}
+
+@theme inline {
+  --color-brand-primary: var(--token-color-brand-primary);
+  --color-brand-primary-hover: var(--token-color-brand-primary-hover);
+  --color-brand-accent: var(--token-color-brand-accent);
+  --color-brand-accent-hover: var(--token-color-brand-accent-hover);
+
+  --color-bg-page: var(--token-color-bg-page);
+  --color-bg-surface: var(--token-color-bg-surface);
+  --color-bg-muted: var(--token-color-bg-muted);
+  --color-bg-subtle: var(--token-color-bg-subtle);
+  --color-bg-overlay: var(--token-color-bg-overlay);
+
+  --color-text-primary: var(--token-color-text-primary);
+  --color-text-secondary: var(--token-color-text-secondary);
+  --color-text-muted: var(--token-color-text-muted);
+  --color-text-inverse: var(--token-color-text-inverse);
+
+  --color-border-default: var(--token-color-border-default);
+  --color-border-subtle: var(--token-color-border-subtle);
+  --color-ring-primary: var(--token-color-ring-primary);
+
+  --color-status-info-bg: var(--token-color-status-info-bg);
+  --color-status-info-text: var(--token-color-status-info-text);
+  --color-status-success-bg: var(--token-color-status-success-bg);
+  --color-status-success-text: var(--token-color-status-success-text);
+  --color-status-warn-bg: var(--token-color-status-warn-bg);
+  --color-status-warn-text: var(--token-color-status-warn-text);
+  --color-status-progress-bg: var(--token-color-status-progress-bg);
+  --color-status-progress-text: var(--token-color-status-progress-text);
+  --color-status-danger-bg: var(--token-color-status-danger-bg);
+  --color-status-danger-text: var(--token-color-status-danger-text);
+
+  --radius-sm: var(--token-radius-sm);
+  --radius-md: var(--token-radius-md);
+  --radius-lg: var(--token-radius-lg);
+  --radius-xl: var(--token-radius-xl);
+
+  --shadow-card: var(--token-shadow-card);
+  --shadow-elevated: var(--token-shadow-elevated);
+  --shadow-brand: var(--token-shadow-brand);
+  --shadow-accent: var(--token-shadow-accent);
+}
+
+@layer base {
+  * {
+    @apply border-border-default;
+  }
+
+  html {
+    font-size: var(--font-size-base);
+  }
+
+  body {
+    @apply bg-bg-page text-text-primary antialiased;
+  }
+
+  a[href],
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  select:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    cursor: not-allowed;
+  }
+}

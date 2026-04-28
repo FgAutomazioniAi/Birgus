@@ -1,0 +1,14 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+.env.*
+dist
+coverage
+.DS_Store
+postgres_data
+garage/meta
+garage/data
+frontend/node_modules
+frontend/.next

@@ -1,0 +1,821 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+enum ModuleOverrideMode {
+  ALLOW
+  DENY
+}
+
+enum DocumentScope {
+  WORKSPACE
+  PROJECT
+  SHIPMENT
+  DDT
+  OTHER
+}
+
+enum DdtDocumentStatus {
+  UPLOADED
+  QUEUED
+  OCR_PROCESSING
+  AI_PROCESSING
+  READY
+  ERROR
+}
+
+enum DdtJobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+model Organization {
+  id          String      @id @default(uuid()) @db.Uuid
+  code        String      @unique
+  legal_name  String
+  vat_number  String?
+  created_at  DateTime    @default(now())
+  updated_at  DateTime    @updatedAt
+  deleted_at  DateTime?
+  workspaces  Workspace[]
+
+  @@map("organizations")
+}
+
+model Workspace {
+  id                  String               @id @default(uuid()) @db.Uuid
+  organization_id     String               @db.Uuid
+  code                String
+  name                String
+  timezone            String               @default("Europe/Rome")
+  locale              String               @default("it-IT")
+  is_active           Boolean              @default(true)
+  created_at          DateTime             @default(now())
+  updated_at          DateTime             @updatedAt
+  deleted_at          DateTime?
+
+  organization        Organization         @relation(fields: [organization_id], references: [id], onDelete: Restrict)
+  memberships         WorkspaceMembership[]
+  user_workspace_roles UserWorkspaceRole[]
+  workspace_modules   WorkspaceModule[]
+  user_module_overrides UserModuleOverride[]
+  user_preferences    UserPreference[]
+  nodes               Node[]
+  documents           Document[]
+  companies           Company[]
+  clients             Client[]
+  project_statuses    ProjectStatus[]
+  project_revisions   ProjectRevision[]
+  project_authors     ProjectAuthor[]
+  projects            Project[]
+  project_clients     ProjectClient[]
+  project_versions    ProjectVersion[]
+  shipment_statuses   ShipmentStatus[]
+  shipments           Shipment[]
+  ddt_documents       DdtDocument[]
+  ddt_processing_jobs DdtProcessingJob[]
+  notifications       Notification[]
+  audit_logs          AuditLog[]
+
+  @@unique([organization_id, code])
+  @@index([organization_id])
+  @@index([deleted_at])
+  @@map("workspaces")
+}
+
+model User {
+  id                   String               @id @default(uuid()) @db.Uuid
+  first_name           String
+  last_name            String?
+  email                String               @unique
+  password_hash        String?
+  password_updated_at  DateTime             @default(now())
+  is_active            Boolean              @default(true)
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+  deleted_at           DateTime?
+
+  memberships          WorkspaceMembership[]
+  user_workspace_roles UserWorkspaceRole[]
+  auth_sessions        AuthSession[]
+  password_reset_codes PasswordResetCode[]
+  user_preferences     UserPreference[]
+  workspace_modules_configured WorkspaceModule[] @relation("workspace_module_configured_by")
+  user_module_overrides UserModuleOverride[] @relation("user_module_override_target")
+  user_module_overrides_configured UserModuleOverride[] @relation("user_module_override_configured_by")
+  documents_uploaded   Document[]           @relation("document_uploaded_by")
+  projects_owned       Project[]            @relation("project_owner")
+  shipments_created    Shipment[]           @relation("shipment_created_by")
+  shipment_events      ShipmentEvent[]      @relation("shipment_event_actor")
+  ddt_documents_requested DdtDocument[]     @relation("ddt_document_requested_by")
+  notifications        Notification[]
+  audit_logs           AuditLog[]
+
+  @@index([deleted_at])
+  @@map("users")
+}
+
+model WorkspaceMembership {
+  id           Int              @id @default(autoincrement())
+  workspace_id String           @db.Uuid
+  user_id      String           @db.Uuid
+  status       MembershipStatus @default(ACTIVE)
+  joined_at    DateTime         @default(now())
+  left_at      DateTime?
+
+  workspace    Workspace        @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  user         User             @relation(fields: [user_id], references: [id], onDelete: Restrict)
+
+  @@unique([workspace_id, user_id])
+  @@index([workspace_id])
+  @@index([user_id])
+  @@map("workspace_memberships")
+}
+
+model Role {
+  id                 Int                @id @default(autoincrement())
+  key                String             @unique
+  label              String
+  is_system          Boolean            @default(false)
+  role_permissions   RolePermission[]
+  user_workspace_roles UserWorkspaceRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id               Int              @id @default(autoincrement())
+  key              String           @unique
+  label            String
+  description      String?
+  role_permissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id            Int        @id @default(autoincrement())
+  role_id       Int
+  permission_id Int
+
+  role          Role       @relation(fields: [role_id], references: [id], onDelete: Restrict)
+  permission    Permission @relation(fields: [permission_id], references: [id], onDelete: Restrict)
+
+  @@unique([role_id, permission_id])
+  @@index([role_id])
+  @@index([permission_id])
+  @@map("role_permissions")
+}
+
+model UserWorkspaceRole {
+  id           Int       @id @default(autoincrement())
+  workspace_id String    @db.Uuid
+  user_id      String    @db.Uuid
+  role_id      Int
+  assigned_at  DateTime  @default(now())
+
+  workspace    Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Restrict)
+  role         Role      @relation(fields: [role_id], references: [id], onDelete: Restrict)
+
+  @@unique([workspace_id, user_id, role_id])
+  @@index([workspace_id])
+  @@index([user_id])
+  @@index([role_id])
+  @@map("user_workspace_roles")
+}
+
+model AuthSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  user_id    String    @db.Uuid
+  token_hash String    @unique
+  user_agent String?
+  ip_address String?
+  expires_at DateTime
+  revoked_at DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([expires_at])
+  @@index([revoked_at])
+  @@index([user_id, revoked_at, expires_at])
+  @@map("auth_sessions")
+}
+
+model PasswordResetCode {
+  id         Int       @id @default(autoincrement())
+  user_id    String    @db.Uuid
+  code_hash  String
+  expires_at DateTime
+  used_at    DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([expires_at])
+  @@index([used_at])
+  @@index([user_id, code_hash, used_at, expires_at])
+  @@map("password_reset_codes")
+}
+
+model UserPreference {
+  id               Int       @id @default(autoincrement())
+  user_id          String    @db.Uuid
+  workspace_id     String?   @db.Uuid
+  palette_id       String    @default("predefinito")
+  language_code    String    @default("it")
+  rows_projects    Int       @default(10)
+  rows_clients     Int       @default(10)
+  columns_projects Json?
+  columns_clients  Json?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  user             User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  workspace        Workspace? @relation(fields: [workspace_id], references: [id], onDelete: SetNull)
+
+  @@unique([user_id, workspace_id])
+  @@index([workspace_id])
+  @@map("user_preferences")
+}
+
+model Module {
+  id                       Int                 @id @default(autoincrement())
+  key                      String              @unique
+  name                     String
+  description              String?
+  is_core                  Boolean             @default(false)
+  is_active                Boolean             @default(true)
+
+  workspace_modules        WorkspaceModule[]
+  user_module_overrides    UserModuleOverride[]
+  documents                Document[]
+  notifications            Notification[]
+  audit_logs               AuditLog[]
+  dependencies             ModuleDependency[]  @relation("module_dependencies_module")
+  dependents               ModuleDependency[]  @relation("module_dependencies_depends_on_module")
+
+  @@map("modules")
+}
+
+model ModuleDependency {
+  id                    Int     @id @default(autoincrement())
+  module_id             Int
+  depends_on_module_id  Int
+
+  module                Module  @relation("module_dependencies_module", fields: [module_id], references: [id], onDelete: Restrict)
+  depends_on_module     Module  @relation("module_dependencies_depends_on_module", fields: [depends_on_module_id], references: [id], onDelete: Restrict)
+
+  @@unique([module_id, depends_on_module_id])
+  @@index([module_id])
+  @@index([depends_on_module_id])
+  @@map("module_dependencies")
+}
+
+model WorkspaceModule {
+  id                    Int       @id @default(autoincrement())
+  workspace_id          String    @db.Uuid
+  module_id             Int
+  is_enabled            Boolean   @default(true)
+  configured_by_user_id String?   @db.Uuid
+  configured_at         DateTime  @default(now())
+
+  workspace             Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  module                Module    @relation(fields: [module_id], references: [id], onDelete: Restrict)
+  configured_by_user    User?     @relation("workspace_module_configured_by", fields: [configured_by_user_id], references: [id], onDelete: SetNull)
+
+  @@unique([workspace_id, module_id])
+  @@index([workspace_id])
+  @@index([module_id])
+  @@index([configured_by_user_id])
+  @@map("workspace_modules")
+}
+
+model UserModuleOverride {
+  id                    Int                @id @default(autoincrement())
+  workspace_id          String             @db.Uuid
+  user_id               String             @db.Uuid
+  module_id             Int
+  mode                  ModuleOverrideMode
+  reason                String?
+  configured_by_user_id String?            @db.Uuid
+  configured_at         DateTime           @default(now())
+
+  workspace             Workspace          @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  user                  User               @relation("user_module_override_target", fields: [user_id], references: [id], onDelete: Restrict)
+  module                Module             @relation(fields: [module_id], references: [id], onDelete: Restrict)
+  configured_by_user    User?              @relation("user_module_override_configured_by", fields: [configured_by_user_id], references: [id], onDelete: SetNull)
+
+  @@unique([workspace_id, user_id, module_id])
+  @@index([workspace_id])
+  @@index([user_id])
+  @@index([module_id])
+  @@index([configured_by_user_id])
+  @@map("user_module_overrides")
+}
+
+model FileType {
+  id         Int        @id @default(autoincrement())
+  key        String     @unique
+  mime_type  String?
+  created_at DateTime   @default(now())
+  updated_at DateTime   @updatedAt
+  documents  Document[]
+
+  @@map("file_types")
+}
+
+model FileStatus {
+  id         Int        @id @default(autoincrement())
+  key        String     @unique
+  created_at DateTime   @default(now())
+  updated_at DateTime   @updatedAt
+  documents  Document[]
+
+  @@map("file_statuses")
+}
+
+model Node {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspace_id String    @db.Uuid
+  parent_id   String?    @db.Uuid
+  name        String
+  path_cache  String
+  depth       Int        @default(0)
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+  deleted_at  DateTime?
+
+  workspace   Workspace  @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  parent      Node?      @relation("node_tree", fields: [parent_id], references: [id], onDelete: SetNull)
+  children    Node[]     @relation("node_tree")
+  documents   Document[]
+
+  @@unique([workspace_id, path_cache])
+  @@index([workspace_id])
+  @@index([parent_id])
+  @@index([deleted_at])
+  @@map("nodes")
+}
+
+model Document {
+  id                String        @id @default(uuid()) @db.Uuid
+  workspace_id      String        @db.Uuid
+  node_id           String        @db.Uuid
+  file_type_id      Int
+  file_status_id    Int
+  module_id         Int?
+  scope             DocumentScope @default(WORKSPACE)
+  domain_entity_type String?
+  domain_entity_id  String?
+  filename          String?
+  size_bytes        BigInt?
+  storage_path      String
+  checksum_sha256   String?
+  uploaded_by_user_id String?     @db.Uuid
+  created_at        DateTime      @default(now())
+  updated_at        DateTime      @updatedAt
+  deleted_at        DateTime?
+
+  workspace         Workspace     @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  node              Node          @relation(fields: [node_id], references: [id], onDelete: Restrict)
+  file_type         FileType      @relation(fields: [file_type_id], references: [id], onDelete: Restrict)
+  file_status       FileStatus    @relation(fields: [file_status_id], references: [id], onDelete: Restrict)
+  module            Module?       @relation(fields: [module_id], references: [id], onDelete: SetNull)
+  uploaded_by_user  User?         @relation("document_uploaded_by", fields: [uploaded_by_user_id], references: [id], onDelete: SetNull)
+  ddt_document      DdtDocument?
+
+  @@index([workspace_id])
+  @@index([node_id])
+  @@index([module_id])
+  @@index([uploaded_by_user_id])
+  @@index([workspace_id, domain_entity_type, domain_entity_id])
+  @@index([workspace_id, deleted_at])
+  @@map("documents")
+}
+
+model Company {
+  id          Int       @id @default(autoincrement())
+  workspace_id String   @db.Uuid
+  name        String
+  address     String?
+  postal_code String?
+  city        String?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  workspace   Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  clients     Client[]
+
+  @@index([workspace_id])
+  @@index([deleted_at])
+  @@map("companies")
+}
+
+model Client {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspace_id String    @db.Uuid
+  company_id  Int?
+  first_name  String
+  last_name   String?
+  phone       String?
+  email       String?
+  notes       String?
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+  deleted_at  DateTime?
+
+  workspace   Workspace  @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  company     Company?   @relation(fields: [company_id], references: [id], onDelete: SetNull)
+  project_clients ProjectClient[]
+  project_versions ProjectVersion[]
+  shipments   Shipment[]
+
+  @@index([workspace_id])
+  @@index([company_id])
+  @@index([deleted_at])
+  @@index([workspace_id, email])
+  @@index([workspace_id, first_name, last_name])
+  @@map("clients")
+}
+
+model ProjectStatus {
+  id          Int       @id @default(autoincrement())
+  workspace_id String   @db.Uuid
+  key         String
+  label       String
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  workspace   Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  projects    Project[]
+  project_versions ProjectVersion[]
+
+  @@unique([workspace_id, key])
+  @@index([workspace_id])
+  @@map("project_statuses")
+}
+
+model ProjectRevision {
+  id          Int       @id @default(autoincrement())
+  workspace_id String   @db.Uuid
+  code        String
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  workspace   Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  projects    Project[]
+
+  @@unique([workspace_id, code])
+  @@index([workspace_id])
+  @@map("project_revisions")
+}
+
+model ProjectAuthor {
+  id          Int       @id @default(autoincrement())
+  workspace_id String   @db.Uuid
+  first_name  String
+  last_name   String?
+  display_name String?
+  notes       String?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  workspace   Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  projects    Project[]
+
+  @@index([workspace_id])
+  @@index([deleted_at])
+  @@index([workspace_id, first_name, last_name])
+  @@index([workspace_id, display_name])
+  @@map("project_authors")
+}
+
+model Project {
+  id          String       @id @default(uuid()) @db.Uuid
+  workspace_id String      @db.Uuid
+  name        String
+  publication_date DateTime?
+  author_date DateTime?
+  publisher_name String?
+  owner_user_id String?    @db.Uuid
+  author_id   Int?
+  status_id   Int
+  revision_id Int?
+  created_at  DateTime     @default(now())
+  updated_at  DateTime     @updatedAt
+  deleted_at  DateTime?
+
+  workspace   Workspace    @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  owner_user  User?        @relation("project_owner", fields: [owner_user_id], references: [id], onDelete: SetNull)
+  author      ProjectAuthor? @relation(fields: [author_id], references: [id], onDelete: SetNull)
+  status      ProjectStatus @relation(fields: [status_id], references: [id], onDelete: Restrict)
+  revision    ProjectRevision? @relation(fields: [revision_id], references: [id], onDelete: SetNull)
+  project_clients ProjectClient[]
+  project_versions ProjectVersion[]
+
+  @@index([workspace_id])
+  @@index([status_id])
+  @@index([author_id])
+  @@index([owner_user_id])
+  @@index([deleted_at])
+  @@index([workspace_id, name])
+  @@map("projects")
+}
+
+model ProjectClient {
+  id          Int       @id @default(autoincrement())
+  workspace_id String   @db.Uuid
+  project_id  String    @db.Uuid
+  client_id   String    @db.Uuid
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  workspace   Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  project     Project   @relation(fields: [project_id], references: [id], onDelete: Restrict)
+  client      Client    @relation(fields: [client_id], references: [id], onDelete: Restrict)
+
+  @@unique([workspace_id, project_id, client_id])
+  @@index([workspace_id])
+  @@index([project_id])
+  @@index([client_id])
+  @@index([deleted_at])
+  @@map("project_clients")
+}
+
+model ProjectVersion {
+  id          Int       @id @default(autoincrement())
+  workspace_id String   @db.Uuid
+  project_id  String    @db.Uuid
+  version_label String
+  description String
+  client_id   String?   @db.Uuid
+  status_id   Int?
+  is_default  Boolean   @default(false)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  workspace   Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  project     Project   @relation(fields: [project_id], references: [id], onDelete: Restrict)
+  client      Client?   @relation(fields: [client_id], references: [id], onDelete: SetNull)
+  status      ProjectStatus? @relation(fields: [status_id], references: [id], onDelete: SetNull)
+
+  @@unique([workspace_id, project_id, version_label])
+  @@index([workspace_id])
+  @@index([project_id])
+  @@index([client_id])
+  @@index([status_id])
+  @@index([deleted_at])
+  @@index([workspace_id, project_id, is_default, deleted_at])
+  @@map("project_versions")
+}
+
+model ShipmentStatus {
+  id          Int       @id @default(autoincrement())
+  workspace_id String   @db.Uuid
+  key         String
+  label       String
+
+  workspace   Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  shipments   Shipment[]
+  shipment_events ShipmentEvent[]
+
+  @@unique([workspace_id, key])
+  @@index([workspace_id])
+  @@map("shipment_statuses")
+}
+
+model Shipment {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspace_id String   @db.Uuid
+  code        String
+  client_id   String?   @db.Uuid
+  status_id   Int
+  scheduled_date DateTime?
+  shipped_at  DateTime?
+  delivered_at DateTime?
+  notes       String?
+  created_by_user_id String? @db.Uuid
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  workspace   Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  client      Client?   @relation(fields: [client_id], references: [id], onDelete: SetNull)
+  status      ShipmentStatus @relation(fields: [status_id], references: [id], onDelete: Restrict)
+  created_by_user User? @relation("shipment_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  shipment_items ShipmentItem[]
+  shipment_events ShipmentEvent[]
+
+  @@unique([workspace_id, code])
+  @@index([workspace_id])
+  @@index([client_id])
+  @@index([status_id])
+  @@index([created_by_user_id])
+  @@index([deleted_at])
+  @@map("shipments")
+}
+
+model ShipmentItem {
+  id          Int      @id @default(autoincrement())
+  shipment_id String   @db.Uuid
+  sku         String?
+  description String
+  quantity    Decimal  @default(1) @db.Decimal(14, 3)
+  unit        String?
+  weight_kg   Decimal? @db.Decimal(12, 3)
+
+  shipment    Shipment @relation(fields: [shipment_id], references: [id], onDelete: Cascade)
+
+  @@index([shipment_id])
+  @@map("shipment_items")
+}
+
+model ShipmentEvent {
+  id           Int       @id @default(autoincrement())
+  shipment_id  String    @db.Uuid
+  status_id    Int?
+  event_type   String
+  payload      Json?
+  actor_user_id String?  @db.Uuid
+  occurred_at  DateTime  @default(now())
+
+  shipment     Shipment  @relation(fields: [shipment_id], references: [id], onDelete: Cascade)
+  status       ShipmentStatus? @relation(fields: [status_id], references: [id], onDelete: SetNull)
+  actor_user   User?     @relation("shipment_event_actor", fields: [actor_user_id], references: [id], onDelete: SetNull)
+
+  @@index([shipment_id])
+  @@index([status_id])
+  @@index([actor_user_id])
+  @@map("shipment_events")
+}
+
+model DdtDocument {
+  id            String            @id @default(uuid()) @db.Uuid
+  workspace_id  String            @db.Uuid
+  document_id   String            @unique @db.Uuid
+  status        DdtDocumentStatus @default(UPLOADED)
+  original_filename String?
+  last_error    String?
+  requested_by_user_id String?    @db.Uuid
+  created_at    DateTime          @default(now())
+  updated_at    DateTime          @updatedAt
+
+  workspace     Workspace         @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  document      Document          @relation(fields: [document_id], references: [id], onDelete: Restrict)
+  requested_by_user User?         @relation("ddt_document_requested_by", fields: [requested_by_user_id], references: [id], onDelete: SetNull)
+  analysis_result DdtAnalysisResult?
+  processing_jobs DdtProcessingJob[]
+  processing_events DdtProcessingEvent[]
+
+  @@index([workspace_id])
+  @@index([status])
+  @@index([requested_by_user_id])
+  @@map("ddt_documents")
+}
+
+model DdtAnalysisResult {
+  id                     String    @id @default(uuid()) @db.Uuid
+  ddt_document_id        String    @unique @db.Uuid
+  movement_type          String?
+  movement_scope         String?
+  main_warehouse_action  String?
+  bolla_number           String?
+  commessa_reference     String?
+  transfer_note          String?
+  article_count          Int?
+  warehouse_delta        Int?
+  summary                String?
+  raw_response           Json?
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @updatedAt
+
+  ddt_document           DdtDocument @relation(fields: [ddt_document_id], references: [id], onDelete: Cascade)
+  article_items          DdtArticleItem[]
+
+  @@map("ddt_analysis_results")
+}
+
+model DdtArticleItem {
+  id                  Int       @id @default(autoincrement())
+  analysis_result_id  String    @db.Uuid
+  article_type        String
+  quantity            Decimal   @db.Decimal(14, 3)
+  unit                String    @default("N/D")
+
+  analysis_result     DdtAnalysisResult @relation(fields: [analysis_result_id], references: [id], onDelete: Cascade)
+
+  @@index([analysis_result_id])
+  @@map("ddt_article_items")
+}
+
+model DdtProcessingJob {
+  id             String       @id @default(uuid()) @db.Uuid
+  workspace_id   String       @db.Uuid
+  ddt_document_id String      @db.Uuid
+  status         DdtJobStatus @default(QUEUED)
+  queued_at      DateTime     @default(now())
+  started_at     DateTime?
+  completed_at   DateTime?
+  retries        Int          @default(0)
+  runner         String?
+  error_message  String?
+
+  workspace      Workspace    @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  ddt_document   DdtDocument  @relation(fields: [ddt_document_id], references: [id], onDelete: Cascade)
+  processing_events DdtProcessingEvent[]
+
+  @@index([workspace_id])
+  @@index([ddt_document_id])
+  @@index([status])
+  @@map("ddt_processing_jobs")
+}
+
+model DdtProcessingEvent {
+  id              Int       @id @default(autoincrement())
+  job_id          String    @db.Uuid
+  ddt_document_id String    @db.Uuid
+  event_type      String
+  payload         Json?
+  created_at      DateTime  @default(now())
+
+  job             DdtProcessingJob @relation(fields: [job_id], references: [id], onDelete: Cascade)
+  ddt_document    DdtDocument      @relation(fields: [ddt_document_id], references: [id], onDelete: Cascade)
+
+  @@index([job_id])
+  @@index([ddt_document_id])
+  @@map("ddt_processing_events")
+}
+
+model Notification {
+  id          Int       @id @default(autoincrement())
+  workspace_id String   @db.Uuid
+  user_id     String?   @db.Uuid
+  module_id   Int?
+  type        String    @default("info")
+  title       String
+  message     String
+  reference   String?
+  read_at     DateTime?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  workspace   Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  user        User?     @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  module      Module?   @relation(fields: [module_id], references: [id], onDelete: SetNull)
+
+  @@index([workspace_id])
+  @@index([user_id])
+  @@index([module_id])
+  @@index([read_at])
+  @@index([deleted_at])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id           Int       @id @default(autoincrement())
+  workspace_id String    @db.Uuid
+  user_id      String?   @db.Uuid
+  module_id    Int?
+  action       String
+  entity_type  String
+  entity_id    String?   @db.Uuid
+  payload      Json?
+  ip_address   String?
+  user_agent   String?
+  created_at   DateTime  @default(now())
+
+  workspace    Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  user         User?     @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  module       Module?   @relation(fields: [module_id], references: [id], onDelete: SetNull)
+
+  @@index([workspace_id, created_at])
+  @@index([entity_type, entity_id])
+  @@index([user_id])
+  @@index([module_id])
+  @@map("audit_logs")
+}

@@ -1,0 +1,91 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: birgus_pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: birgus
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d birgus"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  garage:
+    image: dxflrs/garage:v2.2.0
+    container_name: birgus_garage
+    restart: unless-stopped
+    environment:
+      GARAGE_RPC_SECRET: "${GARAGE_RPC_SECRET:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}"
+      GARAGE_ADMIN_TOKEN: "${GARAGE_ADMIN_TOKEN:-c2FtcGxlLWdhcmFnZS1hZG1pbi10b2tlbi1jaGFuZ2UtbWU=}"
+      GARAGE_METRICS_TOKEN: "${GARAGE_METRICS_TOKEN:-c2FtcGxlLWdhcmFnZS1tZXRyaWNzLXRva2VuLWNoYW5nZS1tZQ==}"
+      GARAGE_DEFAULT_ACCESS_KEY: "${GARAGE_S3_ACCESS_KEY_ID:-GK0123456789abcdef01234567}"
+      GARAGE_DEFAULT_SECRET_KEY: "${GARAGE_S3_SECRET_ACCESS_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}"
+      GARAGE_DEFAULT_BUCKET: "${GARAGE_S3_BUCKET:-birgus-files}"
+    command: ["/garage", "-c", "/etc/garage.toml", "server"]
+    ports:
+      - "3900:3900"
+      - "3901:3901"
+      - "3903:3903"
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - ./garage/meta:/var/lib/garage/meta
+      - ./garage/data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "-c", "/etc/garage.toml", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: birgus_app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/birgus?schema=public
+      AUTH_PEPPER: "${AUTH_PEPPER:-}"
+      AUTH_SESSION_HOURS: "${AUTH_SESSION_HOURS:-12}"
+      AUTH_SESSION_REMEMBER_DAYS: "${AUTH_SESSION_REMEMBER_DAYS:-30}"
+      AUTH_PASSWORD_RESET_CODE_TTL_MINUTES: "${AUTH_PASSWORD_RESET_CODE_TTL_MINUTES:-15}"
+      GARAGE_S3_ENDPOINT: "http://garage:3900"
+      GARAGE_S3_REGION: "${GARAGE_S3_REGION:-garage}"
+      GARAGE_S3_BUCKET: "${GARAGE_S3_BUCKET:-birgus-files}"
+      GARAGE_S3_ACCESS_KEY_ID: "${GARAGE_S3_ACCESS_KEY_ID:-GK0123456789abcdef01234567}"
+      GARAGE_S3_SECRET_ACCESS_KEY: "${GARAGE_S3_SECRET_ACCESS_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}"
+      GARAGE_S3_FORCE_PATH_STYLE: "${GARAGE_S3_FORCE_PATH_STYLE:-true}"
+      GARAGE_STORAGE_PREFIX: "${GARAGE_STORAGE_PREFIX:-projects}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: birgus_frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      BIRGUS_API_BASE_URL: http://app:3000
+    depends_on:
+      app:
+        condition: service_started
+    ports:
+      - "3100:3100"
+
+volumes: {}

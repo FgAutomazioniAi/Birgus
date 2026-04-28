@@ -1,0 +1,110 @@
+"use client";
+
+import { FileSearch, FolderKanban, LogOut, Settings, Truck, Users } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
+
+import { IconButton } from "@/components/atoms";
+import { BirgusLogo, NavItem } from "@/components/molecules";
+import { APP_ROUTES } from "@/lib/routes";
+
+const menuItems = [
+  { icon: FolderKanban, label: "Progetti", path: APP_ROUTES.projects },
+  { icon: Users, label: "Clienti", path: APP_ROUTES.clients },
+  { icon: Truck, label: "Spedizioni", path: APP_ROUTES.spedizioni },
+  // DDT_READER_FEATURE_START
+  { icon: FileSearch, label: "DDT Reader", path: APP_ROUTES.ddtReader },
+  // DDT_READER_FEATURE_END
+  { icon: Settings, label: "Impostazioni", path: APP_ROUTES.settings },
+];
+
+export interface SidebarProps {
+  collapsed: boolean;
+  onClose: () => void;
+  open: boolean;
+}
+
+export function Sidebar({ collapsed, onClose, open }: SidebarProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    if (isLoggingOut) {
+      return;
+    }
+
+    try {
+      setIsLoggingOut(true);
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      onClose();
+      router.push(APP_ROUTES.login);
+      router.refresh();
+      setIsLoggingOut(false);
+    }
+  };
+
+  return (
+    <>
+      {open && <div className="fixed inset-0 z-40 bg-bg-overlay lg:hidden" onClick={onClose} />}
+
+      <aside
+        className={[
+          "fixed inset-y-0 left-0 z-50 w-64 border-r border-border-default bg-bg-surface transition-all duration-300",
+          open ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+          collapsed ? "lg:w-20" : "lg:w-64",
+        ].join(" ")}
+      >
+        <div className="flex h-full flex-col">
+          <div className={["flex items-center p-6", collapsed ? "lg:justify-center" : ""].join(" ")}>
+            {!collapsed ? (
+              <BirgusLogo className="h-12 w-auto max-w-[440px]" />
+            ) : (
+              <div className="hidden h-10 w-10 items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-bg-muted p-1 lg:flex">
+                <img src="/favicon.ico" alt="Logo compatto" className="h-8 w-8 object-contain" />
+              </div>
+            )}
+          </div>
+
+          <nav className="flex-1 space-y-1 px-4">
+            {menuItems.map((item) => {
+              const isProjectsRoute = item.path === APP_ROUTES.projects;
+              const isActive = isProjectsRoute
+                ? pathname === APP_ROUTES.projects || pathname.startsWith("/projects")
+                : pathname === item.path || pathname.startsWith(`${item.path}/`);
+
+              return (
+                <NavItem
+                  key={item.label}
+                  href={item.path}
+                  icon={item.icon}
+                  isActive={isActive}
+                  label={item.label}
+                  collapsed={collapsed}
+                  onClick={onClose}
+                />
+              );
+            })}
+          </nav>
+
+          <div className="border-t border-border-subtle p-4">
+            <IconButton
+              className={[
+                "h-12 w-full justify-start gap-3 px-4 py-3 text-sm font-medium",
+                "text-text-muted hover:bg-status-danger-bg hover:text-status-danger-text",
+                collapsed ? "lg:justify-center lg:px-0" : "",
+              ].join(" ")}
+              title={collapsed ? "Esci" : undefined}
+              onClick={() => void handleLogout()}
+              disabled={isLoggingOut}
+            >
+              <LogOut size={20} />
+              {!collapsed && <span>Esci</span>}
+            </IconButton>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+}

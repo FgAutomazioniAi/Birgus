@@ -1,0 +1,539 @@
+import { randomUUID } from "node:crypto";
+
+import { DocumentScope } from "@prisma/client";
+
+import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
+import { AppError } from "../../../core/errors/AppError.js";
+import { GaragePath } from "../../../storage/GaragePath.js";
+import { ProjectBinaryStorage } from "../../../storage/ProjectBinaryStorage.js";
+import { StartDdtProcessingCommand } from "../dto/StartDdtProcessingCommand.js";
+import { DdtProcessingService } from "./DdtProcessingService.js";
+
+interface LegacyDdtArticleItem {
+  article_type: string;
+  quantity: number;
+  unit: string;
+}
+
+export interface LegacyDdtReaderDocumentDto {
+  id: string;
+  original_filename: string;
+  status: string;
+  movement_type: string | null;
+  movement_scope: string | null;
+  main_warehouse_action: string | null;
+  bolla_number: string | null;
+  commessa_reference: string | null;
+  transfer_note: string | null;
+  article_count: number | null;
+  warehouse_delta: number | null;
+  article_items: LegacyDdtArticleItem[];
+  analysis_summary: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface DdtDocumentRow {
+  id: string;
+  status: string;
+  original_filename: string | null;
+  last_error: string | null;
+  created_at: Date;
+  updated_at: Date;
+  document: {
+    id: string;
+    filename: string | null;
+    storage_path: string;
+    deleted_at: Date | null;
+  };
+  analysis_result: {
+    movement_type: string | null;
+    movement_scope: string | null;
+    main_warehouse_action: string | null;
+    bolla_number: string | null;
+    commessa_reference: string | null;
+    transfer_note: string | null;
+    article_count: number | null;
+    warehouse_delta: number | null;
+    summary: string | null;
+    article_items: Array<{
+      article_type: string;
+      quantity: unknown;
+      unit: string;
+    }>;
+  } | null;
+}
+
+export class LegacyDdtReaderService {
+  private readonly processingService: DdtProcessingService;
+  private readonly objectStorage: ProjectBinaryStorage;
+
+  public constructor(processingService: DdtProcessingService, objectStorage: ProjectBinaryStorage) {
+    this.processingService = processingService;
+    this.objectStorage = objectStorage;
+  }
+
+  public getConfig(): { single_document_mode: boolean; lm_model: string; lm_base_url: string } {
+    return {
+      single_document_mode: true,
+      lm_model: process.env.DDT_READER_LM_MODEL ?? "stub-analyzer",
+      lm_base_url: process.env.DDT_READER_LM_BASE_URL ?? "http://127.0.0.1:1234",
+    };
+  }
+
+  public async listDocuments(workspaceId: string): Promise<LegacyDdtReaderDocumentDto[]> {
+    const prisma = PrismaClientManager.getClient();
+
+    const rows = await prisma.ddtDocument.findMany({
+      where: {
+        workspace_id: workspaceId,
+        document: {
+          is: {
+            deleted_at: null,
+          },
+        },
+      },
+      include: {
+        document: {
+          select: {
+            id: true,
+            filename: true,
+            storage_path: true,
+            deleted_at: true,
+          },
+        },
+        analysis_result: {
+          include: {
+            article_items: {
+              orderBy: {
+                id: "asc",
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        created_at: "desc",
+      },
+    });
+
+    return rows.map((row) => this.toLegacyDocument(row as unknown as DdtDocumentRow));
+  }
+
+  public async getDocument(workspaceId: string, ddtDocumentId: string): Promise<LegacyDdtReaderDocumentDto | null> {
+    const row = await this.findDdtDocument(workspaceId, ddtDocumentId);
+    return row ? this.toLegacyDocument(row) : null;
+  }
+
+  public async uploadDocument(params: {
+    workspaceId: string;
+    requestedByUserId: string | null;
+    fileName: string;
+    mimeType: string;
+    bytes: Buffer;
+  }): Promise<LegacyDdtReaderDocumentDto> {
+    if (params.bytes.length === 0) {
+      throw new AppError("File vuoto.", "DDT_FILE_EMPTY", 400);
+    }
+
+    const prisma = PrismaClientManager.getClient();
+    const fileName = this.resolveFileName(params.fileName);
+    const objectKey = this.buildObjectKey(params.workspaceId, fileName, params.bytes);
+
+    const storedObject = await this.objectStorage.putObject({
+      bucket: this.objectStorage.defaultBucket(),
+      objectKey,
+      bytes: params.bytes,
+      contentType: params.mimeType || "application/pdf",
+      metadata: {
+        workspaceid: params.workspaceId,
+        scope: "ddt-reader",
+      },
+    });
+
+    const storagePath = GaragePath.toStoragePath(storedObject.bucket, storedObject.objectKey);
+    const ddtNode = await this.ensureDdtNode(params.workspaceId);
+
+    const [pdfType, uploadedStatus] = await Promise.all([
+      prisma.fileType.upsert({
+        where: {
+          key: "pdf",
+        },
+        update: {
+          mime_type: "application/pdf",
+        },
+        create: {
+          key: "pdf",
+          mime_type: "application/pdf",
+        },
+      }),
+      prisma.fileStatus.upsert({
+        where: {
+          key: "uploaded",
+        },
+        update: {},
+        create: {
+          key: "uploaded",
+        },
+      }),
+    ]);
+
+    const createdDocument = await prisma.document.create({
+      data: {
+        workspace_id: params.workspaceId,
+        node_id: ddtNode.id,
+        file_type_id: pdfType.id,
+        file_status_id: uploadedStatus.id,
+        scope: DocumentScope.DDT,
+        domain_entity_type: "DdtDocument",
+        filename: fileName,
+        size_bytes: BigInt(params.bytes.length),
+        storage_path: storagePath,
+        uploaded_by_user_id: params.requestedByUserId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const created = await prisma.ddtDocument.create({
+      data: {
+        workspace_id: params.workspaceId,
+        document_id: createdDocument.id,
+        status: "UPLOADED",
+        original_filename: fileName,
+        requested_by_user_id: params.requestedByUserId,
+      },
+      include: {
+        document: {
+          select: {
+            id: true,
+            filename: true,
+            storage_path: true,
+            deleted_at: true,
+          },
+        },
+        analysis_result: {
+          include: {
+            article_items: true,
+          },
+        },
+      },
+    });
+
+    return this.toLegacyDocument(created as unknown as DdtDocumentRow);
+  }
+
+  public async queueAnalyze(params: {
+    workspaceId: string;
+    requestedByUserId: string | null;
+    ddtDocumentId: string;
+  }): Promise<{ queued: boolean; docId: string; status: string; jobId: string }> {
+    const prisma = PrismaClientManager.getClient();
+
+    const row = await prisma.ddtDocument.findFirst({
+      where: {
+        workspace_id: params.workspaceId,
+        id: params.ddtDocumentId,
+        document: {
+          is: {
+            deleted_at: null,
+          },
+        },
+      },
+      select: {
+        id: true,
+        document_id: true,
+      },
+    });
+
+    if (!row) {
+      throw new AppError("Documento non trovato.", "DDT_DOCUMENT_NOT_FOUND", 404);
+    }
+
+    const queued = await this.processingService.queueAnalysis(
+      new StartDdtProcessingCommand({
+        workspaceId: params.workspaceId,
+        documentId: row.document_id,
+        requestedByUserId: params.requestedByUserId,
+      }),
+    );
+
+    return {
+      queued: true,
+      docId: row.id,
+      status: "queued",
+      jobId: queued.jobId,
+    };
+  }
+
+  public async deleteDocument(workspaceId: string, ddtDocumentId: string): Promise<boolean> {
+    const prisma = PrismaClientManager.getClient();
+
+    const row = await prisma.ddtDocument.findFirst({
+      where: {
+        workspace_id: workspaceId,
+        id: ddtDocumentId,
+      },
+      include: {
+        document: {
+          select: {
+            id: true,
+            storage_path: true,
+          },
+        },
+      },
+    });
+
+    if (!row) {
+      return false;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.ddtDocument.delete({
+        where: {
+          id: row.id,
+        },
+      });
+
+      await tx.document.update({
+        where: {
+          id: row.document.id,
+        },
+        data: {
+          deleted_at: new Date(),
+        },
+      });
+    });
+
+    if (row.document.storage_path.startsWith("garage://")) {
+      try {
+        const parsed = GaragePath.parse(row.document.storage_path);
+        await this.objectStorage.deleteObject(parsed.bucket, parsed.objectKey);
+      } catch {
+        // best effort cleanup
+      }
+    }
+
+    return true;
+  }
+
+  public async getDocumentFile(params: {
+    workspaceId: string;
+    ddtDocumentId: string;
+  }): Promise<{ bytes: Buffer; contentType: string; fileName: string } | null> {
+    const row = await this.findDdtDocument(params.workspaceId, params.ddtDocumentId);
+    if (!row) {
+      return null;
+    }
+
+    const payload = await this.readStoragePayload(row.document.storage_path);
+    if (!payload) {
+      return null;
+    }
+
+    return {
+      bytes: payload.bytes,
+      contentType: payload.contentType ?? "application/pdf",
+      fileName: row.original_filename ?? row.document.filename ?? "document.pdf",
+    };
+  }
+
+  private async findDdtDocument(workspaceId: string, ddtDocumentId: string): Promise<DdtDocumentRow | null> {
+    const prisma = PrismaClientManager.getClient();
+
+    const row = await prisma.ddtDocument.findFirst({
+      where: {
+        workspace_id: workspaceId,
+        id: ddtDocumentId,
+        document: {
+          is: {
+            deleted_at: null,
+          },
+        },
+      },
+      include: {
+        document: {
+          select: {
+            id: true,
+            filename: true,
+            storage_path: true,
+            deleted_at: true,
+          },
+        },
+        analysis_result: {
+          include: {
+            article_items: {
+              orderBy: {
+                id: "asc",
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return row ? (row as unknown as DdtDocumentRow) : null;
+  }
+
+  private async ensureDdtNode(workspaceId: string): Promise<{ id: string; depth: number }> {
+    const root = await this.ensureNode(workspaceId, null, "ddt-reader", "/ddt-reader", 0);
+
+    return this.ensureNode(
+      workspaceId,
+      root.id,
+      "documents",
+      "/ddt-reader/documents",
+      root.depth + 1,
+    );
+  }
+
+  private async ensureNode(
+    workspaceId: string,
+    parentId: string | null,
+    name: string,
+    pathCache: string,
+    depth: number,
+  ): Promise<{ id: string; depth: number }> {
+    const prisma = PrismaClientManager.getClient();
+
+    const existing = await prisma.node.findFirst({
+      where: {
+        workspace_id: workspaceId,
+        path_cache: pathCache,
+        deleted_at: null,
+      },
+      select: {
+        id: true,
+        depth: true,
+      },
+    });
+
+    if (existing) {
+      return {
+        id: existing.id,
+        depth: existing.depth,
+      };
+    }
+
+    const created = await prisma.node.create({
+      data: {
+        workspace_id: workspaceId,
+        parent_id: parentId,
+        name,
+        path_cache: pathCache,
+        depth,
+      },
+      select: {
+        id: true,
+        depth: true,
+      },
+    });
+
+    return {
+      id: created.id,
+      depth: created.depth,
+    };
+  }
+
+  private toLegacyDocument(row: DdtDocumentRow): LegacyDdtReaderDocumentDto {
+    const analysis = row.analysis_result;
+
+    return {
+      id: row.id,
+      original_filename: row.original_filename ?? row.document.filename ?? "document.pdf",
+      status: this.toLegacyStatus(row.status),
+      movement_type: analysis?.movement_type ?? null,
+      movement_scope: analysis?.movement_scope ?? null,
+      main_warehouse_action: analysis?.main_warehouse_action ?? null,
+      bolla_number: analysis?.bolla_number ?? null,
+      commessa_reference: analysis?.commessa_reference ?? null,
+      transfer_note: analysis?.transfer_note ?? null,
+      article_count: analysis?.article_count ?? null,
+      warehouse_delta: analysis?.warehouse_delta ?? null,
+      article_items: (analysis?.article_items ?? []).map((item) => ({
+        article_type: item.article_type,
+        quantity: this.toNumber(item.quantity),
+        unit: item.unit,
+      })),
+      analysis_summary: analysis?.summary ?? null,
+      last_error: row.last_error ?? null,
+      created_at: row.created_at.toISOString(),
+      updated_at: row.updated_at.toISOString(),
+    };
+  }
+
+  private toLegacyStatus(status: string): string {
+    return status.toLowerCase();
+  }
+
+  private toNumber(value: unknown): number {
+    if (typeof value === "number") {
+      return value;
+    }
+
+    if (typeof value === "bigint") {
+      return Number(value);
+    }
+
+    if (value && typeof value === "object" && "toNumber" in value && typeof (value as { toNumber: unknown }).toNumber === "function") {
+      return (value as { toNumber: () => number }).toNumber();
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private resolveFileName(fileName: string): string {
+    const trimmed = fileName.trim();
+    return trimmed.length > 0 ? trimmed : "document.pdf";
+  }
+
+  private buildObjectKey(workspaceId: string, fileName: string, bytes: Buffer): string {
+    const fileSha = this.objectStorage.sha256Hex(bytes);
+    const safeName = this.sanitizeFileName(fileName);
+
+    return [
+      this.sanitizeSegment(this.objectStorage.storagePrefix()),
+      "ddt-reader",
+      this.sanitizeSegment(workspaceId),
+      fileSha,
+      `${Date.now()}-${randomUUID()}`,
+      safeName,
+    ].join("/");
+  }
+
+  private sanitizeFileName(fileName: string): string {
+    const trimmed = fileName.trim();
+    const withFallback = trimmed || "document.pdf";
+
+    return withFallback
+      .normalize("NFKD")
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "") || "document.pdf";
+  }
+
+  private sanitizeSegment(value: string): string {
+    return value
+      .normalize("NFKD")
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "") || "na";
+  }
+
+  private async readStoragePayload(storagePath: string): Promise<{ bytes: Buffer; contentType: string | null } | null> {
+    if (!storagePath.startsWith("garage://")) {
+      return null;
+    }
+
+    const parsed = GaragePath.parse(storagePath);
+    const payload = await this.objectStorage.getObject(parsed.bucket, parsed.objectKey);
+    return {
+      bytes: payload.bytes,
+      contentType: payload.contentType,
+    };
+  }
+}
