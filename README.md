@@ -43,6 +43,18 @@ Servizi:
 
 Nota: il container `app` esegue `db:push` + `db:seed` all'avvio.
 
+## Test rapidi (smoke)
+Con stack Docker avviato:
+```bash
+npm run test:smoke
+```
+
+Variabili opzionali:
+- `SMOKE_API_BASE_URL` (default `http://localhost:3000`)
+- `SMOKE_FRONTEND_BASE_URL` (default `http://localhost:3100`)
+- `SMOKE_LOGIN_EMAIL` (default `superuser@birgus.it`)
+- `SMOKE_LOGIN_PASSWORD` (default `admin`)
+
 ## Endpoint principali
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
@@ -125,4 +137,16 @@ Il seed crea organization/workspace, ruoli, permessi, moduli, status base e asso
 ## Stato corrente
 - Architettura OOP modulare attiva
 - Worker DDT integrato nel processo app (queue in-memory)
-- Pipeline DDT analyzer in modalità stub (punto di estensione per OCR/AI reale)
+- Pipeline DDT analyzer collegata a LM Studio via endpoint configurabili da `.env`
+
+## Documentazione database
+- Guida completa tabelle/relazioni: `docs/DATABASE_README.md`
+- Deploy/reverse proxy locale-LAN: `docs/DEPLOYMENT.md`
+
+## Variabili ambiente auth/proxy
+- `AUTH_COOKIE_NAME` (default `vl_session`)
+- `AUTH_COOKIE_DOMAIN` (opzionale, utile con dominio custom)
+- `AUTH_COOKIE_PATH` (default `/`)
+- `AUTH_COOKIE_SECURE` (`true` in produzione HTTPS)
+- `AUTH_COOKIE_SAME_SITE` (`Lax` default, supporta `Strict`/`None`)
+- `TRUST_PROXY` (`true` se dietro reverse proxy)

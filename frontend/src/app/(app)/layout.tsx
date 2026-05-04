@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
-import { AUTH_SESSION_COOKIE_NAME } from "@/lib/auth/constants";
+import { AUTH_CONFIGURED_COOKIE_NAME } from "@/lib/auth/constants";
 import { APP_ROUTES } from "@/lib/routes";
 
 const getApiBaseUrl = () =>
@@ -11,7 +11,7 @@ const getApiBaseUrl = () =>
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const cookieStore = await cookies();
-  const token = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
+  const token = cookieStore.get(AUTH_CONFIGURED_COOKIE_NAME)?.value;
   if (!token) {
     redirect(APP_ROUTES.login);
   }
@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     const response = await fetch(`${getApiBaseUrl()}/api/auth/session`, {
       cache: "no-store",
       headers: {
-        cookie: `${AUTH_SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
+        cookie: `${AUTH_CONFIGURED_COOKIE_NAME}=${encodeURIComponent(token)}`,
       },
     });
 

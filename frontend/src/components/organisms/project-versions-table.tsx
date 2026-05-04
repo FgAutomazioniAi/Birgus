@@ -9,6 +9,7 @@ import {
   FileDown,
   PlusCircle,
   Save,
+  Truck,
   Trash2,
   X,
 } from "lucide-react";
@@ -17,20 +18,24 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Text } from "@/components/atoms";
-import { ConfirmDeleteDialog, SearchField } from "@/components/molecules";
+import { ConfirmDeleteDialog, PageHelpHint, SearchField } from "@/components/molecules";
 import { cn } from "@/lib/cn";
 import { downloadTablePdf } from "@/lib/pdf-export";
-import { PROJECT_STATUSES } from "@/lib/project-status";
+import { PROJECT_STATUS_OPTIONS, getProjectStatusLabel } from "@/lib/project-status";
 import { APP_ROUTES } from "@/lib/routes";
 import type { ProjectStatus } from "@/lib/types";
 
 interface ProjectVersionRow {
+  id: number;
   clientId: string | null;
   clientName: string | null;
   createdAt: string;
   description: string;
   isDefault: boolean;
   status: ProjectStatus;
+  shipmentCode: string | null;
+  shipmentId: string | null;
+  shipmentStatusKey: string | null;
   versionLabel: string;
 }
 
@@ -48,7 +53,7 @@ interface ClientItem {
   name: string;
 }
 
-type VersionColumnKey = "description" | "versionLabel" | "clientName" | "status" | "createdAt" | "actions";
+type VersionColumnKey = "description" | "versionLabel" | "clientName" | "shipment" | "status" | "createdAt" | "actions";
 
 interface VersionColumnDef {
   cellClassName?: string;
@@ -72,6 +77,7 @@ const DEFAULT_VERSION_COLUMN_ORDER: VersionColumnKey[] = [
   "description",
   "versionLabel",
   "clientName",
+  "shipment",
   "status",
   "createdAt",
   "actions",
@@ -98,10 +104,20 @@ const VERSION_COLUMN_DEFS: VersionColumnDef[] = [
     render: (version) => version.clientName ?? "N/D",
   },
   {
+    key: "shipment",
+    label: "Spedizione",
+    required: false,
+    render: (version) =>
+      version.shipmentCode
+        ? `${version.shipmentCode}${version.shipmentStatusKey ? ` (${formatShipmentStatus(version.shipmentStatusKey)})` : ""}`
+        : "Non collegata",
+    cellClassName: "text-xs text-text-secondary",
+  },
+  {
     key: "status",
     label: "Stato",
     required: false,
-    render: (version) => version.status,
+    render: (version) => getProjectStatusLabel(version.status),
   },
   {
     key: "createdAt",
@@ -130,6 +146,21 @@ function formatDate(value: string) {
   return date.toLocaleDateString("it-IT");
 }
 
+function formatShipmentStatus(value: string | null): string {
+  switch (value) {
+    case "draft":
+      return "Bozza";
+    case "prepared":
+      return "Preparata";
+    case "shipped":
+      return "Spedita";
+    case "delivered":
+      return "Consegnata";
+    default:
+      return value ?? "-";
+  }
+}
+
 export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
   const router = useRouter();
   const [projectName, setProjectName] = useState("");
@@ -139,7 +170,7 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newDescription, setNewDescription] = useState("");
-  const [newStatus, setNewStatus] = useState<ProjectStatus>(PROJECT_STATUSES[0]);
+  const [newStatus, setNewStatus] = useState<ProjectStatus>(PROJECT_STATUS_OPTIONS[0].key);
   const [newClientId, setNewClientId] = useState<string>("");
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isCreatingClient, setIsCreatingClient] = useState(false);
@@ -195,7 +226,7 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
         "";
       const suggestedStatus =
         versionsPayload.versions?.find((version) => version.isDefault)?.status ??
-        PROJECT_STATUSES[0];
+        PROJECT_STATUS_OPTIONS[0].key;
 
       setNewClientId(suggestedClientId ?? "");
       setNewStatus(suggestedStatus);
@@ -400,7 +431,8 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
           version.description.toLowerCase().includes(lowered) ||
           version.versionLabel.toLowerCase().includes(lowered) ||
           (version.clientName ?? "").toLowerCase().includes(lowered) ||
-          version.status.toLowerCase().includes(lowered) ||
+          (version.shipmentCode ?? "").toLowerCase().includes(lowered) ||
+          getProjectStatusLabel(version.status).toLowerCase().includes(lowered) ||
           formatDate(version.createdAt).toLowerCase().includes(lowered)
         );
       }),
@@ -464,7 +496,7 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
           clientName: version.clientName ?? "N/D",
           createdAt: formatDate(version.createdAt),
           description: version.description,
-          status: version.status,
+          status: getProjectStatusLabel(version.status),
           versionLabel: version.versionLabel,
         })),
         subtitle: `Progetto: ${projectName || id} · Totale versioni esportate: ${filteredVersions.length}`,
@@ -490,9 +522,12 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
             <ArrowLeft size={18} />
           </button>
           <div>
-            <Text as="h1" variant="h1">
-              {projectName || "Versionamenti progetto"}
-            </Text>
+            <div className="flex items-center gap-2">
+              <Text as="h1" variant="h1">
+                {projectName || "Versionamenti progetto"}
+              </Text>
+              <PageHelpHint text="Crea e gestisci le versioni del progetto." />
+            </div>
             <Text variant="muted">Cliente e stato sono gestiti per singola versione</Text>
           </div>
         </div>
@@ -513,7 +548,7 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
             value={newDescription}
             onChange={(event) => setNewDescription(event.target.value)}
             maxLength={80}
-            placeholder="Descrizione breve (es. revisione prezzi maggio)"
+            placeholder="Descrizione breve"
             disabled={isSubmitting}
           />
           <select
@@ -522,9 +557,9 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
             disabled={isSubmitting}
             className="h-11 w-full cursor-pointer appearance-none rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-4 text-sm text-text-secondary focus:outline-none focus:ring-2 focus:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {PROJECT_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {status}
+            {PROJECT_STATUS_OPTIONS.map((status) => (
+              <option key={status.key} value={status.key}>
+                {status.label}
               </option>
             ))}
           </select>
@@ -672,6 +707,16 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
                     <td key={`${version.versionLabel}-${column.key}`} className={cn("px-6 py-4", column.cellClassName)}>
                       {column.key === "actions" ? (
                         <div className="flex items-center justify-end gap-2">
+                          {version.shipmentId && (
+                            <button
+                              type="button"
+                              onClick={() => router.push(APP_ROUTES.shipmentDetail(version.shipmentId as string))}
+                              className="inline-flex h-8 items-center gap-1 rounded-md border border-status-info-border px-2.5 text-[11px] font-medium text-status-info-text transition-colors hover:bg-status-info-bg"
+                            >
+                              <Truck size={12} />
+                              Spedizione
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => void selectVersion(version.versionLabel)}
@@ -743,7 +788,7 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-[var(--radius-xl)] border border-border-default bg-bg-surface p-5 shadow-elevated">
             <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">Nuovo Cliente</h3>
-            <p className="mt-1 text-xs text-text-muted">Aggiunta rapida durante creazione versione.</p>
+            {/*<p className="mt-1 text-xs text-text-muted"></p>*/}
             <div className="mt-4 grid grid-cols-1 gap-3">
               <Input value={newClientName} onChange={(event) => setNewClientName(event.target.value)} placeholder="Nome e cognome" />
               <Input type="email" value={newClientEmail} onChange={(event) => setNewClientEmail(event.target.value)} placeholder="Email" />

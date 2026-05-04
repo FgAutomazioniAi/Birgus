@@ -8,6 +8,7 @@ import { ModuleGuard } from "./middleware/ModuleGuard.js";
 import { AuthMiddleware } from "./middleware/AuthMiddleware.js";
 import { PermissionGuard } from "./middleware/PermissionGuard.js";
 import { AuthController } from "./controllers/AuthController.js";
+import { SessionCookieFactory } from "./auth/SessionCookieFactory.js";
 import { ClientController } from "./controllers/ClientController.js";
 import { DdtController } from "./controllers/DdtController.js";
 import { LegacyDdtReaderController } from "./controllers/LegacyDdtReaderController.js";
@@ -25,7 +26,10 @@ const healthSchema = z.object({
 });
 
 export class HttpServer {
-  private readonly app = Fastify({ logger: true });
+  private readonly app = Fastify({
+    logger: true,
+    trustProxy: this.resolveTrustProxy(),
+  });
   private readonly container: ApplicationContainer;
   private readonly authMiddleware: AuthMiddleware;
   private readonly moduleGuard: ModuleGuard;
@@ -33,7 +37,11 @@ export class HttpServer {
 
   public constructor(container?: ApplicationContainer) {
     this.container = container ?? new ApplicationContainer();
-    this.authMiddleware = new AuthMiddleware(this.container.authService, this.container.tenancyGuard);
+    this.authMiddleware = new AuthMiddleware(
+      this.container.authService,
+      this.container.tenancyGuard,
+      process.env.AUTH_COOKIE_NAME ?? "vl_session",
+    );
     this.moduleGuard = new ModuleGuard(this.container.moduleAccessPolicy);
     this.permissionGuard = new PermissionGuard(this.container.permissionPolicy);
 
@@ -54,7 +62,18 @@ export class HttpServer {
   }
 
   private registerRoutes(): void {
-    const authController = new AuthController(this.container.authService, this.container.passwordResetService);
+    const sessionCookieFactory = new SessionCookieFactory({
+      cookieName: process.env.AUTH_COOKIE_NAME ?? "vl_session",
+      domain: process.env.AUTH_COOKIE_DOMAIN,
+      path: process.env.AUTH_COOKIE_PATH ?? "/",
+      secure: this.resolveBooleanEnv("AUTH_COOKIE_SECURE", false),
+      sameSite: this.resolveSameSiteMode(process.env.AUTH_COOKIE_SAME_SITE),
+    });
+    const authController = new AuthController(
+      this.container.authService,
+      this.container.passwordResetService,
+      sessionCookieFactory,
+    );
     const moduleController = new ModuleController(this.container.moduleManagementService, this.permissionGuard);
     const clientController = new ClientController(this.container.clientService, this.moduleGuard, this.permissionGuard);
     const userPreferenceController = new UserPreferenceController(this.container.userPreferenceService);
@@ -133,6 +152,8 @@ export class HttpServer {
 
     this.app.get("/api/shipments", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, shipmentController.listShipments);
     this.app.post("/api/shipments", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, shipmentController.createShipment);
+    this.app.get("/api/shipments/:shipmentId", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, shipmentController.getShipment);
+    this.app.patch("/api/shipments/:shipmentId/specification", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, shipmentController.updateShipmentSpecification);
 
     this.app.get("/api/orchestrator/jobs/:jobId", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, legacyOrchestratorController.getJob);
 
@@ -168,5 +189,32 @@ export class HttpServer {
       this.app.log.error(error);
       reply.code(500).send({ code: "INTERNAL_ERROR", message: "Unexpected error." });
     });
+  }
+
+  private resolveTrustProxy(): boolean {
+    return this.resolveBooleanEnv("TRUST_PROXY", false);
+  }
+
+  private resolveBooleanEnv(name: string, defaultValue: boolean): boolean {
+    const value = process.env[name];
+    if (!value) {
+      return defaultValue;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+  }
+
+  private resolveSameSiteMode(value: string | undefined): "Strict" | "Lax" | "None" {
+    const normalized = value?.trim().toLowerCase();
+    if (normalized === "strict") {
+      return "Strict";
+    }
+
+    if (normalized === "none") {
+      return "None";
+    }
+
+    return "Lax";
   }
 }

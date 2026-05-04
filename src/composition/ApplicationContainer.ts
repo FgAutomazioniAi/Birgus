@@ -8,7 +8,7 @@ import { ClientService } from "../modules/clients/services/ClientService.js";
 import { PrismaDdtProcessingRepository } from "../modules/ddt-processing/infra/PrismaDdtProcessingRepository.js";
 import { DdtProcessingService } from "../modules/ddt-processing/services/DdtProcessingService.js";
 import { LegacyDdtReaderService } from "../modules/ddt-processing/services/LegacyDdtReaderService.js";
-import { StubDdtAnalyzer } from "../modules/ddt-processing/services/StubDdtAnalyzer.js";
+import { NextOrchestratorDdtAnalyzer } from "../modules/ddt-processing/services/NextOrchestratorDdtAnalyzer.js";
 import { PrismaDocumentArchiveRepository } from "../modules/document-archive/infra/PrismaDocumentArchiveRepository.js";
 import { DocumentArchiveService } from "../modules/document-archive/services/DocumentArchiveService.js";
 import { PrismaAuthSessionRepository } from "../modules/identity/infra/PrismaAuthSessionRepository.js";
@@ -18,6 +18,7 @@ import { AuthService } from "../modules/identity/services/AuthService.js";
 import { PasswordResetService } from "../modules/identity/services/PasswordResetService.js";
 import { PasswordHasher } from "../modules/identity/services/PasswordHasher.js";
 import { SessionTokenService } from "../modules/identity/services/SessionTokenService.js";
+import { SmtpPasswordResetNotifier } from "../modules/identity/services/SmtpPasswordResetNotifier.js";
 import { PrismaModuleAccessRepository } from "../modules/module-management/infra/PrismaModuleAccessRepository.js";
 import { ModuleManagementService } from "../modules/module-management/services/ModuleManagementService.js";
 import { PrismaNotificationRepository } from "../modules/notifications/infra/PrismaNotificationRepository.js";
@@ -80,6 +81,7 @@ export class ApplicationContainer {
       new PrismaPasswordResetCodeRepository(),
       authSessionRepository,
       passwordHasher,
+      new SmtpPasswordResetNotifier(),
       Number.parseInt(process.env.AUTH_PASSWORD_RESET_CODE_TTL_MINUTES ?? "15", 10),
     );
 
@@ -91,15 +93,15 @@ export class ApplicationContainer {
     const userPreferenceRepository = new PrismaUserPreferenceRepository();
     this.userPreferenceService = new UserPreferenceService(userPreferenceRepository);
 
+    const shipmentRepository = new PrismaShipmentRepository();
+    this.shipmentService = new ShipmentService(shipmentRepository);
+
     const projectRepository = new PrismaProjectRepository();
-    this.projectService = new ProjectService(projectRepository);
+    this.projectService = new ProjectService(projectRepository, this.shipmentService);
 
     const storage = StorageSelector.create();
     const documentRepository = new PrismaDocumentArchiveRepository();
     this.documentArchiveService = new DocumentArchiveService(documentRepository, storage);
-
-    const shipmentRepository = new PrismaShipmentRepository();
-    this.shipmentService = new ShipmentService(shipmentRepository);
 
     const queue = new InMemoryJobQueue();
     const ddtRepository = new PrismaDdtProcessingRepository();
@@ -107,7 +109,7 @@ export class ApplicationContainer {
     this.legacyDdtReaderService = new LegacyDdtReaderService(this.ddtProcessingService, storage);
     this.legacyQuotationOrchestratorService = new LegacyQuotationOrchestratorService(this.documentArchiveService);
 
-    const ddtWorker = new DdtProcessingWorker(ddtRepository, new StubDdtAnalyzer());
+    const ddtWorker = new DdtProcessingWorker(ddtRepository, new NextOrchestratorDdtAnalyzer());
     this.workerCoordinator = new WorkerCoordinator(queue, ddtWorker);
     this.workerCoordinator.registerHandlers();
 

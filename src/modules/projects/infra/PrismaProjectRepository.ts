@@ -329,6 +329,18 @@ export class PrismaProjectRepository implements ProjectRepository {
             last_name: true,
           },
         },
+        shipment: {
+          select: {
+            id: true,
+            code: true,
+            deleted_at: true,
+            status: {
+              select: {
+                key: true,
+              },
+            },
+          },
+        },
       },
       orderBy: [
         { created_at: "asc" },
@@ -336,18 +348,7 @@ export class PrismaProjectRepository implements ProjectRepository {
       ],
     });
 
-    return rows.map((row) => new ProjectVersionEntity({
-      id: row.id,
-      workspaceId: row.workspace_id,
-      projectId: row.project_id,
-      versionLabel: row.version_label,
-      description: row.description,
-      clientId: row.client_id,
-      clientName: row.client ? [row.client.first_name, row.client.last_name ?? ""].join(" ").trim() : null,
-      statusKey: row.status?.key ?? null,
-      isDefault: row.is_default,
-      createdAt: row.created_at,
-    }));
+    return rows.map((row) => this.mapProjectVersion(row));
   }
 
   public async findVersionByLabel(
@@ -376,6 +377,18 @@ export class PrismaProjectRepository implements ProjectRepository {
             last_name: true,
           },
         },
+        shipment: {
+          select: {
+            id: true,
+            code: true,
+            deleted_at: true,
+            status: {
+              select: {
+                key: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -383,18 +396,7 @@ export class PrismaProjectRepository implements ProjectRepository {
       return null;
     }
 
-    return new ProjectVersionEntity({
-      id: row.id,
-      workspaceId: row.workspace_id,
-      projectId: row.project_id,
-      versionLabel: row.version_label,
-      description: row.description,
-      clientId: row.client_id,
-      clientName: row.client ? [row.client.first_name, row.client.last_name ?? ""].join(" ").trim() : null,
-      statusKey: row.status?.key ?? null,
-      isDefault: row.is_default,
-      createdAt: row.created_at,
-    });
+    return this.mapProjectVersion(row);
   }
 
   public async countActiveVersions(workspaceId: string, projectId: string): Promise<number> {
@@ -456,21 +458,22 @@ export class PrismaProjectRepository implements ProjectRepository {
             last_name: true,
           },
         },
+        shipment: {
+          select: {
+            id: true,
+            code: true,
+            deleted_at: true,
+            status: {
+              select: {
+                key: true,
+              },
+            },
+          },
+        },
       },
     });
 
-    return new ProjectVersionEntity({
-      id: row.id,
-      workspaceId: row.workspace_id,
-      projectId: row.project_id,
-      versionLabel: row.version_label,
-      description: row.description,
-      clientId: row.client_id,
-      clientName: row.client ? [row.client.first_name, row.client.last_name ?? ""].join(" ").trim() : null,
-      statusKey: row.status?.key ?? null,
-      isDefault: row.is_default,
-      createdAt: row.created_at,
-    });
+    return this.mapProjectVersion(row);
   }
 
   public async clearDefaultVersionFlags(workspaceId: string, projectId: string): Promise<void> {
@@ -536,6 +539,18 @@ export class PrismaProjectRepository implements ProjectRepository {
             last_name: true,
           },
         },
+        shipment: {
+          select: {
+            id: true,
+            code: true,
+            deleted_at: true,
+            status: {
+              select: {
+                key: true,
+              },
+            },
+          },
+        },
       },
       orderBy: [
         { created_at: "desc" },
@@ -547,6 +562,33 @@ export class PrismaProjectRepository implements ProjectRepository {
       return null;
     }
 
+    return this.mapProjectVersion(row);
+  }
+
+  private mapProjectVersion(row: {
+      id: number;
+      workspace_id: string;
+      project_id: string;
+      version_label: string;
+      description: string;
+      client_id: string | null;
+      is_default: boolean;
+      created_at: Date;
+      client: { first_name: string; last_name: string | null } | null;
+      status: { key: string } | null;
+      shipment:
+        | {
+            id: string;
+            code: string;
+            deleted_at: Date | null;
+            status: {
+              key: string;
+            };
+          }
+        | null;
+    }): ProjectVersionEntity {
+    const activeShipment = row.shipment && row.shipment.deleted_at === null ? row.shipment : null;
+
     return new ProjectVersionEntity({
       id: row.id,
       workspaceId: row.workspace_id,
@@ -556,6 +598,9 @@ export class PrismaProjectRepository implements ProjectRepository {
       clientId: row.client_id,
       clientName: row.client ? [row.client.first_name, row.client.last_name ?? ""].join(" ").trim() : null,
       statusKey: row.status?.key ?? null,
+      shipmentId: activeShipment?.id ?? null,
+      shipmentCode: activeShipment?.code ?? null,
+      shipmentStatusKey: activeShipment?.status.key ?? null,
       isDefault: row.is_default,
       createdAt: row.created_at,
     });

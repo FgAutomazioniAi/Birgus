@@ -87,7 +87,12 @@ export function LoginForm() {
       });
 
       if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        const payload = (await response.json().catch(() => null)) as { message?: string; code?: string } | null;
+        if (payload?.code === "AUTH_PASSWORD_RESET_EMAIL_FAILED") {
+          window.alert(
+            "Invio email non riuscito.\nAvvisa il tuo amministratore oppure contatta support.ai@fgautomazioni.it.",
+          );
+        }
         throw new Error(payload?.message ?? "Invio codice non riuscito.");
       }
 

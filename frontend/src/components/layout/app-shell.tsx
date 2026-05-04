@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 
+import { AuthSessionGuard } from "@/components/auth/auth-session-guard";
 import { Sidebar } from "@/components/organisms/sidebar";
 import { TopNav } from "@/components/organisms/top-nav";
 
@@ -20,6 +21,7 @@ export function AppShell({ children, currentUser }: AppShellProps) {
 
   return (
     <div className="flex min-h-screen bg-bg-page">
+      <AuthSessionGuard />
       <Sidebar
         open={sidebarOpen}
         collapsed={sidebarCollapsed}

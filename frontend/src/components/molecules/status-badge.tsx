@@ -1,20 +1,19 @@
 import { AlertCircle, CheckCircle2, Clock, FileText } from "lucide-react";
 
 import { Badge } from "@/components/atoms";
+import { getProjectStatusLabel } from "@/lib/project-status";
 import type { ProjectStatus } from "@/lib/types";
 
 const STATUS_TONES: Record<ProjectStatus, "info" | "success" | "warn" | "progress"> = {
-  "In Revisione": "info",
-  Completato: "success",
-  "In Attesa": "warn",
-  "In Corso": "progress",
+  in_revisione: "info",
+  completato: "success",
+  in_attesa: "warn",
 };
 
-const STATUS_ICONS = {
-  "In Revisione": FileText,
-  Completato: CheckCircle2,
-  "In Attesa": Clock,
-  "In Corso": AlertCircle,
+const STATUS_ICONS: Record<ProjectStatus, typeof FileText> = {
+  in_revisione: FileText,
+  completato: CheckCircle2,
+  in_attesa: Clock,
 };
 
 export interface StatusBadgeProps {
@@ -22,12 +21,12 @@ export interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status }: StatusBadgeProps) {
-  const Icon = STATUS_ICONS[status];
+  const Icon = STATUS_ICONS[status] ?? AlertCircle;
 
   return (
     <Badge tone={STATUS_TONES[status]}>
       <Icon size={12} />
-      {status}
+      {getProjectStatusLabel(status)}
     </Badge>
   );
 }

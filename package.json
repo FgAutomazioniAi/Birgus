@@ -7,9 +7,11 @@
     "dev": "tsx src/http/main.ts",
     "dev:frontend": "npm --prefix frontend run dev",
     "typecheck": "tsc --noEmit",
+    "test:smoke": "tsx scripts/smoke.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "db:backfill:shipments": "tsx scripts/backfill-project-version-shipments.ts",
     "build:frontend": "npm --prefix frontend run build"
   },
   "dependencies": {
@@ -17,10 +19,12 @@
     "@fastify/multipart": "^10.0.0",
     "@prisma/client": "^6.16.2",
     "fastify": "^5.6.1",
+    "nodemailer": "^8.0.7",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^22.13.11",
+    "@types/nodemailer": "^8.0.0",
     "prisma": "^6.16.2",
     "tsx": "^4.21.0",
     "typescript": "^5.8.2"

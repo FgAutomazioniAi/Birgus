@@ -7,8 +7,8 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Text } from "@/components/atoms";
-import { FormField } from "@/components/molecules";
-import { PROJECT_STATUSES } from "@/lib/project-status";
+import { FormField, PageHelpHint } from "@/components/molecules";
+import { PROJECT_STATUS_OPTIONS } from "@/lib/project-status";
 import { APP_ROUTES } from "@/lib/routes";
 import type { ProjectStatus } from "@/lib/types";
 
@@ -117,7 +117,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
   const [isCreatingVersion, setIsCreatingVersion] = useState(false);
   const [newVersionDescription, setNewVersionDescription] = useState("");
   const [newVersionClientId, setNewVersionClientId] = useState("");
-  const [newVersionStatus, setNewVersionStatus] = useState<ProjectStatus>(PROJECT_STATUSES[0]);
+  const [newVersionStatus, setNewVersionStatus] = useState<ProjectStatus>(PROJECT_STATUS_OPTIONS[0].key);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isCreatingClient, setIsCreatingClient] = useState(false);
   const [newClientName, setNewClientName] = useState("");
@@ -140,7 +140,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
       clientId: "",
       projectName: "",
       enableAi: false,
-      status: PROJECT_STATUSES[0],
+      status: PROJECT_STATUS_OPTIONS[0].key,
     },
   });
   const selectedProjectClientId = watch("clientId");
@@ -329,7 +329,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
           const resolvedVersionData =
             availableVersions.find((version) => version.versionLabel === resolvedVersion) ?? availableVersions[0] ?? null;
           setNewVersionClientId(resolvedVersionData?.clientId ?? project.clientId ?? "");
-          setNewVersionStatus(resolvedVersionData?.status ?? project.status ?? PROJECT_STATUSES[0]);
+          setNewVersionStatus(resolvedVersionData?.status ?? project.status ?? PROJECT_STATUS_OPTIONS[0].key);
           await loadVersionedProjectFiles(id, resolvedVersion);
         } else if (clients.length > 0) {
           setValue("clientId", clients[0]?.id ?? "", { shouldValidate: true });
@@ -815,9 +815,12 @@ export function ProjectForm({ id }: ProjectFormProps) {
             <ArrowLeft size={20} />
           </button>
           <div>
-            <Text as="h1" variant="h1">
-              {isEdit ? "Modifica Progetto" : "Nuovo Progetto"}
-            </Text>
+            <div className="flex items-center gap-2">
+              <Text as="h1" variant="h1">
+                {isEdit ? "Modifica Progetto" : "Nuovo Progetto"}
+              </Text>
+              <PageHelpHint text="Compila i dati progetto e salva la commessa." />
+            </div>
             <Text variant="muted">{isEdit ? "Modifica Commessa" : "Nuova Commessa"}</Text>
           </div>
         </div>
@@ -876,9 +879,9 @@ export function ProjectForm({ id }: ProjectFormProps) {
                 disabled={isLoading || isSubmitting}
                 className="h-12 w-full cursor-pointer appearance-none rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-4 py-3 text-sm text-text-secondary focus:outline-none focus:ring-2 focus:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {PROJECT_STATUSES.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
+                {PROJECT_STATUS_OPTIONS.map((status) => (
+                  <option key={status.key} value={status.key}>
+                    {status.label}
                   </option>
                 ))}
               </select>
@@ -955,9 +958,9 @@ export function ProjectForm({ id }: ProjectFormProps) {
                       disabled={isCreatingVersion}
                       className="h-11 w-full cursor-pointer appearance-none rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-4 text-sm text-text-secondary focus:outline-none focus:ring-2 focus:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {PROJECT_STATUSES.map((status) => (
-                        <option key={status} value={status}>
-                          {status}
+                      {PROJECT_STATUS_OPTIONS.map((status) => (
+                        <option key={status.key} value={status.key}>
+                          {status.label}
                         </option>
                       ))}
                     </select>

@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Text } from "@/components/atoms";
-import { FormField } from "@/components/molecules";
+import { FormField, PageHelpHint } from "@/components/molecules";
 import { APP_ROUTES } from "@/lib/routes";
 
 interface ClientFormValues {
@@ -117,9 +117,12 @@ export function ClientForm({ id }: ClientFormProps) {
             <ArrowLeft size={20} />
           </button>
           <div>
-            <Text as="h1" variant="h1">
-              {isEdit ? "Modifica Cliente" : "Nuovo Cliente"}
-            </Text>
+            <div className="flex items-center gap-2">
+              <Text as="h1" variant="h1">
+                {isEdit ? "Modifica Cliente" : "Nuovo Cliente"}
+              </Text>
+              <PageHelpHint text="Compila i campi richiesti e salva il cliente." />
+            </div>
             <Text variant="muted">
               {isEdit ? "Aggiorna i dati anagrafici del cliente" : "Inserisci un nuovo cliente"}
             </Text>

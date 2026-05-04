@@ -1,20 +1,37 @@
 "use client";
 
 import { Bot, FileText, LoaderCircle, Trash2, Upload } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Text } from "@/components/atoms";
+import { PageHelpHint } from "@/components/molecules";
 import { cn } from "@/lib/cn";
+import { APP_ROUTES } from "@/lib/routes";
 
 import type { DdtReaderArticleItem, DdtReaderConfig, DdtReaderDocument } from "./types";
 
 const PROCESSING_STATUSES = new Set(["queued", "ocr_processing", "ai_processing"]);
 
 type ApiErrorPayload = {
+  code?: string;
   detail?: string;
   message?: string;
 };
+
+class AuthSessionExpiredError extends Error {
+  public constructor(message = "Sessione non valida o scaduta.") {
+    super(message);
+    this.name = "AuthSessionExpiredError";
+  }
+}
+
+const AUTH_ERROR_CODES = new Set([
+  "AUTH_SESSION_INVALID",
+  "AUTH_TOKEN_REQUIRED",
+  "AUTH_BEARER_INVALID",
+]);
 
 const getErrorMessage = (payload: unknown, fallback: string) => {
   if (payload && typeof payload === "object") {
@@ -61,6 +78,17 @@ const requestJson = async <T,>(
   const payload = await readPayload(response);
 
   if (!response.ok) {
+    if (response.status === 401) {
+      const code =
+        payload && typeof payload === "object" && "code" in payload && typeof (payload as ApiErrorPayload).code === "string"
+          ? (payload as ApiErrorPayload).code ?? null
+          : null;
+
+      if (!code || AUTH_ERROR_CODES.has(code)) {
+        throw new AuthSessionExpiredError(getErrorMessage(payload, "Sessione non valida o scaduta."));
+      }
+    }
+
     throw new Error(getErrorMessage(payload, fallbackErrorMessage));
   }
 
@@ -154,10 +182,12 @@ const isPdfFile = (file: File): boolean => {
 };
 
 export function DdtReaderPanel() {
+  const router = useRouter();
   const [documents, setDocuments] = useState<DdtReaderDocument[]>([]);
   const [selectedDocId, setSelectedDocId] = useState<number | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [lmModel, setLmModel] = useState("non configurato");
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string>("");
 
   const [isUploading, setIsUploading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -167,6 +197,7 @@ export function DdtReaderPanel() {
   const [error, setError] = useState<string>("");
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const previewObjectUrlRef = useRef<string>("");
 
   const selectedDocument = useMemo(() => {
     if (selectedDocId === null) {
@@ -196,6 +227,27 @@ export function DdtReaderPanel() {
     return !hasProcessing && !isAnalyzing && !PROCESSING_STATUSES.has(selectedDocument.status);
   }, [hasProcessing, isAnalyzing, selectedDocument]);
 
+  const redirectToLogin = useCallback(() => {
+    setPdfPreviewUrl("");
+    router.replace(APP_ROUTES.login);
+  }, [router]);
+
+  const handleRequestError = useCallback(
+    (requestError: unknown, fallbackMessage: string): string => {
+      if (requestError instanceof AuthSessionExpiredError) {
+        redirectToLogin();
+        return requestError.message;
+      }
+
+      if (requestError instanceof Error) {
+        return requestError.message;
+      }
+
+      return fallbackMessage;
+    },
+    [redirectToLogin],
+  );
+
   const refreshDocuments = useCallback(async (clearMessages = false) => {
     try {
       const docs = await requestJson<DdtReaderDocument[]>(
@@ -218,12 +270,10 @@ export function DdtReaderPanel() {
         setError("");
       }
     } catch (refreshError) {
-      const message = refreshError instanceof Error
-        ? refreshError.message
-        : "Impossibile leggere i documenti dal server.";
+      const message = handleRequestError(refreshError, "Impossibile leggere i documenti dal server.");
       setError(message);
     }
-  }, []);
+  }, [handleRequestError]);
 
   const loadConfig = useCallback(async () => {
     try {
@@ -250,6 +300,86 @@ export function DdtReaderPanel() {
       clearInterval(timerId);
     };
   }, [loadConfig, refreshDocuments]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const revokePreviewUrl = () => {
+      if (previewObjectUrlRef.current) {
+        URL.revokeObjectURL(previewObjectUrlRef.current);
+        previewObjectUrlRef.current = "";
+      }
+    };
+
+    const loadPreview = async () => {
+      if (!selectedDocId) {
+        revokePreviewUrl();
+        setPdfPreviewUrl("");
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/ddt-reader/documents/${selectedDocId}/file`, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            const payload = await readPayload(response);
+            const code =
+              payload && typeof payload === "object" && "code" in payload && typeof (payload as ApiErrorPayload).code === "string"
+                ? (payload as ApiErrorPayload).code ?? null
+                : null;
+
+            if (!code || AUTH_ERROR_CODES.has(code)) {
+              if (!cancelled) {
+                revokePreviewUrl();
+                setPdfPreviewUrl("");
+                redirectToLogin();
+              }
+              return;
+            }
+          }
+
+          if (!cancelled) {
+            revokePreviewUrl();
+            setPdfPreviewUrl("");
+          }
+          return;
+        }
+
+        const blob = await response.blob();
+        if (cancelled) {
+          return;
+        }
+
+        revokePreviewUrl();
+        previewObjectUrlRef.current = URL.createObjectURL(blob);
+        setPdfPreviewUrl(previewObjectUrlRef.current);
+      } catch {
+        if (!cancelled) {
+          revokePreviewUrl();
+          setPdfPreviewUrl("");
+        }
+      }
+    };
+
+    void loadPreview();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [redirectToLogin, selectedDocId]);
+
+  useEffect(() => {
+    return () => {
+      if (previewObjectUrlRef.current) {
+        URL.revokeObjectURL(previewObjectUrlRef.current);
+        previewObjectUrlRef.current = "";
+      }
+    };
+  }, []);
 
   const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
@@ -307,9 +437,7 @@ export function DdtReaderPanel() {
       toast.success("PDF caricato con successo.");
       await refreshDocuments();
     } catch (uploadError) {
-      const message = uploadError instanceof Error
-        ? uploadError.message
-        : "Errore durante il caricamento del PDF.";
+      const message = handleRequestError(uploadError, "Errore durante il caricamento del PDF.");
       setError(message);
       toast.error(message);
     } finally {
@@ -345,9 +473,7 @@ export function DdtReaderPanel() {
       toast.success("Analisi avviata.");
       await refreshDocuments();
     } catch (analyzeError) {
-      const message = analyzeError instanceof Error
-        ? analyzeError.message
-        : "Errore durante l avvio dell analisi.";
+      const message = handleRequestError(analyzeError, "Errore durante l avvio dell analisi.");
       setError(message);
       toast.error(message);
     } finally {
@@ -388,9 +514,7 @@ export function DdtReaderPanel() {
       toast.success("Documento cancellato.");
       await refreshDocuments();
     } catch (deleteError) {
-      const message = deleteError instanceof Error
-        ? deleteError.message
-        : "Errore durante la cancellazione del documento.";
+      const message = handleRequestError(deleteError, "Errore durante la cancellazione del documento.");
       setError(message);
       toast.error(message);
     } finally {
@@ -401,11 +525,14 @@ export function DdtReaderPanel() {
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
       <header className="space-y-1">
-        <Text as="h1" variant="h1">
-          DDT Reader
-        </Text>
+        <div className="flex items-center gap-2">
+          <Text as="h1" variant="h1">
+            DDT Reader
+          </Text>
+          <PageHelpHint text="Carica un PDF DDT, avvia l'analisi e controlla i dati estratti." />
+        </div>
         <Text variant="muted">
-          Carica PDF DDT, avvia OCR + analisi AI e controlla il risultato strutturato.
+          Analizzatore di Documenti di Trasporto
         </Text>
       </header>
 
@@ -588,12 +715,14 @@ export function DdtReaderPanel() {
                   </a>
                 </div>
                 <div className="h-[380px] overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-bg-surface">
-                  <iframe
-                    key={selectedDocument.id}
-                    title={`Anteprima PDF ${selectedDocument.original_filename}`}
-                    src={`/api/ddt-reader/documents/${selectedDocument.id}/file`}
-                    className="h-full w-full"
-                  />
+                  {pdfPreviewUrl ? (
+                    <iframe
+                      key={selectedDocument.id}
+                      title={`Anteprima PDF ${selectedDocument.original_filename}`}
+                      src={pdfPreviewUrl}
+                      className="h-full w-full"
+                    />
+                  ) : null}
                 </div>
               </div>
 

@@ -190,12 +190,16 @@ export class ProjectController {
 
       reply.code(200).send({
         versions: versions.map((item) => ({
+          id: item.id,
           versionLabel: item.versionLabel,
           description: item.description,
           clientId: item.clientId,
           clientName: item.clientName,
           status: item.statusKey,
           statusKey: item.statusKey,
+          shipmentId: item.shipmentId,
+          shipmentCode: item.shipmentCode,
+          shipmentStatusKey: item.shipmentStatusKey,
           isDefault: item.isDefault,
           createdAt: item.createdAt,
         })),
@@ -217,6 +221,7 @@ export class ProjectController {
       const body = createVersionSchema.parse(request.body);
       const workspaceId = request.requestContext.workspace.workspaceId;
       const projectId = this.getProjectId(request);
+      const userId = request.requestContext.workspace.userId;
       const statusKey = this.resolveStatusKey(body.statusKey, body.status);
 
       await this.service.createProjectVersion(
@@ -226,6 +231,7 @@ export class ProjectController {
           description: body.description,
           statusKey,
           clientId: body.clientId ?? null,
+          createdByUserId: userId,
         }),
       );
 

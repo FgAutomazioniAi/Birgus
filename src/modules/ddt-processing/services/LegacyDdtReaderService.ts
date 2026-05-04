@@ -77,8 +77,8 @@ export class LegacyDdtReaderService {
   public getConfig(): { single_document_mode: boolean; lm_model: string; lm_base_url: string } {
     return {
       single_document_mode: true,
-      lm_model: process.env.DDT_READER_LM_MODEL ?? "stub-analyzer",
-      lm_base_url: process.env.DDT_READER_LM_BASE_URL ?? "http://127.0.0.1:1234",
+      lm_model: process.env.DDT_READER_LM_MODEL ?? "",
+      lm_base_url: process.env.DDT_READER_LM_BASE_URL ?? "",
     };
   }
 

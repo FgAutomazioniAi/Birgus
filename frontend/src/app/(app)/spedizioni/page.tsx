@@ -1,5 +1,5 @@
-import { ShippingPanel } from "@/components/organisms";
+import { ShipmentsTable } from "@/components/organisms";
 
 export default function SpedizioniPage() {
-  return <ShippingPanel />;
+  return <ShipmentsTable />;
 }

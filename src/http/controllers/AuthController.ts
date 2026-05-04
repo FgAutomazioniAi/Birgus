@@ -5,6 +5,7 @@ import { AppError } from "../../core/errors/AppError.js";
 import { LoginCommand } from "../../modules/identity/dto/LoginCommand.js";
 import { AuthService } from "../../modules/identity/services/AuthService.js";
 import { PasswordResetService } from "../../modules/identity/services/PasswordResetService.js";
+import { SessionCookieFactory } from "../auth/SessionCookieFactory.js";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest.js";
 
 const loginSchema = z.object({
@@ -26,11 +27,16 @@ const resetPasswordSchema = z.object({
 export class AuthController {
   private readonly authService: AuthService;
   private readonly passwordResetService: PasswordResetService;
-  private static readonly SESSION_COOKIE = "vl_session";
+  private readonly sessionCookieFactory: SessionCookieFactory;
 
-  public constructor(authService: AuthService, passwordResetService: PasswordResetService) {
+  public constructor(
+    authService: AuthService,
+    passwordResetService: PasswordResetService,
+    sessionCookieFactory: SessionCookieFactory,
+  ) {
     this.authService = authService;
     this.passwordResetService = passwordResetService;
+    this.sessionCookieFactory = sessionCookieFactory;
   }
 
   public login = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
@@ -53,7 +59,7 @@ export class AuthController {
       );
       reply.header(
         "Set-Cookie",
-        `${AuthController.SESSION_COOKIE}=${encodeURIComponent(result.token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${cookieMaxAgeSeconds}`,
+        this.sessionCookieFactory.createSessionCookie(result.token, cookieMaxAgeSeconds),
       );
 
       reply.code(200).send({
@@ -75,10 +81,7 @@ export class AuthController {
   public logout = async (request: AuthenticatedRequest, reply: FastifyReply): Promise<void> => {
     try {
       await this.authService.logout(request.requestContext.token);
-      reply.header(
-        "Set-Cookie",
-        `${AuthController.SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
-      );
+      reply.header("Set-Cookie", this.sessionCookieFactory.createExpiredCookie());
       reply.code(200).send({ ok: true });
     } catch (error) {
       this.sendError(reply, error);

@@ -35,8 +35,10 @@ export class PrismaUserPreferenceRepository implements UserPreferenceRepository 
         language_code: patch.languageCode,
         rows_projects: patch.rowsProjects,
         rows_clients: patch.rowsClients,
+        rows_shipments: patch.rowsShipments,
         columns_projects: this.toInputJsonValueOrUndefined(patch.columnsProjects),
         columns_clients: this.toInputJsonValueOrUndefined(patch.columnsClients),
+        columns_shipments: this.toInputJsonValueOrUndefined(patch.columnsShipments),
       },
       create: {
         user_id: userId,
@@ -45,8 +47,10 @@ export class PrismaUserPreferenceRepository implements UserPreferenceRepository 
         language_code: patch.languageCode ?? "it",
         rows_projects: patch.rowsProjects ?? 10,
         rows_clients: patch.rowsClients ?? 10,
+        rows_shipments: patch.rowsShipments ?? 10,
         columns_projects: this.toInputJsonValueOrUndefined(patch.columnsProjects),
         columns_clients: this.toInputJsonValueOrUndefined(patch.columnsClients),
+        columns_shipments: this.toInputJsonValueOrUndefined(patch.columnsShipments),
       },
     });
 
@@ -60,8 +64,10 @@ export class PrismaUserPreferenceRepository implements UserPreferenceRepository 
     language_code: string;
     rows_projects: number;
     rows_clients: number;
+    rows_shipments: number;
     columns_projects: Prisma.JsonValue | null;
     columns_clients: Prisma.JsonValue | null;
+    columns_shipments: Prisma.JsonValue | null;
   }): UserPreferenceEntity {
     return new UserPreferenceEntity({
       userId: row.user_id,
@@ -70,8 +76,10 @@ export class PrismaUserPreferenceRepository implements UserPreferenceRepository 
       languageCode: row.language_code,
       rowsProjects: row.rows_projects,
       rowsClients: row.rows_clients,
+      rowsShipments: row.rows_shipments,
       columnsProjects: row.columns_projects,
       columnsClients: row.columns_clients,
+      columnsShipments: row.columns_shipments,
     });
   }
 

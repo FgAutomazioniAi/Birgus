@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowLeft,
   Box,
   Boxes,
   Eye,
@@ -13,14 +14,18 @@ import {
   Palette,
   RefreshCcw,
   Ruler,
+  Save,
   ScrollText,
   SquareStack,
   Truck,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Text } from "@/components/atoms";
+import { PageHelpHint } from "@/components/molecules";
+import { APP_ROUTES } from "@/lib/routes";
 import {
   calcolaSpedizioni,
   type CopertinaType,
@@ -33,6 +38,25 @@ import {
 type SpedizioniTab = "layout" | "copertina" | "brossura" | "sopracoperta" | "custodia";
 type TechnicalView = "brossura" | "cartonata" | "sopracoperta";
 type ViewMode = "floating" | "sidebar";
+
+interface ShipmentDetailPayload {
+  id: string;
+  code: string;
+  projectId: string;
+  projectName: string;
+  projectVersionId: number;
+  projectVersionLabel: string;
+  clientId: string | null;
+  clientName: string | null;
+  statusKey: string;
+  notes: string | null;
+  createdAt: string;
+  specification: {
+    inputPayload: Partial<SpedizioniInput> | null;
+    calculationPayload: Partial<SpedizioniCalcolo> | null;
+    updatedAt: string | null;
+  } | null;
+}
 
 const copertinaOptions: { label: string; value: CopertinaType }[] = [
   { label: "Dorso quadro", value: "quadro" },
@@ -310,16 +334,52 @@ function SopracopertaPreview({
   );
 }
 
-export function ShippingPanel() {
+export function ShippingPanel({ shipmentId }: { shipmentId: string }) {
+  const router = useRouter();
   const [form, setForm] = useState<SpedizioniInput>(defaultSpedizioniInput);
+  const [shipment, setShipment] = useState<ShipmentDetailPayload | null>(null);
   const [activeTab, setActiveTab] = useState<SpedizioniTab>("layout");
   const [quickToolsOpen, setQuickToolsOpen] = useState(true);
   const [technicalView, setTechnicalView] = useState<TechnicalView>("brossura");
   const [viewMode, setViewMode] = useState<ViewMode>("floating");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const technicalRef = useRef<HTMLDivElement | null>(null);
 
   const calc = useMemo(() => calcolaSpedizioni(form), [form]);
+
+  useEffect(() => {
+    const loadShipment = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch(`/api/shipments/${shipmentId}`, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("Impossibile caricare la spedizione.");
+        }
+
+        const payload = (await response.json()) as ShipmentDetailPayload;
+        setShipment(payload);
+
+        const mergedInput: SpedizioniInput = {
+          ...defaultSpedizioniInput,
+          ...(payload.specification?.inputPayload ?? {}),
+        };
+
+        if (!mergedInput.titolo.trim()) {
+          mergedInput.titolo = `${payload.projectName} ${payload.projectVersionLabel.toUpperCase()}`;
+        }
+
+        setForm(mergedInput);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Errore caricamento spedizione.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void loadShipment();
+  }, [shipmentId]);
 
   const setNumberField =
     (field: keyof SpedizioniInput) =>
@@ -418,17 +478,87 @@ export function ShippingPanel() {
     technicalRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const saveSpecification = async () => {
+    try {
+      setIsSaving(true);
+      const response = await fetch(`/api/shipments/${shipmentId}/specification`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inputPayload: form,
+          calculationPayload: calc,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(payload?.message ?? "Salvataggio spedizione non riuscito.");
+      }
+
+      const payload = (await response.json()) as { specificationUpdatedAt?: string | null };
+      setShipment((current) =>
+        current
+          ? {
+              ...current,
+              specification: {
+                inputPayload: form,
+                calculationPayload: calc,
+                updatedAt: payload.specificationUpdatedAt ?? new Date().toISOString(),
+              },
+            }
+          : current,
+      );
+      toast.success("Configurazione spedizione salvata.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Salvataggio spedizione non riuscito.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Card className="p-8">
+        <Text variant="muted">Caricamento spedizione...</Text>
+      </Card>
+    );
+  }
+
+  if (!shipment) {
+    return (
+      <Card className="p-8 space-y-4">
+        <Text variant="muted">Spedizione non disponibile.</Text>
+        <Button variant="outline" onClick={() => router.push(APP_ROUTES.spedizioni)}>
+          <ArrowLeft size={16} />
+          Torna alle spedizioni
+        </Button>
+      </Card>
+    );
+  }
+
   return (
     <div className={viewMode === "sidebar" ? "grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]" : "space-y-6"}>
       <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
         <div>
-          <Text as="h1" variant="h1">
-            Spedizioni
+          <div className="flex items-center gap-2">
+            <Text as="h1" variant="h1">
+              {shipment.code}
+            </Text>
+            <PageHelpHint text="Configura e salva i dati tecnici della spedizione collegata alla versione progetto." />
+          </div>
+          <Text variant="muted">
+            {shipment.projectName} · {shipment.projectVersionLabel.toUpperCase()} · {shipment.clientName ?? "Cliente non associato"}
           </Text>
-          <Text variant="muted">Gestisci la configurazione delle spedizioni.</Text>
+          <Text variant="caption">
+            Stato: {shipment.statusKey} · Ultimo salvataggio: {shipment.specification?.updatedAt ? new Date(shipment.specification.updatedAt).toLocaleString("it-IT") : "mai"}
+          </Text>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => router.push(APP_ROUTES.spedizioni)}>
+            <ArrowLeft size={16} />
+            Torna alla lista
+          </Button>
           <Button variant="outline" onClick={goLayout}>
             <ScrollText size={16} />
             Vai a layout
@@ -447,12 +577,19 @@ export function ShippingPanel() {
           <Button
             variant="outline"
             onClick={() => {
-              setForm(defaultSpedizioniInput);
+              setForm({
+                ...defaultSpedizioniInput,
+                titolo: `${shipment.projectName} ${shipment.projectVersionLabel.toUpperCase()}`,
+              });
               toast.success("Campi ripristinati.");
             }}
           >
             <RefreshCcw size={16} />
             Pulisci campi
+          </Button>
+          <Button onClick={() => void saveSpecification()} disabled={isSaving}>
+            <Save size={16} />
+            {isSaving ? "Salvataggio..." : "Salva spedizione"}
           </Button>
         </div>
       </div>

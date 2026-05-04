@@ -1,6 +1,6 @@
-import { PROJECT_STATUSES } from "@/lib/project-status";
+import type { ProjectStatusKey } from "@/lib/project-status";
 
-export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+export type ProjectStatus = ProjectStatusKey;
 
 export interface Project {
   id: string;
@@ -15,4 +15,18 @@ export interface Client {
   email: string;
   phone: string;
   notes: string;
+}
+
+export interface ShipmentListItem {
+  id: string;
+  code: string;
+  projectId: string;
+  projectName: string;
+  projectVersionId: number;
+  projectVersionLabel: string;
+  clientId: string | null;
+  clientName: string | null;
+  statusKey: string;
+  specificationUpdatedAt?: string | null;
+  createdAt: string;
 }

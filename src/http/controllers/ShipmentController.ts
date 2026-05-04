@@ -11,10 +11,15 @@ import { CreateShipmentCommand } from "../../modules/shipping/dto/CreateShipment
 import { ShipmentService } from "../../modules/shipping/services/ShipmentService.js";
 
 const createShipmentSchema = z.object({
-  code: z.string().min(2),
-  clientId: z.string().uuid().nullable().optional(),
-  statusKey: z.string().min(1),
+  projectVersionId: z.number().int().positive(),
+  code: z.string().min(2).nullable().optional(),
+  statusKey: z.string().min(1).optional(),
   notes: z.string().nullable().optional(),
+});
+
+const updateShipmentSpecificationSchema = z.object({
+  inputPayload: z.unknown(),
+  calculationPayload: z.unknown(),
 });
 
 export class ShipmentController {
@@ -40,9 +45,15 @@ export class ShipmentController {
         workspaceId,
         shipments: shipments.map((item) => ({
           id: item.id,
+          projectId: item.projectId,
+          projectName: item.projectName,
+          projectVersionId: item.projectVersionId,
+          projectVersionLabel: item.projectVersionLabel,
           code: item.code,
           clientId: item.clientId,
+          clientName: item.clientName,
           statusKey: item.statusKey,
+          specificationUpdatedAt: item.specificationUpdatedAt,
           createdAt: item.createdAt,
         })),
       });
@@ -63,9 +74,9 @@ export class ShipmentController {
       const created = await this.service.createShipment(
         new CreateShipmentCommand({
           workspaceId,
-          code: body.code,
-          clientId: body.clientId ?? null,
-          statusKey: body.statusKey,
+          projectVersionId: body.projectVersionId,
+          code: body.code ?? null,
+          statusKey: body.statusKey ?? "draft",
           notes: body.notes ?? null,
           createdByUserId: userId,
         }),
@@ -73,6 +84,7 @@ export class ShipmentController {
 
       reply.code(201).send({
         id: created.id,
+        projectVersionId: created.projectVersionId,
         code: created.code,
         statusKey: created.statusKey,
       });
@@ -80,6 +92,73 @@ export class ShipmentController {
       this.sendError(reply, error);
     }
   };
+
+  public getShipment = async (request: AuthenticatedRequest, reply: FastifyReply): Promise<void> => {
+    try {
+      await this.moduleGuard.requireModule(request.requestContext, ModuleKey.SHIPMENT_MANAGEMENT);
+      await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.SHIPMENTS_READ);
+
+      const workspaceId = request.requestContext.workspace.workspaceId;
+      const shipmentId = this.getShipmentId(request);
+      const shipment = await this.service.getShipment(workspaceId, shipmentId);
+
+      reply.code(200).send({
+        id: shipment.id,
+        projectId: shipment.projectId,
+        projectName: shipment.projectName,
+        projectVersionId: shipment.projectVersionId,
+        projectVersionLabel: shipment.projectVersionLabel,
+        code: shipment.code,
+        clientId: shipment.clientId,
+        clientName: shipment.clientName,
+        statusKey: shipment.statusKey,
+        notes: shipment.notes,
+        specification: shipment.specificationInput || shipment.specificationCalculation
+          ? {
+              inputPayload: shipment.specificationInput,
+              calculationPayload: shipment.specificationCalculation,
+              updatedAt: shipment.specificationUpdatedAt,
+            }
+          : null,
+        createdAt: shipment.createdAt,
+      });
+    } catch (error) {
+      this.sendError(reply, error);
+    }
+  };
+
+  public updateShipmentSpecification = async (request: AuthenticatedRequest, reply: FastifyReply): Promise<void> => {
+    try {
+      await this.moduleGuard.requireModule(request.requestContext, ModuleKey.SHIPMENT_MANAGEMENT);
+      await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.SHIPMENTS_WRITE);
+
+      const body = updateShipmentSpecificationSchema.parse(request.body);
+      const workspaceId = request.requestContext.workspace.workspaceId;
+      const shipmentId = this.getShipmentId(request);
+      const updated = await this.service.saveShipmentSpecification({
+        workspaceId,
+        shipmentId,
+        inputPayload: body.inputPayload,
+        calculationPayload: body.calculationPayload,
+      });
+
+      reply.code(200).send({
+        id: updated.id,
+        specificationUpdatedAt: updated.specificationUpdatedAt,
+      });
+    } catch (error) {
+      this.sendError(reply, error);
+    }
+  };
+
+  private getShipmentId(request: AuthenticatedRequest): string {
+    const shipmentId = (request.params as { shipmentId?: string }).shipmentId;
+    if (!shipmentId || !shipmentId.trim()) {
+      throw new AppError("Shipment ID is required.", "SHIPMENT_ID_REQUIRED", 400);
+    }
+
+    return shipmentId.trim();
+  }
 
   private sendError(reply: FastifyReply, error: unknown): void {
     if (error instanceof z.ZodError) {

@@ -3,6 +3,7 @@
 import { Palette } from "lucide-react";
 
 import { Card, Text } from "@/components/atoms";
+import { PageHelpHint } from "@/components/molecules";
 import { useTheme } from "@/components/organisms/theme-provider";
 import type { ThemeId } from "@/lib/themes";
 
@@ -13,9 +14,12 @@ export function SettingsPanel() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
-        <Text as="h1" variant="h1">
-          Impostazioni
-        </Text>
+        <div className="flex items-center gap-2">
+          <Text as="h1" variant="h1">
+            Impostazioni
+          </Text>
+          <PageHelpHint text="Modifica le preferenze visive dell'app." />
+        </div>
         <Text variant="muted">Personalizza le tue preferenze</Text>
       </div>
 

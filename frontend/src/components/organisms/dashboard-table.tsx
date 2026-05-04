@@ -15,7 +15,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Text } from "@/components/atoms";
-import { ConfirmDeleteDialog, SearchField } from "@/components/molecules";
+import { ConfirmDeleteDialog, PageHelpHint, SearchField } from "@/components/molecules";
 import { cn } from "@/lib/cn";
 import { downloadTablePdf } from "@/lib/pdf-export";
 import { APP_ROUTES } from "@/lib/routes";
@@ -356,9 +356,12 @@ export function DashboardTable() {
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <Text as="h1" variant="h1">
-            Progetti
-          </Text>
+          <div className="flex items-center gap-2">
+            <Text as="h1" variant="h1">
+              Progetti
+            </Text>
+            <PageHelpHint text="Cerca un progetto, aprilo o crea una nuova commessa." />
+          </div>
           <Text variant="muted">Seleziona un progetto per vedere i suoi versionamenti</Text>
         </div>
 
@@ -552,7 +555,7 @@ export function DashboardTable() {
         <div className="flex flex-col items-start justify-between gap-3 border-t border-border-subtle p-4 sm:flex-row sm:items-center">
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-xs text-text-muted">
-              Mostrando da {firstVisibleRow} a {lastVisibleRow} di {filteredProjects.length} progetti
+              {firstVisibleRow} - {lastVisibleRow} su {filteredProjects.length} progetti
             </p>
             <label className="flex items-center gap-2 text-xs text-text-muted">
               <span>Righe</span>

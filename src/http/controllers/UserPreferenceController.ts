@@ -10,12 +10,16 @@ const patchPreferencesSchema = z.object({
   languageCode: z.string().min(2).optional(),
   righeProgetti: z.number().int().min(1).max(500).optional(),
   righeClienti: z.number().int().min(1).max(500).optional(),
+  righeSpedizioni: z.number().int().min(1).max(500).optional(),
   colonneProgetti: z.unknown().optional(),
   colonneClienti: z.unknown().optional(),
+  colonneSpedizioni: z.unknown().optional(),
   rowsProjects: z.number().int().min(1).max(500).optional(),
   rowsClients: z.number().int().min(1).max(500).optional(),
+  rowsShipments: z.number().int().min(1).max(500).optional(),
   columnsProjects: z.unknown().optional(),
   columnsClients: z.unknown().optional(),
+  columnsShipments: z.unknown().optional(),
 });
 
 export class UserPreferenceController {
@@ -37,12 +41,16 @@ export class UserPreferenceController {
           languageCode: "it",
           righeProgetti: 10,
           righeClienti: 10,
+          righeSpedizioni: 10,
           colonneProgetti: null,
           colonneClienti: null,
+          colonneSpedizioni: null,
           rowsProjects: 10,
           rowsClients: 10,
+          rowsShipments: 10,
           columnsProjects: null,
           columnsClients: null,
+          columnsShipments: null,
         });
         return;
       }
@@ -52,12 +60,16 @@ export class UserPreferenceController {
         languageCode: preferences.languageCode,
         righeProgetti: preferences.rowsProjects,
         righeClienti: preferences.rowsClients,
+        righeSpedizioni: preferences.rowsShipments,
         colonneProgetti: preferences.columnsProjects,
         colonneClienti: preferences.columnsClients,
+        colonneSpedizioni: preferences.columnsShipments,
         rowsProjects: preferences.rowsProjects,
         rowsClients: preferences.rowsClients,
+        rowsShipments: preferences.rowsShipments,
         columnsProjects: preferences.columnsProjects,
         columnsClients: preferences.columnsClients,
+        columnsShipments: preferences.columnsShipments,
       });
     } catch (error) {
       this.sendError(reply, error);
@@ -75,8 +87,10 @@ export class UserPreferenceController {
         languageCode: body.languageCode,
         rowsProjects: body.rowsProjects ?? body.righeProgetti,
         rowsClients: body.rowsClients ?? body.righeClienti,
+        rowsShipments: body.rowsShipments ?? body.righeSpedizioni,
         columnsProjects: body.columnsProjects ?? body.colonneProgetti,
         columnsClients: body.columnsClients ?? body.colonneClienti,
+        columnsShipments: body.columnsShipments ?? body.colonneSpedizioni,
       });
 
       reply.code(200).send({
@@ -84,12 +98,16 @@ export class UserPreferenceController {
         languageCode: updated.languageCode,
         righeProgetti: updated.rowsProjects,
         righeClienti: updated.rowsClients,
+        righeSpedizioni: updated.rowsShipments,
         colonneProgetti: updated.columnsProjects,
         colonneClienti: updated.columnsClients,
+        colonneSpedizioni: updated.columnsShipments,
         rowsProjects: updated.rowsProjects,
         rowsClients: updated.rowsClients,
+        rowsShipments: updated.rowsShipments,
         columnsProjects: updated.columnsProjects,
         columnsClients: updated.columnsClients,
+        columnsShipments: updated.columnsShipments,
       });
     } catch (error) {
       this.sendError(reply, error);

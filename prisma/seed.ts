@@ -381,10 +381,85 @@ async function main() {
     },
   });
 
+  const samuelEmail = "samuel.m@fgautomazioni.it";
+  const samuelPasswordHash = await hashPassword("admin");
+
+  const samuelUser = await prisma.user.upsert({
+    where: { email: samuelEmail },
+    update: {
+      first_name: "Samuel",
+      last_name: "M",
+      password_hash: samuelPasswordHash,
+      is_active: true,
+    },
+    create: {
+      email: samuelEmail,
+      first_name: "Samuel",
+      last_name: "M",
+      password_hash: samuelPasswordHash,
+      is_active: true,
+    },
+  });
+
+  await prisma.workspaceMembership.upsert({
+    where: {
+      workspace_id_user_id: {
+        workspace_id: workspace.id,
+        user_id: samuelUser.id,
+      },
+    },
+    update: {
+      status: "ACTIVE",
+    },
+    create: {
+      workspace_id: workspace.id,
+      user_id: samuelUser.id,
+      status: "ACTIVE",
+    },
+  });
+
+  await prisma.userWorkspaceRole.upsert({
+    where: {
+      workspace_id_user_id_role_id: {
+        workspace_id: workspace.id,
+        user_id: samuelUser.id,
+        role_id: superadminRole.id,
+      },
+    },
+    update: {},
+    create: {
+      workspace_id: workspace.id,
+      user_id: samuelUser.id,
+      role_id: superadminRole.id,
+    },
+  });
+
+  await prisma.userPreference.upsert({
+    where: {
+      user_id_workspace_id: {
+        user_id: samuelUser.id,
+        workspace_id: workspace.id,
+      },
+    },
+    update: {
+      palette_id: "predefinito",
+      language_code: "it",
+    },
+    create: {
+      user_id: samuelUser.id,
+      workspace_id: workspace.id,
+      palette_id: "predefinito",
+      language_code: "it",
+      rows_projects: 20,
+      rows_clients: 20,
+    },
+  });
+
   console.log("Seed completed:", {
     organization: organization.code,
     workspace: workspace.code,
     adminEmail,
+    samuelEmail,
     adminPassword: "admin",
     modules: MODULE_KEYS.length,
   });

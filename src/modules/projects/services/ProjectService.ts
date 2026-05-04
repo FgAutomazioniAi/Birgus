@@ -6,12 +6,16 @@ import { CreateProjectVersionCommand } from "../dto/CreateProjectVersionCommand.
 import { DeleteProjectVersionCommand } from "../dto/DeleteProjectVersionCommand.js";
 import { SelectDefaultVersionCommand } from "../dto/SelectDefaultVersionCommand.js";
 import { ProjectRepository } from "../repositories/ProjectRepository.js";
+import { CreateShipmentCommand } from "../../shipping/dto/CreateShipmentCommand.js";
+import { ShipmentService } from "../../shipping/services/ShipmentService.js";
 
 export class ProjectService {
   private readonly repository: ProjectRepository;
+  private readonly shipmentService: ShipmentService | null;
 
-  public constructor(repository: ProjectRepository) {
+  public constructor(repository: ProjectRepository, shipmentService?: ShipmentService | null) {
     this.repository = repository;
+    this.shipmentService = shipmentService ?? null;
   }
 
   public async listProjects(workspaceId: string): Promise<ProjectEntity[]> {
@@ -32,12 +36,18 @@ export class ProjectService {
 
     await this.repository.linkProjectClient(command.workspaceId, project.id, command.clientId);
 
-    const initialVersion = await this.ensureInitialVersion(
-      command.workspaceId,
-      project.id,
-      command.clientId,
-      command.statusKey,
-    );
+    let initialVersion: ProjectVersionEntity | null = null;
+    try {
+      initialVersion = await this.ensureInitialVersion(
+        command.workspaceId,
+        project.id,
+        command.clientId,
+        command.statusKey,
+      );
+    } catch (error) {
+      await this.repository.softDeleteProject(command.workspaceId, project.id);
+      throw error;
+    }
 
     return new ProjectEntity({
       id: project.id,
@@ -90,10 +100,15 @@ export class ProjectService {
   }
 
   public async deleteProject(workspaceId: string, projectId: string): Promise<void> {
+    const activeVersions = await this.repository.listVersions(workspaceId, projectId);
     const removed = await this.repository.softDeleteProject(workspaceId, projectId);
     if (!removed) {
       throw new AppError("Project not found.", "PROJECT_NOT_FOUND", 404);
     }
+
+    await Promise.all(
+      activeVersions.map((version) => this.shipmentService?.deleteShipmentForProjectVersion(workspaceId, version.id)),
+    );
   }
 
   public async listProjectVersions(workspaceId: string, projectId: string): Promise<ProjectVersionEntity[]> {
@@ -116,7 +131,7 @@ export class ProjectService {
 
     await this.repository.clearDefaultVersionFlags(command.workspaceId, command.projectId);
 
-    return this.repository.createVersion({
+    const version = await this.repository.createVersion({
       workspaceId: command.workspaceId,
       projectId: command.projectId,
       versionLabel: nextVersionLabel,
@@ -125,6 +140,25 @@ export class ProjectService {
       clientId: command.clientId,
       isDefault: true,
     });
+
+    try {
+      await this.ensureShipmentForVersion(command.workspaceId, version.id, command.createdByUserId ?? null);
+    } catch (error) {
+      await this.repository.softDeleteVersion(version.id);
+      const fallback = await this.repository.findMostRecentActiveVersion(command.workspaceId, command.projectId);
+      if (fallback) {
+        await this.repository.setDefaultVersion(fallback.id);
+      }
+      throw error;
+    }
+
+    const refreshedVersion = await this.repository.findVersionByLabel(
+      command.workspaceId,
+      command.projectId,
+      version.versionLabel,
+    );
+
+    return refreshedVersion ?? version;
   }
 
   public async selectDefaultVersion(command: SelectDefaultVersionCommand): Promise<ProjectVersionEntity> {
@@ -164,6 +198,7 @@ export class ProjectService {
     }
 
     await this.repository.softDeleteVersion(target.id);
+    await this.shipmentService?.deleteShipmentForProjectVersion(command.workspaceId, target.id);
 
     if (target.isDefault) {
       const fallback = await this.repository.findMostRecentActiveVersion(command.workspaceId, command.projectId);
@@ -184,7 +219,7 @@ export class ProjectService {
       return null;
     }
 
-    return this.repository.createVersion({
+    const version = await this.repository.createVersion({
       workspaceId,
       projectId,
       versionLabel: "v1",
@@ -193,6 +228,11 @@ export class ProjectService {
       clientId,
       isDefault: true,
     });
+
+    await this.ensureShipmentForVersion(workspaceId, version.id, null);
+
+    const refreshedVersion = await this.repository.findVersionByLabel(workspaceId, projectId, version.versionLabel);
+    return refreshedVersion ?? version;
   }
 
   private normalizeDescription(description: string): string {
@@ -220,5 +260,24 @@ export class ProjectService {
     }, 0);
 
     return `v${Math.max(1, maxVersion + 1)}`;
+  }
+
+  private async ensureShipmentForVersion(
+    workspaceId: string,
+    projectVersionId: number,
+    createdByUserId: string | null,
+  ): Promise<void> {
+    if (!this.shipmentService) {
+      return;
+    }
+
+    await this.shipmentService.createShipment(
+      new CreateShipmentCommand({
+        workspaceId,
+        projectVersionId,
+        statusKey: "draft",
+        createdByUserId,
+      }),
+    );
   }
 }

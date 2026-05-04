@@ -5,12 +5,14 @@ import { PasswordResetCodeRepository } from "../repositories/PasswordResetCodeRe
 import { UserAccountRepository } from "../repositories/UserAccountRepository.js";
 import { AuthSessionRepository } from "../repositories/AuthSessionRepository.js";
 import { PasswordHasher } from "./PasswordHasher.js";
+import { PasswordResetNotifier } from "./PasswordResetNotifier.js";
 
 export class PasswordResetService {
   private readonly userRepository: UserAccountRepository;
   private readonly codeRepository: PasswordResetCodeRepository;
   private readonly sessionRepository: AuthSessionRepository;
   private readonly passwordHasher: PasswordHasher;
+  private readonly notifier: PasswordResetNotifier;
   private readonly ttlMinutes: number;
 
   public constructor(
@@ -18,12 +20,14 @@ export class PasswordResetService {
     codeRepository: PasswordResetCodeRepository,
     sessionRepository: AuthSessionRepository,
     passwordHasher: PasswordHasher,
+    notifier: PasswordResetNotifier,
     ttlMinutes: number,
   ) {
     this.userRepository = userRepository;
     this.codeRepository = codeRepository;
     this.sessionRepository = sessionRepository;
     this.passwordHasher = passwordHasher;
+    this.notifier = notifier;
     this.ttlMinutes = ttlMinutes;
   }
 
@@ -41,6 +45,12 @@ export class PasswordResetService {
 
     await this.codeRepository.invalidateActiveCodesForUser(user.id);
     await this.codeRepository.createCode(user.id, codeHash, expiresAt);
+    await this.notifier.sendResetCode({
+      email: user.email,
+      firstName: user.firstName,
+      code,
+      expiresInMinutes: this.ttlMinutes,
+    });
 
     const debugCode = process.env.NODE_ENV === "production" ? null : code;
     return { expiresAt, debugCode };

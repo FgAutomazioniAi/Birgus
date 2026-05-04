@@ -5,8 +5,10 @@ export interface UserPreferencePatch {
   languageCode?: string;
   rowsProjects?: number;
   rowsClients?: number;
+  rowsShipments?: number;
   columnsProjects?: unknown | null;
   columnsClients?: unknown | null;
+  columnsShipments?: unknown | null;
 }
 
 export interface UserPreferenceRepository {

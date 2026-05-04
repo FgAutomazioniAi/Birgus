@@ -7,6 +7,9 @@ export class ProjectVersionEntity {
   public readonly clientId: string | null;
   public readonly clientName: string | null;
   public readonly statusKey: string | null;
+  public readonly shipmentId: string | null;
+  public readonly shipmentCode: string | null;
+  public readonly shipmentStatusKey: string | null;
   public readonly isDefault: boolean;
   public readonly createdAt: Date;
 
@@ -19,6 +22,9 @@ export class ProjectVersionEntity {
     clientId: string | null;
     clientName?: string | null;
     statusKey: string | null;
+    shipmentId?: string | null;
+    shipmentCode?: string | null;
+    shipmentStatusKey?: string | null;
     isDefault: boolean;
     createdAt: Date;
   }) {
@@ -30,6 +36,9 @@ export class ProjectVersionEntity {
     this.clientId = params.clientId;
     this.clientName = params.clientName ?? null;
     this.statusKey = params.statusKey;
+    this.shipmentId = params.shipmentId ?? null;
+    this.shipmentCode = params.shipmentCode ?? null;
+    this.shipmentStatusKey = params.shipmentStatusKey ?? null;
     this.isDefault = params.isDefault;
     this.createdAt = params.createdAt;
   }

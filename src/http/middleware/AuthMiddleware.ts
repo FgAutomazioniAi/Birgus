@@ -9,11 +9,12 @@ import { TenancyGuard } from "../../core/tenancy/TenancyGuard.js";
 export class AuthMiddleware {
   private readonly authService: AuthService;
   private readonly tenancyGuard: TenancyGuard;
-  private static readonly COOKIE_SESSION_NAME = "vl_session";
+  private readonly cookieSessionName: string;
 
-  public constructor(authService: AuthService, tenancyGuard: TenancyGuard) {
+  public constructor(authService: AuthService, tenancyGuard: TenancyGuard, cookieSessionName?: string) {
     this.authService = authService;
     this.tenancyGuard = tenancyGuard;
+    this.cookieSessionName = cookieSessionName?.trim() || "vl_session";
   }
 
   public async requireAuthenticated(request: FastifyRequest, reply: FastifyReply): Promise<void> {
@@ -74,7 +75,7 @@ export class AuthMiddleware {
       }
 
       const key = entry.slice(0, separator).trim();
-      if (key !== AuthMiddleware.COOKIE_SESSION_NAME) {
+      if (key !== this.cookieSessionName) {
         continue;
       }
 
