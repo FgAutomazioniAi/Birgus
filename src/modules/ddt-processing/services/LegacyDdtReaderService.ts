@@ -29,6 +29,8 @@ export interface LegacyDdtReaderDocumentDto {
   warehouse_delta: number | null;
   article_items: LegacyDdtArticleItem[];
   analysis_summary: string | null;
+  ocr_duration_ms: number | null;
+  inference_duration_ms: number | null;
   last_error: string | null;
   created_at: string;
   updated_at: string;
@@ -57,6 +59,7 @@ interface DdtDocumentRow {
     article_count: number | null;
     warehouse_delta: number | null;
     summary: string | null;
+    raw_response?: unknown;
     article_items: Array<{
       article_type: string;
       quantity: unknown;
@@ -439,6 +442,7 @@ export class LegacyDdtReaderService {
 
   private toLegacyDocument(row: DdtDocumentRow): LegacyDdtReaderDocumentDto {
     const analysis = row.analysis_result;
+    const timings = this.extractTimingInfo(analysis?.raw_response);
 
     return {
       id: row.id,
@@ -458,9 +462,22 @@ export class LegacyDdtReaderService {
         unit: item.unit,
       })),
       analysis_summary: analysis?.summary ?? null,
+      ocr_duration_ms: timings.ocrDurationMs,
+      inference_duration_ms: timings.inferenceDurationMs,
       last_error: row.last_error ?? null,
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
+    };
+  }
+
+  private extractTimingInfo(rawResponse: unknown): { ocrDurationMs: number | null; inferenceDurationMs: number | null } {
+    const directTimings = this.readNestedRecord(rawResponse, ["timings"]);
+    const nestedTimings = this.readNestedRecord(rawResponse, ["response", "timings"]);
+    const timings = directTimings ?? nestedTimings;
+
+    return {
+      ocrDurationMs: this.readFiniteNumber(timings?.ocr_ms),
+      inferenceDurationMs: this.readFiniteNumber(timings?.inference_ms),
     };
   }
 
@@ -483,6 +500,29 @@ export class LegacyDdtReaderService {
 
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private readNestedRecord(source: unknown, path: string[]): Record<string, unknown> | null {
+    let current: unknown = source;
+
+    for (const key of path) {
+      if (!current || typeof current !== "object" || Array.isArray(current) || !(key in current)) {
+        return null;
+      }
+
+      current = (current as Record<string, unknown>)[key];
+    }
+
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      return null;
+    }
+
+    return current as Record<string, unknown>;
+  }
+
+  private readFiniteNumber(value: unknown): number | null {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
   private resolveFileName(fileName: string): string {

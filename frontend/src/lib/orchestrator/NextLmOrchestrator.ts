@@ -46,10 +46,13 @@ export class NextLmOrchestrator {
   }
 
   public async analyzeFromStorage(input: { storagePath: string; fileName: string; maxPages?: number }): Promise<DdtWorkflowResult> {
+    const workflowStartedAt = Date.now();
+    const ocrStartedAt = Date.now();
     const ocrResult = await this.pythonModulesClient.execute("ocr_engine", "extract_text_from_pdf_storage", {
       storage_path: input.storagePath,
       max_pages: input.maxPages,
     });
+    const ocrDurationMs = Date.now() - ocrStartedAt;
 
     const extractedText = String(ocrResult.output.extracted_text ?? "").trim();
     if (!extractedText) {
@@ -64,10 +67,12 @@ export class NextLmOrchestrator {
     const userContext = extractedText;
     const systemPrompt = this.getPrompt();
 
+    const inferenceStartedAt = Date.now();
     const { parsed, rawResponse, rawProvider } = await this.requestDdtAnalysis({
       systemPrompt,
       userContext,
     });
+    const inferenceDurationMs = Date.now() - inferenceStartedAt;
 
     const normalized = this.normalizePayload(parsed, fgRule, evidence, ocrItems, hasNegativeMarker);
     return {
@@ -79,6 +84,11 @@ export class NextLmOrchestrator {
           extracted_chars: ocrResult.output.extracted_chars,
           extracted_pages: ocrResult.output.extracted_pages,
           module: "ocr_engine",
+        },
+        timings: {
+          ocr_ms: ocrDurationMs,
+          inference_ms: inferenceDurationMs,
+          total_ms: Date.now() - workflowStartedAt,
         },
       },
     };

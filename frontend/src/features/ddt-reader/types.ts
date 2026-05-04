@@ -32,6 +32,8 @@ export interface DdtReaderDocument {
   warehouse_delta?: number | null;
   article_items?: DdtReaderArticleItem[];
   analysis_summary?: string | null;
+  ocr_duration_ms?: number | null;
+  inference_duration_ms?: number | null;
   last_error?: string | null;
   created_at?: string | null;
   updated_at?: string | null;

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, FileText, LoaderCircle, Trash2, Upload } from "lucide-react";
+import { Bot, Clock3, FileText, LoaderCircle, Trash2, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -176,6 +176,19 @@ const formatArticleItems = (items: DdtReaderArticleItem[] | null | undefined): s
   return JSON.stringify(clean, null, 2);
 };
 
+const formatDuration = (value: number | null | undefined): string => {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+
+  const durationMs = Math.max(0, Number(value));
+  if (durationMs < 1000) {
+    return `${durationMs.toFixed(0)} ms`;
+  }
+
+  return `${(durationMs / 1000).toFixed(2)} s`;
+};
+
 const isPdfFile = (file: File): boolean => {
   const lowerName = file.name.toLowerCase();
   return file.type === "application/pdf" || lowerName.endsWith(".pdf");
@@ -226,6 +239,20 @@ export function DdtReaderPanel() {
 
     return !hasProcessing && !isAnalyzing && !PROCESSING_STATUSES.has(selectedDocument.status);
   }, [hasProcessing, isAnalyzing, selectedDocument]);
+
+  const recentTimings = useMemo(() => {
+    return documents
+      .filter(
+        (document) =>
+          typeof document.ocr_duration_ms === "number" || typeof document.inference_duration_ms === "number",
+      )
+      .sort((left, right) => {
+        const leftTime = Date.parse(left.updated_at ?? left.created_at ?? "") || 0;
+        const rightTime = Date.parse(right.updated_at ?? right.created_at ?? "") || 0;
+        return rightTime - leftTime;
+      })
+      .slice(0, 6);
+  }, [documents]);
 
   const redirectToLogin = useCallback(() => {
     setPdfPreviewUrl("");
@@ -536,7 +563,7 @@ export function DdtReaderPanel() {
         </Text>
       </header>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_320px]">
         <Card className="space-y-5 p-4 lg:p-5">
           <div className="space-y-2">
             <Text as="h2" variant="h2" className="text-lg">
@@ -801,6 +828,66 @@ export function DdtReaderPanel() {
               <Text variant="muted">Seleziona un PDF dalla lista a sinistra.</Text>
             </div>
           )}
+        </Card>
+
+        <Card className="space-y-4 p-4 lg:p-5">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Clock3 size={16} className="text-brand-primary" />
+              <Text as="h2" variant="h2" className="text-lg">
+                Tempi recenti
+              </Text>
+            </div>
+            <Text variant="caption">
+              Ultimi tempi registrati per OCR e risposta IA.
+            </Text>
+          </div>
+
+          <div className="space-y-3">
+            {recentTimings.length === 0 ? (
+              <div className="rounded-[var(--radius-lg)] border border-dashed border-border-default bg-bg-muted p-4 text-center">
+                <Text variant="muted">I tempi compariranno dopo le prime analisi completate.</Text>
+              </div>
+            ) : (
+              recentTimings.map((document) => {
+                const isSelected = selectedDocId === document.id;
+
+                return (
+                  <button
+                    key={document.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDocId(document.id);
+                      setFeedback("");
+                      setError("");
+                    }}
+                    className={cn(
+                      "w-full rounded-[var(--radius-lg)] border p-3 text-left transition-all",
+                      isSelected
+                        ? "border-brand-primary bg-brand-primary/5 ring-2 ring-ring-primary"
+                        : "border-border-default bg-bg-muted/40 hover:border-brand-accent/70",
+                    )}
+                  >
+                    <Text className="truncate text-sm font-bold text-text-primary">{document.original_filename}</Text>
+                    <div className="mt-3 space-y-2 text-sm text-text-secondary">
+                      <div className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-border-subtle bg-bg-surface px-3 py-2">
+                        <span className="text-xs font-bold uppercase tracking-wide text-text-muted">OCR:</span>
+                        <span className="text-sm font-semibold text-text-primary">
+                          {formatDuration(document.ocr_duration_ms)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-border-subtle bg-bg-surface px-3 py-2">
+                        <span className="text-xs font-bold uppercase tracking-wide text-text-muted">Inferenza:</span>
+                        <span className="text-sm font-semibold text-text-primary">
+                          {formatDuration(document.inference_duration_ms)}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
         </Card>
       </div>
     </div>
