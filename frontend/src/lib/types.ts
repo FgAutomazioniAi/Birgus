@@ -30,3 +30,20 @@ export interface ShipmentListItem {
   specificationUpdatedAt?: string | null;
   createdAt: string;
 }
+
+export interface ProjectAgentListItem {
+  id: string;
+  projectId: string;
+  projectName: string;
+  moduleId: number;
+  moduleKey: string;
+  moduleName: string;
+  key: string;
+  name: string;
+  label: string;
+  originalPrompt: string;
+  activePrompt: string;
+  isEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

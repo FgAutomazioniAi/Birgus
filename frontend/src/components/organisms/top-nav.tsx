@@ -11,8 +11,10 @@ import { APP_ROUTES } from "@/lib/routes";
 export interface TopNavProps {
   collapsed: boolean;
   currentUser: {
+    id: string;
     nome: string;
     ruolo: string;
+    enabledModuleKeys: string[];
   };
   onMenuClick: () => void;
   onToggleCollapse: () => void;

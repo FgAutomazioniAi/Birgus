@@ -1,8 +1,12 @@
 import { randomUUID } from "node:crypto";
 
+import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { FileKind } from "../../document-archive/domain/FileKind.js";
 import { PutProjectFileCommand } from "../../document-archive/dto/PutProjectFileCommand.js";
 import { DocumentArchiveService } from "../../document-archive/services/DocumentArchiveService.js";
+import { QuotationAnalysisResult } from "../domain/QuotationStructuredData.js";
+import { NextOrchestratorQuotationAnalyzer } from "./NextOrchestratorQuotationAnalyzer.js";
+import { QuotationDocxBuilder } from "./QuotationDocxBuilder.js";
 
 type LegacyOrchestratorStatus = "queued" | "running" | "completed" | "failed";
 
@@ -32,10 +36,18 @@ interface LegacyOrchestratorJobState {
 
 export class LegacyQuotationOrchestratorService {
   private readonly documentArchiveService: DocumentArchiveService;
+  private readonly quotationAnalyzer: NextOrchestratorQuotationAnalyzer;
+  private readonly docxBuilder: QuotationDocxBuilder;
   private readonly jobs: Map<string, LegacyOrchestratorJobState>;
 
-  public constructor(documentArchiveService: DocumentArchiveService) {
+  public constructor(
+    documentArchiveService: DocumentArchiveService,
+    quotationAnalyzer: NextOrchestratorQuotationAnalyzer,
+    docxBuilder: QuotationDocxBuilder,
+  ) {
     this.documentArchiveService = documentArchiveService;
+    this.quotationAnalyzer = quotationAnalyzer;
+    this.docxBuilder = docxBuilder;
     this.jobs = new Map();
   }
 
@@ -119,49 +131,86 @@ export class LegacyQuotationOrchestratorService {
       return;
     }
 
-    this.patchJob(jobId, {
-      status: "running",
-      progress: 35,
-      message: "Analisi OCR/AI in esecuzione.",
-      step: "analyzing",
-      error: null,
-    });
-
-    await this.sleep(900);
-
-    const current = this.jobs.get(jobId);
-    if (!current) {
-      return;
-    }
-
     try {
-      const docxBytes = this.buildDocxPlaceholder(current);
+      this.patchJob(jobId, {
+        status: "running",
+        progress: 15,
+        message: "Recupero preventivo PDF da archivio.",
+        step: "resolve_source",
+        error: null,
+      });
+
+      const quotationSource = await this.loadQuotationSource({
+        workspaceId: queued.workspaceId,
+        projectId: queued.projectId,
+        versionLabel: queued.versionLabel,
+      });
+
+      this.patchJob(jobId, {
+        status: "running",
+        progress: 45,
+        message: "Analisi OCR/AI del preventivo in esecuzione.",
+        step: "analyzing",
+        error: null,
+      });
+
+      const analysis = await this.quotationAnalyzer.analyze({
+        workspaceId: queued.workspaceId,
+        projectId: queued.projectId,
+        storagePath: quotationSource.storagePath,
+        fileName: quotationSource.fileName,
+      });
+
+      this.patchJob(jobId, {
+        status: "running",
+        progress: 75,
+        message: "Generazione DOCX del preventivo.",
+        step: "docx_generation",
+        error: null,
+      });
+
+      const docxBytes = await this.docxBuilder.build(analysis.structuredData);
+
+      this.patchJob(jobId, {
+        status: "running",
+        progress: 90,
+        message: "Salvataggio documento generato in archivio.",
+        step: "storing",
+        error: null,
+      });
+
       const saved = await this.documentArchiveService.putProjectVersionFile(
         new PutProjectFileCommand({
-          workspaceId: current.workspaceId,
-          projectId: current.projectId,
-          versionLabel: current.versionLabel,
+          workspaceId: queued.workspaceId,
+          projectId: queued.projectId,
+          versionLabel: queued.versionLabel,
           fileKind: FileKind.QUOTATION_DOCX,
           fileName: "preventivo.docx",
           contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           bytes: docxBytes,
-          uploadedByUserId: current.requestedByUserId,
+          uploadedByUserId: queued.requestedByUserId,
         }),
       );
+
+      const versionContext = await this.loadVersionContext({
+        workspaceId: queued.workspaceId,
+        projectId: queued.projectId,
+        versionLabel: queued.versionLabel,
+      });
 
       this.patchJob(jobId, {
         status: "completed",
         progress: 100,
-        message: "Elaborazione completata.",
+        message: "Preventivo DOCX generato con successo.",
         step: "completed",
         error: null,
         result: {
-          project_uuid: current.projectId,
+          project_uuid: queued.projectId,
           output_docx_path: saved.storagePath,
           output_docx_storage_path: saved.storagePath,
           output_docx_size_bytes: saved.sizeBytes,
-          email_recipient: null,
-          final_message: "Preventivo DOCX generato con successo.",
+          email_recipient: versionContext.clientEmail,
+          final_message: this.composeFinalMessage(analysis, versionContext.clientEmail),
         },
       });
     } catch (error) {
@@ -176,6 +225,76 @@ export class LegacyQuotationOrchestratorService {
     }
   }
 
+  private async loadQuotationSource(params: {
+    workspaceId: string;
+    projectId: string;
+    versionLabel: string;
+  }): Promise<{ storagePath: string; fileName: string }> {
+    const quotation = await this.documentArchiveService.getCurrentProjectVersionFile({
+      workspaceId: params.workspaceId,
+      projectId: params.projectId,
+      versionLabel: params.versionLabel,
+      fileKind: FileKind.QUOTATION_PDF,
+    });
+
+    if (!quotation) {
+      throw new Error("PDF preventivo non trovato per questo progetto.");
+    }
+
+    if (!quotation.storagePath.startsWith("garage://")) {
+      throw new Error("PDF preventivo non migrato su Garage.");
+    }
+
+    return {
+      storagePath: quotation.storagePath,
+      fileName: quotation.filename ?? "preventivo.pdf",
+    };
+  }
+
+  private async loadVersionContext(params: {
+    workspaceId: string;
+    projectId: string;
+    versionLabel: string;
+  }): Promise<{ clientEmail: string | null }> {
+    const prisma = PrismaClientManager.getClient();
+    const version = await prisma.projectVersion.findFirst({
+      where: {
+        workspace_id: params.workspaceId,
+        project_id: params.projectId,
+        version_label: params.versionLabel,
+        deleted_at: null,
+      },
+      select: {
+        client: {
+          select: {
+            email: true,
+          },
+        },
+      },
+    });
+
+    return {
+      clientEmail: version?.client?.email?.trim() ? version.client.email.trim() : null,
+    };
+  }
+
+  private composeFinalMessage(analysis: QuotationAnalysisResult, clientEmail: string | null): string {
+    const title = analysis.structuredData.Title?.trim();
+    const reference = analysis.structuredData.Reference?.trim();
+
+    const detail = title
+      ? `Titolo rilevato: ${title}`
+      : reference
+        ? `Riferimento rilevato: ${reference}`
+        : "Dati strutturati rilevati correttamente.";
+
+    if (clientEmail) {
+      return `Preventivo DOCX generato con successo. ${detail} Cliente associato: ${clientEmail}.`;
+    }
+
+    return `Preventivo DOCX generato con successo. ${detail}`;
+  }
+
   private patchJob(jobId: string, patch: Partial<LegacyOrchestratorJobState>): void {
     const current = this.jobs.get(jobId);
     if (!current) {
@@ -186,24 +305,6 @@ export class LegacyQuotationOrchestratorService {
       ...current,
       ...patch,
       updatedAt: new Date(),
-    });
-  }
-
-  private buildDocxPlaceholder(job: LegacyOrchestratorJobState): Buffer {
-    const lines = [
-      "Preventivo generato (placeholder)",
-      `Progetto: ${job.projectId}`,
-      `Versione: ${job.versionLabel}`,
-      `Cliente: ${job.clientName ?? "N/D"}`,
-      `Generato il: ${new Date().toISOString()}`,
-    ];
-
-    return Buffer.from(lines.join("\n"), "utf8");
-  }
-
-  private async sleep(ms: number): Promise<void> {
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, ms);
     });
   }
 }

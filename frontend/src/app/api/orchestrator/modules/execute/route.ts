@@ -68,13 +68,6 @@ async function executeModuleAction(payload: ModuleActionExecuteRequest): Promise
 }
 
 async function executeWorkflow(payload: WorkflowExecuteRequest): Promise<NextResponse> {
-  if (payload.workflow !== "ddt_analysis_from_storage") {
-    return NextResponse.json<ErrorPayload>(
-      { code: "WORKFLOW_UNSUPPORTED", message: `Workflow non supportato: ${payload.workflow}` },
-      { status: 400 },
-    );
-  }
-
   const storagePath = payload.input?.storagePath?.trim();
   const fileName = payload.input?.fileName?.trim() || "document.pdf";
   if (!storagePath) {
@@ -84,11 +77,30 @@ async function executeWorkflow(payload: WorkflowExecuteRequest): Promise<NextRes
     );
   }
 
-  const result = await orchestrator.analyzeFromStorage({
-    storagePath,
-    fileName,
-    maxPages: payload.input.maxPages,
-  });
+  if (payload.workflow === "ddt_analysis_from_storage") {
+    const result = await orchestrator.analyzeFromStorage({
+      storagePath,
+      fileName,
+      maxPages: payload.input.maxPages,
+      systemPrompt: payload.input.systemPrompt,
+    });
 
-  return NextResponse.json(result, { status: 200 });
+    return NextResponse.json(result, { status: 200 });
+  }
+
+  if (payload.workflow === "quotation_analysis_from_storage") {
+    const result = await orchestrator.analyzeQuotationFromStorage({
+      storagePath,
+      fileName,
+      maxPages: payload.input.maxPages,
+      systemPrompt: payload.input.systemPrompt,
+    });
+
+    return NextResponse.json(result, { status: 200 });
+  }
+
+  return NextResponse.json<ErrorPayload>(
+    { code: "WORKFLOW_UNSUPPORTED", message: `Workflow non supportato: ${payload.workflow}` },
+    { status: 400 },
+  );
 }

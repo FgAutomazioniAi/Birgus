@@ -4,6 +4,7 @@ export const APP_ROUTES = {
   projectNew: "/projects/new",
   projectVersions: (id: string) => `/projects/${id}`,
   projectEdit: (id: string) => `/projects/edit/${id}`,
+  agents: "/agenti",
   clients: "/clients",
   clientNew: "/clients/new",
   clientEdit: (id: number | string) => `/clients/edit/${id}`,

@@ -7,11 +7,12 @@ export interface ModuleActionExecuteRequest {
 
 export interface WorkflowExecuteRequest {
   kind: "workflow";
-  workflow: "ddt_analysis_from_storage";
+  workflow: "ddt_analysis_from_storage" | "quotation_analysis_from_storage";
   input: {
     storagePath: string;
     fileName: string;
     maxPages?: number;
+    systemPrompt?: string;
   };
 }
 
@@ -34,5 +35,10 @@ export interface DdtWorkflowResult {
   article_count: number;
   article_items: Array<{ article_type: string; quantity: number; unit: string }>;
   analysis_summary: string;
+  raw_response: Record<string, unknown>;
+}
+
+export interface QuotationWorkflowResult {
+  structured_data: Record<string, string | null>;
   raw_response: Record<string, unknown>;
 }

@@ -1,6 +1,6 @@
 import { LmStudioClient } from "./LmStudioClient";
 import { PythonModulesClient } from "./PythonModulesClient";
-import { DdtWorkflowResult } from "./types";
+import { DdtWorkflowResult, QuotationWorkflowResult } from "./types";
 
 const FG_CANONICAL = "fg automazioni";
 const DEST_FIELDS = ["destinatario", "spettabile", "spett le", "spett.le"];
@@ -25,6 +25,8 @@ interface ParsedPayload {
   analysis_summary?: unknown;
 }
 
+type QuotationStructuredData = Record<string, string | null>;
+
 interface PartyEvidence {
   receiver_candidates: string[];
   sender_candidates: string[];
@@ -45,7 +47,12 @@ export class NextLmOrchestrator {
     this.useJsonSchema = this.parseBoolean(process.env.ORCH_DDT_USE_JSON_SCHEMA, true);
   }
 
-  public async analyzeFromStorage(input: { storagePath: string; fileName: string; maxPages?: number }): Promise<DdtWorkflowResult> {
+  public async analyzeFromStorage(input: {
+    storagePath: string;
+    fileName: string;
+    maxPages?: number;
+    systemPrompt?: string;
+  }): Promise<DdtWorkflowResult> {
     const workflowStartedAt = Date.now();
     const ocrStartedAt = Date.now();
     const ocrResult = await this.pythonModulesClient.execute("ocr_engine", "extract_text_from_pdf_storage", {
@@ -65,7 +72,7 @@ export class NextLmOrchestrator {
     const hasNegativeMarker = this.hasNegativeQuantityMarkerInText(extractedText);
 
     const userContext = extractedText;
-    const systemPrompt = this.getPrompt();
+    const systemPrompt = input.systemPrompt?.trim() || this.getPrompt();
 
     const inferenceStartedAt = Date.now();
     const { parsed, rawResponse, rawProvider } = await this.requestDdtAnalysis({
@@ -80,6 +87,72 @@ export class NextLmOrchestrator {
       raw_response: {
         provider: rawProvider,
         response: rawResponse,
+        ocr: {
+          extracted_chars: ocrResult.output.extracted_chars,
+          extracted_pages: ocrResult.output.extracted_pages,
+          module: "ocr_engine",
+        },
+        timings: {
+          ocr_ms: ocrDurationMs,
+          inference_ms: inferenceDurationMs,
+          total_ms: Date.now() - workflowStartedAt,
+        },
+      },
+    };
+  }
+
+  public async analyzeQuotationFromStorage(input: {
+    storagePath: string;
+    fileName: string;
+    maxPages?: number;
+    systemPrompt?: string;
+  }): Promise<QuotationWorkflowResult> {
+    const workflowStartedAt = Date.now();
+    const ocrStartedAt = Date.now();
+    const ocrResult = await this.pythonModulesClient.execute("ocr_engine", "extract_text_from_pdf_storage", {
+      storage_path: input.storagePath,
+      max_pages: input.maxPages,
+    });
+    const ocrDurationMs = Date.now() - ocrStartedAt;
+
+    const extractedText = String(ocrResult.output.extracted_text ?? "").trim();
+    if (!extractedText) {
+      throw new Error("OCR completato ma testo preventivo non rilevato.");
+    }
+
+    const cleanedText = this.removeQuotationFooterBlocks(extractedText);
+    const systemPrompt = input.systemPrompt?.trim() || this.getQuotationPrompt();
+
+    console.log(
+      `[Birgus][NextLmOrchestrator][QUOTATION_LM_REQUEST] chars=${cleanedText.length} file=${input.fileName}`,
+    );
+    console.log(
+      `[Birgus][NextLmOrchestrator][QUOTATION_PROMPT_PREVIEW] ${systemPrompt.slice(0, 500)}`,
+    );
+
+    const inferenceStartedAt = Date.now();
+    const lmResponse = await this.lmStudioClient.completeJsonSchema({
+      systemPrompt,
+      userContext: cleanedText,
+      schemaName: "quotation_structured_data",
+      schema: this.getQuotationSchema(),
+      temperature: 0,
+    });
+    const inferenceDurationMs = Date.now() - inferenceStartedAt;
+
+    const parsed = this.tryParseJsonCandidate(lmResponse.content) as Record<string, unknown>;
+    const structuredData = this.normalizeQuotationStructuredData(parsed);
+
+    console.log(
+      `[Birgus][NextLmOrchestrator][QUOTATION_LM_RESPONSE] content_chars=${lmResponse.content.length}`,
+    );
+
+    return {
+      structured_data: structuredData,
+      raw_response: {
+        provider: "lm-studio-chat-completions-json-schema",
+        model: lmResponse.model,
+        response: lmResponse.response,
         ocr: {
           extracted_chars: ocrResult.output.extracted_chars,
           extracted_pages: ocrResult.output.extracted_pages,
@@ -509,6 +582,15 @@ export class NextLmOrchestrator {
       .trim();
   }
 
+  private toNullableString(value: unknown): string | null {
+    if (typeof value !== "string") {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
   private parseOptionalPositiveInt(value: string | undefined): number | null {
     const parsed = Number.parseInt(value ?? "", 10);
     if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -570,6 +652,163 @@ export class NextLmOrchestrator {
         "analysis_summary",
       ],
     };
+  }
+
+  private getQuotationSchema(): Record<string, unknown> {
+    const nullableString = {
+      anyOf: [
+        { type: "string" },
+        { type: "null" },
+      ],
+    };
+
+    return {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        Place: nullableString,
+        Date: nullableString,
+        Attn: nullableString,
+        Company: nullableString,
+        Address1: nullableString,
+        Address2: nullableString,
+        Reference: nullableString,
+        Greeting: nullableString,
+        Title: nullableString,
+        "Printing/Press": nullableString,
+        Imposition: nullableString,
+        "Trim size": nullableString,
+        Extent: nullableString,
+        Text: nullableString,
+        "1st form": nullableString,
+        Endpapers: nullableString,
+        Casecover: nullableString,
+        "Dust jacket": nullableString,
+        Binding: nullableString,
+        Packing: nullableString,
+        Cartons: nullableString,
+        Transport: nullableString,
+        Prices: nullableString,
+        "Extra costs": nullableString,
+        ClosingHeaderAttn: nullableString,
+        ClosingReference: nullableString,
+        ClosingParagraph1: nullableString,
+        ClosingParagraph2: nullableString,
+        Signoff: nullableString,
+        Signature: nullableString,
+      },
+      required: [
+        "Place",
+        "Date",
+        "Attn",
+        "Company",
+        "Address1",
+        "Address2",
+        "Reference",
+        "Greeting",
+        "Title",
+        "Printing/Press",
+        "Imposition",
+        "Trim size",
+        "Extent",
+        "Text",
+        "1st form",
+        "Endpapers",
+        "Casecover",
+        "Dust jacket",
+        "Binding",
+        "Packing",
+        "Cartons",
+        "Transport",
+        "Prices",
+        "Extra costs",
+        "ClosingHeaderAttn",
+        "ClosingReference",
+        "ClosingParagraph1",
+        "ClosingParagraph2",
+        "Signoff",
+        "Signature",
+      ],
+    };
+  }
+
+  private normalizeQuotationStructuredData(parsed: Record<string, unknown>): QuotationStructuredData {
+    const keys = [
+      "Place",
+      "Date",
+      "Attn",
+      "Company",
+      "Address1",
+      "Address2",
+      "Reference",
+      "Greeting",
+      "Title",
+      "Printing/Press",
+      "Imposition",
+      "Trim size",
+      "Extent",
+      "Text",
+      "1st form",
+      "Endpapers",
+      "Casecover",
+      "Dust jacket",
+      "Binding",
+      "Packing",
+      "Cartons",
+      "Transport",
+      "Prices",
+      "Extra costs",
+      "ClosingHeaderAttn",
+      "ClosingReference",
+      "ClosingParagraph1",
+      "ClosingParagraph2",
+      "Signoff",
+      "Signature",
+    ] as const;
+
+    return Object.fromEntries(
+      keys.map((key) => [key, this.toNullableString(parsed[key])]),
+    );
+  }
+
+  private removeQuotationFooterBlocks(text: string): string {
+    return text.replace(
+      /Birgus\s+srl\s+Headquarter[\s\S]*?suzie\.hutton@birgus\.com/gi,
+      "",
+    ).trim();
+  }
+
+  private getQuotationPrompt(): string {
+    return `Extract structured data from this quotation letter and return JSON only.
+Return only valid JSON, with no markdown, no comments and no extra text.
+Each request is independent: do not use memory from previous requests.
+
+Use exactly these keys:
+Place, Date, Attn, Company, Address1, Address2, Reference, Greeting,
+Title, Printing/Press, Imposition, Trim size, Extent, Text,
+1st form, Endpapers, Casecover, Dust jacket, Binding, Packing,
+Cartons, Transport, Prices, Extra costs,
+ClosingHeaderAttn, ClosingReference,
+ClosingParagraph1, ClosingParagraph2,
+Signoff, Signature.
+
+Rules:
+- Use null when a field is not present.
+- Ignore footer/company contact blocks.
+- Preserve the original wording from the document.
+- Do not translate the content.
+- Do not summarize.
+- Reference must contain only the reference text, without adding "RE:" if it is not in the document.
+- Attn must contain only the recipient line value, without adding "Attn." if it is not in the document.
+- ClosingHeaderAttn is the recipient/company line shown again before the closing section on the following page, if present.
+- ClosingReference is the repeated RE/reference line shown again before the closing section, if present.
+- ClosingParagraph1 is the first closing paragraph.
+- ClosingParagraph2 is the second closing paragraph.
+- Signoff is the closing formula, such as "Warm regards,".
+- Signature is the signer name, such as "Nancy Freeman".
+- If a field is spread across multiple OCR lines but clearly belongs to the same value, reconstruct it faithfully as a single string.
+- Do not invent values.
+- Do not add keys beyond the required schema.`;
   }
 
   private getPrompt(): string {

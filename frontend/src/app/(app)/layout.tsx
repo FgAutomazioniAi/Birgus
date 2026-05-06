@@ -17,6 +17,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   }
 
   let currentUserName = "Utente";
+  let currentUserId = "";
+  let enabledModuleKeys: string[] = [];
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/auth/session`, {
       cache: "no-store",
@@ -29,14 +31,39 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       redirect(APP_ROUTES.login);
     }
 
-    const payload = (await response.json()) as { user?: { fullName?: string } };
+    const payload = (await response.json()) as { userId?: string; user?: { fullName?: string } };
     const fullName = payload.user?.fullName?.trim();
     if (fullName && fullName.length > 0) {
       currentUserName = fullName;
+    }
+
+    currentUserId = payload.userId?.trim() ?? "";
+
+    if (currentUserId) {
+      const modulesResponse = await fetch(`${getApiBaseUrl()}/api/modules/users/${encodeURIComponent(currentUserId)}`, {
+        cache: "no-store",
+        headers: {
+          cookie: `${AUTH_CONFIGURED_COOKIE_NAME}=${encodeURIComponent(token)}`,
+        },
+      });
+
+      if (modulesResponse.ok) {
+        const modulesPayload = (await modulesResponse.json()) as {
+          modules?: Array<{ effectiveEnabled?: boolean; moduleKey?: string }>;
+        };
+
+        enabledModuleKeys = (modulesPayload.modules ?? [])
+          .filter((item) => item.effectiveEnabled && typeof item.moduleKey === "string")
+          .map((item) => item.moduleKey as string);
+      }
     }
   } catch {
     redirect(APP_ROUTES.login);
   }
 
-  return <AppShell currentUser={{ nome: currentUserName, ruolo: "Operatore" }}>{children}</AppShell>;
+  return (
+    <AppShell currentUser={{ id: currentUserId, nome: currentUserName, ruolo: "Operatore", enabledModuleKeys }}>
+      {children}
+    </AppShell>
+  );
 }

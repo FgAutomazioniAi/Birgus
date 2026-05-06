@@ -183,7 +183,7 @@ Vincoli:
 
 ### Tabella `modules`
 Descrizione:
-- catalogo moduli funzionali (es. projects, ddt-reader, ...)
+- catalogo moduli funzionali (es. project_management, ddt_processing, agent_management, document_intelligence, conversational_assistant, ...)
 
 Colonne chiave:
 - `key` (univoco)
@@ -369,7 +369,41 @@ Connessioni:
 - N:1 con `project_statuses`
 - N:1 opzionale con `project_revisions`
 - 1:N con `project_clients`
+- 1:N con `project_agents`
 - 1:N con `project_versions`
+
+### Tabella `project_agents`
+Descrizione:
+- agenti configurati all'interno di un progetto
+- contiene i dati del modulo agenti a livello di singolo progetto
+- salva sia il prompt originale sia il prompt attualmente attivo
+
+Colonne chiave:
+- `workspace_id`, `project_id`
+- `module_id`
+- `key`
+- `name`, `label`
+- `original_prompt`, `active_prompt`
+- `is_enabled`
+- `created_by_user_id`, `updated_by_user_id`
+
+Connessioni:
+- N:1 con `workspaces`
+- N:1 con `projects`
+- N:1 con `modules`
+- N:1 opzionale con `users` (creatore)
+- N:1 opzionale con `users` (ultimo aggiornamento)
+
+Vincoli:
+- `@@unique([workspace_id, project_id, module_id, key])`
+
+Note:
+- `key` e' la chiave tecnica stabile dell'agente dentro il progetto
+- `name` e' il nome interno associato all'agente
+- `label` e' la dicitura da visualizzare in interfaccia
+- `is_enabled` permette di attivare/disattivare il singolo agente senza cancellarlo
+- `module_id` collega formalmente l'agente al modulo funzionale in cui verra richiamato
+- il modulo di visualizzazione/configurazione agenti puo vivere separatamente nel catalogo moduli, restando governato da `modules`, `workspace_modules` e `user_module_overrides`
 
 ### Tabella `project_clients`
 Descrizione:
@@ -534,6 +568,147 @@ Connessioni:
 - N:1 con `ddt_processing_jobs` (`onDelete: Cascade`)
 - N:1 con `ddt_documents` (`onDelete: Cascade`)
 
+## Assistente conversazionale e document intelligence
+
+### Tabella `assistant_sessions`
+Descrizione:
+- sessioni chat limitate al ticket/conversazione aperta dall'utente
+- conserva anche il contesto applicativo collegato, quando presente
+
+Colonne chiave:
+- `workspace_id`
+- `opened_by_user_id`
+- `module_id`
+- `status`
+- `context_entity_type`, `context_entity_id`
+- `project_id`, `project_version_id`, `client_id`, `shipment_id`, `document_id`, `ddt_document_id`
+- `opened_at`, `last_activity_at`, `closed_at`
+
+Connessioni:
+- N:1 con `workspaces`
+- N:1 opzionale con `users`
+- N:1 opzionale con `modules`
+- N:1 opzionale con `projects`
+- N:1 opzionale con `project_versions`
+- N:1 opzionale con `clients`
+- N:1 opzionale con `shipments`
+- N:1 opzionale con `documents`
+- N:1 opzionale con `ddt_documents`
+- 1:N con `assistant_messages`
+- 1:N con `assistant_tool_calls`
+- 1:N con `assistant_memory_snapshots`
+
+### Tabella `assistant_messages`
+Descrizione:
+- messaggi scambiati durante la sessione chat
+- memorizza sia testo puro sia payload JSON ausiliari
+
+Colonne chiave:
+- `session_id`, `workspace_id`
+- `role`
+- `sequence_no`
+- `content_text`, `content_payload`
+- `model_name`
+- `prompt_tokens`, `completion_tokens`
+
+Connessioni:
+- N:1 con `assistant_sessions` (`onDelete: Cascade`)
+- N:1 con `workspaces`
+- N:1 opzionale con `users` (autore umano)
+- 1:N con `assistant_tool_calls`
+
+Vincoli:
+- `@@unique([session_id, sequence_no])`
+
+### Tabella `assistant_tool_calls`
+Descrizione:
+- audit esecutivo delle funzioni backend chiamate dal chatbot
+- conserva argomenti, risultato e contesto autorizzativo
+
+Colonne chiave:
+- `session_id`, `message_id`, `workspace_id`
+- `module_id`
+- `tool_name`
+- `status`
+- `arguments_payload`, `result_payload`, `authorization_context`
+- `denied_reason`
+
+Connessioni:
+- N:1 con `assistant_sessions` (`onDelete: Cascade`)
+- N:1 opzionale con `assistant_messages`
+- N:1 con `workspaces`
+- N:1 opzionale con `modules`
+
+### Tabella `assistant_memory_snapshots`
+Descrizione:
+- memoria compatta derivata dalla conversazione
+- permette riassunti progressivi senza rileggere tutti i messaggi
+
+Colonne chiave:
+- `session_id`, `workspace_id`
+- `summary_text`
+- `extracted_facts`
+- `message_count`, `token_estimate`
+- `generated_at`
+
+Connessioni:
+- N:1 con `assistant_sessions` (`onDelete: Cascade`)
+- N:1 con `workspaces`
+
+### Tabella `knowledge_documents`
+Descrizione:
+- layer documentale/logico per contenuti interrogabili dal chatbot
+- puo rappresentare documenti Garage, testi OCR, riassunti o payload strutturati
+
+Colonne chiave:
+- `workspace_id`
+- `module_id`, `document_id`
+- `source_entity_type`, `source_entity_id`
+- `representation_key`
+- `content_text`, `summary_text`, `structured_payload`
+- `extraction_status`, `extraction_kind`
+- `content_hash`, `last_error`, `extracted_at`
+
+Connessioni:
+- N:1 con `workspaces`
+- N:1 opzionale con `modules`
+- N:1 opzionale con `documents`
+- 1:N con `knowledge_chunks`
+
+Vincoli:
+- `@@unique([workspace_id, source_entity_type, source_entity_id, representation_key])`
+
+Note:
+- questa tabella e un layer intermedio controllato tra archivio documentale e chatbot
+- evita accesso diretto del modello ai file o alle tabelle operative
+
+### Tabella `knowledge_chunks`
+Descrizione:
+- suddivisione semantica dei contenuti interrogabili
+- pronta per embedding e ricerca semantica per chunk
+
+Colonne chiave:
+- `workspace_id`
+- `knowledge_document_id`
+- `chunk_index`
+- `content_text`
+- `embedding_status`
+- `embedding_provider`, `embedding_model`, `embedding_dimensions`
+- `embedding_payload`
+- `metadata`, `embedded_at`
+
+Connessioni:
+- N:1 con `workspaces`
+- N:1 con `knowledge_documents` (`onDelete: Cascade`)
+
+Vincoli:
+- `@@unique([knowledge_document_id, chunk_index])`
+
+Nota infrastrutturale:
+- il database attuale non espone ancora l'estensione PostgreSQL `pgvector`
+- per questo il vettore e predisposto ora tramite metadata/`embedding_payload`
+- quando verra introdotta l'estensione a livello Docker/Postgres, `knowledge_chunks` e il punto naturale dove aggiungere la colonna `vector`
+
 ## Notifiche e logs
 
 ### Tabella `notifications`
@@ -570,9 +745,14 @@ Connessioni:
 - `users` + `modules` con override per workspace tramite `user_module_overrides`
 - `nodes` gerarchico self-reference + `documents`
 - `projects` M:N `clients` tramite `project_clients`
+- `projects` 1:N `project_agents`
 - `project_versions` 1:1 `shipments`
 - `shipments` 1:1 `shipment_specifications`
 - `ddt_documents` 1:1 `documents`
+- `assistant_sessions` 1:N `assistant_messages`
+- `assistant_sessions` 1:N `assistant_tool_calls`
+- `assistant_sessions` 1:N `assistant_memory_snapshots`
+- `knowledge_documents` 1:N `knowledge_chunks`
 
 ## Multi-tenant
 

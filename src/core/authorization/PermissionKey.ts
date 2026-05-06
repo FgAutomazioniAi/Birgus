@@ -4,6 +4,8 @@ export class PermissionKey {
 
   public static readonly PROJECTS_READ = "projects.read";
   public static readonly PROJECTS_WRITE = "projects.write";
+  public static readonly AGENTS_READ = "agents.read";
+  public static readonly AGENTS_WRITE = "agents.write";
   public static readonly CLIENTS_READ = "clients.read";
   public static readonly CLIENTS_WRITE = "clients.write";
 

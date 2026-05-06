@@ -1,3 +1,4 @@
+export * from "./agents-panel";
 export * from "./client-form";
 export * from "./clients-table";
 export * from "./dashboard-table";

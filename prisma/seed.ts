@@ -6,9 +6,12 @@ const prisma = new PrismaClient();
 
 const MODULE_KEYS = [
   "project_management",
+  "agent_management",
   "shipment_management",
   "ddt_processing",
   "document_archive",
+  "document_intelligence",
+  "conversational_assistant",
   "notification_center",
 ] as const;
 
@@ -19,6 +22,8 @@ const PERMISSION_KEYS = [
   "modules.configure",
   "projects.read",
   "projects.write",
+  "agents.read",
+  "agents.write",
   "clients.read",
   "clients.write",
   "documents.read",
@@ -27,6 +32,11 @@ const PERMISSION_KEYS = [
   "shipments.write",
   "ddt.read",
   "ddt.process",
+  "knowledge.read",
+  "knowledge.write",
+  "assistant.read",
+  "assistant.write",
+  "assistant.configure",
   "notifications.read",
   "notifications.write",
 ] as const;
@@ -38,6 +48,8 @@ const ROLE_PERMISSION_MATRIX: Record<(typeof ROLE_KEYS)[number], readonly (typeo
     "modules.read",
     "projects.read",
     "projects.write",
+    "agents.read",
+    "agents.write",
     "clients.read",
     "clients.write",
     "documents.read",
@@ -46,6 +58,9 @@ const ROLE_PERMISSION_MATRIX: Record<(typeof ROLE_KEYS)[number], readonly (typeo
     "shipments.write",
     "ddt.read",
     "ddt.process",
+    "knowledge.read",
+    "assistant.read",
+    "assistant.write",
     "notifications.read",
   ],
 } as const;
@@ -95,6 +110,21 @@ async function hashPassword(password: string): Promise<string> {
 async function main() {
   const organizationCode = "birgus";
   const workspaceCode = "main";
+
+  const legacyAgentModule = await prisma.module.findUnique({
+    where: { key: "project_agents" },
+    select: { id: true },
+  });
+
+  if (legacyAgentModule) {
+    await prisma.module.update({
+      where: { id: legacyAgentModule.id },
+      data: {
+        key: "agent_management",
+        name: "agent_management",
+      },
+    });
+  }
 
   let organization = await prisma.organization.findUnique({
     where: { code: organizationCode },
@@ -222,6 +252,61 @@ async function main() {
         workspace_id: workspace.id,
         module_id: module.id,
         is_enabled: true,
+      },
+    });
+  }
+
+  const moduleByKey = new Map(modules.map((item) => [item.key, item]));
+  const projectManagementModule = moduleByKey.get("project_management");
+  const agentManagementModule = moduleByKey.get("agent_management");
+  const documentArchiveModule = moduleByKey.get("document_archive");
+  const documentIntelligenceModule = moduleByKey.get("document_intelligence");
+  const conversationalAssistantModule = moduleByKey.get("conversational_assistant");
+
+  if (projectManagementModule && agentManagementModule) {
+    await prisma.moduleDependency.upsert({
+      where: {
+        module_id_depends_on_module_id: {
+          module_id: agentManagementModule.id,
+          depends_on_module_id: projectManagementModule.id,
+        },
+      },
+      update: {},
+      create: {
+        module_id: agentManagementModule.id,
+        depends_on_module_id: projectManagementModule.id,
+      },
+    });
+  }
+
+  if (documentArchiveModule && documentIntelligenceModule) {
+    await prisma.moduleDependency.upsert({
+      where: {
+        module_id_depends_on_module_id: {
+          module_id: documentIntelligenceModule.id,
+          depends_on_module_id: documentArchiveModule.id,
+        },
+      },
+      update: {},
+      create: {
+        module_id: documentIntelligenceModule.id,
+        depends_on_module_id: documentArchiveModule.id,
+      },
+    });
+  }
+
+  if (documentIntelligenceModule && conversationalAssistantModule) {
+    await prisma.moduleDependency.upsert({
+      where: {
+        module_id_depends_on_module_id: {
+          module_id: conversationalAssistantModule.id,
+          depends_on_module_id: documentIntelligenceModule.id,
+        },
+      },
+      update: {},
+      create: {
+        module_id: conversationalAssistantModule.id,
+        depends_on_module_id: documentIntelligenceModule.id,
       },
     });
   }

@@ -1,4 +1,6 @@
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
+import { ModuleKey } from "../../../core/module-access/ModuleKey.js";
+import { ProjectAgentService } from "../../agents/services/ProjectAgentService.js";
 import { DdtAnalysisInput } from "../repositories/DdtProcessingRepository.js";
 import { DdtAnalyzer } from "./DdtAnalyzer.js";
 
@@ -22,12 +24,16 @@ interface WorkflowResponsePayload {
 }
 
 export class NextOrchestratorDdtAnalyzer implements DdtAnalyzer {
+  public static readonly DDT_PROMPT_AGENT_KEY = "ddt_analysis_prompt";
+
   private readonly baseUrl: string;
   private readonly executePath: string;
   private readonly timeoutMs: number;
   private readonly token: string;
+  private readonly projectAgentService: ProjectAgentService;
 
-  public constructor() {
+  public constructor(projectAgentService: ProjectAgentService) {
+    this.projectAgentService = projectAgentService;
     this.baseUrl = (process.env.DDT_READER_ORCHESTRATOR_BASE_URL ?? "").replace(/\/+$/, "");
     this.executePath = this.normalizePath(process.env.DDT_READER_ORCHESTRATOR_EXECUTE_PATH ?? "/api/orchestrator/modules/execute");
     this.timeoutMs = this.toPositiveInt(process.env.DDT_READER_ORCHESTRATOR_TIMEOUT_MS, 600000);
@@ -40,19 +46,31 @@ export class NextOrchestratorDdtAnalyzer implements DdtAnalyzer {
     }
 
     const row = await this.loadDdtDocument(ddtDocumentId);
+    const systemPrompt = await this.projectAgentService.resolveActivePrompt({
+      workspaceId: row.workspace_id,
+      moduleKey: ModuleKey.DDT_PROCESSING,
+      agentKey: NextOrchestratorDdtAnalyzer.DDT_PROMPT_AGENT_KEY,
+    });
     const workflow = await this.callWorkflow({
       storagePath: row.storage_path,
       fileName: row.original_filename ?? row.filename ?? "document.pdf",
+      systemPrompt,
     });
 
     return this.normalizeResponse(workflow, ddtDocumentId);
   }
 
-  private async loadDdtDocument(ddtDocumentId: string): Promise<{ filename: string | null; original_filename: string | null; storage_path: string }> {
+  private async loadDdtDocument(ddtDocumentId: string): Promise<{
+    workspace_id: string;
+    filename: string | null;
+    original_filename: string | null;
+    storage_path: string;
+  }> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.ddtDocument.findUnique({
       where: { id: ddtDocumentId },
       select: {
+        workspace_id: true,
         original_filename: true,
         document: {
           select: {
@@ -68,13 +86,18 @@ export class NextOrchestratorDdtAnalyzer implements DdtAnalyzer {
     }
 
     return {
+      workspace_id: row.workspace_id,
       filename: row.document.filename,
       original_filename: row.original_filename,
       storage_path: row.document.storage_path,
     };
   }
 
-  private async callWorkflow(input: { storagePath: string; fileName: string }): Promise<WorkflowResponsePayload> {
+  private async callWorkflow(input: {
+    storagePath: string;
+    fileName: string;
+    systemPrompt?: string | null;
+  }): Promise<WorkflowResponsePayload> {
     const headers: Record<string, string> = {
       "content-type": "application/json",
     };
@@ -92,6 +115,7 @@ export class NextOrchestratorDdtAnalyzer implements DdtAnalyzer {
         input: {
           storagePath: input.storagePath,
           fileName: input.fileName,
+          systemPrompt: input.systemPrompt ?? undefined,
         },
       }),
       signal: AbortSignal.timeout(this.timeoutMs),

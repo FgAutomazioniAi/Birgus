@@ -10,8 +10,10 @@ import { TopNav } from "@/components/organisms/top-nav";
 export interface AppShellProps {
   children: ReactNode;
   currentUser: {
+    id: string;
     nome: string;
     ruolo: string;
+    enabledModuleKeys: string[];
   };
 }
 
@@ -25,6 +27,7 @@ export function AppShell({ children, currentUser }: AppShellProps) {
       <Sidebar
         open={sidebarOpen}
         collapsed={sidebarCollapsed}
+        enabledModuleKeys={currentUser.enabledModuleKeys}
         onClose={() => setSidebarOpen(false)}
       />
 

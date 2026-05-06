@@ -1,6 +1,6 @@
 "use client";
 
-import { FileSearch, FolderKanban, LogOut, Settings, Truck, Users } from "lucide-react";
+import { Bot, FileSearch, FolderKanban, LogOut, Settings, Truck, Users } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -9,25 +9,28 @@ import { BirgusLogo, NavItem } from "@/components/molecules";
 import { APP_ROUTES } from "@/lib/routes";
 
 const menuItems = [
-  { icon: FolderKanban, label: "Progetti", path: APP_ROUTES.projects },
-  { icon: Users, label: "Clienti", path: APP_ROUTES.clients },
-  { icon: Truck, label: "Spedizioni", path: APP_ROUTES.spedizioni },
+  { icon: FolderKanban, label: "Progetti", path: APP_ROUTES.projects, moduleKey: "project_management" },
+  { icon: Users, label: "Clienti", path: APP_ROUTES.clients, moduleKey: "project_management" },
+  { icon: Bot, label: "Agenti", path: APP_ROUTES.agents, moduleKey: "agent_management" },
+  { icon: Truck, label: "Spedizioni", path: APP_ROUTES.spedizioni, moduleKey: "shipment_management" },
   // DDT_READER_FEATURE_START
-  { icon: FileSearch, label: "DDT Reader", path: APP_ROUTES.ddtReader },
+  { icon: FileSearch, label: "DDT Reader", path: APP_ROUTES.ddtReader, moduleKey: "ddt_processing" },
   // DDT_READER_FEATURE_END
   { icon: Settings, label: "Impostazioni", path: APP_ROUTES.settings },
 ];
 
 export interface SidebarProps {
   collapsed: boolean;
+  enabledModuleKeys: string[];
   onClose: () => void;
   open: boolean;
 }
 
-export function Sidebar({ collapsed, onClose, open }: SidebarProps) {
+export function Sidebar({ collapsed, enabledModuleKeys, onClose, open }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const visibleMenuItems = menuItems.filter((item) => !item.moduleKey || enabledModuleKeys.includes(item.moduleKey));
 
   const handleLogout = async () => {
     if (isLoggingOut) {
@@ -68,7 +71,7 @@ export function Sidebar({ collapsed, onClose, open }: SidebarProps) {
           </div>
 
           <nav className="flex-1 space-y-1 px-4">
-            {menuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               const isProjectsRoute = item.path === APP_ROUTES.projects;
               const isActive = isProjectsRoute
                 ? pathname === APP_ROUTES.projects || pathname.startsWith("/projects")

@@ -5,6 +5,8 @@ import { WorkspaceMembershipPrismaReader } from "../database/WorkspaceMembership
 import { WorkspacePermissionPrismaReader } from "../database/WorkspacePermissionPrismaReader.js";
 import { PrismaClientRepository } from "../modules/clients/infra/PrismaClientRepository.js";
 import { ClientService } from "../modules/clients/services/ClientService.js";
+import { PrismaProjectAgentRepository } from "../modules/agents/infra/PrismaProjectAgentRepository.js";
+import { ProjectAgentService } from "../modules/agents/services/ProjectAgentService.js";
 import { PrismaDdtProcessingRepository } from "../modules/ddt-processing/infra/PrismaDdtProcessingRepository.js";
 import { DdtProcessingService } from "../modules/ddt-processing/services/DdtProcessingService.js";
 import { LegacyDdtReaderService } from "../modules/ddt-processing/services/LegacyDdtReaderService.js";
@@ -26,6 +28,8 @@ import { NotificationService } from "../modules/notifications/services/Notificat
 import { PrismaProjectRepository } from "../modules/projects/infra/PrismaProjectRepository.js";
 import { ProjectService } from "../modules/projects/services/ProjectService.js";
 import { LegacyQuotationOrchestratorService } from "../modules/quotation-orchestrator/services/LegacyQuotationOrchestratorService.js";
+import { NextOrchestratorQuotationAnalyzer } from "../modules/quotation-orchestrator/services/NextOrchestratorQuotationAnalyzer.js";
+import { QuotationDocxBuilder } from "../modules/quotation-orchestrator/services/QuotationDocxBuilder.js";
 import { PrismaUserPreferenceRepository } from "../modules/preferences/infra/PrismaUserPreferenceRepository.js";
 import { UserPreferenceService } from "../modules/preferences/services/UserPreferenceService.js";
 import { PrismaShipmentRepository } from "../modules/shipping/infra/PrismaShipmentRepository.js";
@@ -43,6 +47,7 @@ export class ApplicationContainer {
   public readonly passwordResetService: PasswordResetService;
   public readonly moduleManagementService: ModuleManagementService;
   public readonly clientService: ClientService;
+  public readonly projectAgentService: ProjectAgentService;
   public readonly userPreferenceService: UserPreferenceService;
   public readonly projectService: ProjectService;
   public readonly documentArchiveService: DocumentArchiveService;
@@ -90,6 +95,9 @@ export class ApplicationContainer {
     const clientRepository = new PrismaClientRepository();
     this.clientService = new ClientService(clientRepository);
 
+    const projectAgentRepository = new PrismaProjectAgentRepository();
+    this.projectAgentService = new ProjectAgentService(projectAgentRepository);
+
     const userPreferenceRepository = new PrismaUserPreferenceRepository();
     this.userPreferenceService = new UserPreferenceService(userPreferenceRepository);
 
@@ -107,9 +115,13 @@ export class ApplicationContainer {
     const ddtRepository = new PrismaDdtProcessingRepository();
     this.ddtProcessingService = new DdtProcessingService(ddtRepository, queue);
     this.legacyDdtReaderService = new LegacyDdtReaderService(this.ddtProcessingService, storage);
-    this.legacyQuotationOrchestratorService = new LegacyQuotationOrchestratorService(this.documentArchiveService);
+    this.legacyQuotationOrchestratorService = new LegacyQuotationOrchestratorService(
+      this.documentArchiveService,
+      new NextOrchestratorQuotationAnalyzer(this.projectAgentService),
+      new QuotationDocxBuilder(),
+    );
 
-    const ddtWorker = new DdtProcessingWorker(ddtRepository, new NextOrchestratorDdtAnalyzer());
+    const ddtWorker = new DdtProcessingWorker(ddtRepository, new NextOrchestratorDdtAnalyzer(this.projectAgentService));
     this.workerCoordinator = new WorkerCoordinator(queue, ddtWorker);
     this.workerCoordinator.registerHandlers();
 

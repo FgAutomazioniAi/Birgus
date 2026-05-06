@@ -16,6 +16,7 @@ import { LegacyOrchestratorController } from "./controllers/LegacyOrchestratorCo
 import { LegacyProjectAssetsController } from "./controllers/LegacyProjectAssetsController.js";
 import { ModuleController } from "./controllers/ModuleController.js";
 import { NotificationController } from "./controllers/NotificationController.js";
+import { ProjectAgentController } from "./controllers/ProjectAgentController.js";
 import { ProjectController } from "./controllers/ProjectController.js";
 import { ShipmentController } from "./controllers/ShipmentController.js";
 import { UserPreferenceController } from "./controllers/UserPreferenceController.js";
@@ -76,6 +77,7 @@ export class HttpServer {
     );
     const moduleController = new ModuleController(this.container.moduleManagementService, this.permissionGuard);
     const clientController = new ClientController(this.container.clientService, this.moduleGuard, this.permissionGuard);
+    const projectAgentController = new ProjectAgentController(this.container.projectAgentService, this.moduleGuard, this.permissionGuard);
     const userPreferenceController = new UserPreferenceController(this.container.userPreferenceService);
     const projectController = new ProjectController(this.container.projectService, this.moduleGuard, this.permissionGuard);
     const legacyProjectAssetsController = new LegacyProjectAssetsController(
@@ -149,6 +151,10 @@ export class HttpServer {
     this.app.delete("/api/projects/:projectId/quotation", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, legacyProjectAssetsController.deleteQuotation);
     this.app.get("/api/projects/:projectId/quotation/file", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, legacyProjectAssetsController.getQuotationFile);
     this.app.post("/api/projects/:projectId/quotation/analyze", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, legacyProjectAssetsController.analyzeQuotation);
+
+    this.app.get("/api/agents", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, projectAgentController.listAgents);
+    this.app.patch("/api/agents/:agentId", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, projectAgentController.updateAgentPrompt);
+    this.app.post("/api/agents/:agentId/reset-prompt", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, projectAgentController.resetAgentPrompt);
 
     this.app.get("/api/shipments", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, shipmentController.listShipments);
     this.app.post("/api/shipments", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, shipmentController.createShipment);
