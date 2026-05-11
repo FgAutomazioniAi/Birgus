@@ -1,11 +1,11 @@
-import { randomUUID } from "node:crypto";
-
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { FileKind } from "../../document-archive/domain/FileKind.js";
 import { PutProjectFileCommand } from "../../document-archive/dto/PutProjectFileCommand.js";
 import { DocumentArchiveService } from "../../document-archive/services/DocumentArchiveService.js";
 import { QuotationAnalysisResult } from "../domain/QuotationStructuredData.js";
+import { QuotationOrchestratorRepository } from "../repositories/QuotationOrchestratorRepository.js";
 import { NextOrchestratorQuotationAnalyzer } from "./NextOrchestratorQuotationAnalyzer.js";
+import { QuotationEmailNotifier } from "./QuotationEmailNotifier.js";
 import { QuotationDocxBuilder } from "./QuotationDocxBuilder.js";
 
 type LegacyOrchestratorStatus = "queued" | "running" | "completed" | "failed";
@@ -30,25 +30,50 @@ interface LegacyOrchestratorJobState {
     output_docx_storage_path: string | null;
     output_docx_size_bytes: number | null;
     email_recipient: string | null;
+    mail_delivery_status: string | null;
+    mail_sent_at: string | null;
+    mail_error: string | null;
     final_message: string | null;
   } | null;
+}
+
+interface QuotationJobPatch {
+  status?: LegacyOrchestratorStatus;
+  progress?: number;
+  message?: string | null;
+  step?: string | null;
+  error?: string | null;
+  outputDocxPath?: string | null;
+  outputDocxStoragePath?: string | null;
+  outputDocxSizeBytes?: number | null;
+  emailRecipient?: string | null;
+  mailDeliveryStatus?: string;
+  mailSentAt?: Date | null;
+  mailError?: string | null;
+  finalMessage?: string | null;
 }
 
 export class LegacyQuotationOrchestratorService {
   private readonly documentArchiveService: DocumentArchiveService;
   private readonly quotationAnalyzer: NextOrchestratorQuotationAnalyzer;
   private readonly docxBuilder: QuotationDocxBuilder;
-  private readonly jobs: Map<string, LegacyOrchestratorJobState>;
+  private readonly repository: QuotationOrchestratorRepository;
+  private readonly emailNotifier: QuotationEmailNotifier;
+  private readonly runningJobs: Set<string>;
 
   public constructor(
     documentArchiveService: DocumentArchiveService,
     quotationAnalyzer: NextOrchestratorQuotationAnalyzer,
     docxBuilder: QuotationDocxBuilder,
+    repository: QuotationOrchestratorRepository,
+    emailNotifier: QuotationEmailNotifier,
   ) {
     this.documentArchiveService = documentArchiveService;
     this.quotationAnalyzer = quotationAnalyzer;
     this.docxBuilder = docxBuilder;
-    this.jobs = new Map();
+    this.repository = repository;
+    this.emailNotifier = emailNotifier;
+    this.runningJobs = new Set();
   }
 
   public async queueJob(params: {
@@ -58,33 +83,26 @@ export class LegacyQuotationOrchestratorService {
     requestedByUserId: string;
     clientName?: string | null;
   }): Promise<string> {
-    const jobId = randomUUID();
-    const now = new Date();
-    this.jobs.set(jobId, {
-      id: jobId,
-      status: "queued",
-      progress: 5,
-      message: "Job in coda.",
-      step: "queued",
-      error: null,
+    const created = await this.repository.createJob({
       workspaceId: params.workspaceId,
       projectId: params.projectId,
       versionLabel: params.versionLabel,
       requestedByUserId: params.requestedByUserId,
       clientName: params.clientName ?? null,
-      createdAt: now,
-      updatedAt: now,
-      result: null,
+      status: "QUEUED",
+      progress: 5,
+      message: "Job in coda.",
+      step: "queued",
     });
 
     setTimeout(() => {
-      void this.runJob(jobId);
+      void this.runJob(created.id);
     }, 100);
 
-    return jobId;
+    return created.id;
   }
 
-  public getJob(jobId: string): {
+  public async getJob(jobId: string): Promise<{
     job_id: string;
     status: LegacyOrchestratorStatus;
     progress: number;
@@ -100,18 +118,18 @@ export class LegacyQuotationOrchestratorService {
       };
     };
     result: LegacyOrchestratorJobState["result"];
-  } | null {
-    const job = this.jobs.get(jobId);
+  } | null> {
+    const job = await this.repository.findJobById(jobId);
     if (!job) {
       return null;
     }
 
     return {
       job_id: job.id,
-      status: job.status,
+      status: this.toLegacyStatus(job.status),
       progress: job.progress,
-      message: job.message,
-      step: job.step,
+      message: job.message ?? "",
+      step: job.step ?? "",
       error: job.error,
       request: {
         project_uuid: job.projectId,
@@ -121,18 +139,49 @@ export class LegacyQuotationOrchestratorService {
           version_label: job.versionLabel,
         },
       },
-      result: job.result,
+      result: job.outputDocxPath || job.outputDocxStoragePath || job.outputDocxSizeBytes || job.emailRecipient || job.finalMessage
+        ? {
+            project_uuid: job.projectId,
+            output_docx_path: job.outputDocxPath,
+            output_docx_storage_path: job.outputDocxStoragePath,
+            output_docx_size_bytes: job.outputDocxSizeBytes,
+            email_recipient: job.emailRecipient,
+            mail_delivery_status: job.mailDeliveryStatus,
+            mail_sent_at: job.mailSentAt?.toISOString() ?? null,
+            mail_error: job.mailError,
+            final_message: job.finalMessage,
+          }
+        : null,
     };
   }
 
+  public async resumePendingJobs(): Promise<void> {
+    const recoverable = await this.repository.listRecoverableJobs();
+    for (const job of recoverable) {
+      if (this.runningJobs.has(job.id)) {
+        continue;
+      }
+
+      setTimeout(() => {
+        void this.runJob(job.id);
+      }, 100);
+    }
+  }
+
   private async runJob(jobId: string): Promise<void> {
-    const queued = this.jobs.get(jobId);
+    if (this.runningJobs.has(jobId)) {
+      return;
+    }
+
+    this.runningJobs.add(jobId);
+    const queued = await this.repository.findJobById(jobId);
     if (!queued) {
+      this.runningJobs.delete(jobId);
       return;
     }
 
     try {
-      this.patchJob(jobId, {
+      await this.patchJob(jobId, {
         status: "running",
         progress: 15,
         message: "Recupero preventivo PDF da archivio.",
@@ -146,7 +195,7 @@ export class LegacyQuotationOrchestratorService {
         versionLabel: queued.versionLabel,
       });
 
-      this.patchJob(jobId, {
+      await this.patchJob(jobId, {
         status: "running",
         progress: 45,
         message: "Analisi OCR/AI del preventivo in esecuzione.",
@@ -161,7 +210,7 @@ export class LegacyQuotationOrchestratorService {
         fileName: quotationSource.fileName,
       });
 
-      this.patchJob(jobId, {
+      await this.patchJob(jobId, {
         status: "running",
         progress: 75,
         message: "Generazione DOCX del preventivo.",
@@ -171,7 +220,7 @@ export class LegacyQuotationOrchestratorService {
 
       const docxBytes = await this.docxBuilder.build(analysis.structuredData);
 
-      this.patchJob(jobId, {
+      await this.patchJob(jobId, {
         status: "running",
         progress: 90,
         message: "Salvataggio documento generato in archivio.",
@@ -198,30 +247,54 @@ export class LegacyQuotationOrchestratorService {
         versionLabel: queued.versionLabel,
       });
 
-      this.patchJob(jobId, {
+      await this.patchJob(jobId, {
+        status: "running",
+        progress: 95,
+        message: versionContext.clientEmail
+          ? `Invio preventivo via email a ${versionContext.clientEmail}.`
+          : "Preventivo generato. Nessuna email cliente associata: invio saltato.",
+        step: "mail_delivery",
+        error: null,
+        outputDocxPath: saved.storagePath,
+        outputDocxStoragePath: saved.storagePath,
+        outputDocxSizeBytes: saved.sizeBytes,
+        emailRecipient: versionContext.clientEmail,
+      });
+
+      const mailOutcome = await this.deliverQuotationEmail({
+        clientEmail: versionContext.clientEmail,
+        clientName: versionContext.clientName,
+        projectName: versionContext.projectName,
+        versionLabel: queued.versionLabel,
+        docxBytes,
+      });
+
+      await this.patchJob(jobId, {
         status: "completed",
         progress: 100,
-        message: "Preventivo DOCX generato con successo.",
+        message: mailOutcome.message,
         step: "completed",
         error: null,
-        result: {
-          project_uuid: queued.projectId,
-          output_docx_path: saved.storagePath,
-          output_docx_storage_path: saved.storagePath,
-          output_docx_size_bytes: saved.sizeBytes,
-          email_recipient: versionContext.clientEmail,
-          final_message: this.composeFinalMessage(analysis, versionContext.clientEmail),
-        },
+        outputDocxPath: saved.storagePath,
+        outputDocxStoragePath: saved.storagePath,
+        outputDocxSizeBytes: saved.sizeBytes,
+        emailRecipient: versionContext.clientEmail,
+        mailDeliveryStatus: mailOutcome.status,
+        mailSentAt: mailOutcome.sentAt,
+        mailError: mailOutcome.error,
+        finalMessage: this.composeFinalMessage(analysis, versionContext.clientEmail, mailOutcome.message),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Errore durante l'elaborazione.";
-      this.patchJob(jobId, {
+      await this.patchJob(jobId, {
         status: "failed",
         progress: 100,
         message: "Elaborazione fallita.",
         step: "failed",
         error: message,
       });
+    } finally {
+      this.runningJobs.delete(jobId);
     }
   }
 
@@ -255,7 +328,7 @@ export class LegacyQuotationOrchestratorService {
     workspaceId: string;
     projectId: string;
     versionLabel: string;
-  }): Promise<{ clientEmail: string | null }> {
+  }): Promise<{ clientEmail: string | null; clientName: string | null; projectName: string | null }> {
     const prisma = PrismaClientManager.getClient();
     const version = await prisma.projectVersion.findFirst({
       where: {
@@ -265,9 +338,16 @@ export class LegacyQuotationOrchestratorService {
         deleted_at: null,
       },
       select: {
+        project: {
+          select: {
+            name: true,
+          },
+        },
         client: {
           select: {
             email: true,
+            first_name: true,
+            last_name: true,
           },
         },
       },
@@ -275,10 +355,12 @@ export class LegacyQuotationOrchestratorService {
 
     return {
       clientEmail: version?.client?.email?.trim() ? version.client.email.trim() : null,
+      clientName: this.composeClientName(version?.client?.first_name, version?.client?.last_name),
+      projectName: version?.project?.name?.trim() ? version.project.name.trim() : null,
     };
   }
 
-  private composeFinalMessage(analysis: QuotationAnalysisResult, clientEmail: string | null): string {
+  private composeFinalMessage(analysis: QuotationAnalysisResult, clientEmail: string | null, mailSummary: string): string {
     const title = analysis.structuredData.Title?.trim();
     const reference = analysis.structuredData.Reference?.trim();
 
@@ -288,23 +370,88 @@ export class LegacyQuotationOrchestratorService {
         ? `Riferimento rilevato: ${reference}`
         : "Dati strutturati rilevati correttamente.";
 
-    if (clientEmail) {
-      return `Preventivo DOCX generato con successo. ${detail} Cliente associato: ${clientEmail}.`;
-    }
-
-    return `Preventivo DOCX generato con successo. ${detail}`;
+    const clientDetail = clientEmail ? ` Cliente associato: ${clientEmail}.` : "";
+    return `${mailSummary} ${detail}.${clientDetail}`.trim();
   }
 
-  private patchJob(jobId: string, patch: Partial<LegacyOrchestratorJobState>): void {
-    const current = this.jobs.get(jobId);
-    if (!current) {
-      return;
+  private async deliverQuotationEmail(params: {
+    clientEmail: string | null;
+    clientName: string | null;
+    projectName: string | null;
+    versionLabel: string;
+    docxBytes: Buffer;
+  }): Promise<{ status: string; message: string; sentAt: Date | null; error: string | null }> {
+    if (!params.clientEmail) {
+      return {
+        status: "SKIPPED",
+        message: "Preventivo DOCX generato con successo. Nessuna email cliente associata: invio saltato.",
+        sentAt: null,
+        error: null,
+      };
     }
 
-    this.jobs.set(jobId, {
-      ...current,
-      ...patch,
-      updatedAt: new Date(),
+    try {
+      await this.emailNotifier.sendQuotation({
+        to: params.clientEmail,
+        clientName: params.clientName,
+        projectName: params.projectName,
+        versionLabel: params.versionLabel,
+        fileName: "preventivo.docx",
+        docxBytes: params.docxBytes,
+      });
+
+      return {
+        status: "SENT",
+        message: `Preventivo DOCX generato e inviato con successo a ${params.clientEmail}.`,
+        sentAt: new Date(),
+        error: null,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invio email non riuscito.";
+      return {
+        status: "FAILED",
+        message: `Preventivo DOCX generato e salvato, ma invio email non riuscito verso ${params.clientEmail}.`,
+        sentAt: null,
+        error: message,
+      };
+    }
+  }
+
+  private composeClientName(firstName: string | null | undefined, lastName: string | null | undefined): string | null {
+    const fullName = [firstName?.trim(), lastName?.trim()].filter((value) => Boolean(value)).join(" ").trim();
+    return fullName.length > 0 ? fullName : null;
+  }
+
+  private async patchJob(jobId: string, patch: QuotationJobPatch): Promise<void> {
+    await this.repository.updateJob(jobId, {
+      status: patch.status?.toUpperCase(),
+      progress: patch.progress,
+      message: patch.message ?? null,
+      step: patch.step ?? null,
+      error: patch.error ?? null,
+      outputDocxPath: patch.outputDocxPath ?? null,
+      outputDocxStoragePath: patch.outputDocxStoragePath ?? null,
+      outputDocxSizeBytes: patch.outputDocxSizeBytes ?? null,
+      emailRecipient: patch.emailRecipient ?? null,
+      mailDeliveryStatus: patch.mailDeliveryStatus ?? undefined,
+      mailSentAt: patch.mailSentAt ?? undefined,
+      mailError: patch.mailError ?? null,
+      finalMessage: patch.finalMessage ?? null,
+      startedAt: patch.status === "running" ? new Date() : undefined,
+      completedAt: patch.status === "completed" || patch.status === "failed" ? new Date() : undefined,
     });
+  }
+
+  private toLegacyStatus(value: string): LegacyOrchestratorStatus {
+    switch (value.toUpperCase()) {
+      case "RUNNING":
+        return "running";
+      case "COMPLETED":
+        return "completed";
+      case "FAILED":
+        return "failed";
+      default:
+        return "queued";
+    }
   }
 }

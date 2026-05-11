@@ -4,7 +4,7 @@ export interface BirgusLogoProps {
   className?: string;
 }
 
-export function BirgusLogo({ className = "h-8 w-auto" }: BirgusLogoProps) {
+export function BirgusLogo({ className = "h-14 w-14" }: BirgusLogoProps) {
   return (
     <img
       src="/fg_logo.png"

@@ -8,9 +8,11 @@ import { ModuleGuard } from "./middleware/ModuleGuard.js";
 import { AuthMiddleware } from "./middleware/AuthMiddleware.js";
 import { PermissionGuard } from "./middleware/PermissionGuard.js";
 import { AuthController } from "./controllers/AuthController.js";
+import { AssistantController } from "./controllers/AssistantController.js";
 import { SessionCookieFactory } from "./auth/SessionCookieFactory.js";
 import { ClientController } from "./controllers/ClientController.js";
 import { DdtController } from "./controllers/DdtController.js";
+import { KnowledgeController } from "./controllers/KnowledgeController.js";
 import { LegacyDdtReaderController } from "./controllers/LegacyDdtReaderController.js";
 import { LegacyOrchestratorController } from "./controllers/LegacyOrchestratorController.js";
 import { LegacyProjectAssetsController } from "./controllers/LegacyProjectAssetsController.js";
@@ -80,6 +82,17 @@ export class HttpServer {
     const projectAgentController = new ProjectAgentController(this.container.projectAgentService, this.moduleGuard, this.permissionGuard);
     const userPreferenceController = new UserPreferenceController(this.container.userPreferenceService);
     const projectController = new ProjectController(this.container.projectService, this.moduleGuard, this.permissionGuard);
+    const knowledgeController = new KnowledgeController(
+      this.container.documentIntelligenceService,
+      this.moduleGuard,
+      this.permissionGuard,
+    );
+    const assistantController = new AssistantController(
+      this.container.assistantSessionService,
+      this.container.assistantConversationService,
+      this.moduleGuard,
+      this.permissionGuard,
+    );
     const legacyProjectAssetsController = new LegacyProjectAssetsController(
       this.container.documentArchiveService,
       this.container.projectService,
@@ -160,6 +173,17 @@ export class HttpServer {
     this.app.post("/api/shipments", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, shipmentController.createShipment);
     this.app.get("/api/shipments/:shipmentId", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, shipmentController.getShipment);
     this.app.patch("/api/shipments/:shipmentId/specification", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, shipmentController.updateShipmentSpecification);
+
+    this.app.post("/api/knowledge/documents/:documentId/refresh", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, knowledgeController.refreshDocument);
+    this.app.get("/api/knowledge/search", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, knowledgeController.search);
+    this.app.get("/api/knowledge/projects/:projectId/versions/:versionLabel/quotation-context", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, knowledgeController.getQuotationContext);
+
+    this.app.get("/api/assistant/sessions", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, assistantController.listSessions);
+    this.app.post("/api/assistant/sessions", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, assistantController.createSession);
+    this.app.get("/api/assistant/sessions/:sessionId", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, assistantController.getSession);
+    this.app.get("/api/assistant/sessions/:sessionId/messages", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, assistantController.listMessages);
+    this.app.post("/api/assistant/sessions/:sessionId/messages", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, assistantController.postMessage);
+    this.app.post("/api/assistant/sessions/:sessionId/close", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, assistantController.closeSession);
 
     this.app.get("/api/orchestrator/jobs/:jobId", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, legacyOrchestratorController.getJob);
 

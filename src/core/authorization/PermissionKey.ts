@@ -18,6 +18,12 @@ export class PermissionKey {
   public static readonly DDT_READ = "ddt.read";
   public static readonly DDT_PROCESS = "ddt.process";
 
+  public static readonly KNOWLEDGE_READ = "knowledge.read";
+  public static readonly KNOWLEDGE_WRITE = "knowledge.write";
+  public static readonly ASSISTANT_READ = "assistant.read";
+  public static readonly ASSISTANT_WRITE = "assistant.write";
+  public static readonly ASSISTANT_CONFIGURE = "assistant.configure";
+
   public static readonly NOTIFICATIONS_READ = "notifications.read";
   public static readonly NOTIFICATIONS_WRITE = "notifications.write";
 }

@@ -7,12 +7,18 @@ import { PrismaClientRepository } from "../modules/clients/infra/PrismaClientRep
 import { ClientService } from "../modules/clients/services/ClientService.js";
 import { PrismaProjectAgentRepository } from "../modules/agents/infra/PrismaProjectAgentRepository.js";
 import { ProjectAgentService } from "../modules/agents/services/ProjectAgentService.js";
+import { PrismaAssistantSessionRepository } from "../modules/conversational-assistant/infra/PrismaAssistantSessionRepository.js";
+import { AssistantConversationService } from "../modules/conversational-assistant/services/AssistantConversationService.js";
+import { AssistantSessionService } from "../modules/conversational-assistant/services/AssistantSessionService.js";
+import { AssistantToolAccessService } from "../modules/conversational-assistant/services/AssistantToolAccessService.js";
+import { AssistantToolRegistry } from "../modules/conversational-assistant/services/AssistantToolRegistry.js";
 import { PrismaDdtProcessingRepository } from "../modules/ddt-processing/infra/PrismaDdtProcessingRepository.js";
 import { DdtProcessingService } from "../modules/ddt-processing/services/DdtProcessingService.js";
 import { LegacyDdtReaderService } from "../modules/ddt-processing/services/LegacyDdtReaderService.js";
 import { NextOrchestratorDdtAnalyzer } from "../modules/ddt-processing/services/NextOrchestratorDdtAnalyzer.js";
 import { PrismaDocumentArchiveRepository } from "../modules/document-archive/infra/PrismaDocumentArchiveRepository.js";
 import { DocumentArchiveService } from "../modules/document-archive/services/DocumentArchiveService.js";
+import { DocumentIntelligenceService } from "../modules/document-intelligence/services/DocumentIntelligenceService.js";
 import { PrismaAuthSessionRepository } from "../modules/identity/infra/PrismaAuthSessionRepository.js";
 import { PrismaPasswordResetCodeRepository } from "../modules/identity/infra/PrismaPasswordResetCodeRepository.js";
 import { PrismaUserAccountRepository } from "../modules/identity/infra/PrismaUserAccountRepository.js";
@@ -29,7 +35,9 @@ import { PrismaProjectRepository } from "../modules/projects/infra/PrismaProject
 import { ProjectService } from "../modules/projects/services/ProjectService.js";
 import { LegacyQuotationOrchestratorService } from "../modules/quotation-orchestrator/services/LegacyQuotationOrchestratorService.js";
 import { NextOrchestratorQuotationAnalyzer } from "../modules/quotation-orchestrator/services/NextOrchestratorQuotationAnalyzer.js";
+import { PrismaQuotationOrchestratorRepository } from "../modules/quotation-orchestrator/infra/PrismaQuotationOrchestratorRepository.js";
 import { QuotationDocxBuilder } from "../modules/quotation-orchestrator/services/QuotationDocxBuilder.js";
+import { SmtpQuotationEmailNotifier } from "../modules/quotation-orchestrator/services/SmtpQuotationEmailNotifier.js";
 import { PrismaUserPreferenceRepository } from "../modules/preferences/infra/PrismaUserPreferenceRepository.js";
 import { UserPreferenceService } from "../modules/preferences/services/UserPreferenceService.js";
 import { PrismaShipmentRepository } from "../modules/shipping/infra/PrismaShipmentRepository.js";
@@ -51,10 +59,13 @@ export class ApplicationContainer {
   public readonly userPreferenceService: UserPreferenceService;
   public readonly projectService: ProjectService;
   public readonly documentArchiveService: DocumentArchiveService;
+  public readonly documentIntelligenceService: DocumentIntelligenceService;
   public readonly shipmentService: ShipmentService;
   public readonly ddtProcessingService: DdtProcessingService;
   public readonly legacyDdtReaderService: LegacyDdtReaderService;
   public readonly legacyQuotationOrchestratorService: LegacyQuotationOrchestratorService;
+  public readonly assistantSessionService: AssistantSessionService;
+  public readonly assistantConversationService: AssistantConversationService;
   public readonly notificationService: NotificationService;
   public readonly workerCoordinator: WorkerCoordinator;
 
@@ -110,6 +121,7 @@ export class ApplicationContainer {
     const storage = StorageSelector.create();
     const documentRepository = new PrismaDocumentArchiveRepository();
     this.documentArchiveService = new DocumentArchiveService(documentRepository, storage);
+    this.documentIntelligenceService = new DocumentIntelligenceService(this.documentArchiveService);
 
     const queue = new InMemoryJobQueue();
     const ddtRepository = new PrismaDdtProcessingRepository();
@@ -119,11 +131,37 @@ export class ApplicationContainer {
       this.documentArchiveService,
       new NextOrchestratorQuotationAnalyzer(this.projectAgentService),
       new QuotationDocxBuilder(),
+      new PrismaQuotationOrchestratorRepository(),
+      new SmtpQuotationEmailNotifier(),
     );
 
     const ddtWorker = new DdtProcessingWorker(ddtRepository, new NextOrchestratorDdtAnalyzer(this.projectAgentService));
     this.workerCoordinator = new WorkerCoordinator(queue, ddtWorker);
     this.workerCoordinator.registerHandlers();
+    void this.ddtProcessingService.resumePendingJobs().catch((error) => {
+      console.error("[ApplicationContainer] Unable to resume pending DDT jobs", error);
+    });
+    void this.legacyQuotationOrchestratorService.resumePendingJobs().catch((error) => {
+      console.error("[ApplicationContainer] Unable to resume pending quotation jobs", error);
+    });
+
+    const assistantSessionRepository = new PrismaAssistantSessionRepository();
+    this.assistantSessionService = new AssistantSessionService(assistantSessionRepository);
+    const assistantToolRegistry = new AssistantToolRegistry(
+      this.projectService,
+      this.shipmentService,
+      this.documentIntelligenceService,
+    );
+    const assistantToolAccessService = new AssistantToolAccessService(
+      this.moduleAccessPolicy,
+      this.permissionPolicy,
+    );
+    this.assistantConversationService = new AssistantConversationService({
+      sessionService: this.assistantSessionService,
+      toolRegistry: assistantToolRegistry,
+      toolAccessService: assistantToolAccessService,
+      repository: assistantSessionRepository,
+    });
 
     const notificationRepository = new PrismaNotificationRepository();
     this.notificationService = new NotificationService(notificationRepository);

@@ -43,6 +43,21 @@ enum DdtJobStatus {
   CANCELED
 }
 
+enum QuotationJobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+enum MailDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
 enum AssistantSessionStatus {
   OPEN
   CLOSED
@@ -127,6 +142,7 @@ model Workspace {
   shipment_specifications    ShipmentSpecification[]
   ddt_documents              DdtDocument[]
   ddt_processing_jobs        DdtProcessingJob[]
+  quotation_orchestrator_jobs QuotationOrchestratorJob[]
   notifications              Notification[]
   audit_logs                 AuditLog[]
   assistant_sessions         AssistantSession[]
@@ -173,6 +189,7 @@ model User {
   audit_logs                       AuditLog[]
   assistant_sessions_opened        AssistantSession[]    @relation("assistant_session_opened_by")
   assistant_messages_authored      AssistantMessage[]    @relation("assistant_message_author")
+  quotation_jobs_requested         QuotationOrchestratorJob[] @relation("quotation_job_requested_by")
 
   @@index([deleted_at])
   @@map("users")
@@ -593,6 +610,7 @@ model Project {
   project_clients    ProjectClient[]
   project_agents     ProjectAgent[]
   project_versions   ProjectVersion[]
+  quotation_jobs     QuotationOrchestratorJob[]
   assistant_sessions AssistantSession[]
 
   @@index([workspace_id])
@@ -890,6 +908,45 @@ model DdtProcessingEvent {
   @@map("ddt_processing_events")
 }
 
+model QuotationOrchestratorJob {
+  id                       String             @id @default(uuid()) @db.Uuid
+  workspace_id             String             @db.Uuid
+  project_id               String             @db.Uuid
+  version_label            String
+  requested_by_user_id     String?            @db.Uuid
+  client_name              String?
+  status                   QuotationJobStatus @default(QUEUED)
+  progress                 Int                @default(0)
+  message                  String?
+  step                     String?
+  error                    String?
+  output_docx_path         String?
+  output_docx_storage_path String?
+  output_docx_size_bytes   BigInt?
+  email_recipient          String?
+  mail_delivery_status     MailDeliveryStatus @default(PENDING)
+  mail_sent_at             DateTime?
+  mail_error               String?
+  final_message            String?
+  queued_at                DateTime           @default(now())
+  started_at               DateTime?
+  completed_at             DateTime?
+  created_at               DateTime           @default(now())
+  updated_at               DateTime           @updatedAt
+
+  workspace         Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  project           Project   @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  requested_by_user User?     @relation("quotation_job_requested_by", fields: [requested_by_user_id], references: [id], onDelete: SetNull)
+
+  @@index([workspace_id])
+  @@index([project_id])
+  @@index([requested_by_user_id])
+  @@index([status])
+  @@index([queued_at])
+  @@index([mail_delivery_status])
+  @@map("quotation_orchestrator_jobs")
+}
+
 model AssistantSession {
   id                  String                 @id @default(uuid()) @db.Uuid
   workspace_id        String                 @db.Uuid
@@ -1067,6 +1124,7 @@ model KnowledgeChunk {
   embedding_provider    String?
   embedding_model       String?
   embedding_dimensions  Int?
+  embedding_vector      Unsupported("vector")?
   embedding_payload     Json?
   metadata              Json?
   embedded_at           DateTime?

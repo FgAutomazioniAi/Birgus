@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { DdtDocumentEntity } from "../domain/DdtDocumentEntity.js";
-import { DdtAnalysisInput, DdtProcessingRepository } from "../repositories/DdtProcessingRepository.js";
+import { DdtAnalysisInput, DdtProcessingRepository, RecoverableDdtProcessingJob } from "../repositories/DdtProcessingRepository.js";
 
 export class PrismaDdtProcessingRepository implements DdtProcessingRepository {
   public async upsertDdtDocument(params: {
@@ -170,6 +170,31 @@ export class PrismaDdtProcessingRepository implements DdtProcessingRepository {
         });
       }
     });
+  }
+
+  public async listRecoverableJobs(): Promise<RecoverableDdtProcessingJob[]> {
+    const prisma = PrismaClientManager.getClient();
+    const rows = await prisma.ddtProcessingJob.findMany({
+      where: {
+        status: {
+          in: ["QUEUED", "RUNNING"],
+        },
+      },
+      orderBy: {
+        queued_at: "asc",
+      },
+      select: {
+        id: true,
+        workspace_id: true,
+        ddt_document_id: true,
+      },
+    });
+
+    return rows.map((row) => ({
+      jobId: row.id,
+      workspaceId: row.workspace_id,
+      ddtDocumentId: row.ddt_document_id,
+    }));
   }
 
   private toInputJson(value: Record<string, unknown> | undefined | null): Prisma.InputJsonValue | undefined {

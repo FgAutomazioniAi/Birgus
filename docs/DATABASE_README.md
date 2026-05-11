@@ -1,4 +1,11 @@
-### Linee guida per db 
+### Linee guida per db
+
+Questa documentazione descrive lo stato attuale del database di Birgus.
+
+File collegati:
+- `prisma/schema.prisma`: fonte di verita applicativa dello schema
+- `docs/database_schema.dbml`: esportazione DBML completa dello schema
+- `docs/DATABASE_SCHEMA.dbml`: copia equivalente con naming esplicito per tool esterni
 
 ### `MembershipStatus`
 Stato appartenenza utente-workspace:
@@ -35,6 +42,58 @@ Stato job pipeline DDT:
 - `COMPLETED`
 - `FAILED`
 - `CANCELED`
+
+### `QuotationJobStatus`
+Stato job orchestratore preventivi:
+- `QUEUED`
+- `RUNNING`
+- `COMPLETED`
+- `FAILED`
+- `CANCELED`
+
+### `MailDeliveryStatus`
+Stato invio email preventivo:
+- `PENDING`
+- `SENT`
+- `FAILED`
+- `SKIPPED`
+
+### `AssistantSessionStatus`
+Stato sessione assistente:
+- `OPEN`
+- `CLOSED`
+- `ARCHIVED`
+
+### `AssistantMessageRole`
+Ruolo messaggio nella chat:
+- `SYSTEM`
+- `USER`
+- `ASSISTANT`
+- `TOOL`
+
+### `AssistantToolCallStatus`
+Stato chiamata tool assistente:
+- `REQUESTED`
+- `RUNNING`
+- `SUCCEEDED`
+- `FAILED`
+- `DENIED`
+- `CANCELED`
+
+### `KnowledgeDocumentStatus`
+Stato estrazione documento knowledge:
+- `PENDING`
+- `PROCESSING`
+- `READY`
+- `ERROR`
+- `STALE`
+
+### `KnowledgeChunkEmbeddingStatus`
+Stato embedding chunk knowledge:
+- `PENDING`
+- `PROCESSING`
+- `READY`
+- `ERROR`
 
 ## Tenant e anagrafiche di accesso
 
@@ -194,7 +253,7 @@ Connessioni:
 - 1:N con `workspace_modules`
 - 1:N con `user_module_overrides`
 - 1:N con `module_dependencies`
-- referenza opzionale da `documents`, `notifications`, `audit_logs`
+- referenza opzionale da `documents`, `notifications`, `audit_logs`, `assistant_sessions`, `assistant_tool_calls`, `knowledge_documents`, `project_agents`
 
 ### Tabella `module_dependencies`
 Descrizione:
@@ -296,6 +355,8 @@ Connessioni:
 - N:1 opzionale con `modules`
 - N:1 opzionale con `users` (uploader)
 - 1:1 opzionale inversa con `ddt_documents`
+- 1:N con `assistant_sessions`
+- 1:N con `knowledge_documents`
 
 
 ## Rubrica clienti e aziende
@@ -318,6 +379,7 @@ Connessioni:
 - 1:N con `project_clients`
 - 1:N con `project_versions`
 - 1:N con `shipments`
+- 1:N con `assistant_sessions`
 
 ## Modulo Progetti
 
@@ -371,6 +433,8 @@ Connessioni:
 - 1:N con `project_clients`
 - 1:N con `project_agents`
 - 1:N con `project_versions`
+- 1:N con `quotation_orchestrator_jobs`
+- 1:N con `assistant_sessions`
 
 ### Tabella `project_agents`
 Descrizione:
@@ -434,6 +498,7 @@ Connessioni:
 - N:1 opzionale con `clients`
 - N:1 opzionale con `project_statuses`
 - 1:1 opzionale con `shipments`
+- 1:N con `assistant_sessions`
 
 Vincoli:
 - `@@unique([workspace_id, project_id, version_label])`
@@ -474,6 +539,7 @@ Connessioni:
 - 1:1 opzionale con `shipment_specifications`
 - 1:N con `shipment_items`
 - 1:N con `shipment_events`
+- 1:N con `assistant_sessions`
 
 Vincoli:
 - `@@unique([workspace_id, code])`
@@ -535,6 +601,7 @@ Connessioni:
 - 1:1 con `ddt_analysis_results`
 - 1:N con `ddt_processing_jobs`
 - 1:N con `ddt_processing_events`
+- 1:N con `assistant_sessions`
 
 ### Tabella `ddt_analysis_results`
 Descrizione:
@@ -567,6 +634,26 @@ Descrizione:
 Connessioni:
 - N:1 con `ddt_processing_jobs` (`onDelete: Cascade`)
 - N:1 con `ddt_documents` (`onDelete: Cascade`)
+
+## Modulo Orchestratore Preventivi
+
+### Tabella `quotation_orchestrator_jobs`
+Descrizione:
+- job asincroni per generazione preventivi DOCX e invio email al cliente
+
+Colonne chiave:
+- `workspace_id`, `project_id`
+- `version_label`, `client_name`
+- `requested_by_user_id`
+- `status`, `progress`, `step`, `message`, `error`
+- output: `output_docx_path`, `output_docx_storage_path`, `output_docx_size_bytes`
+- invio mail: `email_recipient`, `mail_delivery_status`, `mail_sent_at`, `mail_error`
+- tempi: `queued_at`, `started_at`, `completed_at`
+
+Connessioni:
+- N:1 con `workspaces`
+- N:1 con `projects` (`onDelete: Cascade`)
+- N:1 opzionale con `users` (richiedente)
 
 ## Assistente conversazionale e document intelligence
 
@@ -694,6 +781,7 @@ Colonne chiave:
 - `content_text`
 - `embedding_status`
 - `embedding_provider`, `embedding_model`, `embedding_dimensions`
+- `embedding_vector`
 - `embedding_payload`
 - `metadata`, `embedded_at`
 
@@ -704,10 +792,10 @@ Connessioni:
 Vincoli:
 - `@@unique([knowledge_document_id, chunk_index])`
 
-Nota infrastrutturale:
-- il database attuale non espone ancora l'estensione PostgreSQL `pgvector`
-- per questo il vettore e predisposto ora tramite metadata/`embedding_payload`
-- quando verra introdotta l'estensione a livello Docker/Postgres, `knowledge_chunks` e il punto naturale dove aggiungere la colonna `vector`
+Note:
+- il database usa ora l'estensione PostgreSQL `pgvector`
+- `embedding_vector` usa il tipo `vector` senza dimensione fissata a schema, per supportare modelli embedding diversi
+- la ricerca e gia predisposta a livello dati; gli indici ANN specializzati potranno essere aggiunti in seguito quando saranno stabiliti provider, dimensioni e strategia di retrieval
 
 ## Notifiche e logs
 
@@ -746,6 +834,7 @@ Connessioni:
 - `nodes` gerarchico self-reference + `documents`
 - `projects` M:N `clients` tramite `project_clients`
 - `projects` 1:N `project_agents`
+- `projects` 1:N `quotation_orchestrator_jobs`
 - `project_versions` 1:1 `shipments`
 - `shipments` 1:1 `shipment_specifications`
 - `ddt_documents` 1:1 `documents`

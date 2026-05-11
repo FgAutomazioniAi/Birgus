@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:0.8.2-pg16
     container_name: birgus_pg
     restart: unless-stopped
     environment:
@@ -11,6 +11,7 @@ services:
       - "5432:5432"
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d birgus"]
       interval: 5s
@@ -102,6 +103,19 @@ services:
       DDT_READER_ORCHESTRATOR_EXECUTE_PATH: "${DDT_READER_ORCHESTRATOR_EXECUTE_PATH:-/api/orchestrator/modules/execute}"
       DDT_READER_ORCHESTRATOR_TIMEOUT_MS: "${DDT_READER_ORCHESTRATOR_TIMEOUT_MS:-600000}"
       ORCHESTRATOR_INTERNAL_TOKEN: "${ORCHESTRATOR_INTERNAL_TOKEN:-}"
+      PYTHON_MODULES_BASE_URL: "${PYTHON_MODULES_BASE_URL:-http://python_modules:8200}"
+      PYTHON_MODULES_EXECUTE_PATH: "${PYTHON_MODULES_EXECUTE_PATH:-/v1/modules/execute}"
+      PYTHON_MODULES_TIMEOUT_MS: "${PYTHON_MODULES_TIMEOUT_MS:-180000}"
+      ORCH_LM_BASE_URL: "${ORCH_LM_BASE_URL:?ORCH_LM_BASE_URL is required}"
+      ORCH_LM_COMPLETIONS_PATH: "${ORCH_LM_COMPLETIONS_PATH:-/v1/chat/completions}"
+      ORCH_LM_MODEL: "${ORCH_LM_MODEL:?ORCH_LM_MODEL is required}"
+      ORCH_LM_TIMEOUT_MS: "${ORCH_LM_TIMEOUT_MS:-600000}"
+      ORCH_LM_TEMPERATURE: "${ORCH_LM_TEMPERATURE:-0}"
+      KNOWLEDGE_EMBEDDING_PROVIDER: "${KNOWLEDGE_EMBEDDING_PROVIDER:-local-hash}"
+      KNOWLEDGE_EMBEDDING_DIMENSIONS: "${KNOWLEDGE_EMBEDDING_DIMENSIONS:-256}"
+      KNOWLEDGE_EMBEDDING_MODEL: "${KNOWLEDGE_EMBEDDING_MODEL:-}"
+      KNOWLEDGE_LM_EMBEDDINGS_PATH: "${KNOWLEDGE_LM_EMBEDDINGS_PATH:-/v1/embeddings}"
+      KNOWLEDGE_SEARCH_TOP_K: "${KNOWLEDGE_SEARCH_TOP_K:-5}"
       GARAGE_S3_ENDPOINT: "http://garage:3900"
       GARAGE_S3_REGION: "${GARAGE_S3_REGION:-garage}"
       GARAGE_S3_BUCKET: "${GARAGE_S3_BUCKET:?GARAGE_S3_BUCKET is required}"

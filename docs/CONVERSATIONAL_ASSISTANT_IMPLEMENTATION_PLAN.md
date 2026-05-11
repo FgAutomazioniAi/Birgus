@@ -20,8 +20,10 @@ Le modifiche database gia applicate introducono questi pilastri:
 - nuovi permessi `knowledge.*` e `assistant.*`
 
 Nota tecnica importante:
-- il Postgres attuale non espone l'estensione `pgvector`;
-- per questo gli embedding non sono ancora salvati in una colonna `vector`, ma il modello dati e gia pronto per aggiungerla in `knowledge_chunks` quando l'infrastruttura Docker/Postgres verra aggiornata.
+- il Postgres del progetto usa ora `pgvector` nello stesso database principale;
+- la colonna reale `embedding_vector` vive in `knowledge_chunks`;
+- la dimensione non e fissata a schema per lasciare spazio a modelli embedding diversi;
+- gli indici ANN dedicati restano una fase successiva, da introdurre quando la strategia embedding verra stabilita in modo definitivo.
 
 ## Lavori backend da fare
 
@@ -180,8 +182,8 @@ Scelta consigliata:
 - per contenuti gia noti (es. DDT o quotation gia elaborati) prova prima a riusare i risultati persistiti.
 
 ### 8. Indicizzazione semantica
-Quando l'infrastruttura Postgres/Docker supportera `pgvector`, il lavoro backend dovra aggiungere:
-- colonna vettoriale su `knowledge_chunks`;
+Il database supporta gia `pgvector`, quindi il lavoro backend dovra aggiungere:
+- scrittura reale di `embedding_vector` in `knowledge_chunks`;
 - indice ANN coerente con le dimensioni embedding scelte;
 - job di reindicizzazione.
 
@@ -345,15 +347,14 @@ Il comportamento atteso non e mostrare risposte ambigue, ma messaggi chiari e co
 5. Integrazione delle richieste su Garage.
 6. Memory snapshot automatici.
 7. Indicizzazione embedding.
-8. Ricerca semantica vera con `pgvector` dopo aggiornamento infrastrutturale.
+8. Ricerca semantica vera con `pgvector` e indici dedicati.
 
-## Passo infrastrutturale successivo per pgvector
-Per passare da predisposizione a ricerca vettoriale reale, servira:
-- immagine Postgres con estensione `pgvector` disponibile;
-- `CREATE EXTENSION vector;`
-- aggiornamento schema `knowledge_chunks` con colonna vettoriale dedicata;
-- indice ANN coerente (`ivfflat` o equivalente, in base alla strategia scelta);
-- service di backfill embeddings.
+## Passo tecnico successivo per pgvector
+Per passare da struttura pronta a retrieval performante, servira:
+- scegliere provider e dimensioni embedding standard;
+- scrivere il service di backfill embeddings;
+- introdurre indice ANN coerente (`hnsw` o `ivfflat`, in base alla strategia scelta);
+- aggiungere query raw/search repository dedicati.
 
 ## Principio architetturale da preservare
 Il chatbot non deve sapere come interrogare il database.

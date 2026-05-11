@@ -14,6 +14,12 @@ export interface DdtAnalysisInput {
   articleItems: Array<{ articleType: string; quantity: number; unit: string }>;
 }
 
+export interface RecoverableDdtProcessingJob {
+  jobId: string;
+  workspaceId: string;
+  ddtDocumentId: string;
+}
+
 export interface DdtProcessingRepository {
   upsertDdtDocument(params: {
     workspaceId: string;
@@ -25,4 +31,5 @@ export interface DdtProcessingRepository {
   updateDocumentStatus(ddtDocumentId: string, status: "QUEUED" | "OCR_PROCESSING" | "AI_PROCESSING" | "READY" | "ERROR", lastError?: string | null): Promise<void>;
   appendEvent(jobId: string, ddtDocumentId: string, eventType: string, payload?: Record<string, unknown>): Promise<void>;
   saveAnalysis(ddtDocumentId: string, analysis: DdtAnalysisInput): Promise<void>;
+  listRecoverableJobs(): Promise<RecoverableDdtProcessingJob[]>;
 }

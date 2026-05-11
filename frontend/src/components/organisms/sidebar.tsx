@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, FileSearch, FolderKanban, LogOut, Settings, Truck, Users } from "lucide-react";
+import { FileSearch, FolderKanban, LogOut, Settings, Truck, Users } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -11,7 +11,6 @@ import { APP_ROUTES } from "@/lib/routes";
 const menuItems = [
   { icon: FolderKanban, label: "Progetti", path: APP_ROUTES.projects, moduleKey: "project_management" },
   { icon: Users, label: "Clienti", path: APP_ROUTES.clients, moduleKey: "project_management" },
-  { icon: Bot, label: "Agenti", path: APP_ROUTES.agents, moduleKey: "agent_management" },
   { icon: Truck, label: "Spedizioni", path: APP_ROUTES.spedizioni, moduleKey: "shipment_management" },
   // DDT_READER_FEATURE_START
   { icon: FileSearch, label: "DDT Reader", path: APP_ROUTES.ddtReader, moduleKey: "ddt_processing" },

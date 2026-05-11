@@ -49,4 +49,22 @@ export class DdtProcessingService {
       ddtDocumentId: ddtDocument.id,
     };
   }
+
+  public async resumePendingJobs(): Promise<void> {
+    const jobs = await this.repository.listRecoverableJobs();
+
+    for (const job of jobs) {
+      await this.repository.appendEvent(job.jobId, job.ddtDocumentId, "recovered", {
+        source: "application_startup",
+      });
+
+      const payload: DdtProcessingJobPayload = {
+        workspaceId: job.workspaceId,
+        ddtDocumentId: job.ddtDocumentId,
+        jobId: job.jobId,
+      };
+
+      await this.queue.enqueue(new Job(randomUUID(), DdtProcessingService.JOB_NAME, payload));
+    }
+  }
 }

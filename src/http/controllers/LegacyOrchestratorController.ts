@@ -1,4 +1,5 @@
 import { FastifyReply } from "fastify";
+import { z } from "zod";
 
 import { AppError } from "../../core/errors/AppError.js";
 import { LegacyQuotationOrchestratorService } from "../../modules/quotation-orchestrator/services/LegacyQuotationOrchestratorService.js";
@@ -14,7 +15,7 @@ export class LegacyOrchestratorController {
   public getJob = async (request: AuthenticatedRequest, reply: FastifyReply): Promise<void> => {
     try {
       const jobId = this.getJobId(request);
-      const job = this.orchestratorService.getJob(jobId);
+      const job = await this.orchestratorService.getJob(jobId);
 
       if (!job) {
         reply.code(404).send({ message: "Job non trovato." });
@@ -33,10 +34,15 @@ export class LegacyOrchestratorController {
       throw new AppError("Job ID mancante.", "ORCHESTRATOR_JOB_ID_REQUIRED", 400);
     }
 
-    return value.trim();
+    return z.string().uuid().parse(value.trim());
   }
 
   private sendError(reply: FastifyReply, error: unknown): void {
+    if (error instanceof z.ZodError) {
+      reply.code(400).send({ message: "Job ID non valido.", code: "ORCHESTRATOR_JOB_ID_INVALID" });
+      return;
+    }
+
     if (error instanceof AppError) {
       reply.code(error.statusCode).send({ message: error.message, code: error.code });
       return;

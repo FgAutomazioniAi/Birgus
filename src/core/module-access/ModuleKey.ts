@@ -4,5 +4,7 @@ export class ModuleKey {
   public static readonly SHIPMENT_MANAGEMENT = "shipment_management";
   public static readonly DDT_PROCESSING = "ddt_processing";
   public static readonly DOCUMENT_ARCHIVE = "document_archive";
+  public static readonly DOCUMENT_INTELLIGENCE = "document_intelligence";
+  public static readonly CONVERSATIONAL_ASSISTANT = "conversational_assistant";
   public static readonly NOTIFICATION_CENTER = "notification_center";
 }
