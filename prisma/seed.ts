@@ -1,6 +1,7 @@
 import { randomBytes, scrypt } from "node:crypto";
 
 import { PrismaClient } from "@prisma/client";
+import { DEFAULT_MODULE_AGENT_PROMPTS } from "../src/modules/agents/domain/DefaultModuleAgentPrompts.js";
 
 const prisma = new PrismaClient();
 
@@ -12,6 +13,7 @@ const MODULE_KEYS = [
   "document_archive",
   "document_intelligence",
   "conversational_assistant",
+  "workflow_management",
   "notification_center",
 ] as const;
 
@@ -37,6 +39,9 @@ const PERMISSION_KEYS = [
   "assistant.read",
   "assistant.write",
   "assistant.configure",
+  "workflows.read",
+  "workflows.write",
+  "workflows.configure",
   "notifications.read",
   "notifications.write",
 ] as const;
@@ -61,6 +66,7 @@ const ROLE_PERMISSION_MATRIX: Record<(typeof ROLE_KEYS)[number], readonly (typeo
     "knowledge.read",
     "assistant.read",
     "assistant.write",
+    "workflows.read",
     "notifications.read",
   ],
 } as const;
@@ -262,6 +268,7 @@ async function main() {
   const documentArchiveModule = moduleByKey.get("document_archive");
   const documentIntelligenceModule = moduleByKey.get("document_intelligence");
   const conversationalAssistantModule = moduleByKey.get("conversational_assistant");
+  const workflowManagementModule = moduleByKey.get("workflow_management");
 
   if (projectManagementModule && agentManagementModule) {
     await prisma.moduleDependency.upsert({
@@ -306,6 +313,38 @@ async function main() {
       update: {},
       create: {
         module_id: conversationalAssistantModule.id,
+        depends_on_module_id: documentIntelligenceModule.id,
+      },
+    });
+  }
+
+  if (workflowManagementModule && agentManagementModule) {
+    await prisma.moduleDependency.upsert({
+      where: {
+        module_id_depends_on_module_id: {
+          module_id: workflowManagementModule.id,
+          depends_on_module_id: agentManagementModule.id,
+        },
+      },
+      update: {},
+      create: {
+        module_id: workflowManagementModule.id,
+        depends_on_module_id: agentManagementModule.id,
+      },
+    });
+  }
+
+  if (workflowManagementModule && documentIntelligenceModule) {
+    await prisma.moduleDependency.upsert({
+      where: {
+        module_id_depends_on_module_id: {
+          module_id: workflowManagementModule.id,
+          depends_on_module_id: documentIntelligenceModule.id,
+        },
+      },
+      update: {},
+      create: {
+        module_id: workflowManagementModule.id,
         depends_on_module_id: documentIntelligenceModule.id,
       },
     });
@@ -539,6 +578,544 @@ async function main() {
       rows_clients: 20,
     },
   });
+
+  const moduleAgentByRef = new Map<string, { id: string; moduleId: number }>();
+  for (const prompt of DEFAULT_MODULE_AGENT_PROMPTS) {
+    const module = moduleByKey.get(prompt.moduleKey);
+    if (!module) {
+      continue;
+    }
+
+    const agent = await prisma.moduleAgent.upsert({
+      where: {
+        workspace_id_module_id_key: {
+          workspace_id: workspace.id,
+          module_id: module.id,
+          key: prompt.agentKey,
+        },
+      },
+      update: {
+        name: prompt.name,
+        label: prompt.label,
+        original_prompt: prompt.originalPrompt,
+        is_enabled: true,
+        updated_by_user_id: adminUser.id,
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspace.id,
+        module_id: module.id,
+        key: prompt.agentKey,
+        name: prompt.name,
+        label: prompt.label,
+        original_prompt: prompt.originalPrompt,
+        active_prompt: prompt.originalPrompt,
+        is_enabled: true,
+        created_by_user_id: adminUser.id,
+        updated_by_user_id: adminUser.id,
+      },
+      select: {
+        id: true,
+        module_id: true,
+      },
+    });
+
+    moduleAgentByRef.set(`${prompt.moduleKey}:${prompt.agentKey}`, {
+      id: agent.id,
+      moduleId: agent.module_id,
+    });
+  }
+
+  const moduleToolDefinitions = [
+    {
+      moduleKey: "document_intelligence",
+      toolKey: "ocr_engine_extract_text",
+      name: "ocr_engine_extract_text",
+      label: "OCR engine PDF",
+      description: "Estrae testo da un PDF tramite il modulo Python OCR condiviso.",
+      runtimeKind: "PYTHON_MODULE" as const,
+      handlerKey: "ocr_engine.extract_text_from_pdf_storage",
+      inputSchema: {
+        type: "object",
+        required: ["storagePath"],
+        properties: {
+          storagePath: { type: "string" },
+          fileName: { type: "string" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+        },
+      },
+      configuration: {
+        module: "ocr_engine",
+        operation: "extract_text_from_pdf_storage",
+      },
+    },
+    {
+      moduleKey: "document_intelligence",
+      toolKey: "knowledge_refresh_document",
+      name: "knowledge_refresh_document",
+      label: "Indicizza documento",
+      description: "Aggiorna il knowledge layer e gli embedding di un documento archiviato.",
+      runtimeKind: "BACKEND" as const,
+      handlerKey: "document_intelligence.refresh_document_knowledge",
+      inputSchema: {
+        type: "object",
+        required: ["documentId"],
+        properties: {
+          documentId: { type: "string", format: "uuid" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          knowledgeDocumentId: { type: "string", format: "uuid" },
+          chunksCreated: { type: "integer" },
+        },
+      },
+      configuration: {
+        endpoint: "/api/knowledge/documents/:documentId/refresh",
+      },
+    },
+    {
+      moduleKey: "document_intelligence",
+      toolKey: "semantic_knowledge_search",
+      name: "semantic_knowledge_search",
+      label: "Ricerca semantica knowledge",
+      description: "Esegue semantic search sui knowledge chunks del workspace.",
+      runtimeKind: "BACKEND" as const,
+      handlerKey: "document_intelligence.search_workspace_knowledge",
+      inputSchema: {
+        type: "object",
+        required: ["query"],
+        properties: {
+          query: { type: "string" },
+          limit: { type: "integer" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          results: { type: "array" },
+        },
+      },
+      configuration: {
+        endpoint: "/api/knowledge/search",
+      },
+    },
+    {
+      moduleKey: "project_management",
+      toolKey: "quotation_docx_builder",
+      name: "quotation_docx_builder",
+      label: "Generatore DOCX preventivo",
+      description: "Genera il file Word finale a partire dai dati strutturati del preventivo.",
+      runtimeKind: "BACKEND" as const,
+      handlerKey: "quotation_orchestrator.generate_docx",
+      inputSchema: {
+        type: "object",
+        required: ["projectId", "versionLabel"],
+        properties: {
+          projectId: { type: "string", format: "uuid" },
+          versionLabel: { type: "string" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          documentId: { type: "string", format: "uuid" },
+          storagePath: { type: "string" },
+        },
+      },
+      configuration: {
+        outputKind: "quotation-docx",
+      },
+    },
+    {
+      moduleKey: "project_management",
+      toolKey: "quotation_mail_delivery",
+      name: "quotation_mail_delivery",
+      label: "Invio mail preventivo",
+      description: "Invia il preventivo generato via backend SMTP con allegato DOCX.",
+      runtimeKind: "BACKEND" as const,
+      handlerKey: "quotation_orchestrator.send_email",
+      inputSchema: {
+        type: "object",
+        required: ["projectId", "versionLabel"],
+        properties: {
+          projectId: { type: "string", format: "uuid" },
+          versionLabel: { type: "string" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          deliveryStatus: { type: "string" },
+          recipientEmail: { type: "string" },
+        },
+      },
+      configuration: {
+        provider: "smtp",
+      },
+    },
+  ];
+
+  const moduleToolByRef = new Map<string, { id: string; moduleId: number }>();
+  for (const definition of moduleToolDefinitions) {
+    const module = moduleByKey.get(definition.moduleKey);
+    if (!module) {
+      continue;
+    }
+
+    const existingTool = await prisma.moduleTool.findFirst({
+      where: {
+        workspace_id: workspace.id,
+        module_id: module.id,
+        key: definition.toolKey,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const tool = existingTool
+      ? await prisma.moduleTool.update({
+          where: {
+            id: existingTool.id,
+          },
+          data: {
+            name: definition.name,
+            label: definition.label,
+            description: definition.description,
+            runtime_kind: definition.runtimeKind,
+            handler_key: definition.handlerKey,
+            input_schema: definition.inputSchema,
+            output_schema: definition.outputSchema,
+            configuration: definition.configuration,
+            is_enabled: true,
+            updated_by_user_id: adminUser.id,
+            deleted_at: null,
+          },
+          select: {
+            id: true,
+            module_id: true,
+          },
+        })
+      : await prisma.moduleTool.create({
+          data: {
+            workspace_id: workspace.id,
+            module_id: module.id,
+            key: definition.toolKey,
+            name: definition.name,
+            label: definition.label,
+            description: definition.description,
+            runtime_kind: definition.runtimeKind,
+            handler_key: definition.handlerKey,
+            input_schema: definition.inputSchema,
+            output_schema: definition.outputSchema,
+            configuration: definition.configuration,
+            is_enabled: true,
+            created_by_user_id: adminUser.id,
+            updated_by_user_id: adminUser.id,
+          },
+          select: {
+            id: true,
+            module_id: true,
+          },
+        });
+
+    moduleToolByRef.set(`${definition.moduleKey}:${definition.toolKey}`, {
+      id: tool.id,
+      moduleId: tool.module_id,
+    });
+  }
+
+  const workflowDefinitions = [
+    {
+      moduleKey: "project_management",
+      workflowKey: "quotation_document_pipeline",
+      name: "quotation_document_pipeline",
+      label: "Pipeline preventivo",
+      description: "Workflow base per OCR, strutturazione preventivo, generazione DOCX e invio email.",
+      isDefault: true,
+      nodes: [
+        {
+          nodeKey: "quotation_pdf_input",
+          nodeKind: "INPUT" as const,
+          label: "PDF preventivo",
+          positionX: 0,
+          positionY: 80,
+          inputKind: "pdf",
+          configuration: {
+            acceptedMimeTypes: ["application/pdf"],
+            isRequired: true,
+          },
+        },
+        {
+          nodeKey: "quotation_ocr_tool",
+          nodeKind: "TOOL" as const,
+          label: "OCR preventivo",
+          positionX: 260,
+          positionY: 80,
+          moduleToolRef: "document_intelligence:ocr_engine_extract_text",
+          configuration: {
+            stage: "ocr",
+          },
+        },
+        {
+          nodeKey: "quotation_structuring_agent",
+          nodeKind: "AGENT" as const,
+          label: "Agente strutturazione preventivo",
+          positionX: 520,
+          positionY: 80,
+          moduleAgentRef: "project_management:quotation_structuring_prompt",
+          configuration: {
+            purpose: "quotation_structuring",
+          },
+        },
+        {
+          nodeKey: "quotation_docx_builder_tool",
+          nodeKind: "TOOL" as const,
+          label: "Genera DOCX",
+          positionX: 780,
+          positionY: 30,
+          moduleToolRef: "project_management:quotation_docx_builder",
+        },
+        {
+          nodeKey: "quotation_mail_delivery_tool",
+          nodeKind: "TOOL" as const,
+          label: "Invia mail preventivo",
+          positionX: 780,
+          positionY: 150,
+          moduleToolRef: "project_management:quotation_mail_delivery",
+        },
+        {
+          nodeKey: "quotation_delivery_output",
+          nodeKind: "OUTPUT" as const,
+          label: "Esito preventivo",
+          positionX: 1040,
+          positionY: 90,
+          outputKind: "quotation_delivery",
+          configuration: {
+            persistenceTarget: "document_archive",
+          },
+        },
+      ],
+      edges: [
+        { source: "quotation_pdf_input", target: "quotation_ocr_tool", orderNo: 1 },
+        { source: "quotation_ocr_tool", target: "quotation_structuring_agent", orderNo: 2 },
+        { source: "quotation_structuring_agent", target: "quotation_docx_builder_tool", orderNo: 3 },
+        { source: "quotation_docx_builder_tool", target: "quotation_mail_delivery_tool", orderNo: 4 },
+        { source: "quotation_mail_delivery_tool", target: "quotation_delivery_output", orderNo: 5 },
+      ],
+    },
+    {
+      moduleKey: "ddt_processing",
+      workflowKey: "ddt_reader_pipeline",
+      name: "ddt_reader_pipeline",
+      label: "Pipeline DDT Reader",
+      description: "Workflow base per OCR, analisi DDT e indicizzazione knowledge finale.",
+      isDefault: true,
+      nodes: [
+        {
+          nodeKey: "ddt_pdf_input",
+          nodeKind: "INPUT" as const,
+          label: "PDF DDT",
+          positionX: 0,
+          positionY: 80,
+          inputKind: "pdf",
+          configuration: {
+            acceptedMimeTypes: ["application/pdf"],
+            isRequired: true,
+          },
+        },
+        {
+          nodeKey: "ddt_ocr_tool",
+          nodeKind: "TOOL" as const,
+          label: "OCR DDT",
+          positionX: 250,
+          positionY: 80,
+          moduleToolRef: "document_intelligence:ocr_engine_extract_text",
+        },
+        {
+          nodeKey: "ddt_analysis_agent",
+          nodeKind: "AGENT" as const,
+          label: "Agente analisi DDT",
+          positionX: 500,
+          positionY: 80,
+          moduleAgentRef: "ddt_processing:ddt_analysis_prompt",
+        },
+        {
+          nodeKey: "ddt_knowledge_index_tool",
+          nodeKind: "TOOL" as const,
+          label: "Indicizza knowledge",
+          positionX: 760,
+          positionY: 80,
+          moduleToolRef: "document_intelligence:knowledge_refresh_document",
+        },
+        {
+          nodeKey: "ddt_analysis_output",
+          nodeKind: "OUTPUT" as const,
+          label: "Esito analisi DDT",
+          positionX: 1020,
+          positionY: 80,
+          outputKind: "ddt_analysis_result",
+          configuration: {
+            persistenceTarget: "ddt_processing",
+          },
+        },
+      ],
+      edges: [
+        { source: "ddt_pdf_input", target: "ddt_ocr_tool", orderNo: 1 },
+        { source: "ddt_ocr_tool", target: "ddt_analysis_agent", orderNo: 2 },
+        { source: "ddt_analysis_agent", target: "ddt_knowledge_index_tool", orderNo: 3 },
+        { source: "ddt_knowledge_index_tool", target: "ddt_analysis_output", orderNo: 4 },
+      ],
+    },
+  ];
+
+  for (const definition of workflowDefinitions) {
+    const module = moduleByKey.get(definition.moduleKey);
+    if (!module) {
+      continue;
+    }
+
+    const existingWorkflow = await prisma.moduleWorkflow.findFirst({
+      where: {
+        workspace_id: workspace.id,
+        module_id: module.id,
+        key: definition.workflowKey,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const workflow = existingWorkflow
+      ? await prisma.moduleWorkflow.update({
+          where: {
+            id: existingWorkflow.id,
+          },
+          data: {
+            name: definition.name,
+            label: definition.label,
+            description: definition.description,
+            version_no: 1,
+            is_enabled: true,
+            is_default: definition.isDefault,
+            updated_by_user_id: adminUser.id,
+            deleted_at: null,
+          },
+          select: {
+            id: true,
+          },
+        })
+      : await prisma.moduleWorkflow.create({
+          data: {
+            workspace_id: workspace.id,
+            module_id: module.id,
+            key: definition.workflowKey,
+            name: definition.name,
+            label: definition.label,
+            description: definition.description,
+            version_no: 1,
+            is_enabled: true,
+            is_default: definition.isDefault,
+            created_by_user_id: adminUser.id,
+            updated_by_user_id: adminUser.id,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+    const workflowNodeByKey = new Map<string, { id: string }>();
+    for (const node of definition.nodes) {
+      const moduleAgent = "moduleAgentRef" in node && node.moduleAgentRef ? moduleAgentByRef.get(node.moduleAgentRef) : null;
+      const moduleTool = "moduleToolRef" in node && node.moduleToolRef ? moduleToolByRef.get(node.moduleToolRef) : null;
+
+      const existingNode = await prisma.moduleWorkflowNode.findFirst({
+        where: {
+          workflow_id: workflow.id,
+          node_key: node.nodeKey,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      const savedNode = existingNode
+        ? await prisma.moduleWorkflowNode.update({
+            where: {
+              id: existingNode.id,
+            },
+            data: {
+              node_kind: node.nodeKind,
+              label: node.label,
+              position_x: node.positionX,
+              position_y: node.positionY,
+              module_agent_id: moduleAgent?.id ?? null,
+              module_tool_id: moduleTool?.id ?? null,
+              input_kind: "inputKind" in node ? node.inputKind ?? null : null,
+              output_kind: "outputKind" in node ? node.outputKind ?? null : null,
+              configuration: node.configuration ?? null,
+              is_enabled: true,
+            },
+            select: {
+              id: true,
+            },
+          })
+        : await prisma.moduleWorkflowNode.create({
+            data: {
+              workflow_id: workflow.id,
+              workspace_id: workspace.id,
+              node_key: node.nodeKey,
+              node_kind: node.nodeKind,
+              label: node.label,
+              position_x: node.positionX,
+              position_y: node.positionY,
+              module_agent_id: moduleAgent?.id ?? null,
+              module_tool_id: moduleTool?.id ?? null,
+              input_kind: "inputKind" in node ? node.inputKind ?? null : null,
+              output_kind: "outputKind" in node ? node.outputKind ?? null : null,
+              configuration: node.configuration ?? null,
+              is_enabled: true,
+            },
+            select: {
+              id: true,
+            },
+          });
+
+      workflowNodeByKey.set(node.nodeKey, savedNode);
+    }
+
+    await prisma.moduleWorkflowEdge.deleteMany({
+      where: {
+        workflow_id: workflow.id,
+      },
+    });
+
+    await prisma.moduleWorkflowEdge.createMany({
+      data: definition.edges.map((edge) => {
+        const sourceNode = workflowNodeByKey.get(edge.source);
+        const targetNode = workflowNodeByKey.get(edge.target);
+        if (!sourceNode || !targetNode) {
+          throw new Error(`Workflow edge non valido per ${definition.workflowKey}: ${edge.source} -> ${edge.target}`);
+        }
+
+        return {
+          workspace_id: workspace.id,
+          workflow_id: workflow.id,
+          source_node_id: sourceNode.id,
+          target_node_id: targetNode.id,
+          order_no: edge.orderNo,
+          is_enabled: true,
+        };
+      }),
+    });
+  }
 
   console.log("Seed completed:", {
     organization: organization.code,

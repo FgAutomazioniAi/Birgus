@@ -95,6 +95,36 @@ enum KnowledgeChunkEmbeddingStatus {
   ERROR
 }
 
+enum WorkflowNodeKind {
+  INPUT
+  AGENT
+  TOOL
+  OUTPUT
+}
+
+enum WorkflowToolRuntimeKind {
+  BACKEND
+  PYTHON_MODULE
+  NEXT_ORCHESTRATOR
+}
+
+enum WorkflowRunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+enum WorkflowStepStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+  CANCELED
+}
+
 model Organization {
   id         String      @id @default(uuid()) @db.Uuid
   code       String      @unique
@@ -134,7 +164,7 @@ model Workspace {
   project_revisions          ProjectRevision[]
   project_authors            ProjectAuthor[]
   projects                   Project[]
-  project_agents             ProjectAgent[]
+  module_agents              ModuleAgent[]
   project_clients            ProjectClient[]
   project_versions           ProjectVersion[]
   shipment_statuses          ShipmentStatus[]
@@ -151,6 +181,12 @@ model Workspace {
   assistant_memory_snapshots AssistantMemorySnapshot[]
   knowledge_documents        KnowledgeDocument[]
   knowledge_chunks           KnowledgeChunk[]
+  module_tools               ModuleTool[]
+  module_workflows           ModuleWorkflow[]
+  module_workflow_nodes      ModuleWorkflowNode[]
+  module_workflow_edges      ModuleWorkflowEdge[]
+  module_workflow_runs       ModuleWorkflowRun[]
+  module_workflow_run_steps  ModuleWorkflowRunStep[]
 
   @@unique([organization_id, code])
   @@index([organization_id])
@@ -180,8 +216,12 @@ model User {
   user_module_overrides_configured UserModuleOverride[]  @relation("user_module_override_configured_by")
   documents_uploaded               Document[]            @relation("document_uploaded_by")
   projects_owned                   Project[]             @relation("project_owner")
-  project_agents_created           ProjectAgent[]        @relation("project_agent_created_by")
-  project_agents_updated           ProjectAgent[]        @relation("project_agent_updated_by")
+  module_agents_created            ModuleAgent[]         @relation("module_agent_created_by")
+  module_agents_updated            ModuleAgent[]         @relation("module_agent_updated_by")
+  module_tools_created             ModuleTool[]          @relation("module_tool_created_by")
+  module_tools_updated             ModuleTool[]          @relation("module_tool_updated_by")
+  module_workflows_created         ModuleWorkflow[]      @relation("module_workflow_created_by")
+  module_workflows_updated         ModuleWorkflow[]      @relation("module_workflow_updated_by")
   shipments_created                Shipment[]            @relation("shipment_created_by")
   shipment_events                  ShipmentEvent[]       @relation("shipment_event_actor")
   ddt_documents_requested          DdtDocument[]         @relation("ddt_document_requested_by")
@@ -190,6 +230,7 @@ model User {
   assistant_sessions_opened        AssistantSession[]    @relation("assistant_session_opened_by")
   assistant_messages_authored      AssistantMessage[]    @relation("assistant_message_author")
   quotation_jobs_requested         QuotationOrchestratorJob[] @relation("quotation_job_requested_by")
+  workflow_runs_requested          ModuleWorkflowRun[]   @relation("module_workflow_run_requested_by")
 
   @@index([deleted_at])
   @@map("users")
@@ -336,7 +377,10 @@ model Module {
 
   workspace_modules     WorkspaceModule[]
   user_module_overrides UserModuleOverride[]
-  project_agents        ProjectAgent[]
+  module_agents         ModuleAgent[]
+  module_tools          ModuleTool[]
+  module_workflows      ModuleWorkflow[]
+  workflow_runs         ModuleWorkflowRun[]
   documents             Document[]
   notifications         Notification[]
   audit_logs            AuditLog[]
@@ -476,6 +520,7 @@ model Document {
   uploaded_by_user    User?               @relation("document_uploaded_by", fields: [uploaded_by_user_id], references: [id], onDelete: SetNull)
   ddt_document        DdtDocument?
   assistant_sessions  AssistantSession[]
+  workflow_runs       ModuleWorkflowRun[]
   knowledge_documents KnowledgeDocument[]
 
   @@index([workspace_id])
@@ -525,6 +570,7 @@ model Client {
   project_versions   ProjectVersion[]
   shipments          Shipment[]
   assistant_sessions AssistantSession[]
+  workflow_runs      ModuleWorkflowRun[]
 
   @@index([workspace_id])
   @@index([company_id])
@@ -608,10 +654,10 @@ model Project {
   status             ProjectStatus      @relation(fields: [status_id], references: [id], onDelete: Restrict)
   revision           ProjectRevision?   @relation(fields: [revision_id], references: [id], onDelete: SetNull)
   project_clients    ProjectClient[]
-  project_agents     ProjectAgent[]
   project_versions   ProjectVersion[]
   quotation_jobs     QuotationOrchestratorJob[]
   assistant_sessions AssistantSession[]
+  workflow_runs      ModuleWorkflowRun[]
 
   @@index([workspace_id])
   @@index([status_id])
@@ -622,10 +668,9 @@ model Project {
   @@map("projects")
 }
 
-model ProjectAgent {
+model ModuleAgent {
   id                 String    @id @default(uuid()) @db.Uuid
   workspace_id       String    @db.Uuid
-  project_id         String    @db.Uuid
   module_id          Int
   key                String
   name               String
@@ -640,20 +685,239 @@ model ProjectAgent {
   deleted_at         DateTime?
 
   workspace       Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
-  project         Project   @relation(fields: [project_id], references: [id], onDelete: Restrict)
   module          Module    @relation(fields: [module_id], references: [id], onDelete: Restrict)
-  created_by_user User?     @relation("project_agent_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull)
-  updated_by_user User?     @relation("project_agent_updated_by", fields: [updated_by_user_id], references: [id], onDelete: SetNull)
+  created_by_user User?     @relation("module_agent_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  updated_by_user User?     @relation("module_agent_updated_by", fields: [updated_by_user_id], references: [id], onDelete: SetNull)
+  workflow_nodes  ModuleWorkflowNode[]
 
-  @@unique([workspace_id, project_id, module_id, key])
+  @@unique([workspace_id, module_id, key])
   @@index([workspace_id])
-  @@index([project_id])
   @@index([module_id])
   @@index([created_by_user_id])
   @@index([updated_by_user_id])
   @@index([is_enabled])
   @@index([deleted_at])
-  @@map("project_agents")
+  @@map("module_agents")
+}
+
+model ModuleTool {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  workspace_id       String                  @db.Uuid
+  module_id          Int
+  key                String
+  name               String
+  label              String
+  description        String?
+  runtime_kind       WorkflowToolRuntimeKind
+  handler_key        String
+  input_schema       Json?
+  output_schema      Json?
+  configuration      Json?
+  is_enabled         Boolean                 @default(true)
+  created_by_user_id String?                 @db.Uuid
+  updated_by_user_id String?                 @db.Uuid
+  created_at         DateTime                @default(now())
+  updated_at         DateTime                @updatedAt
+  deleted_at         DateTime?
+
+  workspace       Workspace           @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  module          Module              @relation(fields: [module_id], references: [id], onDelete: Restrict)
+  created_by_user User?               @relation("module_tool_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  updated_by_user User?               @relation("module_tool_updated_by", fields: [updated_by_user_id], references: [id], onDelete: SetNull)
+  workflow_nodes  ModuleWorkflowNode[]
+
+  @@unique([workspace_id, module_id, key])
+  @@index([workspace_id])
+  @@index([module_id])
+  @@index([created_by_user_id])
+  @@index([updated_by_user_id])
+  @@index([is_enabled])
+  @@index([deleted_at])
+  @@map("module_tools")
+}
+
+model ModuleWorkflow {
+  id                 String   @id @default(uuid()) @db.Uuid
+  workspace_id       String   @db.Uuid
+  module_id          Int
+  key                String
+  name               String
+  label              String
+  description        String?
+  version_no         Int      @default(1)
+  is_enabled         Boolean  @default(true)
+  is_default         Boolean  @default(false)
+  created_by_user_id String?  @db.Uuid
+  updated_by_user_id String?  @db.Uuid
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+  deleted_at         DateTime?
+
+  workspace       Workspace             @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  module          Module                @relation(fields: [module_id], references: [id], onDelete: Restrict)
+  created_by_user User?                 @relation("module_workflow_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  updated_by_user User?                 @relation("module_workflow_updated_by", fields: [updated_by_user_id], references: [id], onDelete: SetNull)
+  nodes           ModuleWorkflowNode[]
+  edges           ModuleWorkflowEdge[]
+  runs            ModuleWorkflowRun[]
+
+  @@unique([workspace_id, module_id, key])
+  @@index([workspace_id])
+  @@index([module_id])
+  @@index([created_by_user_id])
+  @@index([updated_by_user_id])
+  @@index([is_enabled])
+  @@index([is_default])
+  @@index([deleted_at])
+  @@map("module_workflows")
+}
+
+model ModuleWorkflowNode {
+  id              String           @id @default(uuid()) @db.Uuid
+  workflow_id     String           @db.Uuid
+  workspace_id    String           @db.Uuid
+  node_key        String
+  node_kind       WorkflowNodeKind
+  label           String
+  position_x      Float            @default(0)
+  position_y      Float            @default(0)
+  module_agent_id String?          @db.Uuid
+  module_tool_id  String?          @db.Uuid
+  input_kind      String?
+  output_kind     String?
+  configuration   Json?
+  input_schema    Json?
+  output_schema   Json?
+  is_enabled      Boolean          @default(true)
+  created_at      DateTime         @default(now())
+  updated_at      DateTime         @updatedAt
+
+  workflow                ModuleWorkflow          @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
+  workspace               Workspace               @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  module_agent            ModuleAgent?            @relation(fields: [module_agent_id], references: [id], onDelete: SetNull)
+  module_tool             ModuleTool?             @relation(fields: [module_tool_id], references: [id], onDelete: SetNull)
+  source_edges            ModuleWorkflowEdge[]    @relation("module_workflow_edge_source")
+  target_edges            ModuleWorkflowEdge[]    @relation("module_workflow_edge_target")
+  workflow_run_steps      ModuleWorkflowRunStep[]
+
+  @@unique([workflow_id, node_key])
+  @@index([workflow_id])
+  @@index([workspace_id])
+  @@index([module_agent_id])
+  @@index([module_tool_id])
+  @@index([node_kind])
+  @@index([is_enabled])
+  @@map("module_workflow_nodes")
+}
+
+model ModuleWorkflowEdge {
+  id                String   @id @default(uuid()) @db.Uuid
+  workflow_id       String   @db.Uuid
+  workspace_id      String   @db.Uuid
+  source_node_id    String   @db.Uuid
+  target_node_id    String   @db.Uuid
+  source_handle     String?
+  target_handle     String?
+  label             String?
+  condition_payload Json?
+  order_no          Int      @default(0)
+  is_enabled        Boolean  @default(true)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  workflow     ModuleWorkflow     @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
+  workspace    Workspace          @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  source_node  ModuleWorkflowNode @relation("module_workflow_edge_source", fields: [source_node_id], references: [id], onDelete: Cascade)
+  target_node  ModuleWorkflowNode @relation("module_workflow_edge_target", fields: [target_node_id], references: [id], onDelete: Cascade)
+
+  @@index([workflow_id])
+  @@index([workspace_id])
+  @@index([source_node_id])
+  @@index([target_node_id])
+  @@index([order_no])
+  @@index([is_enabled])
+  @@map("module_workflow_edges")
+}
+
+model ModuleWorkflowRun {
+  id                  String            @id @default(uuid()) @db.Uuid
+  workspace_id        String            @db.Uuid
+  workflow_id         String            @db.Uuid
+  module_id           Int?
+  requested_by_user_id String?          @db.Uuid
+  status              WorkflowRunStatus @default(QUEUED)
+  trigger_source      String?
+  context_entity_type String?
+  context_entity_id   String?
+  project_id          String?           @db.Uuid
+  project_version_id  Int?
+  client_id           String?           @db.Uuid
+  shipment_id         String?           @db.Uuid
+  document_id         String?           @db.Uuid
+  ddt_document_id     String?           @db.Uuid
+  input_payload       Json?
+  result_payload      Json?
+  error_message       String?
+  queued_at           DateTime          @default(now())
+  started_at          DateTime?
+  completed_at        DateTime?
+  created_at          DateTime          @default(now())
+  updated_at          DateTime          @updatedAt
+
+  workspace          Workspace              @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  workflow           ModuleWorkflow         @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
+  module             Module?                @relation(fields: [module_id], references: [id], onDelete: SetNull)
+  requested_by_user  User?                  @relation("module_workflow_run_requested_by", fields: [requested_by_user_id], references: [id], onDelete: SetNull)
+  project            Project?               @relation(fields: [project_id], references: [id], onDelete: SetNull)
+  project_version    ProjectVersion?        @relation(fields: [project_version_id], references: [id], onDelete: SetNull)
+  client             Client?                @relation(fields: [client_id], references: [id], onDelete: SetNull)
+  shipment           Shipment?              @relation(fields: [shipment_id], references: [id], onDelete: SetNull)
+  document           Document?              @relation(fields: [document_id], references: [id], onDelete: SetNull)
+  ddt_document       DdtDocument?           @relation(fields: [ddt_document_id], references: [id], onDelete: SetNull)
+  steps              ModuleWorkflowRunStep[]
+
+  @@index([workspace_id])
+  @@index([workflow_id])
+  @@index([module_id])
+  @@index([requested_by_user_id])
+  @@index([project_id])
+  @@index([project_version_id])
+  @@index([client_id])
+  @@index([shipment_id])
+  @@index([document_id])
+  @@index([ddt_document_id])
+  @@index([status])
+  @@index([queued_at])
+  @@map("module_workflow_runs")
+}
+
+model ModuleWorkflowRunStep {
+  id               String             @id @default(uuid()) @db.Uuid
+  workspace_id     String             @db.Uuid
+  workflow_run_id  String             @db.Uuid
+  workflow_node_id String?            @db.Uuid
+  sequence_no      Int
+  step_key         String
+  status           WorkflowStepStatus @default(PENDING)
+  started_at       DateTime?
+  completed_at     DateTime?
+  input_payload    Json?
+  output_payload   Json?
+  error_message    String?
+  logs_text        String?            @db.Text
+  created_at       DateTime           @default(now())
+  updated_at       DateTime           @updatedAt
+
+  workspace      Workspace            @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  workflow_run   ModuleWorkflowRun    @relation(fields: [workflow_run_id], references: [id], onDelete: Cascade)
+  workflow_node  ModuleWorkflowNode?  @relation(fields: [workflow_node_id], references: [id], onDelete: SetNull)
+
+  @@unique([workflow_run_id, sequence_no])
+  @@index([workspace_id])
+  @@index([workflow_run_id])
+  @@index([workflow_node_id])
+  @@index([status])
+  @@map("module_workflow_run_steps")
 }
 
 model ProjectClient {
@@ -696,6 +960,7 @@ model ProjectVersion {
   status             ProjectStatus?     @relation(fields: [status_id], references: [id], onDelete: SetNull)
   shipment           Shipment?
   assistant_sessions AssistantSession[]
+  workflow_runs      ModuleWorkflowRun[]
 
   @@unique([workspace_id, project_id, version_label])
   @@index([workspace_id])
@@ -747,6 +1012,7 @@ model Shipment {
   shipment_items     ShipmentItem[]
   shipment_events    ShipmentEvent[]
   assistant_sessions AssistantSession[]
+  workflow_runs      ModuleWorkflowRun[]
 
   @@unique([workspace_id, code])
   @@unique([project_version_id])
@@ -828,6 +1094,7 @@ model DdtDocument {
   processing_jobs    DdtProcessingJob[]
   processing_events  DdtProcessingEvent[]
   assistant_sessions AssistantSession[]
+  workflow_runs      ModuleWorkflowRun[]
 
   @@index([workspace_id])
   @@index([status])

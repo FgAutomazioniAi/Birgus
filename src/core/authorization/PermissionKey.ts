@@ -23,6 +23,9 @@ export class PermissionKey {
   public static readonly ASSISTANT_READ = "assistant.read";
   public static readonly ASSISTANT_WRITE = "assistant.write";
   public static readonly ASSISTANT_CONFIGURE = "assistant.configure";
+  public static readonly WORKFLOWS_READ = "workflows.read";
+  public static readonly WORKFLOWS_WRITE = "workflows.write";
+  public static readonly WORKFLOWS_CONFIGURE = "workflows.configure";
 
   public static readonly NOTIFICATIONS_READ = "notifications.read";
   public static readonly NOTIFICATIONS_WRITE = "notifications.write";

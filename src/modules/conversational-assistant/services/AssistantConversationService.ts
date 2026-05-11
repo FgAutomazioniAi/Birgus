@@ -7,6 +7,7 @@ import { PrismaAssistantSessionRepository } from "../infra/PrismaAssistantSessio
 import { AssistantSessionService } from "./AssistantSessionService.js";
 import { AssistantToolAccessService } from "./AssistantToolAccessService.js";
 import { AssistantToolRegistry } from "./AssistantToolRegistry.js";
+import { DocumentChatContext, DocumentIntelligenceService } from "../../document-intelligence/services/DocumentIntelligenceService.js";
 import { LmStudioChatClient } from "./LmStudioChatClient.js";
 
 interface ModelMessage {
@@ -21,18 +22,21 @@ export class AssistantConversationService {
   private readonly sessionService: AssistantSessionService;
   private readonly toolRegistry: AssistantToolRegistry;
   private readonly toolAccessService: AssistantToolAccessService;
+  private readonly documentIntelligenceService: DocumentIntelligenceService;
   private readonly chatClient: LmStudioChatClient;
 
   public constructor(params: {
     sessionService: AssistantSessionService;
     toolRegistry: AssistantToolRegistry;
     toolAccessService: AssistantToolAccessService;
+    documentIntelligenceService: DocumentIntelligenceService;
     chatClient?: LmStudioChatClient;
     repository?: AssistantSessionRepository;
   }) {
     this.sessionService = params.sessionService;
     this.toolRegistry = params.toolRegistry;
     this.toolAccessService = params.toolAccessService;
+    this.documentIntelligenceService = params.documentIntelligenceService;
     this.chatClient = params.chatClient ?? new LmStudioChatClient();
     this.repository = params.repository ?? new PrismaAssistantSessionRepository();
   }
@@ -74,12 +78,14 @@ export class AssistantConversationService {
       contentPayload: null,
     });
 
+    const documentContext = await this.resolveLinkedDocumentContext(params.workspaceId, session);
     const history = await this.repository.listMessages(params.workspaceId, session.id);
     const memorySnapshot = await this.sessionService.findLatestMemorySnapshot(params.workspaceId, params.userId, session.id);
     const initialMessages = this.buildModelMessages({
       session,
       history,
       memorySummary: memorySnapshot?.summaryText ?? null,
+      documentContext,
     });
 
     const toolDefinitions = this.toolRegistry.listDefinitions();
@@ -383,6 +389,7 @@ export class AssistantConversationService {
     };
     history: AssistantMessageEntity[];
     memorySummary: string | null;
+    documentContext: DocumentChatContext | null;
   }): ModelMessage[] {
     const messages: ModelMessage[] = [
       {
@@ -391,7 +398,9 @@ export class AssistantConversationService {
           "Sei l'assistente applicativo interno di Birgus.",
           "Rispondi in italiano, in modo chiaro e concreto.",
           "Ogni conversazione e limitata alla sessione corrente: non usare memoria esterna o richieste precedenti non presenti nella sessione.",
-          "Per leggere dati di business o documenti usa solo i tool disponibili. Non assumere accesso diretto al database, a Garage o ai file.",
+          "Per leggere dati di business usa solo i tool disponibili. Non assumere accesso diretto al database, a Garage o ai file.",
+          "Se il backend ti fornisce un contesto documentale gia estratto per questa sessione, puoi usarlo come fonte primaria del documento collegato.",
+          "Se devi approfondire il documento collegato alla sessione, preferisci il tool dedicato al documento collegato prima di allargare la ricerca all'intero workspace.",
           "Se l'utente richiede esplicitamente ricerca 'semantica', usa il tool semantico; se richiede ricerca 'mirata', 'keyword' o 'puntuale', usa il tool targeted.",
           "Non inventare dati mancanti. Se il contesto non basta, chiedi conferma o usa il tool piu adatto.",
           "Quando il tool restituisce dati strutturati, sintetizzali senza alterarne il significato.",
@@ -411,6 +420,29 @@ export class AssistantConversationService {
       messages.push({
         role: "system",
         content: `Memoria compatta della sessione: ${params.memorySummary}`,
+      });
+    }
+
+    if (params.documentContext) {
+      const structuredParts = [
+        params.documentContext.kind === "ddt_document" && params.documentContext.ddtDocumentId
+          ? `Tipo documento collegato: DDT (${params.documentContext.ddtDocumentId})`
+          : "Tipo documento collegato: documento generico",
+        params.documentContext.title ? `Titolo: ${params.documentContext.title}` : null,
+        params.documentContext.sourceLabel ? `Origine archivio: ${params.documentContext.sourceLabel}` : null,
+        params.documentContext.summaryText ? `Riassunto estratto: ${params.documentContext.summaryText}` : null,
+        params.documentContext.contentPreview ? `Estratto contenuto: ${params.documentContext.contentPreview}` : null,
+        params.documentContext.ddtAnalysis
+          ? `Analisi DDT strutturata: ${JSON.stringify(params.documentContext.ddtAnalysis)}`
+          : null,
+        params.documentContext.structuredPayload
+          ? `Payload strutturato documento: ${JSON.stringify(params.documentContext.structuredPayload)}`
+          : null,
+      ].filter((value): value is string => Boolean(value));
+
+      messages.push({
+        role: "system",
+        content: structuredParts.join("\n"),
       });
     }
 
@@ -452,6 +484,30 @@ export class AssistantConversationService {
     ].filter((value): value is string => Boolean(value));
 
     return parts.length > 0 ? parts.join(", ") : null;
+  }
+
+  private async resolveLinkedDocumentContext(
+    workspaceId: string,
+    session: {
+      documentId: string | null;
+      ddtDocumentId: string | null;
+    },
+  ): Promise<DocumentChatContext | null> {
+    if (session.ddtDocumentId) {
+      return this.documentIntelligenceService.getDdtDocumentChatContext({
+        workspaceId,
+        ddtDocumentId: session.ddtDocumentId,
+      });
+    }
+
+    if (session.documentId) {
+      return this.documentIntelligenceService.getDocumentChatContext({
+        workspaceId,
+        documentId: session.documentId,
+      });
+    }
+
+    return null;
   }
 
   private toModelRole(role: string): ModelMessage["role"] | null {

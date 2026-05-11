@@ -1,5 +1,5 @@
 import { ModuleKey } from "../../../core/module-access/ModuleKey.js";
-import { ProjectAgentService } from "../../agents/services/ProjectAgentService.js";
+import { ModuleAgentService } from "../../agents/services/ModuleAgentService.js";
 import { QuotationAnalysisResult, QuotationStructuredData, QUOTATION_FIELD_KEYS } from "../domain/QuotationStructuredData.js";
 
 interface WorkflowResponsePayload {
@@ -14,10 +14,10 @@ export class NextOrchestratorQuotationAnalyzer {
   private readonly executePath: string;
   private readonly timeoutMs: number;
   private readonly token: string;
-  private readonly projectAgentService: ProjectAgentService;
+  private readonly moduleAgentService: ModuleAgentService;
 
-  public constructor(projectAgentService: ProjectAgentService) {
-    this.projectAgentService = projectAgentService;
+  public constructor(moduleAgentService: ModuleAgentService) {
+    this.moduleAgentService = moduleAgentService;
     this.baseUrl = (process.env.NEXT_ORCHESTRATOR_BASE_URL ?? process.env.DDT_READER_ORCHESTRATOR_BASE_URL ?? "").replace(/\/+$/, "");
     this.executePath = this.normalizePath(
       process.env.NEXT_ORCHESTRATOR_EXECUTE_PATH
@@ -41,9 +41,8 @@ export class NextOrchestratorQuotationAnalyzer {
       throw new Error("NEXT_ORCHESTRATOR_BASE_URL mancante.");
     }
 
-    const systemPrompt = await this.projectAgentService.resolveActivePrompt({
+    const systemPrompt = await this.moduleAgentService.resolveActivePrompt({
       workspaceId: params.workspaceId,
-      projectId: params.projectId,
       moduleKey: ModuleKey.PROJECT_MANAGEMENT,
       agentKey: NextOrchestratorQuotationAnalyzer.QUOTATION_PROMPT_AGENT_KEY,
     });

@@ -194,7 +194,7 @@ export class PrismaKnowledgeRepository implements KnowledgeRepository {
 
       const vectorLiteral = this.toVectorLiteral(chunk.embeddingVector);
       await prisma.$executeRawUnsafe(
-        `UPDATE knowledge_chunks SET embedding_vector = $1::vector WHERE id = $2`,
+        `UPDATE knowledge_chunks SET embedding_vector = $1::vector WHERE id = $2::uuid`,
         vectorLiteral,
         row.id,
       );

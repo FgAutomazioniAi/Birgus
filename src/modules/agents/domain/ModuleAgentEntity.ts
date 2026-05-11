@@ -1,8 +1,6 @@
-export class ProjectAgentEntity {
+export class ModuleAgentEntity {
   public readonly id: string;
   public readonly workspaceId: string;
-  public readonly projectId: string;
-  public readonly projectName: string;
   public readonly moduleId: number;
   public readonly moduleKey: string;
   public readonly moduleName: string;
@@ -20,8 +18,6 @@ export class ProjectAgentEntity {
   public constructor(params: {
     id: string;
     workspaceId: string;
-    projectId: string;
-    projectName: string;
     moduleId: number;
     moduleKey: string;
     moduleName: string;
@@ -38,8 +34,6 @@ export class ProjectAgentEntity {
   }) {
     this.id = params.id;
     this.workspaceId = params.workspaceId;
-    this.projectId = params.projectId;
-    this.projectName = params.projectName;
     this.moduleId = params.moduleId;
     this.moduleKey = params.moduleKey;
     this.moduleName = params.moduleName;

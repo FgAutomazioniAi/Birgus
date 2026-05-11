@@ -1,6 +1,6 @@
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { ModuleKey } from "../../../core/module-access/ModuleKey.js";
-import { ProjectAgentService } from "../../agents/services/ProjectAgentService.js";
+import { ModuleAgentService } from "../../agents/services/ModuleAgentService.js";
 import { DdtAnalysisInput } from "../repositories/DdtProcessingRepository.js";
 import { DdtAnalyzer } from "./DdtAnalyzer.js";
 
@@ -30,10 +30,10 @@ export class NextOrchestratorDdtAnalyzer implements DdtAnalyzer {
   private readonly executePath: string;
   private readonly timeoutMs: number;
   private readonly token: string;
-  private readonly projectAgentService: ProjectAgentService;
+  private readonly moduleAgentService: ModuleAgentService;
 
-  public constructor(projectAgentService: ProjectAgentService) {
-    this.projectAgentService = projectAgentService;
+  public constructor(moduleAgentService: ModuleAgentService) {
+    this.moduleAgentService = moduleAgentService;
     this.baseUrl = (process.env.DDT_READER_ORCHESTRATOR_BASE_URL ?? "").replace(/\/+$/, "");
     this.executePath = this.normalizePath(process.env.DDT_READER_ORCHESTRATOR_EXECUTE_PATH ?? "/api/orchestrator/modules/execute");
     this.timeoutMs = this.toPositiveInt(process.env.DDT_READER_ORCHESTRATOR_TIMEOUT_MS, 600000);
@@ -46,7 +46,7 @@ export class NextOrchestratorDdtAnalyzer implements DdtAnalyzer {
     }
 
     const row = await this.loadDdtDocument(ddtDocumentId);
-    const systemPrompt = await this.projectAgentService.resolveActivePrompt({
+    const systemPrompt = await this.moduleAgentService.resolveActivePrompt({
       workspaceId: row.workspace_id,
       moduleKey: ModuleKey.DDT_PROCESSING,
       agentKey: NextOrchestratorDdtAnalyzer.DDT_PROMPT_AGENT_KEY,

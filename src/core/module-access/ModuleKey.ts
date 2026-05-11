@@ -6,5 +6,6 @@ export class ModuleKey {
   public static readonly DOCUMENT_ARCHIVE = "document_archive";
   public static readonly DOCUMENT_INTELLIGENCE = "document_intelligence";
   public static readonly CONVERSATIONAL_ASSISTANT = "conversational_assistant";
+  public static readonly WORKFLOW_MANAGEMENT = "workflow_management";
   public static readonly NOTIFICATION_CENTER = "notification_center";
 }

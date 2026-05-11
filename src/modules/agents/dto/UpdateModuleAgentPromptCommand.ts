@@ -1,4 +1,4 @@
-export class UpdateProjectAgentPromptCommand {
+export class UpdateModuleAgentPromptCommand {
   public readonly workspaceId: string;
   public readonly agentId: string;
   public readonly activePrompt: string;

@@ -1,11 +1,10 @@
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
-import { ProjectAgentEntity } from "../domain/ProjectAgentEntity.js";
-import { ProjectAgentRepository } from "../repositories/ProjectAgentRepository.js";
+import { ModuleAgentEntity } from "../domain/ModuleAgentEntity.js";
+import { ModuleAgentRepository } from "../repositories/ModuleAgentRepository.js";
 
-interface ProjectAgentRow {
+interface ModuleAgentRow {
   id: string;
   workspace_id: string;
-  project_id: string;
   module_id: number;
   key: string;
   name: string;
@@ -17,10 +16,6 @@ interface ProjectAgentRow {
   updated_by_user_id: string | null;
   created_at: Date;
   updated_at: Date;
-  project: {
-    id: string;
-    name: string;
-  };
   module: {
     id: number;
     key: string;
@@ -28,24 +23,18 @@ interface ProjectAgentRow {
   };
 }
 
-export class PrismaProjectAgentRepository implements ProjectAgentRepository {
-  public async listProjectAgents(workspaceId: string): Promise<ProjectAgentEntity[]> {
+export class PrismaModuleAgentRepository implements ModuleAgentRepository {
+  public async listModuleAgents(workspaceId: string): Promise<ModuleAgentEntity[]> {
     const prisma = PrismaClientManager.getClient();
-    const rows = await prisma.projectAgent.findMany({
+    const rows = await prisma.moduleAgent.findMany({
       where: {
         workspace_id: workspaceId,
         deleted_at: null,
-        project: {
-          deleted_at: null,
+        module: {
+          is_active: true,
         },
       },
       include: {
-        project: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
         module: {
           select: {
             id: true,
@@ -55,11 +44,6 @@ export class PrismaProjectAgentRepository implements ProjectAgentRepository {
         },
       },
       orderBy: [
-        {
-          project: {
-            name: "asc",
-          },
-        },
         {
           module: {
             key: "asc",
@@ -71,27 +55,21 @@ export class PrismaProjectAgentRepository implements ProjectAgentRepository {
       ],
     });
 
-    return rows.map((row) => this.toEntity(row as unknown as ProjectAgentRow));
+    return rows.map((row) => this.toEntity(row as unknown as ModuleAgentRow));
   }
 
-  public async findProjectAgentById(workspaceId: string, agentId: string): Promise<ProjectAgentEntity | null> {
+  public async findModuleAgentById(workspaceId: string, agentId: string): Promise<ModuleAgentEntity | null> {
     const prisma = PrismaClientManager.getClient();
-    const row = await prisma.projectAgent.findFirst({
+    const row = await prisma.moduleAgent.findFirst({
       where: {
         id: agentId,
         workspace_id: workspaceId,
         deleted_at: null,
-        project: {
-          deleted_at: null,
+        module: {
+          is_active: true,
         },
       },
       include: {
-        project: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
         module: {
           select: {
             id: true,
@@ -102,47 +80,16 @@ export class PrismaProjectAgentRepository implements ProjectAgentRepository {
       },
     });
 
-    return row ? this.toEntity(row as unknown as ProjectAgentRow) : null;
+    return row ? this.toEntity(row as unknown as ModuleAgentRow) : null;
   }
 
   public async resolveActivePrompt(params: {
     workspaceId: string;
     moduleKey: string;
     agentKey: string;
-    projectId?: string | null;
   }): Promise<string | null> {
     const prisma = PrismaClientManager.getClient();
-
-    if (params.projectId) {
-      const scoped = await prisma.projectAgent.findFirst({
-        where: {
-          workspace_id: params.workspaceId,
-          project_id: params.projectId,
-          key: params.agentKey,
-          is_enabled: true,
-          deleted_at: null,
-          module: {
-            key: params.moduleKey,
-            is_active: true,
-          },
-          project: {
-            deleted_at: null,
-          },
-        },
-        select: {
-          active_prompt: true,
-        },
-        orderBy: {
-          updated_at: "desc",
-        },
-      });
-
-      if (scoped?.active_prompt?.trim()) {
-        return scoped.active_prompt.trim();
-      }
-    }
-
-    const inherited = await prisma.projectAgent.findFirst({
+    const row = await prisma.moduleAgent.findFirst({
       where: {
         workspace_id: params.workspaceId,
         key: params.agentKey,
@@ -151,9 +98,6 @@ export class PrismaProjectAgentRepository implements ProjectAgentRepository {
         module: {
           key: params.moduleKey,
           is_active: true,
-        },
-        project: {
-          deleted_at: null,
         },
       },
       select: {
@@ -169,45 +113,47 @@ export class PrismaProjectAgentRepository implements ProjectAgentRepository {
       ],
     });
 
-    return inherited?.active_prompt?.trim() ? inherited.active_prompt.trim() : null;
+    return row?.active_prompt?.trim() ? row.active_prompt.trim() : null;
   }
 
-  public async updateProjectAgentPrompt(params: {
+  public async updateModuleAgentPrompt(params: {
     workspaceId: string;
     agentId: string;
     activePrompt: string;
     updatedByUserId: string;
-  }): Promise<ProjectAgentEntity | null> {
+  }): Promise<ModuleAgentEntity | null> {
     const prisma = PrismaClientManager.getClient();
-
-    const existing = await prisma.projectAgent.findFirst({
+    const existing = await prisma.moduleAgent.findFirst({
       where: {
         id: params.agentId,
         workspace_id: params.workspaceId,
         deleted_at: null,
       },
-      select: { id: true },
+      select: {
+        id: true,
+      },
     });
 
     if (!existing) {
       return null;
     }
 
-    await prisma.projectAgent.update({
-      where: { id: existing.id },
+    await prisma.moduleAgent.update({
+      where: {
+        id: existing.id,
+      },
       data: {
         active_prompt: params.activePrompt,
         updated_by_user_id: params.updatedByUserId,
       },
     });
 
-    return this.findProjectAgentById(params.workspaceId, existing.id);
+    return this.findModuleAgentById(params.workspaceId, existing.id);
   }
 
-  public async resetProjectAgentPrompt(workspaceId: string, agentId: string, updatedByUserId: string): Promise<ProjectAgentEntity | null> {
+  public async resetModuleAgentPrompt(workspaceId: string, agentId: string, updatedByUserId: string): Promise<ModuleAgentEntity | null> {
     const prisma = PrismaClientManager.getClient();
-
-    const existing = await prisma.projectAgent.findFirst({
+    const existing = await prisma.moduleAgent.findFirst({
       where: {
         id: agentId,
         workspace_id: workspaceId,
@@ -223,23 +169,23 @@ export class PrismaProjectAgentRepository implements ProjectAgentRepository {
       return null;
     }
 
-    await prisma.projectAgent.update({
-      where: { id: existing.id },
+    await prisma.moduleAgent.update({
+      where: {
+        id: existing.id,
+      },
       data: {
         active_prompt: existing.original_prompt,
         updated_by_user_id: updatedByUserId,
       },
     });
 
-    return this.findProjectAgentById(workspaceId, existing.id);
+    return this.findModuleAgentById(workspaceId, existing.id);
   }
 
-  private toEntity(row: ProjectAgentRow): ProjectAgentEntity {
-    return new ProjectAgentEntity({
+  private toEntity(row: ModuleAgentRow): ModuleAgentEntity {
+    return new ModuleAgentEntity({
       id: row.id,
       workspaceId: row.workspace_id,
-      projectId: row.project_id,
-      projectName: row.project.name,
       moduleId: row.module_id,
       moduleKey: row.module.key,
       moduleName: row.module.name,

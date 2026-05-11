@@ -4,6 +4,7 @@ import { DocumentScope } from "@prisma/client";
 
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { AppError } from "../../../core/errors/AppError.js";
+import { ModuleKey } from "../../../core/module-access/ModuleKey.js";
 import { GaragePath } from "../../../storage/GaragePath.js";
 import { ProjectBinaryStorage } from "../../../storage/ProjectBinaryStorage.js";
 import { StartDdtProcessingCommand } from "../dto/StartDdtProcessingCommand.js";
@@ -158,7 +159,7 @@ export class LegacyDdtReaderService {
     const storagePath = GaragePath.toStoragePath(storedObject.bucket, storedObject.objectKey);
     const ddtNode = await this.ensureDdtNode(params.workspaceId);
 
-    const [pdfType, uploadedStatus] = await Promise.all([
+    const [pdfType, uploadedStatus, ddtModule] = await Promise.all([
       prisma.fileType.upsert({
         where: {
           key: "pdf",
@@ -180,6 +181,15 @@ export class LegacyDdtReaderService {
           key: "uploaded",
         },
       }),
+      prisma.module.findFirst({
+        where: {
+          key: ModuleKey.DDT_PROCESSING,
+          is_active: true,
+        },
+        select: {
+          id: true,
+        },
+      }),
     ]);
 
     const createdDocument = await prisma.document.create({
@@ -188,6 +198,7 @@ export class LegacyDdtReaderService {
         node_id: ddtNode.id,
         file_type_id: pdfType.id,
         file_status_id: uploadedStatus.id,
+        module_id: ddtModule?.id ?? null,
         scope: DocumentScope.DDT,
         domain_entity_type: "DdtDocument",
         filename: fileName,
@@ -222,6 +233,15 @@ export class LegacyDdtReaderService {
             article_items: true,
           },
         },
+      },
+    });
+
+    await prisma.document.update({
+      where: {
+        id: createdDocument.id,
+      },
+      data: {
+        domain_entity_id: created.id,
       },
     });
 

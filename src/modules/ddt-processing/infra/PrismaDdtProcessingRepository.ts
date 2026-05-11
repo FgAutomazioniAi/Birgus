@@ -172,6 +172,28 @@ export class PrismaDdtProcessingRepository implements DdtProcessingRepository {
     });
   }
 
+  public async findDocumentReference(ddtDocumentId: string): Promise<{ workspaceId: string; documentId: string } | null> {
+    const prisma = PrismaClientManager.getClient();
+    const row = await prisma.ddtDocument.findFirst({
+      where: {
+        id: ddtDocumentId,
+      },
+      select: {
+        workspace_id: true,
+        document_id: true,
+      },
+    });
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      workspaceId: row.workspace_id,
+      documentId: row.document_id,
+    };
+  }
+
   public async listRecoverableJobs(): Promise<RecoverableDdtProcessingJob[]> {
     const prisma = PrismaClientManager.getClient();
     const rows = await prisma.ddtProcessingJob.findMany({

@@ -60,6 +60,10 @@ export class AssistantToolRegistry {
       sourceEntityType: z.string().min(1).optional(),
       sourceEntityId: z.string().min(1).optional(),
     });
+    const linkedDocumentSearchSchema = z.object({
+      query: z.string().min(2),
+      topK: z.number().int().positive().max(10).optional(),
+    });
     const targetedSearchSchema = z.object({
       query: z.string().min(2),
       topK: z.number().int().positive().max(10).optional(),
@@ -71,6 +75,7 @@ export class AssistantToolRegistry {
     type ProjectVersionArgs = z.infer<typeof projectVersionSchema>;
     type SemanticSearchArgs = z.infer<typeof semanticSearchSchema>;
     type TargetedSearchArgs = z.infer<typeof targetedSearchSchema>;
+    type LinkedDocumentSearchArgs = z.infer<typeof linkedDocumentSearchSchema>;
 
     return [
       {
@@ -255,6 +260,113 @@ export class AssistantToolRegistry {
             projectId: args.projectId,
             versionLabel: args.versionLabel,
           });
+        },
+      },
+      {
+        name: "search_linked_document_knowledge",
+        description: "Cerca informazioni solo nel documento collegato alla sessione chat corrente, senza allargare la ricerca al resto del workspace.",
+        moduleKeys: [ModuleKey.CONVERSATIONAL_ASSISTANT, ModuleKey.DOCUMENT_INTELLIGENCE],
+        permissionKeys: [PermissionKey.ASSISTANT_READ, PermissionKey.KNOWLEDGE_READ],
+        parametersSchema: linkedDocumentSearchSchema,
+        parametersJsonSchema: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            query: { type: "string" },
+            topK: { type: "integer" },
+          },
+          required: ["query"],
+        },
+        execute: async (context, args: LinkedDocumentSearchArgs) => {
+          const prisma = PrismaClientManager.getClient();
+          const session = await prisma.assistantSession.findFirst({
+            where: {
+              id: context.sessionId,
+              workspace_id: context.workspaceId,
+              deleted_at: null,
+            },
+            select: {
+              document_id: true,
+              ddt_document_id: true,
+            },
+          });
+
+          if (!session) {
+            return { found: false, reason: "ASSISTANT_SESSION_NOT_FOUND" };
+          }
+
+          if (session.ddt_document_id) {
+            await this.documentIntelligenceService.getDdtDocumentChatContext({
+              workspaceId: context.workspaceId,
+              ddtDocumentId: session.ddt_document_id,
+            });
+
+            const hits = await this.documentIntelligenceService.searchWorkspaceKnowledge({
+              workspaceId: context.workspaceId,
+              query: args.query,
+              topK: args.topK,
+              sourceEntityType: "DdtDocument",
+              sourceEntityId: session.ddt_document_id,
+            });
+
+            return {
+              found: true,
+              scope: "ddt_document",
+              sourceEntityType: "DdtDocument",
+              sourceEntityId: session.ddt_document_id,
+              hits: hits.map((hit) => ({
+                chunkId: hit.chunkId,
+                knowledgeDocumentId: hit.knowledgeDocumentId,
+                documentId: hit.documentId,
+                sourceEntityType: hit.sourceEntityType,
+                sourceEntityId: hit.sourceEntityId,
+                title: hit.title,
+                sourceLabel: hit.sourceLabel,
+                chunkIndex: hit.chunkIndex,
+                contentText: hit.contentText,
+                distance: hit.distance,
+              })),
+            };
+          }
+
+          if (session.document_id) {
+            const documentContext = await this.documentIntelligenceService.getDocumentChatContext({
+              workspaceId: context.workspaceId,
+              documentId: session.document_id,
+            });
+
+            const hits = await this.documentIntelligenceService.searchWorkspaceKnowledge({
+              workspaceId: context.workspaceId,
+              query: args.query,
+              topK: args.topK,
+              sourceEntityType: documentContext.sourceEntityType,
+              sourceEntityId: documentContext.sourceEntityId,
+            });
+
+            return {
+              found: true,
+              scope: "document",
+              sourceEntityType: documentContext.sourceEntityType,
+              sourceEntityId: documentContext.sourceEntityId,
+              hits: hits.map((hit) => ({
+                chunkId: hit.chunkId,
+                knowledgeDocumentId: hit.knowledgeDocumentId,
+                documentId: hit.documentId,
+                sourceEntityType: hit.sourceEntityType,
+                sourceEntityId: hit.sourceEntityId,
+                title: hit.title,
+                sourceLabel: hit.sourceLabel,
+                chunkIndex: hit.chunkIndex,
+                contentText: hit.contentText,
+                distance: hit.distance,
+              })),
+            };
+          }
+
+          return {
+            found: false,
+            reason: "SESSION_DOCUMENT_NOT_LINKED",
+          };
         },
       },
       {

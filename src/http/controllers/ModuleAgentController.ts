@@ -4,22 +4,22 @@ import { z } from "zod";
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
 import { AppError } from "../../core/errors/AppError.js";
 import { ModuleKey } from "../../core/module-access/ModuleKey.js";
-import { UpdateProjectAgentPromptCommand } from "../../modules/agents/dto/UpdateProjectAgentPromptCommand.js";
-import { ProjectAgentService } from "../../modules/agents/services/ProjectAgentService.js";
+import { UpdateModuleAgentPromptCommand } from "../../modules/agents/dto/UpdateModuleAgentPromptCommand.js";
+import { ModuleAgentService } from "../../modules/agents/services/ModuleAgentService.js";
 import { ModuleGuard } from "../middleware/ModuleGuard.js";
 import { PermissionGuard } from "../middleware/PermissionGuard.js";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest.js";
 
-const updateProjectAgentSchema = z.object({
+const updateModuleAgentSchema = z.object({
   activePrompt: z.string().min(1),
 });
 
-export class ProjectAgentController {
-  private readonly service: ProjectAgentService;
+export class ModuleAgentController {
+  private readonly service: ModuleAgentService;
   private readonly moduleGuard: ModuleGuard;
   private readonly permissionGuard: PermissionGuard;
 
-  public constructor(service: ProjectAgentService, moduleGuard: ModuleGuard, permissionGuard: PermissionGuard) {
+  public constructor(service: ModuleAgentService, moduleGuard: ModuleGuard, permissionGuard: PermissionGuard) {
     this.service = service;
     this.moduleGuard = moduleGuard;
     this.permissionGuard = permissionGuard;
@@ -31,14 +31,12 @@ export class ProjectAgentController {
       await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.AGENTS_READ);
 
       const workspaceId = request.requestContext.workspace.workspaceId;
-      const agents = await this.service.listProjectAgents(workspaceId);
+      const agents = await this.service.listModuleAgents(workspaceId);
 
       reply.code(200).send({
         workspaceId,
         agents: agents.map((item) => ({
           id: item.id,
-          projectId: item.projectId,
-          projectName: item.projectName,
           moduleId: item.moduleId,
           moduleKey: item.moduleKey,
           moduleName: item.moduleName,
@@ -62,13 +60,13 @@ export class ProjectAgentController {
       await this.moduleGuard.requireModule(request.requestContext, ModuleKey.AGENT_MANAGEMENT);
       await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.AGENTS_WRITE);
 
-      const body = updateProjectAgentSchema.parse(request.body);
+      const body = updateModuleAgentSchema.parse(request.body);
       const workspaceId = request.requestContext.workspace.workspaceId;
       const updatedByUserId = request.requestContext.workspace.userId;
       const agentId = this.getAgentId(request);
 
-      const updated = await this.service.updateProjectAgentPrompt(
-        new UpdateProjectAgentPromptCommand({
+      const updated = await this.service.updateModuleAgentPrompt(
+        new UpdateModuleAgentPromptCommand({
           workspaceId,
           agentId,
           activePrompt: body.activePrompt,
@@ -95,7 +93,7 @@ export class ProjectAgentController {
       const workspaceId = request.requestContext.workspace.workspaceId;
       const updatedByUserId = request.requestContext.workspace.userId;
       const agentId = this.getAgentId(request);
-      const updated = await this.service.resetProjectAgentPrompt(workspaceId, agentId, updatedByUserId);
+      const updated = await this.service.resetModuleAgentPrompt(workspaceId, agentId, updatedByUserId);
 
       reply.code(200).send({
         id: updated.id,
@@ -111,7 +109,7 @@ export class ProjectAgentController {
   private getAgentId(request: AuthenticatedRequest): string {
     const value = (request.params as { agentId?: string }).agentId;
     if (!value || !value.trim()) {
-      throw new AppError("Agent ID is required.", "PROJECT_AGENT_ID_REQUIRED", 400);
+      throw new AppError("Agent ID is required.", "MODULE_AGENT_ID_REQUIRED", 400);
     }
 
     return value.trim();

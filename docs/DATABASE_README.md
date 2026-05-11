@@ -1,12 +1,5 @@
 ### Linee guida per db
 
-Questa documentazione descrive lo stato attuale del database di Birgus.
-
-File collegati:
-- `prisma/schema.prisma`: fonte di verita applicativa dello schema
-- `docs/database_schema.dbml`: esportazione DBML completa dello schema
-- `docs/DATABASE_SCHEMA.dbml`: copia equivalente con naming esplicito per tool esterni
-
 ### `MembershipStatus`
 Stato appartenenza utente-workspace:
 - `INVITED`
@@ -94,6 +87,36 @@ Stato embedding chunk knowledge:
 - `PROCESSING`
 - `READY`
 - `ERROR`
+
+### `WorkflowNodeKind`
+Tipologia nodo workflow:
+- `INPUT`
+- `AGENT`
+- `TOOL`
+- `OUTPUT`
+
+### `WorkflowToolRuntimeKind`
+Runtime esecutivo di un tool workflow:
+- `BACKEND`
+- `PYTHON_MODULE`
+- `NEXT_ORCHESTRATOR`
+
+### `WorkflowRunStatus`
+Stato di una run workflow:
+- `QUEUED`
+- `RUNNING`
+- `COMPLETED`
+- `FAILED`
+- `CANCELED`
+
+### `WorkflowStepStatus`
+Stato di un singolo step workflow:
+- `PENDING`
+- `RUNNING`
+- `SUCCEEDED`
+- `FAILED`
+- `SKIPPED`
+- `CANCELED`
 
 ## Tenant e anagrafiche di accesso
 
@@ -253,7 +276,7 @@ Connessioni:
 - 1:N con `workspace_modules`
 - 1:N con `user_module_overrides`
 - 1:N con `module_dependencies`
-- referenza opzionale da `documents`, `notifications`, `audit_logs`, `assistant_sessions`, `assistant_tool_calls`, `knowledge_documents`, `project_agents`
+- referenza opzionale da `documents`, `notifications`, `audit_logs`, `assistant_sessions`, `assistant_tool_calls`, `knowledge_documents`, `module_agents`
 
 ### Tabella `module_dependencies`
 Descrizione:
@@ -431,19 +454,18 @@ Connessioni:
 - N:1 con `project_statuses`
 - N:1 opzionale con `project_revisions`
 - 1:N con `project_clients`
-- 1:N con `project_agents`
 - 1:N con `project_versions`
 - 1:N con `quotation_orchestrator_jobs`
 - 1:N con `assistant_sessions`
 
-### Tabella `project_agents`
+### Tabella `module_agents`
 Descrizione:
-- agenti configurati all'interno di un progetto
-- contiene i dati del modulo agenti a livello di singolo progetto
+- agenti configurati a livello workspace e collegati a un modulo funzionale
+- contiene i prompt e la configurazione attiva degli agenti di modulo
 - salva sia il prompt originale sia il prompt attualmente attivo
 
 Colonne chiave:
-- `workspace_id`, `project_id`
+- `workspace_id`
 - `module_id`
 - `key`
 - `name`, `label`
@@ -453,21 +475,182 @@ Colonne chiave:
 
 Connessioni:
 - N:1 con `workspaces`
-- N:1 con `projects`
 - N:1 con `modules`
 - N:1 opzionale con `users` (creatore)
 - N:1 opzionale con `users` (ultimo aggiornamento)
 
 Vincoli:
-- `@@unique([workspace_id, project_id, module_id, key])`
+- `@@unique([workspace_id, module_id, key])`
 
 Note:
-- `key` e' la chiave tecnica stabile dell'agente dentro il progetto
+- `key` e' la chiave tecnica stabile dell'agente dentro il modulo
 - `name` e' il nome interno associato all'agente
 - `label` e' la dicitura da visualizzare in interfaccia
 - `is_enabled` permette di attivare/disattivare il singolo agente senza cancellarlo
 - `module_id` collega formalmente l'agente al modulo funzionale in cui verra richiamato
 - il modulo di visualizzazione/configurazione agenti puo vivere separatamente nel catalogo moduli, restando governato da `modules`, `workspace_modules` e `user_module_overrides`
+
+### Tabella `module_tools`
+Descrizione:
+- catalogo dei tool disponibili a livello workspace, formalmente collegati a un modulo
+- rappresenta funzioni backend, moduli Python o orchestrazioni Next riusabili nei workflow
+
+Colonne chiave:
+- `workspace_id`
+- `module_id`
+- `key`
+- `name`, `label`, `description`
+- `runtime_kind`
+- `handler_key`
+- `input_schema`, `output_schema`
+- `configuration`
+- `is_enabled`
+
+Connessioni:
+- N:1 con `workspaces`
+- N:1 con `modules`
+- N:1 opzionale con `users` (creatore)
+- N:1 opzionale con `users` (ultimo aggiornamento)
+- 1:N con `module_workflow_nodes`
+
+Vincoli:
+- `@@unique([workspace_id, module_id, key])`
+
+Note:
+- `handler_key` descrive il punto logico di esecuzione reale del tool
+- `runtime_kind` distingue tool backend, Python e orchestratore Next
+
+### Tabella `module_workflows`
+Descrizione:
+- definizione di workflow visuali appartenenti a un modulo funzionale
+- un workflow puo usare agenti e tool di modulo tramite i nodi collegati
+
+Colonne chiave:
+- `workspace_id`
+- `module_id`
+- `key`
+- `name`, `label`, `description`
+- `version_no`
+- `is_enabled`, `is_default`
+
+Connessioni:
+- N:1 con `workspaces`
+- N:1 con `modules`
+- N:1 opzionale con `users` (creatore)
+- N:1 opzionale con `users` (ultimo aggiornamento)
+- 1:N con `module_workflow_nodes`
+- 1:N con `module_workflow_edges`
+- 1:N con `module_workflow_runs`
+
+Vincoli:
+- `@@unique([workspace_id, module_id, key])`
+
+### Tabella `module_workflow_nodes`
+Descrizione:
+- nodi del canvas workflow
+- possono rappresentare input, agenti, tool o output finali
+
+Colonne chiave:
+- `workflow_id`
+- `workspace_id`
+- `node_key`
+- `node_kind`
+- `label`
+- `position_x`, `position_y`
+- `module_agent_id` (opzionale)
+- `module_tool_id` (opzionale)
+- `input_kind`, `output_kind`
+- `configuration`, `input_schema`, `output_schema`
+
+Connessioni:
+- N:1 con `module_workflows`
+- N:1 con `workspaces`
+- N:1 opzionale con `module_agents`
+- N:1 opzionale con `module_tools`
+- 1:N con `module_workflow_edges` come source
+- 1:N con `module_workflow_edges` come target
+- 1:N con `module_workflow_run_steps`
+
+Vincoli:
+- `@@unique([workflow_id, node_key])`
+
+Note:
+- un nodo `AGENT` collega il workflow a un prompt reale salvato in `module_agents`
+- un nodo `TOOL` collega il workflow a una funzione eseguibile salvata in `module_tools`
+
+### Tabella `module_workflow_edges`
+Descrizione:
+- archi del workflow che collegano i nodi del canvas
+
+Colonne chiave:
+- `workflow_id`
+- `workspace_id`
+- `source_node_id`
+- `target_node_id`
+- `source_handle`, `target_handle`
+- `label`
+- `condition_payload`
+- `order_no`
+- `is_enabled`
+
+Connessioni:
+- N:1 con `module_workflows`
+- N:1 con `workspaces`
+- N:1 con `module_workflow_nodes` (source)
+- N:1 con `module_workflow_nodes` (target)
+
+### Tabella `module_workflow_runs`
+Descrizione:
+- esecuzioni runtime dei workflow di modulo
+- permette audit, storico e collegamento al contesto business reale
+
+Colonne chiave:
+- `workspace_id`
+- `workflow_id`
+- `module_id`
+- `requested_by_user_id`
+- `status`
+- `trigger_source`
+- `context_entity_type`, `context_entity_id`
+- riferimenti opzionali a `project`, `project_version`, `client`, `shipment`, `document`, `ddt_document`
+- `input_payload`, `result_payload`, `error_message`
+- `queued_at`, `started_at`, `completed_at`
+
+Connessioni:
+- N:1 con `workspaces`
+- N:1 con `module_workflows`
+- N:1 opzionale con `modules`
+- N:1 opzionale con `users`
+- N:1 opzionale con `projects`
+- N:1 opzionale con `project_versions`
+- N:1 opzionale con `clients`
+- N:1 opzionale con `shipments`
+- N:1 opzionale con `documents`
+- N:1 opzionale con `ddt_documents`
+- 1:N con `module_workflow_run_steps`
+
+### Tabella `module_workflow_run_steps`
+Descrizione:
+- log dei singoli step eseguiti durante una run workflow
+
+Colonne chiave:
+- `workspace_id`
+- `workflow_run_id`
+- `workflow_node_id`
+- `sequence_no`
+- `step_key`
+- `status`
+- `input_payload`, `output_payload`
+- `error_message`, `logs_text`
+- `started_at`, `completed_at`
+
+Connessioni:
+- N:1 con `workspaces`
+- N:1 con `module_workflow_runs`
+- N:1 opzionale con `module_workflow_nodes`
+
+Vincoli:
+- `@@unique([workflow_run_id, sequence_no])`
 
 ### Tabella `project_clients`
 Descrizione:
@@ -833,7 +1016,13 @@ Connessioni:
 - `users` + `modules` con override per workspace tramite `user_module_overrides`
 - `nodes` gerarchico self-reference + `documents`
 - `projects` M:N `clients` tramite `project_clients`
-- `projects` 1:N `project_agents`
+- `modules` 1:N `module_agents`
+- `modules` 1:N `module_tools`
+- `modules` 1:N `module_workflows`
+- `module_workflows` 1:N `module_workflow_nodes`
+- `module_workflows` 1:N `module_workflow_edges`
+- `module_workflows` 1:N `module_workflow_runs`
+- `module_workflow_runs` 1:N `module_workflow_run_steps`
 - `projects` 1:N `quotation_orchestrator_jobs`
 - `project_versions` 1:1 `shipments`
 - `shipments` 1:1 `shipment_specifications`

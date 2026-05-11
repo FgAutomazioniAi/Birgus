@@ -5,8 +5,8 @@ import { WorkspaceMembershipPrismaReader } from "../database/WorkspaceMembership
 import { WorkspacePermissionPrismaReader } from "../database/WorkspacePermissionPrismaReader.js";
 import { PrismaClientRepository } from "../modules/clients/infra/PrismaClientRepository.js";
 import { ClientService } from "../modules/clients/services/ClientService.js";
-import { PrismaProjectAgentRepository } from "../modules/agents/infra/PrismaProjectAgentRepository.js";
-import { ProjectAgentService } from "../modules/agents/services/ProjectAgentService.js";
+import { PrismaModuleAgentRepository } from "../modules/agents/infra/PrismaModuleAgentRepository.js";
+import { ModuleAgentService } from "../modules/agents/services/ModuleAgentService.js";
 import { PrismaAssistantSessionRepository } from "../modules/conversational-assistant/infra/PrismaAssistantSessionRepository.js";
 import { AssistantConversationService } from "../modules/conversational-assistant/services/AssistantConversationService.js";
 import { AssistantSessionService } from "../modules/conversational-assistant/services/AssistantSessionService.js";
@@ -55,7 +55,7 @@ export class ApplicationContainer {
   public readonly passwordResetService: PasswordResetService;
   public readonly moduleManagementService: ModuleManagementService;
   public readonly clientService: ClientService;
-  public readonly projectAgentService: ProjectAgentService;
+  public readonly moduleAgentService: ModuleAgentService;
   public readonly userPreferenceService: UserPreferenceService;
   public readonly projectService: ProjectService;
   public readonly documentArchiveService: DocumentArchiveService;
@@ -106,8 +106,8 @@ export class ApplicationContainer {
     const clientRepository = new PrismaClientRepository();
     this.clientService = new ClientService(clientRepository);
 
-    const projectAgentRepository = new PrismaProjectAgentRepository();
-    this.projectAgentService = new ProjectAgentService(projectAgentRepository);
+    const moduleAgentRepository = new PrismaModuleAgentRepository();
+    this.moduleAgentService = new ModuleAgentService(moduleAgentRepository);
 
     const userPreferenceRepository = new PrismaUserPreferenceRepository();
     this.userPreferenceService = new UserPreferenceService(userPreferenceRepository);
@@ -129,13 +129,18 @@ export class ApplicationContainer {
     this.legacyDdtReaderService = new LegacyDdtReaderService(this.ddtProcessingService, storage);
     this.legacyQuotationOrchestratorService = new LegacyQuotationOrchestratorService(
       this.documentArchiveService,
-      new NextOrchestratorQuotationAnalyzer(this.projectAgentService),
+      new NextOrchestratorQuotationAnalyzer(this.moduleAgentService),
       new QuotationDocxBuilder(),
       new PrismaQuotationOrchestratorRepository(),
       new SmtpQuotationEmailNotifier(),
+      this.documentIntelligenceService,
     );
 
-    const ddtWorker = new DdtProcessingWorker(ddtRepository, new NextOrchestratorDdtAnalyzer(this.projectAgentService));
+    const ddtWorker = new DdtProcessingWorker(
+      ddtRepository,
+      new NextOrchestratorDdtAnalyzer(this.moduleAgentService),
+      this.documentIntelligenceService,
+    );
     this.workerCoordinator = new WorkerCoordinator(queue, ddtWorker);
     this.workerCoordinator.registerHandlers();
     void this.ddtProcessingService.resumePendingJobs().catch((error) => {
@@ -160,6 +165,7 @@ export class ApplicationContainer {
       sessionService: this.assistantSessionService,
       toolRegistry: assistantToolRegistry,
       toolAccessService: assistantToolAccessService,
+      documentIntelligenceService: this.documentIntelligenceService,
       repository: assistantSessionRepository,
     });
 

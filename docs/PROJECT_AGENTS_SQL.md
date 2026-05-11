@@ -1,33 +1,29 @@
 # SQL operativo modulo agenti
 
-## Leggere tutti gli agenti con progetto e modulo
+## Leggere tutti gli agenti di modulo
 ```sql
 SELECT
-  pa.id,
-  p.name AS project_name,
+  ma.id,
   m.key AS module_key,
-  pa.key AS agent_key,
-  pa.name,
-  pa.label,
-  pa.is_enabled,
-  pa.updated_at
-FROM project_agents pa
-JOIN projects p ON p.id = pa.project_id
-JOIN modules m ON m.id = pa.module_id
-WHERE pa.workspace_id = 'WORKSPACE_UUID'
-  AND pa.deleted_at IS NULL
-  AND p.deleted_at IS NULL
-ORDER BY p.name, m.key, pa.label;
+  ma.key AS agent_key,
+  ma.name,
+  ma.label,
+  ma.is_enabled,
+  ma.updated_at
+FROM module_agents ma
+JOIN modules m ON m.id = ma.module_id
+WHERE ma.workspace_id = 'WORKSPACE_UUID'
+  AND ma.deleted_at IS NULL
+ORDER BY m.key, ma.label;
 ```
 Descrizione:
-- elenca gli agenti di un workspace con progetto e modulo associato.
+- elenca gli agenti di modulo di un workspace.
 
-## Inserire un agente per un progetto
+## Inserire un agente di modulo
 ```sql
-INSERT INTO project_agents (
+INSERT INTO module_agents (
   id,
   workspace_id,
-  project_id,
   module_id,
   key,
   name,
@@ -43,11 +39,10 @@ INSERT INTO project_agents (
 VALUES (
   gen_random_uuid(),
   'WORKSPACE_UUID',
-  'PROJECT_UUID',
   (SELECT id FROM modules WHERE key = 'ddt_processing'),
-  'ddt_reader_agent',
-  'ddt_reader_agent',
-  'DDT Reader Agent',
+  'ddt_analysis_prompt',
+  'ddt_analysis_prompt',
+  'Prompt analisi DDT',
   'PROMPT_ORIGINALE',
   'PROMPT_ORIGINALE',
   true,
@@ -58,7 +53,7 @@ VALUES (
 );
 ```
 Descrizione:
-- crea un agente di progetto collegandolo formalmente a un modulo esistente.
+- crea un agente collegandolo formalmente a un modulo esistente nel workspace.
 
 Nota:
 - per agganciare il prompt reale del DDT Reader usa:
@@ -70,7 +65,7 @@ Nota:
 
 ## Aggiornare il prompt attivo di un agente
 ```sql
-UPDATE project_agents
+UPDATE module_agents
 SET active_prompt = 'NUOVO_PROMPT_ATTIVO',
     updated_by_user_id = 'USER_UUID',
     updated_at = NOW()
@@ -83,7 +78,7 @@ Descrizione:
 
 ## Resettare il prompt attivo all originale
 ```sql
-UPDATE project_agents
+UPDATE module_agents
 SET active_prompt = original_prompt,
     updated_by_user_id = 'USER_UUID',
     updated_at = NOW()
@@ -96,7 +91,7 @@ Descrizione:
 
 ## Disabilitare o riabilitare un agente
 ```sql
-UPDATE project_agents
+UPDATE module_agents
 SET is_enabled = false,
     updated_by_user_id = 'USER_UUID',
     updated_at = NOW()
@@ -147,4 +142,4 @@ DO UPDATE SET
   configured_at = EXCLUDED.configured_at;
 ```
 Descrizione:
-- applica un override utente per non mostrare il modulo Agenti.
+- crea o aggiorna un override utente per nascondere il modulo Agenti.

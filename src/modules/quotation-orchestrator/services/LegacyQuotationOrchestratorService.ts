@@ -2,6 +2,7 @@ import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { FileKind } from "../../document-archive/domain/FileKind.js";
 import { PutProjectFileCommand } from "../../document-archive/dto/PutProjectFileCommand.js";
 import { DocumentArchiveService } from "../../document-archive/services/DocumentArchiveService.js";
+import { DocumentIntelligenceService } from "../../document-intelligence/services/DocumentIntelligenceService.js";
 import { QuotationAnalysisResult } from "../domain/QuotationStructuredData.js";
 import { QuotationOrchestratorRepository } from "../repositories/QuotationOrchestratorRepository.js";
 import { NextOrchestratorQuotationAnalyzer } from "./NextOrchestratorQuotationAnalyzer.js";
@@ -59,6 +60,7 @@ export class LegacyQuotationOrchestratorService {
   private readonly docxBuilder: QuotationDocxBuilder;
   private readonly repository: QuotationOrchestratorRepository;
   private readonly emailNotifier: QuotationEmailNotifier;
+  private readonly documentIntelligenceService: DocumentIntelligenceService;
   private readonly runningJobs: Set<string>;
 
   public constructor(
@@ -67,12 +69,14 @@ export class LegacyQuotationOrchestratorService {
     docxBuilder: QuotationDocxBuilder,
     repository: QuotationOrchestratorRepository,
     emailNotifier: QuotationEmailNotifier,
+    documentIntelligenceService: DocumentIntelligenceService,
   ) {
     this.documentArchiveService = documentArchiveService;
     this.quotationAnalyzer = quotationAnalyzer;
     this.docxBuilder = docxBuilder;
     this.repository = repository;
     this.emailNotifier = emailNotifier;
+    this.documentIntelligenceService = documentIntelligenceService;
     this.runningJobs = new Set();
   }
 
@@ -210,6 +214,13 @@ export class LegacyQuotationOrchestratorService {
         fileName: quotationSource.fileName,
       });
 
+      await this.refreshQuotationKnowledge({
+        workspaceId: queued.workspaceId,
+        documentId: quotationSource.documentId,
+        projectId: queued.projectId,
+        versionLabel: queued.versionLabel,
+      });
+
       await this.patchJob(jobId, {
         status: "running",
         progress: 75,
@@ -302,7 +313,7 @@ export class LegacyQuotationOrchestratorService {
     workspaceId: string;
     projectId: string;
     versionLabel: string;
-  }): Promise<{ storagePath: string; fileName: string }> {
+  }): Promise<{ documentId: string; storagePath: string; fileName: string }> {
     const quotation = await this.documentArchiveService.getCurrentProjectVersionFile({
       workspaceId: params.workspaceId,
       projectId: params.projectId,
@@ -319,6 +330,7 @@ export class LegacyQuotationOrchestratorService {
     }
 
     return {
+      documentId: quotation.id,
       storagePath: quotation.storagePath,
       fileName: quotation.filename ?? "preventivo.pdf",
     };
@@ -420,6 +432,26 @@ export class LegacyQuotationOrchestratorService {
   private composeClientName(firstName: string | null | undefined, lastName: string | null | undefined): string | null {
     const fullName = [firstName?.trim(), lastName?.trim()].filter((value) => Boolean(value)).join(" ").trim();
     return fullName.length > 0 ? fullName : null;
+  }
+
+  private async refreshQuotationKnowledge(params: {
+    workspaceId: string;
+    documentId: string;
+    projectId: string;
+    versionLabel: string;
+  }): Promise<void> {
+    try {
+      await this.documentIntelligenceService.refreshDocumentKnowledge(params.workspaceId, params.documentId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Knowledge indexing error";
+      console.error("[LegacyQuotationOrchestratorService] Unable to index quotation document knowledge", {
+        workspaceId: params.workspaceId,
+        projectId: params.projectId,
+        versionLabel: params.versionLabel,
+        documentId: params.documentId,
+        message,
+      });
+    }
   }
 
   private async patchJob(jobId: string, patch: QuotationJobPatch): Promise<void> {

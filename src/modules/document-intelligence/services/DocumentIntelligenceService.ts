@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { AppError } from "../../../core/errors/AppError.js";
+import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { FileKind } from "../../document-archive/domain/FileKind.js";
 import { DocumentArchiveService } from "../../document-archive/services/DocumentArchiveService.js";
 import { KnowledgeDocumentEntity } from "../domain/KnowledgeDocumentEntity.js";
@@ -9,6 +10,20 @@ import { PrismaKnowledgeRepository } from "../infra/PrismaKnowledgeRepository.js
 import { KnowledgeRepository, SourceDocumentRecord } from "../repositories/KnowledgeRepository.js";
 import { BackendPythonModulesClient } from "./BackendPythonModulesClient.js";
 import { KnowledgeEmbeddingService } from "./KnowledgeEmbeddingService.js";
+
+export interface DocumentChatContext {
+  kind: "document" | "ddt_document";
+  documentId: string;
+  ddtDocumentId: string | null;
+  sourceEntityType: string;
+  sourceEntityId: string;
+  title: string | null;
+  sourceLabel: string | null;
+  summaryText: string | null;
+  contentPreview: string | null;
+  structuredPayload: Record<string, unknown> | null;
+  ddtAnalysis: Record<string, unknown> | null;
+}
 
 export class DocumentIntelligenceService {
   private readonly repository: KnowledgeRepository;
@@ -31,7 +46,7 @@ export class DocumentIntelligenceService {
   }
 
   public async refreshDocumentKnowledge(workspaceId: string, documentId: string): Promise<KnowledgeDocumentEntity> {
-    const source = await this.repository.findSourceDocumentById(workspaceId, documentId);
+    const source = await this.loadNormalizedSourceDocument(workspaceId, documentId);
     if (!source) {
       throw new AppError("Documento sorgente non trovato.", "KNOWLEDGE_SOURCE_NOT_FOUND", 404);
     }
@@ -62,6 +77,93 @@ export class DocumentIntelligenceService {
     const chunks = await this.buildChunkModels(extracted.text);
     await this.repository.replaceKnowledgeChunks(workspaceId, knowledgeDocument.id, chunks);
     return knowledgeDocument;
+  }
+
+  public async getDocumentChatContext(params: {
+    workspaceId: string;
+    documentId: string;
+  }): Promise<DocumentChatContext> {
+    const source = await this.loadNormalizedSourceDocument(params.workspaceId, params.documentId);
+    if (!source) {
+      throw new AppError("Documento sorgente non trovato.", "KNOWLEDGE_SOURCE_NOT_FOUND", 404);
+    }
+
+    const knowledge = await this.ensureDocumentKnowledge(source);
+    return {
+      kind: "document",
+      documentId: source.id,
+      ddtDocumentId: null,
+      sourceEntityType: knowledge.sourceEntityType,
+      sourceEntityId: knowledge.sourceEntityId,
+      title: knowledge.title ?? source.filename,
+      sourceLabel: knowledge.sourceLabel ?? source.nodePath,
+      summaryText: knowledge.summaryText,
+      contentPreview: this.buildPreviewText(knowledge.contentText),
+      structuredPayload: knowledge.structuredPayload,
+      ddtAnalysis: null,
+    };
+  }
+
+  public async getDdtDocumentChatContext(params: {
+    workspaceId: string;
+    ddtDocumentId: string;
+  }): Promise<DocumentChatContext> {
+    const prisma = PrismaClientManager.getClient();
+    const row = await prisma.ddtDocument.findFirst({
+      where: {
+        id: params.ddtDocumentId,
+        workspace_id: params.workspaceId,
+      },
+      include: {
+        document: {
+          select: {
+            id: true,
+          },
+        },
+        analysis_result: {
+          include: {
+            article_items: {
+              orderBy: {
+                id: "asc",
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!row?.document?.id) {
+      throw new AppError("Documento DDT non trovato.", "DDT_DOCUMENT_NOT_FOUND", 404);
+    }
+
+    const baseContext = await this.getDocumentChatContext({
+      workspaceId: params.workspaceId,
+      documentId: row.document.id,
+    });
+
+    return {
+      ...baseContext,
+      kind: "ddt_document",
+      ddtDocumentId: row.id,
+      ddtAnalysis: row.analysis_result
+        ? {
+            movementType: row.analysis_result.movement_type,
+            movementScope: row.analysis_result.movement_scope,
+            mainWarehouseAction: row.analysis_result.main_warehouse_action,
+            bollaNumber: row.analysis_result.bolla_number,
+            commessaReference: row.analysis_result.commessa_reference,
+            transferNote: row.analysis_result.transfer_note,
+            articleCount: row.analysis_result.article_count,
+            warehouseDelta: row.analysis_result.warehouse_delta,
+            summary: row.analysis_result.summary,
+            articleItems: row.analysis_result.article_items.map((item) => ({
+              articleType: item.article_type,
+              quantity: Number(item.quantity),
+              unit: item.unit,
+            })),
+          }
+        : null,
+    };
   }
 
   public async getProjectVersionQuotationContext(params: {
@@ -268,6 +370,73 @@ export class DocumentIntelligenceService {
     }
 
     return chunks;
+  }
+
+  private async ensureDocumentKnowledge(source: SourceDocumentRecord): Promise<KnowledgeDocumentEntity> {
+    const representationKey = this.isPdfDocument(source) ? "ocr_text" : "plain_text";
+    const existing = await this.repository.findKnowledgeDocumentByDocumentId(source.workspaceId, source.id, representationKey);
+    if (existing && existing.extractionStatus === "READY" && (existing.contentText?.trim() || existing.summaryText?.trim())) {
+      return existing;
+    }
+
+    return this.refreshDocumentKnowledge(source.workspaceId, source.id);
+  }
+
+  private async loadNormalizedSourceDocument(workspaceId: string, documentId: string): Promise<SourceDocumentRecord | null> {
+    const source = await this.repository.findSourceDocumentById(workspaceId, documentId);
+    if (!source) {
+      return null;
+    }
+
+    return this.normalizeSourceDocument(source);
+  }
+
+  private async normalizeSourceDocument(source: SourceDocumentRecord): Promise<SourceDocumentRecord> {
+    if (source.domainEntityType !== "DdtDocument" || source.domainEntityId?.trim()) {
+      return source;
+    }
+
+    const prisma = PrismaClientManager.getClient();
+    const ddtRow = await prisma.ddtDocument.findFirst({
+      where: {
+        workspace_id: source.workspaceId,
+        document_id: source.id,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!ddtRow?.id) {
+      return source;
+    }
+
+    await prisma.document.update({
+      where: {
+        id: source.id,
+      },
+      data: {
+        domain_entity_id: ddtRow.id,
+      },
+    });
+
+    return {
+      ...source,
+      domainEntityId: ddtRow.id,
+    };
+  }
+
+  private buildPreviewText(value: string | null): string | null {
+    if (!value) {
+      return null;
+    }
+
+    const normalized = value.replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      return null;
+    }
+
+    return normalized.slice(0, 6000);
   }
 
   private buildSummary(text: string): string {

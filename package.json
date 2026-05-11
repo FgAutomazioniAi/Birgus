@@ -12,6 +12,8 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:backfill:shipments": "tsx scripts/backfill-project-version-shipments.ts",
+    "db:sync:project-agent-prompts": "tsx scripts/sync-module-agent-prompts.ts",
+    "db:sync:module-agent-prompts": "tsx scripts/sync-module-agent-prompts.ts",
     "build:frontend": "npm --prefix frontend run build"
   },
   "dependencies": {
