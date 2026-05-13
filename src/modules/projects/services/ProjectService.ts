@@ -8,14 +8,26 @@ import { SelectDefaultVersionCommand } from "../dto/SelectDefaultVersionCommand.
 import { ProjectRepository } from "../repositories/ProjectRepository.js";
 import { CreateShipmentCommand } from "../../shipping/dto/CreateShipmentCommand.js";
 import { ShipmentService } from "../../shipping/services/ShipmentService.js";
+import { NotificationService } from "../../notifications/services/NotificationService.js";
+import { ModuleKey } from "../../../core/module-access/ModuleKey.js";
+import { AuditLogService } from "../../audit/services/AuditLogService.js";
 
 export class ProjectService {
   private readonly repository: ProjectRepository;
   private readonly shipmentService: ShipmentService | null;
+  private readonly notificationService: NotificationService | null;
+  private readonly auditLogService: AuditLogService | null;
 
-  public constructor(repository: ProjectRepository, shipmentService?: ShipmentService | null) {
+  public constructor(
+    repository: ProjectRepository,
+    shipmentService?: ShipmentService | null,
+    notificationService?: NotificationService | null,
+    auditLogService?: AuditLogService | null,
+  ) {
     this.repository = repository;
     this.shipmentService = shipmentService ?? null;
+    this.notificationService = notificationService ?? null;
+    this.auditLogService = auditLogService ?? null;
   }
 
   public async listProjects(workspaceId: string): Promise<ProjectEntity[]> {
@@ -32,6 +44,11 @@ export class ProjectService {
       projectName: command.projectName,
       ownerUserId: command.ownerUserId,
       statusKey: command.statusKey,
+      authorId: command.authorId,
+      revisionId: command.revisionId,
+      publisherName: command.publisherName,
+      publicationDate: command.publicationDate,
+      authorDate: command.authorDate,
     });
 
     await this.repository.linkProjectClient(command.workspaceId, project.id, command.clientId);
@@ -49,11 +66,34 @@ export class ProjectService {
       throw error;
     }
 
+    await this.notify(command.workspaceId, "Progetto creato", `Creato il progetto "${project.name}".`);
+    await this.auditLogService?.record({
+      workspaceId: command.workspaceId,
+      userId: command.actorUserId,
+      moduleKey: ModuleKey.PROJECT_MANAGEMENT,
+      action: "project.create",
+      entityType: "Project",
+      entityId: project.id,
+      payload: {
+        name: project.name,
+        clientId: command.clientId,
+        authorId: command.authorId,
+        revisionId: command.revisionId,
+      },
+    });
+
     return new ProjectEntity({
       id: project.id,
       workspaceId: project.workspaceId,
       name: project.name,
       statusKey: project.statusKey,
+      authorId: project.authorId,
+      authorName: project.authorName,
+      revisionId: project.revisionId,
+      revisionCode: project.revisionCode,
+      publisherName: project.publisherName,
+      publicationDate: project.publicationDate,
+      authorDate: project.authorDate,
       createdAt: project.createdAt,
       versionsCount: initialVersion ? 1 : 0,
     });
@@ -74,6 +114,12 @@ export class ProjectService {
     projectName: string;
     statusKey: string;
     clientId: string;
+    authorId: number | null;
+    revisionId: number | null;
+    publisherName: string;
+    publicationDate: Date | null;
+    authorDate: Date | null;
+    actorUserId?: string | null;
   }): Promise<ProjectEntity> {
     const projectName = params.projectName.trim().replace(/\s+/g, " ");
     if (projectName.length < 2) {
@@ -85,6 +131,11 @@ export class ProjectService {
       projectId: params.projectId,
       projectName,
       statusKey: params.statusKey,
+      authorId: params.authorId,
+      revisionId: params.revisionId,
+      publisherName: params.publisherName,
+      publicationDate: params.publicationDate,
+      authorDate: params.authorDate,
     });
 
     if (!updated) {
@@ -92,14 +143,34 @@ export class ProjectService {
     }
 
     await this.repository.setProjectPrimaryClient(params.workspaceId, params.projectId, params.clientId);
+    await this.notify(params.workspaceId, "Progetto aggiornato", `Aggiornato il progetto "${updated.name}".`);
+    await this.auditLogService?.record({
+      workspaceId: params.workspaceId,
+      userId: params.actorUserId ?? null,
+      moduleKey: ModuleKey.PROJECT_MANAGEMENT,
+      action: "project.update",
+      entityType: "Project",
+      entityId: updated.id,
+      payload: {
+        name: updated.name,
+        clientId: params.clientId,
+        authorId: params.authorId,
+        revisionId: params.revisionId,
+      },
+    });
 
     return new ProjectEntity({
       ...updated,
       clientId: params.clientId,
+      authorId: params.authorId,
+      revisionId: params.revisionId,
+      publisherName: params.publisherName,
+      publicationDate: params.publicationDate,
+      authorDate: params.authorDate,
     });
   }
 
-  public async deleteProject(workspaceId: string, projectId: string): Promise<void> {
+  public async deleteProject(workspaceId: string, projectId: string, actorUserId?: string | null): Promise<void> {
     const activeVersions = await this.repository.listVersions(workspaceId, projectId);
     const removed = await this.repository.softDeleteProject(workspaceId, projectId);
     if (!removed) {
@@ -109,6 +180,16 @@ export class ProjectService {
     await Promise.all(
       activeVersions.map((version) => this.shipmentService?.deleteShipmentForProjectVersion(workspaceId, version.id)),
     );
+    await this.notify(workspaceId, "Progetto archiviato", `Archiviato il progetto con ID ${projectId}.`);
+    await this.auditLogService?.record({
+      workspaceId,
+      userId: actorUserId ?? null,
+      moduleKey: ModuleKey.PROJECT_MANAGEMENT,
+      action: "project.delete",
+      entityType: "Project",
+      entityId: projectId,
+      payload: null,
+    });
   }
 
   public async listProjectVersions(workspaceId: string, projectId: string): Promise<ProjectVersionEntity[]> {
@@ -158,6 +239,21 @@ export class ProjectService {
       version.versionLabel,
     );
 
+    await this.notify(
+      command.workspaceId,
+      "Versione progetto creata",
+      `Creata la versione ${version.versionLabel.toUpperCase()} per il progetto ${project.name}.`,
+    );
+    await this.auditLogService?.record({
+      workspaceId: command.workspaceId,
+      userId: command.createdByUserId ?? null,
+      moduleKey: ModuleKey.PROJECT_MANAGEMENT,
+      action: "project_version.create",
+      entityType: "ProjectVersion",
+      entityId: null,
+      payload: { projectId: command.projectId, versionId: version.id, versionLabel: version.versionLabel },
+    });
+
     return refreshedVersion ?? version;
   }
 
@@ -174,6 +270,20 @@ export class ProjectService {
 
     await this.repository.clearDefaultVersionFlags(command.workspaceId, command.projectId);
     await this.repository.setDefaultVersion(target.id);
+    await this.notify(
+      command.workspaceId,
+      "Versione predefinita aggiornata",
+      `Impostata ${target.versionLabel.toUpperCase()} come versione predefinita.`,
+    );
+    await this.auditLogService?.record({
+      workspaceId: command.workspaceId,
+      userId: null,
+      moduleKey: ModuleKey.PROJECT_MANAGEMENT,
+      action: "project_version.set_default",
+      entityType: "Project",
+      entityId: command.projectId,
+      payload: { versionId: target.id, versionLabel: target.versionLabel },
+    });
 
     return new ProjectVersionEntity({
       ...target,
@@ -206,6 +316,21 @@ export class ProjectService {
         await this.repository.setDefaultVersion(fallback.id);
       }
     }
+
+    await this.notify(
+      command.workspaceId,
+      "Versione progetto archiviata",
+      `Archiviata la versione ${target.versionLabel.toUpperCase()} del progetto ${command.projectId}.`,
+    );
+    await this.auditLogService?.record({
+      workspaceId: command.workspaceId,
+      userId: null,
+      moduleKey: ModuleKey.PROJECT_MANAGEMENT,
+      action: "project_version.delete",
+      entityType: "ProjectVersion",
+      entityId: null,
+      payload: { projectId: command.projectId, versionId: target.id, versionLabel: target.versionLabel },
+    });
   }
 
   private async ensureInitialVersion(
@@ -279,5 +404,23 @@ export class ProjectService {
         createdByUserId,
       }),
     );
+  }
+
+  private async notify(workspaceId: string, title: string, message: string): Promise<void> {
+    if (!this.notificationService) {
+      return;
+    }
+
+    try {
+      await this.notificationService.createInfo({
+        workspaceId,
+        userId: null,
+        moduleKey: ModuleKey.PROJECT_MANAGEMENT,
+        title,
+        message,
+      });
+    } catch (error) {
+      console.error("[ProjectService] Unable to create notification", { workspaceId, title, message, error });
+    }
   }
 }

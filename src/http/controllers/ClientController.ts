@@ -13,6 +13,7 @@ import { AuthenticatedRequest } from "../types/AuthenticatedRequest.js";
 
 const createClientSchema = z.object({
   name: z.string().min(2),
+  companyId: z.number().int().positive().nullable().optional(),
   email: z.string().trim().optional().default(""),
   phone: z.string().trim().optional().default(""),
   notes: z.string().trim().optional().default(""),
@@ -20,6 +21,7 @@ const createClientSchema = z.object({
 
 const updateClientSchema = z.object({
   name: z.string().min(2),
+  companyId: z.number().int().positive().nullable().optional(),
   email: z.string().trim().optional().default(""),
   phone: z.string().trim().optional().default(""),
   notes: z.string().trim().optional().default(""),
@@ -46,11 +48,13 @@ export class ClientController {
 
       reply.code(200).send(
         clients.map((item) => ({
-          id: item.id,
-          name: item.name,
-          email: item.email,
-          phone: item.phone,
-          notes: item.notes,
+        id: item.id,
+        name: item.name,
+        companyId: item.companyId,
+        companyName: item.companyName,
+        email: item.email,
+        phone: item.phone,
+        notes: item.notes,
         })),
       );
     } catch (error) {
@@ -70,6 +74,8 @@ export class ClientController {
       reply.code(200).send({
         id: client.id,
         name: client.name,
+        companyId: client.companyId,
+        companyName: client.companyName,
         email: client.email,
         phone: client.phone,
         notes: client.notes,
@@ -90,15 +96,19 @@ export class ClientController {
         new CreateClientCommand({
           workspaceId,
           name: body.name,
+          companyId: body.companyId ?? null,
           email: body.email,
           phone: body.phone,
           notes: body.notes,
+          actorUserId: request.requestContext.workspace.userId,
         }),
       );
 
       reply.code(201).send({
         id: created.id,
         name: created.name,
+        companyId: created.companyId,
+        companyName: created.companyName,
         email: created.email,
         phone: created.phone,
         notes: created.notes,
@@ -121,15 +131,19 @@ export class ClientController {
           workspaceId,
           clientId,
           name: body.name,
+          companyId: body.companyId ?? null,
           email: body.email,
           phone: body.phone,
           notes: body.notes,
+          actorUserId: request.requestContext.workspace.userId,
         }),
       );
 
       reply.code(200).send({
         id: updated.id,
         name: updated.name,
+        companyId: updated.companyId,
+        companyName: updated.companyName,
         email: updated.email,
         phone: updated.phone,
         notes: updated.notes,
@@ -146,7 +160,7 @@ export class ClientController {
 
       const workspaceId = request.requestContext.workspace.workspaceId;
       const clientId = this.getClientId(request);
-      await this.service.delete(workspaceId, clientId);
+      await this.service.delete(workspaceId, clientId, request.requestContext.workspace.userId);
 
       reply.code(200).send({ ok: true, id: clientId });
     } catch (error) {

@@ -22,6 +22,22 @@ const updateShipmentSpecificationSchema = z.object({
   calculationPayload: z.unknown(),
 });
 
+const replaceShipmentItemsSchema = z.object({
+  items: z.array(z.object({
+    sku: z.string().nullable().optional(),
+    description: z.string().min(1),
+    quantity: z.number().positive(),
+    unit: z.string().nullable().optional(),
+    weightKg: z.number().positive().nullable().optional(),
+  })),
+});
+
+const addShipmentEventSchema = z.object({
+  statusKey: z.string().min(1).nullable().optional(),
+  eventType: z.string().min(1),
+  payload: z.unknown().nullable().optional(),
+});
+
 export class ShipmentController {
   private readonly service: ShipmentService;
   private readonly moduleGuard: ModuleGuard;
@@ -120,6 +136,8 @@ export class ShipmentController {
               updatedAt: shipment.specificationUpdatedAt,
             }
           : null,
+        items: shipment.items,
+        events: shipment.events,
         createdAt: shipment.createdAt,
       });
     } catch (error) {
@@ -145,6 +163,62 @@ export class ShipmentController {
       reply.code(200).send({
         id: updated.id,
         specificationUpdatedAt: updated.specificationUpdatedAt,
+      });
+    } catch (error) {
+      this.sendError(reply, error);
+    }
+  };
+
+  public replaceShipmentItems = async (request: AuthenticatedRequest, reply: FastifyReply): Promise<void> => {
+    try {
+      await this.moduleGuard.requireModule(request.requestContext, ModuleKey.SHIPMENT_MANAGEMENT);
+      await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.SHIPMENTS_WRITE);
+
+      const body = replaceShipmentItemsSchema.parse(request.body);
+      const workspaceId = request.requestContext.workspace.workspaceId;
+      const shipmentId = this.getShipmentId(request);
+      const updated = await this.service.replaceShipmentItems({
+        workspaceId,
+        shipmentId,
+        items: body.items.map((item) => ({
+          sku: item.sku ?? null,
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit ?? null,
+          weightKg: item.weightKg ?? null,
+        })),
+      });
+
+      reply.code(200).send({
+        id: updated.id,
+        items: updated.items,
+      });
+    } catch (error) {
+      this.sendError(reply, error);
+    }
+  };
+
+  public addShipmentEvent = async (request: AuthenticatedRequest, reply: FastifyReply): Promise<void> => {
+    try {
+      await this.moduleGuard.requireModule(request.requestContext, ModuleKey.SHIPMENT_MANAGEMENT);
+      await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.SHIPMENTS_WRITE);
+
+      const body = addShipmentEventSchema.parse(request.body);
+      const workspaceId = request.requestContext.workspace.workspaceId;
+      const userId = request.requestContext.workspace.userId;
+      const shipmentId = this.getShipmentId(request);
+      const updated = await this.service.addShipmentEvent({
+        workspaceId,
+        shipmentId,
+        statusKey: body.statusKey ?? null,
+        eventType: body.eventType,
+        payload: body.payload ?? null,
+        actorUserId: userId,
+      });
+
+      reply.code(201).send({
+        id: updated.id,
+        events: updated.events,
       });
     } catch (error) {
       this.sendError(reply, error);

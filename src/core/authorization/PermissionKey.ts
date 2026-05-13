@@ -29,4 +29,5 @@ export class PermissionKey {
 
   public static readonly NOTIFICATIONS_READ = "notifications.read";
   public static readonly NOTIFICATIONS_WRITE = "notifications.write";
+  public static readonly AUDIT_READ = "audit.read";
 }

@@ -18,6 +18,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   let currentUserName = "Utente";
   let currentUserId = "";
+  let currentUserRole = "Operatore";
   let enabledModuleKeys: string[] = [];
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/auth/session`, {
@@ -31,10 +32,22 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       redirect(APP_ROUTES.login);
     }
 
-    const payload = (await response.json()) as { userId?: string; user?: { fullName?: string } };
+    const payload = (await response.json()) as {
+      userId?: string;
+      user?: { fullName?: string; roleKeys?: string[] };
+    };
     const fullName = payload.user?.fullName?.trim();
     if (fullName && fullName.length > 0) {
       currentUserName = fullName;
+    }
+
+    const roleKey = payload.user?.roleKeys?.[0]?.trim().toLowerCase();
+    if (roleKey === "superadmin") {
+      currentUserRole = "Superadmin";
+    } else if (roleKey === "admin") {
+      currentUserRole = "Admin";
+    } else if (roleKey === "operator") {
+      currentUserRole = "Operatore";
     }
 
     currentUserId = payload.userId?.trim() ?? "";
@@ -62,7 +75,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AppShell currentUser={{ id: currentUserId, nome: currentUserName, ruolo: "Operatore", enabledModuleKeys }}>
+    <AppShell currentUser={{ id: currentUserId, nome: currentUserName, ruolo: currentUserRole, enabledModuleKeys }}>
       {children}
     </AppShell>
   );

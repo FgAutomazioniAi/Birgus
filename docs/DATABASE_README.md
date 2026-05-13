@@ -197,6 +197,20 @@ Connessioni:
 Descrizione:
 - permessi (azioni)
 
+Valori seed principali correnti:
+- `modules.read`, `modules.configure`
+- `projects.read`, `projects.write`
+- `agents.read`, `agents.write`
+- `clients.read`, `clients.write`
+- `documents.read`, `documents.write`
+- `shipments.read`, `shipments.write`
+- `ddt.read`, `ddt.process`
+- `knowledge.read`, `knowledge.write`
+- `assistant.read`, `assistant.write`, `assistant.configure`
+- `workflows.read`, `workflows.write`, `workflows.configure`
+- `notifications.read`, `notifications.write`
+- `audit.read`
+
 Connessioni:
 - 1:N con `role_permissions`
 
@@ -267,6 +281,18 @@ Vincoli:
 Descrizione:
 - catalogo moduli funzionali (es. project_management, ddt_processing, agent_management, document_intelligence, conversational_assistant, ...)
 
+Valori seed principali correnti:
+- `project_management`
+- `agent_management`
+- `shipment_management`
+- `ddt_processing`
+- `document_archive`
+- `document_intelligence`
+- `conversational_assistant`
+- `workflow_management`
+- `notification_center`
+- `audit_center`
+
 Colonne chiave:
 - `key` (univoco)
 - `name`, `description`
@@ -281,6 +307,13 @@ Connessioni:
 ### Tabella `module_dependencies`
 Descrizione:
 - dipendenze tra moduli
+
+Dipendenze seed principali correnti:
+- `agent_management -> project_management`
+- `conversational_assistant -> document_intelligence`
+- `workflow_management -> agent_management`
+- `workflow_management -> document_intelligence`
+- `audit_center -> notification_center`
 
 Connessioni:
 - N:1 con `modules` (modulo)
@@ -519,6 +552,12 @@ Vincoli:
 Note:
 - `handler_key` descrive il punto logico di esecuzione reale del tool
 - `runtime_kind` distingue tool backend, Python e orchestratore Next
+- tool seed principali:
+  - `document_intelligence:ocr_engine_extract_text`
+  - `document_intelligence:knowledge_refresh_document`
+  - `document_intelligence:semantic_knowledge_search`
+  - `project_management:quotation_docx_builder`
+  - `project_management:quotation_mail_delivery`
 
 ### Tabella `module_workflows`
 Descrizione:
@@ -544,6 +583,11 @@ Connessioni:
 
 Vincoli:
 - `@@unique([workspace_id, module_id, key])`
+
+Note:
+- workflow seed principali:
+  - `ddt_processing:ddt_reader_pipeline`
+  - `project_management:quotation_document_pipeline`
 
 ### Tabella `module_workflow_nodes`
 Descrizione:
@@ -998,6 +1042,10 @@ Descrizione:
 Colonne chiave:
 - `action`, `entity_type`, `entity_id`
 - `payload`, `ip_address`, `user_agent`
+
+Note:
+- traccia eventi backend rilevanti a livello workspace
+- la consultazione applicativa e' pensata tramite il modulo `audit_center`
 
 Connessioni:
 - N:1 con `workspaces`

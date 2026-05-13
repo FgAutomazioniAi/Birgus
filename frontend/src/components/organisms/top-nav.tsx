@@ -45,6 +45,7 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const notificationRef = useRef<HTMLDivElement | null>(null);
+  const notificationsEnabled = currentUser.enabledModuleKeys.includes("notification_center");
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
@@ -86,15 +87,26 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
   };
 
   useEffect(() => {
+    if (!notificationsEnabled) {
+      setShowNotifications(false);
+      setNotifications([]);
+      setIsNotificationsLoading(false);
+      return;
+    }
+
     void loadNotifications();
     const interval = window.setInterval(() => {
       void loadNotifications({ silent: true });
     }, 8000);
 
     return () => window.clearInterval(interval);
-  }, []);
+  }, [notificationsEnabled]);
 
   const handleNotificationClick = () => {
+    if (!notificationsEnabled) {
+      return;
+    }
+
     const nextValue = !showNotifications;
     setShowNotifications(nextValue);
     if (nextValue) {
@@ -158,49 +170,53 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
         </div>
 
         <div className="flex items-center gap-2 lg:gap-4">
-          <div className="relative" ref={notificationRef}>
-            <IconButton className="relative" onClick={handleNotificationClick}>
-              <Bell size={20} />
-              {hasUnreadNotifications && (
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full border-2 border-bg-surface bg-brand-accent" />
-              )}
-            </IconButton>
+          {notificationsEnabled ? (
+            <>
+              <div className="relative" ref={notificationRef}>
+                <IconButton className="relative" onClick={handleNotificationClick}>
+                  <Bell size={20} />
+                  {hasUnreadNotifications && (
+                    <span className="absolute right-2 top-2 h-2 w-2 rounded-full border-2 border-bg-surface bg-brand-accent" />
+                  )}
+                </IconButton>
 
-            {showNotifications && (
-              <div className="absolute right-0 top-12 max-h-[420px] w-[360px] overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-4 shadow-elevated">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">Comunicazioni</p>
-                  <button
-                    type="button"
-                    onClick={() => void handleClearNotifications()}
-                    className="rounded-md border border-border-default px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted transition-colors hover:bg-bg-subtle hover:text-text-secondary"
-                  >
-                    Pulisci
-                  </button>
-                </div>
+                {showNotifications && (
+                  <div className="absolute right-0 top-12 max-h-[420px] w-[360px] overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-4 shadow-elevated">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">Comunicazioni</p>
+                      <button
+                        type="button"
+                        onClick={() => void handleClearNotifications()}
+                        className="rounded-md border border-border-default px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted transition-colors hover:bg-bg-subtle hover:text-text-secondary"
+                      >
+                        Pulisci
+                      </button>
+                    </div>
 
-                {isNotificationsLoading ? (
-                  <p className="mt-3 text-sm text-text-muted">Caricamento comunicazioni...</p>
-                ) : notifications.length === 0 ? (
-                  <p className="mt-3 text-sm text-text-muted">Hai zero comunicazioni.</p>
-                ) : (
-                  <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
-                    {notifications.map((notification) => (
-                      <div key={notification.id} className="rounded-lg border border-border-subtle bg-bg-muted px-3 py-2">
-                        <p className="text-xs font-semibold text-text-primary">{notification.title}</p>
-                        <p className="mt-1 text-xs leading-5 text-text-secondary">{notification.message}</p>
-                        <p className="mt-1 text-[10px] uppercase tracking-wide text-text-muted">
-                          {formatNotificationDate(notification.createdAt)}
-                        </p>
+                    {isNotificationsLoading ? (
+                      <p className="mt-3 text-sm text-text-muted">Caricamento comunicazioni...</p>
+                    ) : notifications.length === 0 ? (
+                      <p className="mt-3 text-sm text-text-muted">Hai zero comunicazioni.</p>
+                    ) : (
+                      <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
+                        {notifications.map((notification) => (
+                          <div key={notification.id} className="rounded-lg border border-border-subtle bg-bg-muted px-3 py-2">
+                            <p className="text-xs font-semibold text-text-primary">{notification.title}</p>
+                            <p className="mt-1 text-xs leading-5 text-text-secondary">{notification.message}</p>
+                            <p className="mt-1 text-[10px] uppercase tracking-wide text-text-muted">
+                              {formatNotificationDate(notification.createdAt)}
+                            </p>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               </div>
-            )}
-          </div>
 
-          <div className="mx-1 hidden h-8 w-px bg-border-default sm:block" />
+              <div className="mx-1 hidden h-8 w-px bg-border-default sm:block" />
+            </>
+          ) : null}
 
           <button onClick={() => void handleLogout()} disabled={isLoggingOut} title="Esci">
             <UserChip name={userName} role={currentUser.ruolo} />

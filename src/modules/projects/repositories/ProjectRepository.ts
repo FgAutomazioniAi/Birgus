@@ -9,6 +9,11 @@ export interface ProjectRepository {
     projectId: string;
     projectName: string;
     statusKey: string;
+    authorId: number | null;
+    revisionId: number | null;
+    publisherName: string;
+    publicationDate: Date | null;
+    authorDate: Date | null;
   }): Promise<ProjectEntity | null>;
   setProjectPrimaryClient(workspaceId: string, projectId: string, clientId: string): Promise<void>;
   softDeleteProject(workspaceId: string, projectId: string): Promise<boolean>;
@@ -17,6 +22,11 @@ export interface ProjectRepository {
     projectName: string;
     ownerUserId: string;
     statusKey: string;
+    authorId: number | null;
+    revisionId: number | null;
+    publisherName: string;
+    publicationDate: Date | null;
+    authorDate: Date | null;
   }): Promise<ProjectEntity>;
   linkProjectClient(workspaceId: string, projectId: string, clientId: string): Promise<void>;
 

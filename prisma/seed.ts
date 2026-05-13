@@ -15,6 +15,7 @@ const MODULE_KEYS = [
   "conversational_assistant",
   "workflow_management",
   "notification_center",
+  "audit_center",
 ] as const;
 
 const ROLE_KEYS = ["superadmin", "admin", "operator"] as const;
@@ -44,11 +45,37 @@ const PERMISSION_KEYS = [
   "workflows.configure",
   "notifications.read",
   "notifications.write",
+  "audit.read",
 ] as const;
 
 const ROLE_PERMISSION_MATRIX: Record<(typeof ROLE_KEYS)[number], readonly (typeof PERMISSION_KEYS)[number][]> = {
   superadmin: PERMISSION_KEYS,
-  admin: PERMISSION_KEYS,
+  admin: [
+    "modules.read",
+    "modules.configure",
+    "projects.read",
+    "projects.write",
+    "agents.read",
+    "agents.write",
+    "clients.read",
+    "clients.write",
+    "documents.read",
+    "documents.write",
+    "shipments.read",
+    "shipments.write",
+    "ddt.read",
+    "ddt.process",
+    "knowledge.read",
+    "knowledge.write",
+    "assistant.read",
+    "assistant.write",
+    "assistant.configure",
+    "workflows.read",
+    "workflows.write",
+    "workflows.configure",
+    "notifications.read",
+    "notifications.write",
+  ],
   operator: [
     "modules.read",
     "projects.read",
@@ -226,8 +253,10 @@ async function main() {
   }
 
   const superadminRole = roleByKey.get("superadmin");
-  if (!superadminRole) {
-    throw new Error("Role 'superadmin' not found after seed role creation.");
+  const adminRole = roleByKey.get("admin");
+  const operatorRole = roleByKey.get("operator");
+  if (!superadminRole || !adminRole || !operatorRole) {
+    throw new Error("Required roles not found after seed role creation.");
   }
 
   for (const moduleKey of MODULE_KEYS) {
@@ -239,6 +268,40 @@ async function main() {
         name: moduleKey,
         is_active: true,
       },
+    });
+  }
+
+  const deprecatedApiViewerModule = await prisma.module.findUnique({
+    where: { key: "api_viewer" },
+    select: { id: true },
+  });
+
+  if (deprecatedApiViewerModule) {
+    await prisma.userModuleOverride.deleteMany({
+      where: { module_id: deprecatedApiViewerModule.id },
+    });
+    await prisma.workspaceModule.deleteMany({
+      where: { module_id: deprecatedApiViewerModule.id },
+    });
+    await prisma.moduleDependency.deleteMany({
+      where: {
+        OR: [
+          { module_id: deprecatedApiViewerModule.id },
+          { depends_on_module_id: deprecatedApiViewerModule.id },
+        ],
+      },
+    });
+    await prisma.moduleAgent.deleteMany({
+      where: { module_id: deprecatedApiViewerModule.id },
+    });
+    await prisma.moduleTool.deleteMany({
+      where: { module_id: deprecatedApiViewerModule.id },
+    });
+    await prisma.moduleWorkflow.deleteMany({
+      where: { module_id: deprecatedApiViewerModule.id },
+    });
+    await prisma.module.delete({
+      where: { id: deprecatedApiViewerModule.id },
     });
   }
 
@@ -269,6 +332,8 @@ async function main() {
   const documentIntelligenceModule = moduleByKey.get("document_intelligence");
   const conversationalAssistantModule = moduleByKey.get("conversational_assistant");
   const workflowManagementModule = moduleByKey.get("workflow_management");
+  const notificationCenterModule = moduleByKey.get("notification_center");
+  const auditCenterModule = moduleByKey.get("audit_center");
 
   if (projectManagementModule && agentManagementModule) {
     await prisma.moduleDependency.upsert({
@@ -346,6 +411,22 @@ async function main() {
       create: {
         module_id: workflowManagementModule.id,
         depends_on_module_id: documentIntelligenceModule.id,
+      },
+    });
+  }
+
+  if (auditCenterModule && notificationCenterModule) {
+    await prisma.moduleDependency.upsert({
+      where: {
+        module_id_depends_on_module_id: {
+          module_id: auditCenterModule.id,
+          depends_on_module_id: notificationCenterModule.id,
+        },
+      },
+      update: {},
+      create: {
+        module_id: auditCenterModule.id,
+        depends_on_module_id: notificationCenterModule.id,
       },
     });
   }
@@ -431,153 +512,270 @@ async function main() {
     });
   }
 
-  const adminEmail = "superuser@birgus.it";
-  const adminPasswordHash = await hashPassword("admin");
-
-  const adminUser = await prisma.user.upsert({
-    where: { email: adminEmail },
-    update: {
-      first_name: "Super",
-      last_name: "Admin",
-      password_hash: adminPasswordHash,
-      is_active: true,
+  const accountDefinitions = [
+    {
+      email: "samuel.m@fgautomazioni.it",
+      firstName: "Samuel",
+      lastName: "M",
+      roleKey: "superadmin",
+      roleId: superadminRole.id,
     },
-    create: {
-      email: adminEmail,
-      first_name: "Super",
-      last_name: "Admin",
-      password_hash: adminPasswordHash,
-      is_active: true,
+    {
+      email: "admin@birgus.it",
+      firstName: "Birgus",
+      lastName: "Admin",
+      roleKey: "admin",
+      roleId: adminRole.id,
     },
-  });
+    {
+      email: "guest@birgus.it",
+      firstName: "Birgus",
+      lastName: "Guest",
+      roleKey: "operator",
+      roleId: operatorRole.id,
+    },
+  ] as const;
 
-  await prisma.workspaceMembership.upsert({
+  const desiredEmails = accountDefinitions.map((item) => item.email);
+  const staleUsers = await prisma.user.findMany({
     where: {
-      workspace_id_user_id: {
-        workspace_id: workspace.id,
-        user_id: adminUser.id,
+      email: {
+        notIn: desiredEmails,
       },
     },
-    update: {
-      status: "ACTIVE",
-    },
-    create: {
-      workspace_id: workspace.id,
-      user_id: adminUser.id,
-      status: "ACTIVE",
+    select: {
+      id: true,
     },
   });
 
-  await prisma.userWorkspaceRole.upsert({
-    where: {
-      workspace_id_user_id_role_id: {
+  const staleUserIds = staleUsers.map((item) => item.id);
+  if (staleUserIds.length > 0) {
+    await prisma.userModuleOverride.deleteMany({
+      where: {
+        user_id: {
+          in: staleUserIds,
+        },
+      },
+    });
+    await prisma.userWorkspaceRole.deleteMany({
+      where: {
+        user_id: {
+          in: staleUserIds,
+        },
+      },
+    });
+    await prisma.workspaceMembership.deleteMany({
+      where: {
+        user_id: {
+          in: staleUserIds,
+        },
+      },
+    });
+    await prisma.userPreference.deleteMany({
+      where: {
+        user_id: {
+          in: staleUserIds,
+        },
+      },
+    });
+    await prisma.user.deleteMany({
+      where: {
+        id: {
+          in: staleUserIds,
+        },
+      },
+    });
+  }
+
+  const seededUsers = new Map<string, { id: string; email: string; roleKey: string }>();
+  for (const account of accountDefinitions) {
+    const passwordHash = await hashPassword("admin");
+    const user = await prisma.user.upsert({
+      where: { email: account.email },
+      update: {
+        first_name: account.firstName,
+        last_name: account.lastName,
+        password_hash: passwordHash,
+        is_active: true,
+      },
+      create: {
+        email: account.email,
+        first_name: account.firstName,
+        last_name: account.lastName,
+        password_hash: passwordHash,
+        is_active: true,
+      },
+    });
+
+    await prisma.workspaceMembership.upsert({
+      where: {
+        workspace_id_user_id: {
+          workspace_id: workspace.id,
+          user_id: user.id,
+        },
+      },
+      update: {
+        status: "ACTIVE",
+      },
+      create: {
         workspace_id: workspace.id,
-        user_id: adminUser.id,
-        role_id: superadminRole.id,
+        user_id: user.id,
+        status: "ACTIVE",
+      },
+    });
+
+    await prisma.userWorkspaceRole.deleteMany({
+      where: {
+        workspace_id: workspace.id,
+        user_id: user.id,
+      },
+    });
+
+    await prisma.userWorkspaceRole.create({
+      data: {
+        workspace_id: workspace.id,
+        user_id: user.id,
+        role_id: account.roleId,
+      },
+    });
+
+    await prisma.userPreference.upsert({
+      where: {
+        user_id_workspace_id: {
+          user_id: user.id,
+          workspace_id: workspace.id,
+        },
+      },
+      update: {
+        palette_id: "predefinito",
+        language_code: "it",
+      },
+      create: {
+        user_id: user.id,
+        workspace_id: workspace.id,
+        palette_id: "predefinito",
+        language_code: "it",
+        rows_projects: 20,
+        rows_clients: 20,
+      },
+    });
+
+    seededUsers.set(account.email, { id: user.id, email: user.email, roleKey: account.roleKey });
+  }
+
+  const samuelUser = seededUsers.get("samuel.m@fgautomazioni.it");
+  const adminUser = seededUsers.get("admin@birgus.it");
+  const guestUser = seededUsers.get("guest@birgus.it");
+  if (!samuelUser || !adminUser || !guestUser) {
+    throw new Error("Seeded users are incomplete.");
+  }
+
+  const desiredOverridesByUserId = new Map<string, Array<{ moduleId: number; mode: "ALLOW" | "DENY"; reason: string }>>();
+
+  const pushOverride = (userId: string, moduleId: number | undefined, mode: "ALLOW" | "DENY", reason: string) => {
+    if (!moduleId) {
+      return;
+    }
+
+    const current = desiredOverridesByUserId.get(userId) ?? [];
+    current.push({ moduleId, mode, reason });
+    desiredOverridesByUserId.set(userId, current);
+  };
+
+  const documentIntelligenceModuleId = documentIntelligenceModule?.id;
+  const agentManagementModuleId = agentManagementModule?.id;
+  const workflowManagementModuleId = workflowManagementModule?.id;
+  const auditCenterModuleId = auditCenterModule?.id;
+  pushOverride(
+    adminUser.id,
+    auditCenterModuleId,
+    "DENY",
+    "Il centro audit resta riservato al superadmin.",
+  );
+
+  pushOverride(
+    guestUser.id,
+    documentIntelligenceModuleId,
+    "DENY",
+    "L'operatore non vede il modulo di document intelligence.",
+  );
+  pushOverride(
+    guestUser.id,
+    agentManagementModuleId,
+    "DENY",
+    "L'operatore non vede il modulo agenti.",
+  );
+  pushOverride(
+    guestUser.id,
+    workflowManagementModuleId,
+    "DENY",
+    "L'operatore non vede il modulo workflow.",
+  );
+  pushOverride(
+    guestUser.id,
+    auditCenterModuleId,
+    "DENY",
+    "Il centro audit resta riservato al superadmin.",
+  );
+
+  const desiredOverrideKeys = new Set<string>();
+  for (const [userId, entries] of desiredOverridesByUserId.entries()) {
+    for (const entry of entries) {
+      desiredOverrideKeys.add(`${userId}:${entry.moduleId}`);
+      await prisma.userModuleOverride.upsert({
+        where: {
+          workspace_id_user_id_module_id: {
+            workspace_id: workspace.id,
+            user_id: userId,
+            module_id: entry.moduleId,
+          },
+        },
+        update: {
+          mode: entry.mode,
+          reason: entry.reason,
+          configured_by_user_id: samuelUser.id,
+          configured_at: new Date(),
+        },
+        create: {
+          workspace_id: workspace.id,
+          user_id: userId,
+          module_id: entry.moduleId,
+          mode: entry.mode,
+          reason: entry.reason,
+          configured_by_user_id: samuelUser.id,
+        },
+      });
+    }
+  }
+
+  const existingOverrides = await prisma.userModuleOverride.findMany({
+    where: {
+      workspace_id: workspace.id,
+      user_id: {
+        in: [samuelUser.id, adminUser.id, guestUser.id],
       },
     },
-    update: {},
-    create: {
-      workspace_id: workspace.id,
-      user_id: adminUser.id,
-      role_id: superadminRole.id,
+    select: {
+      user_id: true,
+      module_id: true,
     },
   });
 
-  await prisma.userPreference.upsert({
-    where: {
-      user_id_workspace_id: {
-        user_id: adminUser.id,
-        workspace_id: workspace.id,
+  const staleOverrideConditions = existingOverrides
+    .filter((item) => !desiredOverrideKeys.has(`${item.user_id}:${item.module_id}`))
+    .map((item) => ({
+      workspace_id: workspace.id,
+      user_id: item.user_id,
+      module_id: item.module_id,
+    }));
+
+  if (staleOverrideConditions.length > 0) {
+    await prisma.userModuleOverride.deleteMany({
+      where: {
+        OR: staleOverrideConditions,
       },
-    },
-    update: {
-      palette_id: "predefinito",
-      language_code: "it",
-    },
-    create: {
-      user_id: adminUser.id,
-      workspace_id: workspace.id,
-      palette_id: "predefinito",
-      language_code: "it",
-      rows_projects: 20,
-      rows_clients: 20,
-    },
-  });
-
-  const samuelEmail = "samuel.m@fgautomazioni.it";
-  const samuelPasswordHash = await hashPassword("admin");
-
-  const samuelUser = await prisma.user.upsert({
-    where: { email: samuelEmail },
-    update: {
-      first_name: "Samuel",
-      last_name: "M",
-      password_hash: samuelPasswordHash,
-      is_active: true,
-    },
-    create: {
-      email: samuelEmail,
-      first_name: "Samuel",
-      last_name: "M",
-      password_hash: samuelPasswordHash,
-      is_active: true,
-    },
-  });
-
-  await prisma.workspaceMembership.upsert({
-    where: {
-      workspace_id_user_id: {
-        workspace_id: workspace.id,
-        user_id: samuelUser.id,
-      },
-    },
-    update: {
-      status: "ACTIVE",
-    },
-    create: {
-      workspace_id: workspace.id,
-      user_id: samuelUser.id,
-      status: "ACTIVE",
-    },
-  });
-
-  await prisma.userWorkspaceRole.upsert({
-    where: {
-      workspace_id_user_id_role_id: {
-        workspace_id: workspace.id,
-        user_id: samuelUser.id,
-        role_id: superadminRole.id,
-      },
-    },
-    update: {},
-    create: {
-      workspace_id: workspace.id,
-      user_id: samuelUser.id,
-      role_id: superadminRole.id,
-    },
-  });
-
-  await prisma.userPreference.upsert({
-    where: {
-      user_id_workspace_id: {
-        user_id: samuelUser.id,
-        workspace_id: workspace.id,
-      },
-    },
-    update: {
-      palette_id: "predefinito",
-      language_code: "it",
-    },
-    create: {
-      user_id: samuelUser.id,
-      workspace_id: workspace.id,
-      palette_id: "predefinito",
-      language_code: "it",
-      rows_projects: 20,
-      rows_clients: 20,
-    },
-  });
+    });
+  }
 
   const moduleAgentByRef = new Map<string, { id: string; moduleId: number }>();
   for (const prompt of DEFAULT_MODULE_AGENT_PROMPTS) {
@@ -712,25 +910,28 @@ async function main() {
       name: "quotation_docx_builder",
       label: "Generatore DOCX preventivo",
       description: "Genera il file Word finale a partire dai dati strutturati del preventivo.",
-      runtimeKind: "BACKEND" as const,
-      handlerKey: "quotation_orchestrator.generate_docx",
+      runtimeKind: "PYTHON_MODULE" as const,
+      handlerKey: "docx_engine.build_quotation_docx",
       inputSchema: {
         type: "object",
-        required: ["projectId", "versionLabel"],
+        required: ["structured_data"],
         properties: {
-          projectId: { type: "string", format: "uuid" },
-          versionLabel: { type: "string" },
+          structured_data: { type: "object" },
+          file_name: { type: "string" },
         },
       },
       outputSchema: {
         type: "object",
         properties: {
-          documentId: { type: "string", format: "uuid" },
-          storagePath: { type: "string" },
+          file_name: { type: "string" },
+          size_bytes: { type: "integer" },
+          content_type: { type: "string" },
+          docx_base64: { type: "string" },
         },
       },
       configuration: {
-        outputKind: "quotation-docx",
+        module: "docx_engine",
+        action: "build_quotation_docx",
       },
     },
     {
@@ -738,26 +939,34 @@ async function main() {
       toolKey: "quotation_mail_delivery",
       name: "quotation_mail_delivery",
       label: "Invio mail preventivo",
-      description: "Invia il preventivo generato via backend SMTP con allegato DOCX.",
-      runtimeKind: "BACKEND" as const,
-      handlerKey: "quotation_orchestrator.send_email",
+      description: "Invia il preventivo generato tramite tool Python SMTP con allegato DOCX.",
+      runtimeKind: "PYTHON_MODULE" as const,
+      handlerKey: "mail_engine.send_quotation_email",
       inputSchema: {
         type: "object",
-        required: ["projectId", "versionLabel"],
+        required: ["to", "version_label", "file_name", "docx_base64"],
         properties: {
-          projectId: { type: "string", format: "uuid" },
-          versionLabel: { type: "string" },
+          to: { type: "string", format: "email" },
+          client_name: { type: "string" },
+          project_name: { type: "string" },
+          version_label: { type: "string" },
+          file_name: { type: "string" },
+          docx_base64: { type: "string" },
         },
       },
       outputSchema: {
         type: "object",
         properties: {
-          deliveryStatus: { type: "string" },
-          recipientEmail: { type: "string" },
+          to: { type: "string" },
+          version_label: { type: "string" },
+          file_name: { type: "string" },
+          size_bytes: { type: "integer" },
+          transport_result: {},
         },
       },
       configuration: {
-        provider: "smtp",
+        module: "mail_engine",
+        action: "send_quotation_email",
       },
     },
   ];
@@ -847,6 +1056,7 @@ async function main() {
           label: "PDF preventivo",
           positionX: 0,
           positionY: 80,
+          isRequired: true,
           inputKind: "pdf",
           configuration: {
             acceptedMimeTypes: ["application/pdf"],
@@ -859,6 +1069,7 @@ async function main() {
           label: "OCR preventivo",
           positionX: 260,
           positionY: 80,
+          isRequired: true,
           moduleToolRef: "document_intelligence:ocr_engine_extract_text",
           configuration: {
             stage: "ocr",
@@ -870,6 +1081,7 @@ async function main() {
           label: "Agente strutturazione preventivo",
           positionX: 520,
           positionY: 80,
+          isRequired: true,
           moduleAgentRef: "project_management:quotation_structuring_prompt",
           configuration: {
             purpose: "quotation_structuring",
@@ -881,6 +1093,7 @@ async function main() {
           label: "Genera DOCX",
           positionX: 780,
           positionY: 30,
+          isRequired: true,
           moduleToolRef: "project_management:quotation_docx_builder",
         },
         {
@@ -889,6 +1102,7 @@ async function main() {
           label: "Invia mail preventivo",
           positionX: 780,
           positionY: 150,
+          isRequired: false,
           moduleToolRef: "project_management:quotation_mail_delivery",
         },
         {
@@ -897,6 +1111,7 @@ async function main() {
           label: "Esito preventivo",
           positionX: 1040,
           positionY: 90,
+          isRequired: true,
           outputKind: "quotation_delivery",
           configuration: {
             persistenceTarget: "document_archive",
@@ -925,6 +1140,7 @@ async function main() {
           label: "PDF DDT",
           positionX: 0,
           positionY: 80,
+          isRequired: true,
           inputKind: "pdf",
           configuration: {
             acceptedMimeTypes: ["application/pdf"],
@@ -937,6 +1153,7 @@ async function main() {
           label: "OCR DDT",
           positionX: 250,
           positionY: 80,
+          isRequired: true,
           moduleToolRef: "document_intelligence:ocr_engine_extract_text",
         },
         {
@@ -945,6 +1162,7 @@ async function main() {
           label: "Agente analisi DDT",
           positionX: 500,
           positionY: 80,
+          isRequired: true,
           moduleAgentRef: "ddt_processing:ddt_analysis_prompt",
         },
         {
@@ -953,6 +1171,7 @@ async function main() {
           label: "Indicizza knowledge",
           positionX: 760,
           positionY: 80,
+          isRequired: true,
           moduleToolRef: "document_intelligence:knowledge_refresh_document",
         },
         {
@@ -961,6 +1180,7 @@ async function main() {
           label: "Esito analisi DDT",
           positionX: 1020,
           positionY: 80,
+          isRequired: true,
           outputKind: "ddt_analysis_result",
           configuration: {
             persistenceTarget: "ddt_processing",
@@ -1061,6 +1281,7 @@ async function main() {
               input_kind: "inputKind" in node ? node.inputKind ?? null : null,
               output_kind: "outputKind" in node ? node.outputKind ?? null : null,
               configuration: node.configuration ?? null,
+              is_required: "isRequired" in node ? node.isRequired ?? false : false,
               is_enabled: true,
             },
             select: {
@@ -1081,6 +1302,7 @@ async function main() {
               input_kind: "inputKind" in node ? node.inputKind ?? null : null,
               output_kind: "outputKind" in node ? node.outputKind ?? null : null,
               configuration: node.configuration ?? null,
+              is_required: "isRequired" in node ? node.isRequired ?? false : false,
               is_enabled: true,
             },
             select: {
@@ -1120,9 +1342,11 @@ async function main() {
   console.log("Seed completed:", {
     organization: organization.code,
     workspace: workspace.code,
-    adminEmail,
-    samuelEmail,
-    adminPassword: "admin",
+    users: accountDefinitions.map((item) => ({
+      email: item.email,
+      role: item.roleKey,
+      password: "admin",
+    })),
     modules: MODULE_KEYS.length,
   });
 }

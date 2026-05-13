@@ -58,6 +58,12 @@ services:
       GARAGE_S3_FORCE_PATH_STYLE: "${GARAGE_S3_FORCE_PATH_STYLE:-true}"
       OCR_ENGINE_LANG: "${OCR_ENGINE_LANG:-it}"
       PADDLEOCR_HOME: "/app/storage/paddleocr_cache"
+      SMTP_HOST: "${SMTP_HOST:?SMTP_HOST is required}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_SECURE: "${SMTP_SECURE:-false}"
+      SMTP_USER: "${SMTP_USER:?SMTP_USER is required}"
+      SMTP_PASS: "${SMTP_PASS:?SMTP_PASS is required}"
+      SMTP_FROM: "${SMTP_FROM:?SMTP_FROM is required}"
     depends_on:
       garage:
         condition: service_healthy

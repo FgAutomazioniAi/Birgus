@@ -789,6 +789,7 @@ model ModuleWorkflowNode {
   input_schema    Json?
   output_schema   Json?
   is_enabled      Boolean          @default(true)
+  is_required     Boolean          @default(false)
   created_at      DateTime         @default(now())
   updated_at      DateTime         @updatedAt
 
@@ -807,6 +808,7 @@ model ModuleWorkflowNode {
   @@index([module_tool_id])
   @@index([node_kind])
   @@index([is_enabled])
+  @@index([is_required])
   @@map("module_workflow_nodes")
 }
 

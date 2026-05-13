@@ -13,6 +13,12 @@ class Settings:
     garage_s3_force_path_style: bool
     paddle_ocr_home: str
     ocr_engine_lang: str
+    smtp_host: str
+    smtp_port: int
+    smtp_secure: bool
+    smtp_user: str
+    smtp_pass: str
+    smtp_from: str
 
     @staticmethod
     def from_env() -> "Settings":
@@ -24,4 +30,10 @@ class Settings:
             garage_s3_force_path_style=os.getenv("GARAGE_S3_FORCE_PATH_STYLE", "true").lower() in {"1", "true", "yes", "on"},
             paddle_ocr_home=os.getenv("PADDLEOCR_HOME", "/app/storage/paddleocr_cache"),
             ocr_engine_lang=os.getenv("OCR_ENGINE_LANG", "it"),
+            smtp_host=os.getenv("SMTP_HOST", ""),
+            smtp_port=int(os.getenv("SMTP_PORT", "587")),
+            smtp_secure=os.getenv("SMTP_SECURE", "false").lower() in {"1", "true", "yes", "on"},
+            smtp_user=os.getenv("SMTP_USER", ""),
+            smtp_pass=os.getenv("SMTP_PASS", ""),
+            smtp_from=os.getenv("SMTP_FROM", ""),
         )

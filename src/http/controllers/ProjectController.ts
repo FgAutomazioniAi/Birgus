@@ -18,6 +18,11 @@ const createProjectSchema = z.object({
   statusKey: z.string().min(1).optional(),
   status: z.string().min(1).optional(),
   clientId: z.string().uuid(),
+  authorId: z.number().int().positive().nullable().optional(),
+  revisionId: z.number().int().positive().nullable().optional(),
+  publisherName: z.string().trim().max(120).optional().default(""),
+  publicationDate: z.coerce.date().nullable().optional(),
+  authorDate: z.coerce.date().nullable().optional(),
 });
 
 const createVersionSchema = z.object({
@@ -36,6 +41,11 @@ const updateProjectSchema = z.object({
   statusKey: z.string().min(1).optional(),
   status: z.string().min(1).optional(),
   clientId: z.string().uuid(),
+  authorId: z.number().int().positive().nullable().optional(),
+  revisionId: z.number().int().positive().nullable().optional(),
+  publisherName: z.string().trim().max(120).optional().default(""),
+  publicationDate: z.coerce.date().nullable().optional(),
+  authorDate: z.coerce.date().nullable().optional(),
 });
 
 const deleteVersionBodySchema = z.object({
@@ -71,6 +81,13 @@ export class ProjectController {
           statusKey: item.statusKey,
           projectName: item.name,
           clientId: item.clientId,
+          authorId: item.authorId,
+          authorName: item.authorName,
+          revisionId: item.revisionId,
+          revisionCode: item.revisionCode,
+          publisherName: item.publisherName,
+          publicationDate: item.publicationDate,
+          authorDate: item.authorDate,
           createdAt: item.createdAt,
         })),
       );
@@ -96,6 +113,12 @@ export class ProjectController {
           statusKey,
           clientId: body.clientId,
           ownerUserId: userId,
+          authorId: body.authorId ?? null,
+          revisionId: body.revisionId ?? null,
+          publisherName: body.publisherName,
+          publicationDate: body.publicationDate ?? null,
+          authorDate: body.authorDate ?? null,
+          actorUserId: userId,
         }),
       );
 
@@ -106,6 +129,13 @@ export class ProjectController {
         statusKey: created.statusKey,
         status: created.statusKey,
         clientId: body.clientId,
+        authorId: created.authorId,
+        authorName: created.authorName,
+        revisionId: created.revisionId,
+        revisionCode: created.revisionCode,
+        publisherName: created.publisherName,
+        publicationDate: created.publicationDate,
+        authorDate: created.authorDate,
         versionsCount: created.versionsCount,
       });
     } catch (error) {
@@ -128,6 +158,13 @@ export class ProjectController {
         status: project.statusKey,
         statusKey: project.statusKey,
         clientId: project.clientId,
+        authorId: project.authorId,
+        authorName: project.authorName,
+        revisionId: project.revisionId,
+        revisionCode: project.revisionCode,
+        publisherName: project.publisherName,
+        publicationDate: project.publicationDate,
+        authorDate: project.authorDate,
       });
     } catch (error) {
       this.sendError(reply, error);
@@ -149,6 +186,12 @@ export class ProjectController {
         projectName: body.projectName,
         statusKey,
         clientId: body.clientId,
+        authorId: body.authorId ?? null,
+        revisionId: body.revisionId ?? null,
+        publisherName: body.publisherName,
+        publicationDate: body.publicationDate ?? null,
+        authorDate: body.authorDate ?? null,
+        actorUserId: request.requestContext.workspace.userId,
       });
 
       reply.code(200).send({
@@ -158,6 +201,13 @@ export class ProjectController {
         status: updated.statusKey,
         statusKey: updated.statusKey,
         clientId: updated.clientId,
+        authorId: updated.authorId,
+        authorName: updated.authorName,
+        revisionId: updated.revisionId,
+        revisionCode: updated.revisionCode,
+        publisherName: updated.publisherName,
+        publicationDate: updated.publicationDate,
+        authorDate: updated.authorDate,
       });
     } catch (error) {
       this.sendError(reply, error);
@@ -171,7 +221,7 @@ export class ProjectController {
 
       const workspaceId = request.requestContext.workspace.workspaceId;
       const projectId = this.getProjectId(request);
-      await this.service.deleteProject(workspaceId, projectId);
+      await this.service.deleteProject(workspaceId, projectId, request.requestContext.workspace.userId);
 
       reply.code(200).send({ ok: true, id: projectId });
     } catch (error) {

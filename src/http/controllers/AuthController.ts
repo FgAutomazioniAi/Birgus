@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import { AppError } from "../../core/errors/AppError.js";
+import { PrismaClientManager } from "../../database/PrismaClientManager.js";
 import { LoginCommand } from "../../modules/identity/dto/LoginCommand.js";
 import { AuthService } from "../../modules/identity/services/AuthService.js";
 import { PasswordResetService } from "../../modules/identity/services/PasswordResetService.js";
@@ -95,6 +96,11 @@ export class AuthController {
         throw new AppError("Invalid or expired session.", "AUTH_SESSION_INVALID", 401);
       }
 
+      const roleKeys = await this.listWorkspaceRoleKeys(
+        request.requestContext.workspace.workspaceId,
+        request.requestContext.workspace.userId,
+      );
+
       reply.code(200).send({
         ok: true,
         sessionId: request.requestContext.sessionId,
@@ -104,6 +110,7 @@ export class AuthController {
           id: session.userId,
           email: session.email,
           fullName: session.fullName,
+          roleKeys,
         },
       });
     } catch (error) {
@@ -160,6 +167,25 @@ export class AuthController {
   private getUserAgent(request: FastifyRequest): string | null {
     const value = request.headers["user-agent"];
     return typeof value === "string" && value.trim() ? value.trim() : null;
+  }
+
+  private async listWorkspaceRoleKeys(workspaceId: string, userId: string): Promise<string[]> {
+    const prisma = PrismaClientManager.getClient();
+    const rows = await prisma.userWorkspaceRole.findMany({
+      where: {
+        workspace_id: workspaceId,
+        user_id: userId,
+      },
+      select: {
+        role: {
+          select: {
+            key: true,
+          },
+        },
+      },
+    });
+
+    return rows.map((row) => row.role.key);
   }
 
   private sendError(reply: FastifyReply, error: unknown): void {

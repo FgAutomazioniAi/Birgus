@@ -17,6 +17,25 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
       return false;
     }
 
+    const override = await prisma.userModuleOverride.findFirst({
+      where: {
+        workspace_id: workspaceId,
+        user_id: userId,
+        module_id: moduleRecord.id,
+      },
+      select: {
+        mode: true,
+      },
+    });
+
+    if (override?.mode === "ALLOW") {
+      return true;
+    }
+
+    if (override?.mode === "DENY") {
+      return false;
+    }
+
     const workspaceModule = await prisma.workspaceModule.findFirst({
       where: {
         workspace_id: workspaceId,
@@ -31,22 +50,7 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
       return false;
     }
 
-    const override = await prisma.userModuleOverride.findFirst({
-      where: {
-        workspace_id: workspaceId,
-        user_id: userId,
-        module_id: moduleRecord.id,
-      },
-      select: {
-        mode: true,
-      },
-    });
-
-    if (!override) {
-      return true;
-    }
-
-    return override.mode === "ALLOW";
+    return true;
   }
 
   public async listWorkspaceModules(workspaceId: string): Promise<WorkspaceModuleState[]> {
@@ -105,7 +109,12 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
 
     return rows.map((row) => {
       const override = row.module.user_module_overrides[0]?.mode ?? null;
-      const effectiveEnabled = row.is_enabled && (override === null || override === "ALLOW");
+      const effectiveEnabled =
+        override === "ALLOW"
+          ? true
+          : override === "DENY"
+            ? false
+            : row.is_enabled;
 
       return new UserModuleState({
         moduleKey: row.module.key,

@@ -13,6 +13,22 @@ export class ShipmentEntity {
   public readonly specificationInput: unknown | null;
   public readonly specificationCalculation: unknown | null;
   public readonly specificationUpdatedAt: Date | null;
+  public readonly items: Array<{
+    id: number;
+    sku: string | null;
+    description: string;
+    quantity: number;
+    unit: string | null;
+    weightKg: number | null;
+  }>;
+  public readonly events: Array<{
+    id: number;
+    eventType: string;
+    statusKey: string | null;
+    payload: unknown | null;
+    actorUserId: string | null;
+    occurredAt: Date;
+  }>;
   public readonly createdAt: Date;
 
   public constructor(params: {
@@ -30,6 +46,22 @@ export class ShipmentEntity {
     specificationInput?: unknown | null;
     specificationCalculation?: unknown | null;
     specificationUpdatedAt?: Date | null;
+    items?: Array<{
+      id: number;
+      sku: string | null;
+      description: string;
+      quantity: number;
+      unit: string | null;
+      weightKg: number | null;
+    }>;
+    events?: Array<{
+      id: number;
+      eventType: string;
+      statusKey: string | null;
+      payload: unknown | null;
+      actorUserId: string | null;
+      occurredAt: Date;
+    }>;
     createdAt: Date;
   }) {
     this.id = params.id;
@@ -46,6 +78,8 @@ export class ShipmentEntity {
     this.specificationInput = params.specificationInput ?? null;
     this.specificationCalculation = params.specificationCalculation ?? null;
     this.specificationUpdatedAt = params.specificationUpdatedAt ?? null;
+    this.items = params.items ?? [];
+    this.events = params.events ?? [];
     this.createdAt = params.createdAt;
   }
 }

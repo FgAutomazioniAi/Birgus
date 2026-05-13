@@ -4,7 +4,7 @@ type JsonRecord = Record<string, unknown>;
 
 const backendBaseUrl = process.env.SMOKE_API_BASE_URL ?? "http://localhost:3000";
 const frontendBaseUrl = process.env.SMOKE_FRONTEND_BASE_URL ?? "http://localhost:3100";
-const loginEmail = process.env.SMOKE_LOGIN_EMAIL ?? "superuser@birgus.it";
+const loginEmail = process.env.SMOKE_LOGIN_EMAIL ?? "samuel.m@fgautomazioni.it";
 const loginPassword = process.env.SMOKE_LOGIN_PASSWORD ?? "admin";
 
 function url(base: string, path: string): string {
@@ -102,6 +102,10 @@ async function run(): Promise<void> {
   assert.equal(knowledgeSearch.status, 200, "knowledge search must be 200");
   assert.ok(Array.isArray(knowledgeSearch.body.hits), "knowledge search must return hits array");
 
+  const apiDocs = await requestJson(url(backendBaseUrl, "/documentation/json"));
+  assert.equal(apiDocs.status, 200, "/documentation/json must be 200");
+  assert.equal(typeof apiDocs.body.openapi, "string", "/documentation/json must expose an openapi string version");
+
   console.log("Smoke test passed.");
   console.log(
     JSON.stringify(
@@ -119,6 +123,7 @@ async function run(): Promise<void> {
           "GET /api/modules",
           "POST /api/assistant/sessions",
           "GET /api/knowledge/search",
+          "GET /documentation/json",
         ],
       },
       null,

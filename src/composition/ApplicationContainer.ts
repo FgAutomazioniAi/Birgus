@@ -5,8 +5,12 @@ import { WorkspaceMembershipPrismaReader } from "../database/WorkspaceMembership
 import { WorkspacePermissionPrismaReader } from "../database/WorkspacePermissionPrismaReader.js";
 import { PrismaClientRepository } from "../modules/clients/infra/PrismaClientRepository.js";
 import { ClientService } from "../modules/clients/services/ClientService.js";
+import { PrismaCompanyRepository } from "../modules/companies/infra/PrismaCompanyRepository.js";
+import { CompanyService } from "../modules/companies/services/CompanyService.js";
 import { PrismaModuleAgentRepository } from "../modules/agents/infra/PrismaModuleAgentRepository.js";
 import { ModuleAgentService } from "../modules/agents/services/ModuleAgentService.js";
+import { PrismaAuditLogRepository } from "../modules/audit/infra/PrismaAuditLogRepository.js";
+import { AuditLogService } from "../modules/audit/services/AuditLogService.js";
 import { PrismaAssistantSessionRepository } from "../modules/conversational-assistant/infra/PrismaAssistantSessionRepository.js";
 import { AssistantConversationService } from "../modules/conversational-assistant/services/AssistantConversationService.js";
 import { AssistantSessionService } from "../modules/conversational-assistant/services/AssistantSessionService.js";
@@ -14,11 +18,12 @@ import { AssistantToolAccessService } from "../modules/conversational-assistant/
 import { AssistantToolRegistry } from "../modules/conversational-assistant/services/AssistantToolRegistry.js";
 import { PrismaDdtProcessingRepository } from "../modules/ddt-processing/infra/PrismaDdtProcessingRepository.js";
 import { DdtProcessingService } from "../modules/ddt-processing/services/DdtProcessingService.js";
-import { LegacyDdtReaderService } from "../modules/ddt-processing/services/LegacyDdtReaderService.js";
+import { DdtReaderService } from "../modules/ddt-processing/services/DdtReaderService.js";
 import { NextOrchestratorDdtAnalyzer } from "../modules/ddt-processing/services/NextOrchestratorDdtAnalyzer.js";
 import { PrismaDocumentArchiveRepository } from "../modules/document-archive/infra/PrismaDocumentArchiveRepository.js";
 import { DocumentArchiveService } from "../modules/document-archive/services/DocumentArchiveService.js";
 import { DocumentIntelligenceService } from "../modules/document-intelligence/services/DocumentIntelligenceService.js";
+import { BackendPythonModulesClient } from "../modules/document-intelligence/services/BackendPythonModulesClient.js";
 import { PrismaAuthSessionRepository } from "../modules/identity/infra/PrismaAuthSessionRepository.js";
 import { PrismaPasswordResetCodeRepository } from "../modules/identity/infra/PrismaPasswordResetCodeRepository.js";
 import { PrismaUserAccountRepository } from "../modules/identity/infra/PrismaUserAccountRepository.js";
@@ -31,13 +36,17 @@ import { PrismaModuleAccessRepository } from "../modules/module-management/infra
 import { ModuleManagementService } from "../modules/module-management/services/ModuleManagementService.js";
 import { PrismaNotificationRepository } from "../modules/notifications/infra/PrismaNotificationRepository.js";
 import { NotificationService } from "../modules/notifications/services/NotificationService.js";
+import { PrismaProjectAuthorRepository } from "../modules/project-authors/infra/PrismaProjectAuthorRepository.js";
+import { ProjectAuthorService } from "../modules/project-authors/services/ProjectAuthorService.js";
 import { PrismaProjectRepository } from "../modules/projects/infra/PrismaProjectRepository.js";
 import { ProjectService } from "../modules/projects/services/ProjectService.js";
-import { LegacyQuotationOrchestratorService } from "../modules/quotation-orchestrator/services/LegacyQuotationOrchestratorService.js";
+import { PrismaProjectRevisionRepository } from "../modules/project-revisions/infra/PrismaProjectRevisionRepository.js";
+import { ProjectRevisionService } from "../modules/project-revisions/services/ProjectRevisionService.js";
+import { QuotationOrchestratorService } from "../modules/quotation-orchestrator/services/QuotationOrchestratorService.js";
 import { NextOrchestratorQuotationAnalyzer } from "../modules/quotation-orchestrator/services/NextOrchestratorQuotationAnalyzer.js";
 import { PrismaQuotationOrchestratorRepository } from "../modules/quotation-orchestrator/infra/PrismaQuotationOrchestratorRepository.js";
+import { PythonQuotationEmailNotifier } from "../modules/quotation-orchestrator/services/PythonQuotationEmailNotifier.js";
 import { QuotationDocxBuilder } from "../modules/quotation-orchestrator/services/QuotationDocxBuilder.js";
-import { SmtpQuotationEmailNotifier } from "../modules/quotation-orchestrator/services/SmtpQuotationEmailNotifier.js";
 import { PrismaUserPreferenceRepository } from "../modules/preferences/infra/PrismaUserPreferenceRepository.js";
 import { UserPreferenceService } from "../modules/preferences/services/UserPreferenceService.js";
 import { PrismaShipmentRepository } from "../modules/shipping/infra/PrismaShipmentRepository.js";
@@ -46,6 +55,11 @@ import { StorageSelector } from "../storage/StorageSelector.js";
 import { InMemoryJobQueue } from "../worker/queue/InMemoryJobQueue.js";
 import { DdtProcessingWorker } from "../worker/services/DdtProcessingWorker.js";
 import { WorkerCoordinator } from "../worker/services/WorkerCoordinator.js";
+import { PrismaWorkflowRepository } from "../modules/workflows/infra/PrismaWorkflowRepository.js";
+import { QueueWorkflowRunDispatcher } from "../modules/workflows/services/QueueWorkflowRunDispatcher.js";
+import { WorkflowService } from "../modules/workflows/services/WorkflowService.js";
+import { WorkflowRunExecutorService } from "../modules/workflows/services/WorkflowRunExecutorService.js";
+import { WorkflowRunWorker } from "../worker/services/WorkflowRunWorker.js";
 
 export class ApplicationContainer {
   public readonly tenancyGuard: TenancyGuard;
@@ -54,19 +68,24 @@ export class ApplicationContainer {
   public readonly authService: AuthService;
   public readonly passwordResetService: PasswordResetService;
   public readonly moduleManagementService: ModuleManagementService;
+  public readonly auditLogService: AuditLogService;
+  public readonly companyService: CompanyService;
   public readonly clientService: ClientService;
   public readonly moduleAgentService: ModuleAgentService;
   public readonly userPreferenceService: UserPreferenceService;
+  public readonly projectAuthorService: ProjectAuthorService;
   public readonly projectService: ProjectService;
+  public readonly projectRevisionService: ProjectRevisionService;
   public readonly documentArchiveService: DocumentArchiveService;
   public readonly documentIntelligenceService: DocumentIntelligenceService;
   public readonly shipmentService: ShipmentService;
   public readonly ddtProcessingService: DdtProcessingService;
-  public readonly legacyDdtReaderService: LegacyDdtReaderService;
-  public readonly legacyQuotationOrchestratorService: LegacyQuotationOrchestratorService;
+  public readonly ddtReaderService: DdtReaderService;
+  public readonly quotationOrchestratorService: QuotationOrchestratorService;
   public readonly assistantSessionService: AssistantSessionService;
   public readonly assistantConversationService: AssistantConversationService;
   public readonly notificationService: NotificationService;
+  public readonly workflowService: WorkflowService;
   public readonly workerCoordinator: WorkerCoordinator;
 
   public constructor() {
@@ -102,9 +121,16 @@ export class ApplicationContainer {
     );
 
     this.moduleManagementService = new ModuleManagementService(moduleAccessRepository);
+    this.auditLogService = new AuditLogService(new PrismaAuditLogRepository());
+
+    const notificationRepository = new PrismaNotificationRepository();
+    this.notificationService = new NotificationService(notificationRepository);
+
+    const companyRepository = new PrismaCompanyRepository();
+    this.companyService = new CompanyService(companyRepository, this.auditLogService);
 
     const clientRepository = new PrismaClientRepository();
-    this.clientService = new ClientService(clientRepository);
+    this.clientService = new ClientService(clientRepository, this.auditLogService);
 
     const moduleAgentRepository = new PrismaModuleAgentRepository();
     this.moduleAgentService = new ModuleAgentService(moduleAgentRepository);
@@ -113,41 +139,71 @@ export class ApplicationContainer {
     this.userPreferenceService = new UserPreferenceService(userPreferenceRepository);
 
     const shipmentRepository = new PrismaShipmentRepository();
-    this.shipmentService = new ShipmentService(shipmentRepository);
+    this.shipmentService = new ShipmentService(shipmentRepository, this.notificationService);
+
+    const projectAuthorRepository = new PrismaProjectAuthorRepository();
+    this.projectAuthorService = new ProjectAuthorService(projectAuthorRepository, this.auditLogService);
+
+    const projectRevisionRepository = new PrismaProjectRevisionRepository();
+    this.projectRevisionService = new ProjectRevisionService(projectRevisionRepository, this.auditLogService);
 
     const projectRepository = new PrismaProjectRepository();
-    this.projectService = new ProjectService(projectRepository, this.shipmentService);
+    this.projectService = new ProjectService(
+      projectRepository,
+      this.shipmentService,
+      this.notificationService,
+      this.auditLogService,
+    );
 
     const storage = StorageSelector.create();
     const documentRepository = new PrismaDocumentArchiveRepository();
     this.documentArchiveService = new DocumentArchiveService(documentRepository, storage);
     this.documentIntelligenceService = new DocumentIntelligenceService(this.documentArchiveService);
-
     const queue = new InMemoryJobQueue();
+    const workflowRunDispatcher = new QueueWorkflowRunDispatcher(queue);
+    const nextOrchestratorQuotationAnalyzer = new NextOrchestratorQuotationAnalyzer(this.moduleAgentService);
+    const nextOrchestratorDdtAnalyzer = new NextOrchestratorDdtAnalyzer(this.moduleAgentService);
+    const workflowRunExecutorService = new WorkflowRunExecutorService({
+      documentArchiveService: this.documentArchiveService,
+      documentIntelligenceService: this.documentIntelligenceService,
+      quotationAnalyzer: nextOrchestratorQuotationAnalyzer,
+      ddtAnalyzer: nextOrchestratorDdtAnalyzer,
+      pythonModulesClient: new BackendPythonModulesClient(),
+      notificationService: this.notificationService,
+    });
+    this.workflowService = new WorkflowService(new PrismaWorkflowRepository(), workflowRunDispatcher);
+
     const ddtRepository = new PrismaDdtProcessingRepository();
     this.ddtProcessingService = new DdtProcessingService(ddtRepository, queue);
-    this.legacyDdtReaderService = new LegacyDdtReaderService(this.ddtProcessingService, storage);
-    this.legacyQuotationOrchestratorService = new LegacyQuotationOrchestratorService(
+    this.ddtReaderService = new DdtReaderService(storage, this.workflowService, this.notificationService);
+    this.quotationOrchestratorService = new QuotationOrchestratorService(
       this.documentArchiveService,
-      new NextOrchestratorQuotationAnalyzer(this.moduleAgentService),
+      nextOrchestratorQuotationAnalyzer,
       new QuotationDocxBuilder(),
       new PrismaQuotationOrchestratorRepository(),
-      new SmtpQuotationEmailNotifier(),
+      new PythonQuotationEmailNotifier(),
       this.documentIntelligenceService,
+      this.workflowService,
+      this.notificationService,
     );
 
     const ddtWorker = new DdtProcessingWorker(
       ddtRepository,
-      new NextOrchestratorDdtAnalyzer(this.moduleAgentService),
+      nextOrchestratorDdtAnalyzer,
       this.documentIntelligenceService,
+      this.notificationService,
     );
-    this.workerCoordinator = new WorkerCoordinator(queue, ddtWorker);
+    const workflowRunWorker = new WorkflowRunWorker(workflowRunExecutorService);
+    this.workerCoordinator = new WorkerCoordinator(queue, ddtWorker, workflowRunWorker);
     this.workerCoordinator.registerHandlers();
     void this.ddtProcessingService.resumePendingJobs().catch((error) => {
       console.error("[ApplicationContainer] Unable to resume pending DDT jobs", error);
     });
-    void this.legacyQuotationOrchestratorService.resumePendingJobs().catch((error) => {
+    void this.quotationOrchestratorService.resumePendingJobs().catch((error) => {
       console.error("[ApplicationContainer] Unable to resume pending quotation jobs", error);
+    });
+    void workflowRunExecutorService.resumeRecoverableRuns().catch((error) => {
+      console.error("[ApplicationContainer] Unable to resume pending workflow runs", error);
     });
 
     const assistantSessionRepository = new PrismaAssistantSessionRepository();
@@ -168,8 +224,5 @@ export class ApplicationContainer {
       documentIntelligenceService: this.documentIntelligenceService,
       repository: assistantSessionRepository,
     });
-
-    const notificationRepository = new PrismaNotificationRepository();
-    this.notificationService = new NotificationService(notificationRepository);
   }
 }

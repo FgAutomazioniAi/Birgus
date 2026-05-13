@@ -41,6 +41,15 @@ export class PrismaShipmentRepository implements ShipmentRepository {
             updated_at: true,
           },
         },
+        shipment_items: true,
+        shipment_events: {
+          include: {
+            status: {
+              select: { key: true },
+            },
+          },
+          orderBy: { occurred_at: "desc" },
+        },
       },
       orderBy: {
         created_at: "desc",
@@ -90,6 +99,15 @@ export class PrismaShipmentRepository implements ShipmentRepository {
             updated_at: true,
           },
         },
+        shipment_items: true,
+        shipment_events: {
+          include: {
+            status: {
+              select: { key: true },
+            },
+          },
+          orderBy: { occurred_at: "desc" },
+        },
       },
     });
 
@@ -133,6 +151,15 @@ export class PrismaShipmentRepository implements ShipmentRepository {
           select: {
             updated_at: true,
           },
+        },
+        shipment_items: true,
+        shipment_events: {
+          include: {
+            status: {
+              select: { key: true },
+            },
+          },
+          orderBy: { occurred_at: "desc" },
         },
       },
     });
@@ -248,6 +275,15 @@ export class PrismaShipmentRepository implements ShipmentRepository {
             updated_at: true,
           },
         },
+        shipment_items: true,
+        shipment_events: {
+          include: {
+            status: {
+              select: { key: true },
+            },
+          },
+          orderBy: { occurred_at: "desc" },
+        },
       },
     });
 
@@ -301,6 +337,114 @@ export class PrismaShipmentRepository implements ShipmentRepository {
     return refreshed;
   }
 
+  public async replaceShipmentItems(params: {
+    workspaceId: string;
+    shipmentId: string;
+    items: Array<{
+      sku: string | null;
+      description: string;
+      quantity: number;
+      unit: string | null;
+      weightKg: number | null;
+    }>;
+  }): Promise<ShipmentEntity> {
+    const prisma = PrismaClientManager.getClient();
+    const existing = await prisma.shipment.findFirst({
+      where: {
+        workspace_id: params.workspaceId,
+        id: params.shipmentId,
+        deleted_at: null,
+      },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw new AppError("Shipment not found.", "SHIPMENT_NOT_FOUND", 404);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.shipmentItem.deleteMany({
+        where: {
+          shipment_id: params.shipmentId,
+        },
+      });
+
+      if (params.items.length > 0) {
+        await tx.shipmentItem.createMany({
+          data: params.items.map((item) => ({
+            shipment_id: params.shipmentId,
+            sku: item.sku,
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit,
+            weight_kg: item.weightKg,
+          })),
+        });
+      }
+    });
+
+    const refreshed = await this.findShipmentById(params.workspaceId, params.shipmentId);
+    if (!refreshed) {
+      throw new AppError("Shipment not found.", "SHIPMENT_NOT_FOUND", 404);
+    }
+
+    return refreshed;
+  }
+
+  public async addShipmentEvent(params: {
+    workspaceId: string;
+    shipmentId: string;
+    statusKey: string | null;
+    eventType: string;
+    payload: unknown;
+    actorUserId: string | null;
+  }): Promise<ShipmentEntity> {
+    const prisma = PrismaClientManager.getClient();
+    const existing = await prisma.shipment.findFirst({
+      where: {
+        workspace_id: params.workspaceId,
+        id: params.shipmentId,
+        deleted_at: null,
+      },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw new AppError("Shipment not found.", "SHIPMENT_NOT_FOUND", 404);
+    }
+
+    const status = params.statusKey
+      ? await prisma.shipmentStatus.findFirst({
+          where: {
+            workspace_id: params.workspaceId,
+            key: params.statusKey,
+          },
+          select: { id: true },
+        })
+      : null;
+
+    if (params.statusKey && !status) {
+      throw new AppError(`Shipment status '${params.statusKey}' not found.`, "SHIPMENT_STATUS_NOT_FOUND", 404);
+    }
+
+    await prisma.shipmentEvent.create({
+      data: {
+        shipment_id: params.shipmentId,
+        status_id: status?.id ?? null,
+        event_type: params.eventType,
+        payload: params.payload as never,
+        actor_user_id: params.actorUserId,
+      },
+    });
+
+    const refreshed = await this.findShipmentById(params.workspaceId, params.shipmentId);
+    if (!refreshed) {
+      throw new AppError("Shipment not found.", "SHIPMENT_NOT_FOUND", 404);
+    }
+
+    return refreshed;
+  }
+
   public async softDeleteByProjectVersionId(workspaceId: string, projectVersionId: number): Promise<void> {
     const prisma = PrismaClientManager.getClient();
 
@@ -340,6 +484,22 @@ export class PrismaShipmentRepository implements ShipmentRepository {
           updated_at: Date;
         }
       | null;
+    shipment_items?: Array<{
+      id: number;
+      sku: string | null;
+      description: string;
+      quantity: unknown;
+      unit: string | null;
+      weight_kg: unknown | null;
+    }>;
+    shipment_events?: Array<{
+      id: number;
+      event_type: string;
+      payload: unknown | null;
+      actor_user_id: string | null;
+      occurred_at: Date;
+      status?: { key: string } | null;
+    }>;
   }): ShipmentEntity {
     return new ShipmentEntity({
       id: row.id,
@@ -357,6 +517,22 @@ export class PrismaShipmentRepository implements ShipmentRepository {
       specificationCalculation:
         row.specification && "calculation_payload" in row.specification ? row.specification.calculation_payload ?? null : null,
       specificationUpdatedAt: row.specification?.updated_at ?? null,
+      items: (row.shipment_items ?? []).map((item) => ({
+        id: item.id,
+        sku: item.sku,
+        description: item.description,
+        quantity: Number(item.quantity),
+        unit: item.unit,
+        weightKg: item.weight_kg == null ? null : Number(item.weight_kg),
+      })),
+      events: (row.shipment_events ?? []).map((event) => ({
+        id: event.id,
+        eventType: event.event_type,
+        statusKey: event.status?.key ?? null,
+        payload: event.payload ?? null,
+        actorUserId: event.actor_user_id,
+        occurredAt: event.occurred_at,
+      })),
       createdAt: row.created_at,
     });
   }

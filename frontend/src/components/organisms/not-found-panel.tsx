@@ -1,7 +1,4 @@
-import { AlertCircle, Home } from "lucide-react";
-import Link from "next/link";
-
-import { APP_ROUTES } from "@/lib/routes";
+import { AlertCircle } from "lucide-react";
 
 export function NotFoundPanel() {
   return (
@@ -13,13 +10,6 @@ export function NotFoundPanel() {
       <p className="max-w-sm text-text-muted">
         La pagina che stai cercando non esiste o e stata spostata in un&apos;altra sezione del portale.
       </p>
-      <Link
-        href={APP_ROUTES.dashboard}
-        className="flex items-center gap-2 rounded-[var(--radius-md)] bg-brand-primary px-6 py-3 text-sm font-bold text-text-inverse shadow-brand transition-all hover:bg-brand-primary-hover"
-      >
-        <Home size={18} />
-        Torna ai Progetti
-      </Link>
     </div>
   );
 }

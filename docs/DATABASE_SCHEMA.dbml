@@ -90,6 +90,36 @@ Enum KnowledgeChunkEmbeddingStatus {
   ERROR
 }
 
+Enum WorkflowNodeKind {
+  INPUT
+  AGENT
+  TOOL
+  OUTPUT
+}
+
+Enum WorkflowToolRuntimeKind {
+  BACKEND
+  PYTHON_MODULE
+  NEXT_ORCHESTRATOR
+}
+
+Enum WorkflowRunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+Enum WorkflowStepStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+  CANCELED
+}
+
 Table organizations {
   id varchar [pk, not null, default: `uuid_generate_v4()`]
   code varchar [unique, not null]
@@ -513,7 +543,7 @@ Table module_tools {
   name varchar [not null]
   label varchar [not null]
   description text
-  runtime_kind varchar [not null]
+  runtime_kind WorkflowToolRuntimeKind [not null]
   handler_key varchar [not null]
   input_schema json
   output_schema json
@@ -570,7 +600,7 @@ Table module_workflow_nodes {
   workflow_id varchar [not null]
   workspace_id varchar [not null]
   node_key varchar [not null]
-  node_kind varchar [not null]
+  node_kind WorkflowNodeKind [not null]
   label varchar [not null]
   position_x float [not null, default: 0]
   position_y float [not null, default: 0]
@@ -627,7 +657,7 @@ Table module_workflow_runs {
   workflow_id varchar [not null]
   module_id int
   requested_by_user_id varchar
-  status varchar [not null, default: 'QUEUED']
+  status WorkflowRunStatus [not null, default: 'QUEUED']
   trigger_source varchar
   context_entity_type varchar
   context_entity_id varchar
@@ -669,7 +699,7 @@ Table module_workflow_run_steps {
   workflow_node_id varchar
   sequence_no int [not null]
   step_key varchar [not null]
-  status varchar [not null, default: 'PENDING']
+  status WorkflowStepStatus [not null, default: 'PENDING']
   started_at timestamp
   completed_at timestamp
   input_payload json

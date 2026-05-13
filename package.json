@@ -12,13 +12,14 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:backfill:shipments": "tsx scripts/backfill-project-version-shipments.ts",
-    "db:sync:project-agent-prompts": "tsx scripts/sync-module-agent-prompts.ts",
     "db:sync:module-agent-prompts": "tsx scripts/sync-module-agent-prompts.ts",
     "build:frontend": "npm --prefix frontend run build"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1026.0",
     "@fastify/multipart": "^10.0.0",
+    "@fastify/swagger": "^9.7.0",
+    "@fastify/swagger-ui": "^5.2.6",
     "@prisma/client": "^6.16.2",
     "docx": "^9.6.1",
     "fastify": "^5.6.1",

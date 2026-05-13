@@ -6,6 +6,7 @@ export interface ClientRepository {
   create(params: {
     workspaceId: string;
     name: string;
+    companyId: number | null;
     email: string;
     phone: string;
     notes: string;
@@ -14,6 +15,7 @@ export interface ClientRepository {
     workspaceId: string;
     clientId: string;
     name: string;
+    companyId: number | null;
     email: string;
     phone: string;
     notes: string;

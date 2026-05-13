@@ -19,6 +19,20 @@ export class PrismaProjectRepository implements ProjectRepository {
             key: true,
           },
         },
+        author: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            display_name: true,
+          },
+        },
+        revision: {
+          select: {
+            id: true,
+            code: true,
+          },
+        },
         project_clients: {
           where: {
             workspace_id: workspaceId,
@@ -49,6 +63,13 @@ export class PrismaProjectRepository implements ProjectRepository {
       name: row.name,
       statusKey: row.status.key,
       clientId: row.project_clients[0]?.client_id ?? null,
+      authorId: row.author?.id ?? null,
+      authorName: row.author?.display_name ?? [row.author?.first_name ?? "", row.author?.last_name ?? ""].join(" ").trim(),
+      revisionId: row.revision?.id ?? null,
+      revisionCode: row.revision?.code ?? "",
+      publisherName: row.publisher_name ?? "",
+      publicationDate: row.publication_date,
+      authorDate: row.author_date,
       createdAt: row.created_at,
       versionsCount: row.project_versions.length,
     }));
@@ -67,6 +88,20 @@ export class PrismaProjectRepository implements ProjectRepository {
         status: {
           select: {
             key: true,
+          },
+        },
+        author: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            display_name: true,
+          },
+        },
+        revision: {
+          select: {
+            id: true,
+            code: true,
           },
         },
         project_clients: {
@@ -100,6 +135,13 @@ export class PrismaProjectRepository implements ProjectRepository {
       name: row.name,
       statusKey: row.status.key,
       clientId: row.project_clients[0]?.client_id ?? null,
+      authorId: row.author?.id ?? null,
+      authorName: row.author?.display_name ?? [row.author?.first_name ?? "", row.author?.last_name ?? ""].join(" ").trim(),
+      revisionId: row.revision?.id ?? null,
+      revisionCode: row.revision?.code ?? "",
+      publisherName: row.publisher_name ?? "",
+      publicationDate: row.publication_date,
+      authorDate: row.author_date,
       createdAt: row.created_at,
       versionsCount: row.project_versions.length,
     });
@@ -110,6 +152,11 @@ export class PrismaProjectRepository implements ProjectRepository {
     projectId: string;
     projectName: string;
     statusKey: string;
+    authorId: number | null;
+    revisionId: number | null;
+    publisherName: string;
+    publicationDate: Date | null;
+    authorDate: Date | null;
   }): Promise<ProjectEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const existing = await this.findProjectById(params.workspaceId, params.projectId);
@@ -132,6 +179,35 @@ export class PrismaProjectRepository implements ProjectRepository {
       throw new AppError(`Project status '${params.statusKey}' not found.`, "PROJECT_STATUS_NOT_FOUND", 404);
     }
 
+    if (params.authorId !== null) {
+      const author = await prisma.projectAuthor.findFirst({
+        where: {
+          workspace_id: params.workspaceId,
+          id: params.authorId,
+          deleted_at: null,
+        },
+        select: { id: true },
+      });
+
+      if (!author) {
+        throw new AppError("Project author not found.", "PROJECT_AUTHOR_NOT_FOUND", 404);
+      }
+    }
+
+    if (params.revisionId !== null) {
+      const revision = await prisma.projectRevision.findFirst({
+        where: {
+          workspace_id: params.workspaceId,
+          id: params.revisionId,
+        },
+        select: { id: true },
+      });
+
+      if (!revision) {
+        throw new AppError("Project revision not found.", "PROJECT_REVISION_NOT_FOUND", 404);
+      }
+    }
+
     const row = await prisma.project.update({
       where: {
         id: params.projectId,
@@ -139,6 +215,11 @@ export class PrismaProjectRepository implements ProjectRepository {
       data: {
         name: params.projectName,
         status_id: status.id,
+        author_id: params.authorId,
+        revision_id: params.revisionId,
+        publisher_name: params.publisherName || null,
+        publication_date: params.publicationDate,
+        author_date: params.authorDate,
       },
     });
 
@@ -148,6 +229,13 @@ export class PrismaProjectRepository implements ProjectRepository {
       name: row.name,
       statusKey: status.key,
       clientId: existing.clientId,
+      authorId: params.authorId,
+      authorName: existing.authorId === params.authorId ? existing.authorName : "",
+      revisionId: params.revisionId,
+      revisionCode: existing.revisionId === params.revisionId ? existing.revisionCode : "",
+      publisherName: row.publisher_name ?? "",
+      publicationDate: row.publication_date,
+      authorDate: row.author_date,
       createdAt: row.created_at,
       versionsCount: existing.versionsCount,
     });
@@ -242,6 +330,11 @@ export class PrismaProjectRepository implements ProjectRepository {
     projectName: string;
     ownerUserId: string;
     statusKey: string;
+    authorId: number | null;
+    revisionId: number | null;
+    publisherName: string;
+    publicationDate: Date | null;
+    authorDate: Date | null;
   }): Promise<ProjectEntity> {
     const prisma = PrismaClientManager.getClient();
 
@@ -260,17 +353,65 @@ export class PrismaProjectRepository implements ProjectRepository {
       throw new AppError(`Project status '${params.statusKey}' not found.`, "PROJECT_STATUS_NOT_FOUND", 404);
     }
 
+    if (params.authorId !== null) {
+      const author = await prisma.projectAuthor.findFirst({
+        where: {
+          workspace_id: params.workspaceId,
+          id: params.authorId,
+          deleted_at: null,
+        },
+        select: { id: true },
+      });
+
+      if (!author) {
+        throw new AppError("Project author not found.", "PROJECT_AUTHOR_NOT_FOUND", 404);
+      }
+    }
+
+    if (params.revisionId !== null) {
+      const revision = await prisma.projectRevision.findFirst({
+        where: {
+          workspace_id: params.workspaceId,
+          id: params.revisionId,
+        },
+        select: { id: true },
+      });
+
+      if (!revision) {
+        throw new AppError("Project revision not found.", "PROJECT_REVISION_NOT_FOUND", 404);
+      }
+    }
+
     const row = await prisma.project.create({
       data: {
         workspace_id: params.workspaceId,
         name: params.projectName,
         owner_user_id: params.ownerUserId,
         status_id: status.id,
+        author_id: params.authorId,
+        revision_id: params.revisionId,
+        publisher_name: params.publisherName || null,
+        publication_date: params.publicationDate,
+        author_date: params.authorDate,
       },
       include: {
         status: {
           select: {
             key: true,
+          },
+        },
+        author: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            display_name: true,
+          },
+        },
+        revision: {
+          select: {
+            id: true,
+            code: true,
           },
         },
       },
@@ -281,6 +422,13 @@ export class PrismaProjectRepository implements ProjectRepository {
       workspaceId: row.workspace_id,
       name: row.name,
       statusKey: row.status.key,
+      authorId: row.author?.id ?? null,
+      authorName: row.author?.display_name ?? [row.author?.first_name ?? "", row.author?.last_name ?? ""].join(" ").trim(),
+      revisionId: row.revision?.id ?? null,
+      revisionCode: row.revision?.code ?? "",
+      publisherName: row.publisher_name ?? "",
+      publicationDate: row.publication_date,
+      authorDate: row.author_date,
       createdAt: row.created_at,
       versionsCount: 0,
     });
