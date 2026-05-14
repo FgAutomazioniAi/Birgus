@@ -377,6 +377,8 @@ export class HttpServer {
     this.app.get("/api/superadmin/roles", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.listRoles);
     this.app.get("/api/superadmin/modules", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.listModules);
     this.app.get("/api/superadmin/users", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.listUsers);
+    this.app.post("/api/superadmin/users", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.createUser);
+    this.app.patch("/api/superadmin/users/:userId/status", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.setUserStatus);
     this.app.get("/api/superadmin/users/:userId/memberships", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.listUserMemberships);
     this.app.get("/api/superadmin/users/:userId/modules", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.listUserModules);
     this.app.post("/api/superadmin/users/:userId/reset-password", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.resetUserPassword);

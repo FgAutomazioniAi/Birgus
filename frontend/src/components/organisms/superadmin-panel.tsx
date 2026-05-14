@@ -84,6 +84,11 @@ export function SuperadminPanel() {
   const [selectedRoleKeys, setSelectedRoleKeys] = useState<string[]>([]);
 
   const [passwordResetValue, setPasswordResetValue] = useState("admin");
+  const [createEmail, setCreateEmail] = useState("");
+  const [createFirstName, setCreateFirstName] = useState("");
+  const [createLastName, setCreateLastName] = useState("");
+  const [createPassword, setCreatePassword] = useState("admin");
+  const [createRoleKeys, setCreateRoleKeys] = useState<string[]>(["operator"]);
   const [isSaving, setIsSaving] = useState(false);
 
   const selectedUser = useMemo(() => users.find((item) => item.id === selectedUserId) ?? null, [users, selectedUserId]);
@@ -154,6 +159,87 @@ export function SuperadminPanel() {
 
   const handleRefreshUsers = async () => {
     await loadBase();
+  };
+
+  const handleToggleCreateRole = (roleKey: string) => {
+    setCreateRoleKeys((current) => (
+      current.includes(roleKey)
+        ? current.filter((item) => item !== roleKey)
+        : [...current, roleKey]
+    ));
+  };
+
+  const handleCreateUser = async () => {
+    if (!selectedWorkspaceId) {
+      toast.error("Seleziona un workspace.");
+      return;
+    }
+
+    if (!createEmail.trim() || !createFirstName.trim()) {
+      toast.error("Inserisci almeno email e nome.");
+      return;
+    }
+
+    if (createPassword.trim().length < 5) {
+      toast.error("La password deve avere almeno 5 caratteri.");
+      return;
+    }
+
+    if (createRoleKeys.length === 0) {
+      toast.error("Seleziona almeno un ruolo.");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const payload = await fetchJson<{ userId: string; email: string }>("/api/superadmin/users", {
+        method: "POST",
+        body: JSON.stringify({
+          workspaceId: selectedWorkspaceId,
+          email: createEmail.trim().toLowerCase(),
+          firstName: createFirstName.trim(),
+          lastName: createLastName.trim() || null,
+          password: createPassword,
+          roleKeys: createRoleKeys,
+        }),
+      });
+      await loadBase();
+      setSelectedUserId(payload.userId);
+      setCreateEmail("");
+      setCreateFirstName("");
+      setCreateLastName("");
+      setCreatePassword("admin");
+      setCreateRoleKeys(["operator"]);
+      toast.success(`Utente creato: ${payload.email}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Creazione utente non riuscita.";
+      toast.error(message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSetUserStatus = async (isActive: boolean) => {
+    if (!selectedUserId) {
+      toast.error("Seleziona un utente.");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await fetchJson(`/api/superadmin/users/${encodeURIComponent(selectedUserId)}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive }),
+      });
+      await loadBase();
+      await loadUserContext(selectedUserId, selectedWorkspaceId);
+      toast.success(isActive ? "Utente attivato." : "Utente disattivato.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Aggiornamento stato utente non riuscito.";
+      toast.error(message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleResetPassword = async () => {
@@ -384,12 +470,80 @@ export function SuperadminPanel() {
         </div>
       </Card>
 
+      <Card className="p-4 lg:p-5">
+        <Text as="h2" variant="h2">Crea utente</Text>
+        <p className="mt-1 text-sm text-text-muted">Creazione rapida utente nel workspace selezionato.</p>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          <div>
+            <Label htmlFor="create-email">Email</Label>
+            <Input
+              id="create-email"
+              value={createEmail}
+              onChange={(event) => setCreateEmail(event.target.value)}
+              className="mt-1"
+              placeholder="nuovo.utente@azienda.it"
+            />
+          </div>
+          <div>
+            <Label htmlFor="create-password">Password iniziale</Label>
+            <Input
+              id="create-password"
+              value={createPassword}
+              onChange={(event) => setCreatePassword(event.target.value)}
+              className="mt-1"
+              placeholder="almeno 5 caratteri"
+            />
+          </div>
+          <div>
+            <Label htmlFor="create-first-name">Nome</Label>
+            <Input
+              id="create-first-name"
+              value={createFirstName}
+              onChange={(event) => setCreateFirstName(event.target.value)}
+              className="mt-1"
+              placeholder="Nome"
+            />
+          </div>
+          <div>
+            <Label htmlFor="create-last-name">Cognome</Label>
+            <Input
+              id="create-last-name"
+              value={createLastName}
+              onChange={(event) => setCreateLastName(event.target.value)}
+              className="mt-1"
+              placeholder="Cognome"
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {roles.map((role) => (
+            <label key={`create-${role.key}`} className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-border-subtle px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={createRoleKeys.includes(role.key)}
+                onChange={() => handleToggleCreateRole(role.key)}
+                disabled={isSaving}
+              />
+              <span>{role.label}</span>
+            </label>
+          ))}
+        </div>
+
+        <div className="mt-4">
+          <Button onClick={() => void handleCreateUser()} disabled={isSaving || !selectedWorkspaceId}>
+            Crea utente
+          </Button>
+        </div>
+      </Card>
+
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="p-4 lg:p-5">
           <Text as="h2" variant="h2">Gestione credenziali/sessioni</Text>
           {selectedUser ? (
             <p className="mt-1 text-sm text-text-muted">
-              {selectedUser.firstName} {selectedUser.lastName ?? ""} - {selectedUser.email}
+              {selectedUser.firstName} {selectedUser.lastName ?? ""} - {selectedUser.email} · stato: {selectedUser.isActive ? "Attivo" : "Disattivo"}
             </p>
           ) : (
             <p className="mt-1 text-sm text-text-muted">Seleziona un utente per procedere.</p>
@@ -407,6 +561,13 @@ export function SuperadminPanel() {
               />
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button
+                variant={selectedUser?.isActive ? "outline" : "primary"}
+                onClick={() => void handleSetUserStatus(!(selectedUser?.isActive ?? false))}
+                disabled={isSaving || !selectedUserId}
+              >
+                {selectedUser?.isActive ? "Disattiva utente" : "Attiva utente"}
+              </Button>
               <Button onClick={() => void handleResetPassword()} disabled={isSaving || !selectedUserId}>Reset credenziali</Button>
               <Button variant="outline" onClick={() => void handleRevokeSessions()} disabled={isSaving || !selectedUserId}>
                 Reset sessioni

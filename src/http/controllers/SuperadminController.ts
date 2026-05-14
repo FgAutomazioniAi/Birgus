@@ -18,6 +18,19 @@ const userModulesQuerySchema = z.object({
   workspaceId: z.string().uuid(),
 });
 
+const createUserSchema = z.object({
+  workspaceId: z.string().uuid(),
+  email: z.string().email(),
+  firstName: z.string().trim().min(1),
+  lastName: z.string().trim().optional(),
+  password: z.string().min(5),
+  roleKeys: z.array(z.string().trim().min(1)).min(1),
+});
+
+const setUserStatusSchema = z.object({
+  isActive: z.boolean(),
+});
+
 const resetPasswordSchema = z.object({
   newPassword: z.string().min(5),
 });
@@ -101,6 +114,48 @@ export class SuperadminController {
       const query = usersQuerySchema.parse(request.query);
       const users = await this.service.listUsers(query.search ?? null);
       reply.code(200).send({ users });
+    } catch (error) {
+      this.sendError(reply, error);
+    }
+  };
+
+  public createUser = async (request: AuthenticatedRequest, reply: FastifyReply): Promise<void> => {
+    try {
+      await this.ensureSuperadmin(request);
+      const body = createUserSchema.parse(request.body);
+      const created = await this.service.createUserInWorkspace({
+        workspaceId: body.workspaceId,
+        email: body.email,
+        firstName: body.firstName,
+        lastName: body.lastName ?? null,
+        password: body.password,
+        roleKeys: body.roleKeys,
+        auditContext: this.getAuditContext(request),
+      });
+
+      reply.code(201).send({
+        ok: true,
+        userId: created.userId,
+        email: created.email,
+      });
+    } catch (error) {
+      this.sendError(reply, error);
+    }
+  };
+
+  public setUserStatus = async (request: AuthenticatedRequest, reply: FastifyReply): Promise<void> => {
+    try {
+      await this.ensureSuperadmin(request);
+      const params = userParamsSchema.parse(request.params);
+      const body = setUserStatusSchema.parse(request.body);
+
+      await this.service.setUserActiveStatus({
+        targetUserId: params.userId,
+        isActive: body.isActive,
+        auditContext: this.getAuditContext(request),
+      });
+
+      reply.code(200).send({ ok: true, userId: params.userId, isActive: body.isActive });
     } catch (error) {
       this.sendError(reply, error);
     }

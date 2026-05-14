@@ -256,6 +256,265 @@ export class SuperadminService {
     }));
   }
 
+  public async createUserInWorkspace(params: {
+    workspaceId: string;
+    email: string;
+    firstName: string;
+    lastName?: string | null;
+    password: string;
+    roleKeys: string[];
+    auditContext: AuditContext;
+  }): Promise<{ userId: string; email: string }> {
+    const prisma = PrismaClientManager.getClient();
+    await this.ensureWorkspaceExists(params.workspaceId);
+
+    const normalizedEmail = params.email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new AppError("Email obbligatoria.", "SUPERADMIN_CREATE_USER_EMAIL_REQUIRED", 400);
+    }
+
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        email: normalizedEmail,
+      },
+      select: {
+        id: true,
+        deleted_at: true,
+      },
+    });
+
+    if (existingUser && !existingUser.deleted_at) {
+      throw new AppError("Esiste gia un utente con questa email.", "SUPERADMIN_USER_ALREADY_EXISTS", 409);
+    }
+
+    const roleKeys = [...new Set(params.roleKeys.map((item) => item.trim()).filter(Boolean))];
+    if (roleKeys.length === 0) {
+      throw new AppError("Seleziona almeno un ruolo.", "SUPERADMIN_ROLE_SET_EMPTY", 400);
+    }
+
+    const roles = await prisma.role.findMany({
+      where: {
+        key: {
+          in: roleKeys,
+        },
+      },
+      select: {
+        id: true,
+        key: true,
+      },
+    });
+
+    if (roles.length !== roleKeys.length) {
+      throw new AppError("Uno o piu ruoli non esistono.", "SUPERADMIN_ROLE_UNKNOWN", 400);
+    }
+
+    const passwordHash = await this.passwordHasher.hashPassword(params.password);
+
+    const created = await prisma.$transaction(async (tx) => {
+      const user = existingUser
+        ? await tx.user.update({
+          where: { id: existingUser.id },
+          data: {
+            first_name: params.firstName.trim(),
+            last_name: params.lastName?.trim() || null,
+            password_hash: passwordHash,
+            password_updated_at: new Date(),
+            is_active: true,
+            deleted_at: null,
+          },
+          select: {
+            id: true,
+            email: true,
+          },
+        })
+        : await tx.user.create({
+          data: {
+            first_name: params.firstName.trim(),
+            last_name: params.lastName?.trim() || null,
+            email: normalizedEmail,
+            password_hash: passwordHash,
+            is_active: true,
+          },
+          select: {
+            id: true,
+            email: true,
+          },
+        });
+
+      await tx.workspaceMembership.upsert({
+        where: {
+          workspace_id_user_id: {
+            workspace_id: params.workspaceId,
+            user_id: user.id,
+          },
+        },
+        update: {
+          status: "ACTIVE",
+          left_at: null,
+        },
+        create: {
+          workspace_id: params.workspaceId,
+          user_id: user.id,
+          status: "ACTIVE",
+        },
+      });
+
+      await tx.userWorkspaceRole.deleteMany({
+        where: {
+          workspace_id: params.workspaceId,
+          user_id: user.id,
+        },
+      });
+
+      for (const role of roles) {
+        await tx.userWorkspaceRole.create({
+          data: {
+            workspace_id: params.workspaceId,
+            user_id: user.id,
+            role_id: role.id,
+          },
+        });
+      }
+
+      await tx.userPreference.upsert({
+        where: {
+          user_id_workspace_id: {
+            user_id: user.id,
+            workspace_id: params.workspaceId,
+          },
+        },
+        update: {},
+        create: {
+          user_id: user.id,
+          workspace_id: params.workspaceId,
+          palette_id: "predefinito",
+          language_code: "it",
+        },
+      });
+
+      return user;
+    });
+
+    await this.auditLogService.record({
+      workspaceId: params.auditContext.actorWorkspaceId,
+      userId: params.auditContext.actorUserId,
+      moduleKey: "superadmin_center",
+      action: "superadmin.user.created",
+      entityType: "User",
+      entityId: created.id,
+      payload: {
+        workspaceId: params.workspaceId,
+        email: created.email,
+        roleKeys,
+      },
+      ipAddress: params.auditContext.ipAddress ?? null,
+      userAgent: params.auditContext.userAgent ?? null,
+    });
+
+    return {
+      userId: created.id,
+      email: created.email,
+    };
+  }
+
+  public async setUserActiveStatus(params: {
+    targetUserId: string;
+    isActive: boolean;
+    auditContext: AuditContext;
+  }): Promise<void> {
+    const prisma = PrismaClientManager.getClient();
+    const target = await prisma.user.findFirst({
+      where: {
+        id: params.targetUserId,
+        deleted_at: null,
+      },
+      select: {
+        id: true,
+        is_active: true,
+      },
+    });
+
+    if (!target) {
+      throw new AppError("Utente non trovato.", "SUPERADMIN_USER_NOT_FOUND", 404);
+    }
+
+    if (params.auditContext.actorUserId === params.targetUserId && !params.isActive) {
+      throw new AppError("Non puoi disattivare il tuo account.", "SUPERADMIN_SELF_DEACTIVATE_FORBIDDEN", 400);
+    }
+
+    if (target.is_active === params.isActive) {
+      return;
+    }
+
+    if (!params.isActive) {
+      const isTargetSuperadmin = await prisma.userWorkspaceRole.findFirst({
+        where: {
+          user_id: params.targetUserId,
+          role: {
+            key: "superadmin",
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (isTargetSuperadmin) {
+        const activeSuperadmins = await prisma.user.findMany({
+          where: {
+            deleted_at: null,
+            is_active: true,
+            user_workspace_roles: {
+              some: {
+                role: {
+                  key: "superadmin",
+                },
+              },
+            },
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        if (activeSuperadmins.length <= 1) {
+          throw new AppError(
+            "Non puoi disattivare l'ultimo superadmin attivo.",
+            "SUPERADMIN_LAST_SUPERADMIN_FORBIDDEN",
+            400,
+          );
+        }
+      }
+    }
+
+    await prisma.user.update({
+      where: {
+        id: params.targetUserId,
+      },
+      data: {
+        is_active: params.isActive,
+      },
+    });
+
+    if (!params.isActive) {
+      await this.authSessionRepository.revokeAllForUser(params.targetUserId);
+    }
+
+    await this.auditLogService.record({
+      workspaceId: params.auditContext.actorWorkspaceId,
+      userId: params.auditContext.actorUserId,
+      moduleKey: "superadmin_center",
+      action: params.isActive ? "superadmin.user.activated" : "superadmin.user.deactivated",
+      entityType: "User",
+      entityId: params.targetUserId,
+      payload: {
+        isActive: params.isActive,
+      },
+      ipAddress: params.auditContext.ipAddress ?? null,
+      userAgent: params.auditContext.userAgent ?? null,
+    });
+  }
+
   public async resetUserPassword(params: {
     targetUserId: string;
     newPassword: string;
