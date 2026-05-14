@@ -11,6 +11,7 @@ import { AuthMiddleware } from "./middleware/AuthMiddleware.js";
 import { PermissionGuard } from "./middleware/PermissionGuard.js";
 import { AuthController } from "./controllers/AuthController.js";
 import { AssistantController } from "./controllers/AssistantController.js";
+import { ArchiveController } from "./controllers/ArchiveController.js";
 import { AuditController } from "./controllers/AuditController.js";
 import { SessionCookieFactory } from "./auth/SessionCookieFactory.js";
 import { ClientController } from "./controllers/ClientController.js";
@@ -29,6 +30,7 @@ import { ProjectRevisionController } from "./controllers/ProjectRevisionControll
 import { ShipmentController } from "./controllers/ShipmentController.js";
 import { UserPreferenceController } from "./controllers/UserPreferenceController.js";
 import { WorkflowController } from "./controllers/WorkflowController.js";
+import { SuperadminController } from "./controllers/SuperadminController.js";
 
 const healthSchema = z.object({
   ok: z.literal(true),
@@ -51,6 +53,16 @@ const SWAGGER_ROUTE_DOCS: Record<string, SwaggerRouteDoc> = {
     summary: "Login utente",
     description: `Autentica un utente con email e password e crea la sessione applicativa.`,
     tags: ["Auth"],
+  },
+  "POST /api/auth/login/2fa/verify": {
+    summary: "Conferma login 2FA",
+    description: `Conferma il challenge TOTP del login e crea la sessione applicativa.`,
+    tags: ["Auth"],
+  },
+  "GET /api/superadmin/workspaces": {
+    summary: "Workspaces globali",
+    description: `Elenca i workspace globali disponibili per operazioni superadmin.`,
+    tags: ["Superadmin"],
   },
   "POST /api/auth/logout": {
     summary: "Logout utente",
@@ -194,6 +206,11 @@ export class HttpServer {
       this.moduleGuard,
       this.permissionGuard,
     );
+    const archiveController = new ArchiveController(
+      this.container.archivedItemsService,
+      this.moduleGuard,
+      this.permissionGuard,
+    );
     const projectAssetsController = new ProjectAssetsController(
       this.container.documentArchiveService,
       this.container.projectService,
@@ -211,6 +228,7 @@ export class HttpServer {
     const ddtController = new DdtController(this.container.ddtProcessingService, this.moduleGuard, this.permissionGuard);
     const notificationController = new NotificationController(this.container.notificationService, this.moduleGuard, this.permissionGuard);
     const workflowController = new WorkflowController(this.container.workflowService, this.moduleGuard, this.permissionGuard);
+    const superadminController = new SuperadminController(this.container.superadminService);
 
     this.app.get("/health", {
       schema: {
@@ -237,6 +255,7 @@ export class HttpServer {
     });
 
     this.app.post("/api/auth/login", authController.login);
+    this.app.post("/api/auth/login/2fa/verify", authController.verifyLogin2fa);
     this.app.post("/api/auth/logout", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, authController.logout);
     this.app.get("/api/auth/session", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, authController.session);
     this.app.post("/api/auth/password/forgot", authController.forgotPassword);
@@ -332,6 +351,9 @@ export class HttpServer {
     this.app.post("/api/assistant/sessions/:sessionId/close", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, assistantController.closeSession);
 
     this.app.get("/api/orchestrator/jobs/:jobId", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, orchestratorJobController.getJob);
+    this.app.get("/api/archive", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, archiveController.listItems);
+    this.app.post("/api/archive/:entityType/:entityId/restore", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, archiveController.restoreItem);
+    this.app.delete("/api/archive/:entityType/:entityId/permanent", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, archiveController.permanentlyDeleteItem);
 
     this.app.get("/api/ddt-reader/config", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, ddtReaderController.getConfig);
     this.app.get("/api/ddt-reader/documents", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, ddtReaderController.listDocuments);
@@ -350,6 +372,21 @@ export class HttpServer {
     this.app.post("/api/notifications", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, notificationController.createInfo);
 
     this.app.get("/api/audit/logs", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, auditController.list);
+
+    this.app.get("/api/superadmin/workspaces", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.listWorkspaces);
+    this.app.get("/api/superadmin/roles", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.listRoles);
+    this.app.get("/api/superadmin/modules", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.listModules);
+    this.app.get("/api/superadmin/users", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.listUsers);
+    this.app.get("/api/superadmin/users/:userId/memberships", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.listUserMemberships);
+    this.app.get("/api/superadmin/users/:userId/modules", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.listUserModules);
+    this.app.post("/api/superadmin/users/:userId/reset-password", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.resetUserPassword);
+    this.app.post("/api/superadmin/users/:userId/revoke-sessions", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.revokeUserSessions);
+    this.app.post("/api/superadmin/users/:userId/reset-2fa", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.resetUserTwoFactor);
+    this.app.put("/api/superadmin/module-overrides", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.setModuleOverride);
+    this.app.delete("/api/superadmin/module-overrides", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.clearModuleOverride);
+    this.app.put("/api/superadmin/workspace-roles", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.replaceWorkspaceRoles);
+    this.app.post("/api/superadmin/archive/:entityType/:entityId/restore", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.restoreArchive);
+    this.app.delete("/api/superadmin/archive/:entityType/:entityId/permanent", { preHandler: this.authMiddleware.requireAuthenticated.bind(this.authMiddleware) }, superadminController.hardDeleteArchive);
   }
 
   private registerErrorHandler(): void {
@@ -417,6 +454,7 @@ export class HttpServer {
     const requiresAuth = !(
       url === "/health" ||
       url === "/api/auth/login" ||
+      url === "/api/auth/login/2fa/verify" ||
       url === "/api/auth/password/forgot" ||
       url === "/api/auth/password/reset"
     );
@@ -447,10 +485,12 @@ export class HttpServer {
       { prefix: "/api/knowledge", tag: "Knowledge" },
       { prefix: "/api/assistant", tag: "Assistant" },
       { prefix: "/api/orchestrator", tag: "Orchestrator" },
+      { prefix: "/api/archive", tag: "Archivio" },
       { prefix: "/api/ddt-reader", tag: "DDT Reader" },
       { prefix: "/api/ddt", tag: "DDT" },
       { prefix: "/api/notifications", tag: "Notifiche" },
       { prefix: "/api/audit", tag: "Audit" },
+      { prefix: "/api/superadmin", tag: "Superadmin" },
       { prefix: "/health", tag: "Sistema" },
     ];
 
@@ -512,6 +552,7 @@ export class HttpServer {
       specification: "specifiche spedizione",
       tools: "tools workflow",
       users: "moduli utente",
+      superadmin: "centro superadmin",
       versions: "versioni progetto",
       workflows: "workflow",
     };

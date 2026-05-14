@@ -252,7 +252,7 @@ export class DdtReaderService {
       },
     });
 
-    await this.notify(params.workspaceId, "Documento DDT caricato", `Caricato il documento "${fileName}".`);
+    await this.notify(params.workspaceId, "DDT", `Caricato "${fileName}".`);
 
     return this.toDocumentDto(created as unknown as DdtDocumentRow);
   }
@@ -277,6 +277,12 @@ export class DdtReaderService {
       select: {
         id: true,
         document_id: true,
+        original_filename: true,
+        document: {
+          select: {
+            filename: true,
+          },
+        },
       },
     });
 
@@ -323,7 +329,8 @@ export class DdtReaderService {
       },
     });
 
-    await this.notify(params.workspaceId, "Analisi DDT avviata", `Avviata l'analisi del documento ${params.ddtDocumentId}.`);
+    const displayName = this.resolveDocumentDisplayName(row.original_filename, row.document?.filename ?? null);
+    await this.notify(params.workspaceId, "DDT", `Analisi avviata su "${displayName}".`);
 
     return {
       queued: true,
@@ -371,15 +378,6 @@ export class DdtReaderService {
         },
       });
     });
-
-    if (row.document.storage_path.startsWith("garage://")) {
-      try {
-        const parsed = GaragePath.parse(row.document.storage_path);
-        await this.objectStorage.deleteObject(parsed.bucket, parsed.objectKey);
-      } catch {
-        // best effort cleanup
-      }
-    }
 
     return true;
   }
@@ -590,6 +588,11 @@ export class DdtReaderService {
   private resolveFileName(fileName: string): string {
     const trimmed = fileName.trim();
     return trimmed.length > 0 ? trimmed : "document.pdf";
+  }
+
+  private resolveDocumentDisplayName(originalFileName: string | null, fallbackFileName: string | null): string {
+    const preferred = originalFileName?.trim() || fallbackFileName?.trim() || "";
+    return preferred.length > 0 ? preferred : "document.pdf";
   }
 
   private async notify(workspaceId: string, title: string, message: string): Promise<void> {

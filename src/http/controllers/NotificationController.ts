@@ -16,6 +16,10 @@ const createNotificationSchema = z.object({
   message: z.string().min(1),
 });
 
+const clearNotificationsSchema = z.object({
+  confirmText: z.string().min(1),
+});
+
 export class NotificationController {
   private readonly service: NotificationService;
   private readonly moduleGuard: ModuleGuard;
@@ -99,6 +103,14 @@ export class NotificationController {
     try {
       await this.moduleGuard.requireModule(request.requestContext, ModuleKey.NOTIFICATION_CENTER);
       await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.NOTIFICATIONS_WRITE);
+      const body = clearNotificationsSchema.parse(request.body);
+      if (body.confirmText.trim() !== "cancella") {
+        throw new AppError(
+          "Conferma eliminazione non valida: digita 'cancella'.",
+          "DELETE_CONFIRMATION_INVALID",
+          400,
+        );
+      }
 
       const workspaceId = request.requestContext.workspace.workspaceId;
       const userId = request.requestContext.workspace.userId;

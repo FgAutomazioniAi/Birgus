@@ -31,6 +31,6 @@ export interface DdtProcessingRepository {
   updateDocumentStatus(ddtDocumentId: string, status: "QUEUED" | "OCR_PROCESSING" | "AI_PROCESSING" | "READY" | "ERROR", lastError?: string | null): Promise<void>;
   appendEvent(jobId: string, ddtDocumentId: string, eventType: string, payload?: Record<string, unknown>): Promise<void>;
   saveAnalysis(ddtDocumentId: string, analysis: DdtAnalysisInput): Promise<void>;
-  findDocumentReference(ddtDocumentId: string): Promise<{ workspaceId: string; documentId: string } | null>;
+  findDocumentReference(ddtDocumentId: string): Promise<{ workspaceId: string; documentId: string; fileName: string } | null>;
   listRecoverableJobs(): Promise<RecoverableDdtProcessingJob[]>;
 }

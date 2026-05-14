@@ -18,6 +18,10 @@ const payloadSchema = z.object({
   notes: z.string().trim().optional().default(""),
 });
 
+const deleteProjectAuthorSchema = z.object({
+  confirmText: z.string().min(1),
+});
+
 export class ProjectAuthorController {
   public constructor(
     private readonly service: ProjectAuthorService,
@@ -114,6 +118,14 @@ export class ProjectAuthorController {
     try {
       await this.moduleGuard.requireModule(request.requestContext, ModuleKey.PROJECT_MANAGEMENT);
       await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.PROJECTS_WRITE);
+      const body = deleteProjectAuthorSchema.parse(request.body);
+      if (body.confirmText.trim() !== "cancella") {
+        throw new AppError(
+          "Conferma eliminazione non valida: digita 'cancella'.",
+          "DELETE_CONFIRMATION_INVALID",
+          400,
+        );
+      }
       const authorId = this.getAuthorId(request);
       await this.service.delete(request.requestContext.workspace.workspaceId, authorId, request.requestContext.workspace.userId);
       reply.code(200).send({ ok: true, id: authorId });

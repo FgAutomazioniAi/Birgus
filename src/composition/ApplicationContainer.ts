@@ -21,10 +21,12 @@ import { DdtProcessingService } from "../modules/ddt-processing/services/DdtProc
 import { DdtReaderService } from "../modules/ddt-processing/services/DdtReaderService.js";
 import { NextOrchestratorDdtAnalyzer } from "../modules/ddt-processing/services/NextOrchestratorDdtAnalyzer.js";
 import { PrismaDocumentArchiveRepository } from "../modules/document-archive/infra/PrismaDocumentArchiveRepository.js";
+import { ArchivedItemsService } from "../modules/document-archive/services/ArchivedItemsService.js";
 import { DocumentArchiveService } from "../modules/document-archive/services/DocumentArchiveService.js";
 import { DocumentIntelligenceService } from "../modules/document-intelligence/services/DocumentIntelligenceService.js";
 import { BackendPythonModulesClient } from "../modules/document-intelligence/services/BackendPythonModulesClient.js";
 import { PrismaAuthSessionRepository } from "../modules/identity/infra/PrismaAuthSessionRepository.js";
+import { PrismaAuthLoginChallengeRepository } from "../modules/identity/infra/PrismaAuthLoginChallengeRepository.js";
 import { PrismaPasswordResetCodeRepository } from "../modules/identity/infra/PrismaPasswordResetCodeRepository.js";
 import { PrismaUserAccountRepository } from "../modules/identity/infra/PrismaUserAccountRepository.js";
 import { AuthService } from "../modules/identity/services/AuthService.js";
@@ -32,6 +34,8 @@ import { PasswordResetService } from "../modules/identity/services/PasswordReset
 import { PasswordHasher } from "../modules/identity/services/PasswordHasher.js";
 import { SessionTokenService } from "../modules/identity/services/SessionTokenService.js";
 import { SmtpPasswordResetNotifier } from "../modules/identity/services/SmtpPasswordResetNotifier.js";
+import { TotpSecretCipherService } from "../modules/identity/services/TotpSecretCipherService.js";
+import { TotpService } from "../modules/identity/services/TotpService.js";
 import { PrismaModuleAccessRepository } from "../modules/module-management/infra/PrismaModuleAccessRepository.js";
 import { ModuleManagementService } from "../modules/module-management/services/ModuleManagementService.js";
 import { PrismaNotificationRepository } from "../modules/notifications/infra/PrismaNotificationRepository.js";
@@ -60,6 +64,7 @@ import { QueueWorkflowRunDispatcher } from "../modules/workflows/services/QueueW
 import { WorkflowService } from "../modules/workflows/services/WorkflowService.js";
 import { WorkflowRunExecutorService } from "../modules/workflows/services/WorkflowRunExecutorService.js";
 import { WorkflowRunWorker } from "../worker/services/WorkflowRunWorker.js";
+import { SuperadminService } from "../modules/superadmin/services/SuperadminService.js";
 
 export class ApplicationContainer {
   public readonly tenancyGuard: TenancyGuard;
@@ -77,6 +82,7 @@ export class ApplicationContainer {
   public readonly projectService: ProjectService;
   public readonly projectRevisionService: ProjectRevisionService;
   public readonly documentArchiveService: DocumentArchiveService;
+  public readonly archivedItemsService: ArchivedItemsService;
   public readonly documentIntelligenceService: DocumentIntelligenceService;
   public readonly shipmentService: ShipmentService;
   public readonly ddtProcessingService: DdtProcessingService;
@@ -86,6 +92,7 @@ export class ApplicationContainer {
   public readonly assistantConversationService: AssistantConversationService;
   public readonly notificationService: NotificationService;
   public readonly workflowService: WorkflowService;
+  public readonly superadminService: SuperadminService;
   public readonly workerCoordinator: WorkerCoordinator;
 
   public constructor() {
@@ -99,16 +106,29 @@ export class ApplicationContainer {
 
     const userRepository = new PrismaUserAccountRepository();
     const authSessionRepository = new PrismaAuthSessionRepository();
+    const authLoginChallengeRepository = new PrismaAuthLoginChallengeRepository();
     const passwordHasher = new PasswordHasher(process.env.AUTH_PEPPER ?? "");
     const tokenService = new SessionTokenService();
+    const totpService = new TotpService(
+      Number.parseInt(process.env.AUTH_TOTP_DIGITS ?? "6", 10),
+      Number.parseInt(process.env.AUTH_TOTP_STEP_SECONDS ?? "30", 10),
+    );
+    const totpSecretCipherService = new TotpSecretCipherService(
+      process.env.AUTH_TOTP_ENCRYPTION_KEY ?? process.env.AUTH_PEPPER ?? "",
+    );
 
     this.authService = new AuthService(
       userRepository,
       authSessionRepository,
+      authLoginChallengeRepository,
       passwordHasher,
       tokenService,
+      totpService,
+      totpSecretCipherService,
+      process.env.AUTH_TOTP_ISSUER ?? "Birgus",
       Number.parseInt(process.env.AUTH_SESSION_HOURS ?? "12", 10),
       Number.parseInt(process.env.AUTH_SESSION_REMEMBER_DAYS ?? "30", 10),
+      Number.parseInt(process.env.AUTH_2FA_CHALLENGE_TTL_MINUTES ?? "5", 10),
     );
 
     this.passwordResetService = new PasswordResetService(
@@ -158,6 +178,7 @@ export class ApplicationContainer {
     const storage = StorageSelector.create();
     const documentRepository = new PrismaDocumentArchiveRepository();
     this.documentArchiveService = new DocumentArchiveService(documentRepository, storage);
+    this.archivedItemsService = new ArchivedItemsService(storage);
     this.documentIntelligenceService = new DocumentIntelligenceService(this.documentArchiveService);
     const queue = new InMemoryJobQueue();
     const workflowRunDispatcher = new QueueWorkflowRunDispatcher(queue);
@@ -172,6 +193,13 @@ export class ApplicationContainer {
       notificationService: this.notificationService,
     });
     this.workflowService = new WorkflowService(new PrismaWorkflowRepository(), workflowRunDispatcher);
+    this.superadminService = new SuperadminService({
+      archivedItemsService: this.archivedItemsService,
+      passwordHasher,
+      authSessionRepository,
+      moduleManagementService: this.moduleManagementService,
+      auditLogService: this.auditLogService,
+    });
 
     const ddtRepository = new PrismaDdtProcessingRepository();
     this.ddtProcessingService = new DdtProcessingService(ddtRepository, queue);

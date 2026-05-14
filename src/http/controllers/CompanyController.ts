@@ -18,6 +18,10 @@ const payloadSchema = z.object({
   city: z.string().trim().optional().default(""),
 });
 
+const deleteCompanySchema = z.object({
+  confirmText: z.string().min(1),
+});
+
 export class CompanyController {
   public constructor(
     private readonly service: CompanyService,
@@ -114,6 +118,14 @@ export class CompanyController {
     try {
       await this.moduleGuard.requireModule(request.requestContext, ModuleKey.PROJECT_MANAGEMENT);
       await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.CLIENTS_WRITE);
+      const body = deleteCompanySchema.parse(request.body);
+      if (body.confirmText.trim() !== "cancella") {
+        throw new AppError(
+          "Conferma eliminazione non valida: digita 'cancella'.",
+          "DELETE_CONFIRMATION_INVALID",
+          400,
+        );
+      }
       const companyId = this.getCompanyId(request);
       await this.service.delete(request.requestContext.workspace.workspaceId, companyId, request.requestContext.workspace.userId);
       reply.code(200).send({ ok: true, id: companyId });

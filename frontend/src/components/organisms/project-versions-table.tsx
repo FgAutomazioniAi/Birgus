@@ -18,11 +18,12 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Text } from "@/components/atoms";
-import { ConfirmDeleteDialog, PageHelpHint, SearchField } from "@/components/molecules";
+import { PageHelpHint, SearchField } from "@/components/molecules";
 import { cn } from "@/lib/cn";
 import { downloadTablePdf } from "@/lib/pdf-export";
 import { PROJECT_STATUS_OPTIONS, getProjectStatusLabel } from "@/lib/project-status";
 import { APP_ROUTES } from "@/lib/routes";
+import { scheduleUndoableAction } from "@/lib/undoable-action";
 import type { ProjectStatus } from "@/lib/types";
 
 interface ProjectVersionRow {
@@ -178,8 +179,6 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
   const [newClientEmail, setNewClientEmail] = useState("");
   const [newClientPhone, setNewClientPhone] = useState("");
   const [newClientNotes, setNewClientNotes] = useState("");
-  const [versionDeleteTarget, setVersionDeleteTarget] = useState<ProjectVersionRow | null>(null);
-  const [isDeletingVersion, setIsDeletingVersion] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isColumnsMenuOpen, setIsColumnsMenuOpen] = useState(false);
   const [columnOrder, setColumnOrder] = useState<VersionColumnKey[]>(DEFAULT_VERSION_COLUMN_ORDER);
@@ -394,33 +393,44 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
     }
   };
 
-  const deleteVersion = async (version: ProjectVersionRow, confirmText: string) => {
-    try {
-      setIsDeletingVersion(true);
-      const response = await fetch(`/api/projects/${id}/versions`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          confirmText,
-          versionLabel: version.versionLabel,
-        }),
-      });
+  const deleteVersion = (version: ProjectVersionRow) => {
+    const previousVersions = versions;
+    const previousSelectedVersionLabel = selectedVersionLabel;
 
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => ({ message: "Errore eliminazione versione" }))) as { message?: string };
-        throw new Error(payload.message ?? "Errore eliminazione versione");
-      }
-
-      const payload = (await response.json()) as VersionsPayload;
-      setVersions(payload.versions ?? []);
-      setSelectedVersionLabel(payload.selectedVersionLabel ?? "v1");
-      setVersionDeleteTarget(null);
-      toast.success("Versione eliminata con successo.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Eliminazione versione non riuscita.");
-    } finally {
-      setIsDeletingVersion(false);
+    const filtered = versions.filter((item) => item.versionLabel !== version.versionLabel);
+    setVersions(filtered);
+    if (previousSelectedVersionLabel === version.versionLabel) {
+      setSelectedVersionLabel(filtered[0]?.versionLabel ?? "v1");
     }
+
+    scheduleUndoableAction({
+      pendingMessage: `Versione ${version.versionLabel.toUpperCase()} in archiviazione...`,
+      successMessage: "Versione archiviata.",
+      errorMessage: "Archiviazione versione non riuscita.",
+      rollback: () => {
+        setVersions(previousVersions);
+        setSelectedVersionLabel(previousSelectedVersionLabel);
+      },
+      commit: async () => {
+        const response = await fetch(`/api/projects/${id}/versions`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            confirmText: "cancella",
+            versionLabel: version.versionLabel,
+          }),
+        });
+
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({ message: "Errore archiviazione versione" }))) as { message?: string };
+          throw new Error(payload.message ?? "Errore archiviazione versione");
+        }
+
+        const payload = (await response.json()) as VersionsPayload;
+        setVersions(payload.versions ?? []);
+        setSelectedVersionLabel(payload.selectedVersionLabel ?? "v1");
+      },
+    });
   };
 
   const filteredVersions = useMemo(
@@ -726,11 +736,11 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setVersionDeleteTarget(version)}
+                            onClick={() => deleteVersion(version)}
                             className="inline-flex h-8 items-center gap-1 rounded-md border border-status-danger-border px-2.5 text-[11px] font-medium text-status-danger-text transition-colors hover:bg-status-danger-bg"
                           >
                             <Trash2 size={12} />
-                            Elimina
+                            Archivia
                           </button>
                         </div>
                       ) : column.key === "description" ? (
@@ -814,19 +824,6 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
         </div>
       )}
 
-      <ConfirmDeleteDialog
-        open={Boolean(versionDeleteTarget)}
-        isBusy={isDeletingVersion}
-        expectedText={versionDeleteTarget ? `${projectName} ${versionDeleteTarget.versionLabel}` : ""}
-        onCancel={() => setVersionDeleteTarget(null)}
-        onConfirm={async (typedText) => {
-          if (!versionDeleteTarget) {
-            return;
-          }
-          await deleteVersion(versionDeleteTarget, typedText);
-        }}
-        confirmLabel="Elimina versione"
-      />
     </div>
   );
 }

@@ -50,6 +50,11 @@ const updateProjectSchema = z.object({
 
 const deleteVersionBodySchema = z.object({
   versionLabel: z.string().min(1),
+  confirmText: z.string().min(1),
+});
+
+const deleteProjectBodySchema = z.object({
+  confirmText: z.string().min(1),
 });
 
 export class ProjectController {
@@ -219,8 +224,18 @@ export class ProjectController {
       await this.moduleGuard.requireModule(request.requestContext, ModuleKey.PROJECT_MANAGEMENT);
       await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.PROJECTS_WRITE);
 
+      const body = deleteProjectBodySchema.parse(request.body);
       const workspaceId = request.requestContext.workspace.workspaceId;
       const projectId = this.getProjectId(request);
+      const project = await this.service.getProject(workspaceId, projectId);
+      if (body.confirmText.trim() !== project.name.trim()) {
+        throw new AppError(
+          "Conferma eliminazione non valida: inserisci esattamente il nome del progetto.",
+          "DELETE_CONFIRMATION_INVALID",
+          400,
+        );
+      }
+
       await this.service.deleteProject(workspaceId, projectId, request.requestContext.workspace.userId);
 
       reply.code(200).send({ ok: true, id: projectId });
@@ -319,6 +334,15 @@ export class ProjectController {
       await this.moduleGuard.requireModule(request.requestContext, ModuleKey.PROJECT_MANAGEMENT);
       await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.PROJECTS_WRITE);
 
+      const body = deleteProjectBodySchema.parse(request.body);
+      if (body.confirmText.trim() !== "cancella") {
+        throw new AppError(
+          "Conferma eliminazione non valida: digita 'cancella'.",
+          "DELETE_CONFIRMATION_INVALID",
+          400,
+        );
+      }
+
       const workspaceId = request.requestContext.workspace.workspaceId;
       const projectId = this.getProjectId(request);
       const versionLabel = this.getVersionLabel(request);
@@ -347,6 +371,13 @@ export class ProjectController {
       await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.PROJECTS_WRITE);
 
       const body = deleteVersionBodySchema.parse(request.body);
+      if (body.confirmText.trim() !== "cancella") {
+        throw new AppError(
+          "Conferma eliminazione non valida: digita 'cancella'.",
+          "DELETE_CONFIRMATION_INVALID",
+          400,
+        );
+      }
       const workspaceId = request.requestContext.workspace.workspaceId;
       const projectId = this.getProjectId(request);
 

@@ -903,18 +903,15 @@ export class WorkflowRunExecutorService {
     }
 
     const moduleKey = context.moduleKey ?? ModuleKey.WORKFLOW_MANAGEMENT;
-    const title = status === "completed" ? "Workflow completato" : "Workflow fallito";
-    const message = status === "completed"
-      ? `Run ${context.runId} (${context.workflowKey}) completato.`
-      : `Run ${context.runId} (${context.workflowKey}) fallito: ${error ?? "errore sconosciuto"}.`;
+    const notification = this.composeWorkflowNotification(context, status, error);
 
     try {
       await this.notificationService.createInfo({
         workspaceId: context.workspaceId,
         userId: null,
         moduleKey,
-        title,
-        message,
+        title: notification.title,
+        message: notification.message,
       });
     } catch (notifyError) {
       console.error("[WorkflowRunExecutorService] Unable to notify workflow status", {
@@ -923,5 +920,37 @@ export class WorkflowRunExecutorService {
         notifyError,
       });
     }
+  }
+
+  private composeWorkflowNotification(
+    context: StepExecutionContext,
+    status: "completed" | "failed",
+    error?: string,
+  ): { title: string; message: string } {
+    if (context.moduleKey === ModuleKey.DDT_PROCESSING) {
+      const documentName = context.ddtSource?.fileName ?? "document.pdf";
+      return status === "completed"
+        ? { title: "DDT", message: `Analizzato "${documentName}".` }
+        : { title: "DDT", message: `Analisi fallita su "${documentName}": ${error ?? "errore sconosciuto"}` };
+    }
+
+    if (context.projectName) {
+      const versionLabel = context.projectVersionLabel ? ` ${context.projectVersionLabel.toUpperCase()}` : "";
+      if (status === "completed") {
+        return {
+          title: context.projectName,
+          message: `Workflow${versionLabel} completato.`,
+        };
+      }
+
+      return {
+        title: context.projectName,
+        message: `Workflow${versionLabel} fallito: ${error ?? "errore sconosciuto"}`,
+      };
+    }
+
+    return status === "completed"
+      ? { title: "Workflow", message: "Esecuzione completata." }
+      : { title: "Workflow", message: `Esecuzione fallita: ${error ?? "errore sconosciuto"}` };
   }
 }

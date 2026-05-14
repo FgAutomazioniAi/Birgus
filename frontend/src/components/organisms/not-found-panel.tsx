@@ -8,7 +8,7 @@ export function NotFoundPanel() {
       </div>
       <h1 className="text-4xl font-extrabold tracking-tight text-brand-primary">404 - Pagina non trovata</h1>
       <p className="max-w-sm text-text-muted">
-        La pagina che stai cercando non esiste o e stata spostata in un&apos;altra sezione del portale.
+        La pagina che stai cercando non esiste oppure non hai i permessi per visualizzarla.
       </p>
     </div>
   );

@@ -66,7 +66,7 @@ export class ProjectService {
       throw error;
     }
 
-    await this.notify(command.workspaceId, "Progetto creato", `Creato il progetto "${project.name}".`);
+    await this.notify(command.workspaceId, project.name, "Progetto creato.");
     await this.auditLogService?.record({
       workspaceId: command.workspaceId,
       userId: command.actorUserId,
@@ -143,7 +143,7 @@ export class ProjectService {
     }
 
     await this.repository.setProjectPrimaryClient(params.workspaceId, params.projectId, params.clientId);
-    await this.notify(params.workspaceId, "Progetto aggiornato", `Aggiornato il progetto "${updated.name}".`);
+    await this.notify(params.workspaceId, updated.name, "Progetto aggiornato.");
     await this.auditLogService?.record({
       workspaceId: params.workspaceId,
       userId: params.actorUserId ?? null,
@@ -171,6 +171,11 @@ export class ProjectService {
   }
 
   public async deleteProject(workspaceId: string, projectId: string, actorUserId?: string | null): Promise<void> {
+    const project = await this.repository.findProjectById(workspaceId, projectId);
+    if (!project) {
+      throw new AppError("Project not found.", "PROJECT_NOT_FOUND", 404);
+    }
+
     const activeVersions = await this.repository.listVersions(workspaceId, projectId);
     const removed = await this.repository.softDeleteProject(workspaceId, projectId);
     if (!removed) {
@@ -180,7 +185,7 @@ export class ProjectService {
     await Promise.all(
       activeVersions.map((version) => this.shipmentService?.deleteShipmentForProjectVersion(workspaceId, version.id)),
     );
-    await this.notify(workspaceId, "Progetto archiviato", `Archiviato il progetto con ID ${projectId}.`);
+    await this.notify(workspaceId, project.name, "Progetto archiviato.");
     await this.auditLogService?.record({
       workspaceId,
       userId: actorUserId ?? null,
@@ -241,8 +246,8 @@ export class ProjectService {
 
     await this.notify(
       command.workspaceId,
-      "Versione progetto creata",
-      `Creata la versione ${version.versionLabel.toUpperCase()} per il progetto ${project.name}.`,
+      project.name,
+      `Versione ${version.versionLabel.toUpperCase()} creata.`,
     );
     await this.auditLogService?.record({
       workspaceId: command.workspaceId,
@@ -270,10 +275,11 @@ export class ProjectService {
 
     await this.repository.clearDefaultVersionFlags(command.workspaceId, command.projectId);
     await this.repository.setDefaultVersion(target.id);
+    const project = await this.repository.findProjectById(command.workspaceId, command.projectId);
     await this.notify(
       command.workspaceId,
-      "Versione predefinita aggiornata",
-      `Impostata ${target.versionLabel.toUpperCase()} come versione predefinita.`,
+      project?.name ?? "Progetti",
+      `Versione ${target.versionLabel.toUpperCase()} impostata come predefinita.`,
     );
     await this.auditLogService?.record({
       workspaceId: command.workspaceId,
@@ -317,10 +323,11 @@ export class ProjectService {
       }
     }
 
+    const project = await this.repository.findProjectById(command.workspaceId, command.projectId);
     await this.notify(
       command.workspaceId,
-      "Versione progetto archiviata",
-      `Archiviata la versione ${target.versionLabel.toUpperCase()} del progetto ${command.projectId}.`,
+      project?.name ?? "Progetti",
+      `Versione ${target.versionLabel.toUpperCase()} archiviata.`,
     );
     await this.auditLogService?.record({
       workspaceId: command.workspaceId,

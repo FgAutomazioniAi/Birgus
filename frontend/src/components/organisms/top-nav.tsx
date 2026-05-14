@@ -3,10 +3,12 @@
 import { Bell, Menu, PanelLeft, PanelLeftClose } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { IconButton } from "@/components/atoms";
 import { UserChip } from "@/components/molecules";
 import { APP_ROUTES } from "@/lib/routes";
+import { scheduleUndoableAction } from "@/lib/undoable-action";
 
 export interface TopNavProps {
   collapsed: boolean;
@@ -37,7 +39,6 @@ const formatNotificationDate = (isoDate: string) =>
     minute: "2-digit",
     month: "2-digit",
   });
-
 export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }: TopNavProps) {
   const router = useRouter();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -122,12 +123,26 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
   };
 
   const handleClearNotifications = async () => {
-    try {
-      await fetch("/api/notifications", { method: "DELETE" });
-      setNotifications([]);
-    } catch {
-      // no-op
-    }
+    const previousNotifications = notifications;
+    setNotifications([]);
+
+    scheduleUndoableAction({
+      pendingMessage: "Notifiche in cancellazione...",
+      successMessage: "Notifiche eliminate.",
+      errorMessage: "Cancellazione notifiche non riuscita.",
+      rollback: () => setNotifications(previousNotifications),
+      commit: async () => {
+        const response = await fetch("/api/notifications", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirmText: "cancella" }),
+        });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({ message: "Cancellazione notifiche non riuscita." }))) as { message?: string };
+          throw new Error(payload.message ?? "Cancellazione notifiche non riuscita.");
+        }
+      },
+    });
   };
 
   const handleLogout = async () => {

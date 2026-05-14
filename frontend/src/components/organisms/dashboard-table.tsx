@@ -15,10 +15,11 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Text } from "@/components/atoms";
-import { ConfirmDeleteDialog, PageHelpHint, SearchField } from "@/components/molecules";
+import { PageHelpHint, SearchField } from "@/components/molecules";
 import { cn } from "@/lib/cn";
 import { downloadTablePdf } from "@/lib/pdf-export";
 import { APP_ROUTES } from "@/lib/routes";
+import { scheduleUndoableAction } from "@/lib/undoable-action";
 import type { Project } from "@/lib/types";
 
 type ProjectColumnKey = "project" | "versionsCount" | "date" | "actions";
@@ -87,8 +88,6 @@ export function DashboardTable() {
   const [columnOrder, setColumnOrder] = useState<ProjectColumnKey[]>(DEFAULT_PROJECT_COLUMN_ORDER);
   const [hiddenColumns, setHiddenColumns] = useState<ProjectColumnKey[]>([]);
   const [isPreferencesReady, setIsPreferencesReady] = useState(false);
-  const [projectDeleteTarget, setProjectDeleteTarget] = useState<Project | null>(null);
-  const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const columnsMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -263,27 +262,27 @@ export function DashboardTable() {
 
   const totalVisibleColumns = Math.max(visibleColumns.length, 1);
 
-  const handleDelete = async (project: Project, confirmText: string) => {
-    try {
-      setIsDeletingProject(true);
-      const response = await fetch(`/api/projects/${project.id}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmText }),
-      });
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => ({ message: "Errore eliminazione progetto" }))) as { message?: string };
-        throw new Error(payload.message ?? "Errore eliminazione progetto");
-      }
+  const handleDelete = (project: Project) => {
+    const previousProjects = projects;
+    setProjects((prev) => prev.filter((item) => item.id !== project.id));
 
-      setProjects((prev) => prev.filter((item) => item.id !== project.id));
-      setProjectDeleteTarget(null);
-      toast.success("Progetto eliminato con successo.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Eliminazione progetto non riuscita.");
-    } finally {
-      setIsDeletingProject(false);
-    }
+    scheduleUndoableAction({
+      pendingMessage: `Progetto "${project.project}" in archiviazione...`,
+      successMessage: "Progetto archiviato.",
+      errorMessage: "Archiviazione progetto non riuscita.",
+      rollback: () => setProjects(previousProjects),
+      commit: async () => {
+        const response = await fetch(`/api/projects/${project.id}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirmText: project.project }),
+        });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({ message: "Errore archiviazione progetto" }))) as { message?: string };
+          throw new Error(payload.message ?? "Errore archiviazione progetto");
+        }
+      },
+    });
   };
 
   const toggleColumnVisibility = (key: ProjectColumnKey) => {
@@ -508,9 +507,9 @@ export function DashboardTable() {
                             <Pencil size={18} />
                           </button>
                           <button
-                            onClick={() => setProjectDeleteTarget(project)}
+                            onClick={() => handleDelete(project)}
                             className="rounded-lg p-1.5 text-status-danger-text transition-colors hover:bg-status-danger-bg"
-                            title="Elimina progetto"
+                            title="Archivia progetto"
                           >
                             <Trash2 size={18} />
                           </button>
@@ -601,19 +600,6 @@ export function DashboardTable() {
         </div>
       </Card>
 
-      <ConfirmDeleteDialog
-        open={Boolean(projectDeleteTarget)}
-        isBusy={isDeletingProject}
-        expectedText={projectDeleteTarget?.project ?? ""}
-        onCancel={() => setProjectDeleteTarget(null)}
-        onConfirm={async (typedText) => {
-          if (!projectDeleteTarget) {
-            return;
-          }
-          await handleDelete(projectDeleteTarget, typedText);
-        }}
-        confirmLabel="Elimina progetto"
-      />
     </div>
   );
 }

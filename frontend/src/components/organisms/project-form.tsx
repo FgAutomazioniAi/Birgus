@@ -10,6 +10,7 @@ import { Button, Card, Input, Text } from "@/components/atoms";
 import { FormField, PageHelpHint } from "@/components/molecules";
 import { PROJECT_STATUS_OPTIONS } from "@/lib/project-status";
 import { APP_ROUTES } from "@/lib/routes";
+import { scheduleUndoableAction } from "@/lib/undoable-action";
 import type { ProjectStatus } from "@/lib/types";
 
 interface ProjectFormValues {
@@ -575,25 +576,37 @@ export function ProjectForm({ id }: ProjectFormProps) {
       return;
     }
 
-    try {
-      const fileKind = LOCAL_PDF_KIND_MAP[field];
-      const response = await fetch(withVersion(`/api/projects/${id}/files/${fileKind}`, selectedVersionLabel), { method: "DELETE" });
-      if (!response.ok) {
-        throw new Error("Delete file fallita");
-      }
+    const previousName = localPdfNames[field];
+    const previousPreview = localPdfPreviewUrls[field];
+    setLocalPdfNames((prev) => ({
+      ...prev,
+      [field]: null,
+    }));
+    setLocalPdfPreviewUrls((prev) => ({
+      ...prev,
+      [field]: null,
+    }));
 
-      setLocalPdfNames((prev) => ({
-        ...prev,
-        [field]: null,
-      }));
-      setLocalPdfPreviewUrls((prev) => ({
-        ...prev,
-        [field]: null,
-      }));
-      toast.success("PDF eliminato.");
-    } catch {
-      toast.error("Eliminazione PDF non riuscita.");
-    }
+    const fileKind = LOCAL_PDF_KIND_MAP[field];
+    scheduleUndoableAction({
+      pendingMessage: `Documento "${previousName ?? "pdf"}" in archiviazione...`,
+      successMessage: "PDF archiviato.",
+      errorMessage: "Archiviazione PDF non riuscita.",
+      rollback: () => {
+        setLocalPdfNames((prev) => ({ ...prev, [field]: previousName }));
+        setLocalPdfPreviewUrls((prev) => ({ ...prev, [field]: previousPreview }));
+      },
+      commit: async () => {
+        const response = await fetch(withVersion(`/api/projects/${id}/files/${fileKind}`, selectedVersionLabel), {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirmText: "cancella" }),
+        });
+        if (!response.ok) {
+          throw new Error("Archiviazione PDF non riuscita.");
+        }
+      },
+    });
   };
 
   const isSpreadsheetFile = (file: File) => {
@@ -649,21 +662,36 @@ export function ProjectForm({ id }: ProjectFormProps) {
       return;
     }
 
-    try {
-      setIsDeletingQuotationXlsx(true);
-      const response = await fetch(withVersion(`/api/projects/${id}/files/quotation-xlsx`, selectedVersionLabel), { method: "DELETE" });
-      if (!response.ok) {
-        throw new Error("Eliminazione Excel fallita");
-      }
+    const previousName = quotationXlsxName;
+    const previousPreview = quotationXlsxPreviewUrl;
+    setQuotationXlsxName(null);
+    setQuotationXlsxPreviewUrl(null);
+    setIsDeletingQuotationXlsx(true);
 
-      setQuotationXlsxName(null);
-      setQuotationXlsxPreviewUrl(null);
-      toast.success("File Excel eliminato.");
-    } catch {
-      toast.error("Eliminazione file Excel non riuscita.");
-    } finally {
-      setIsDeletingQuotationXlsx(false);
-    }
+    scheduleUndoableAction({
+      pendingMessage: `File "${previousName ?? "preventivo.xlsx"}" in archiviazione...`,
+      successMessage: "File Excel archiviato.",
+      errorMessage: "Archiviazione file Excel non riuscita.",
+      rollback: () => {
+        setIsDeletingQuotationXlsx(false);
+        setQuotationXlsxName(previousName);
+        setQuotationXlsxPreviewUrl(previousPreview);
+      },
+      commit: async () => {
+        try {
+          const response = await fetch(withVersion(`/api/projects/${id}/files/quotation-xlsx`, selectedVersionLabel), {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ confirmText: "cancella" }),
+          });
+          if (!response.ok) {
+            throw new Error("Archiviazione file Excel non riuscita.");
+          }
+        } finally {
+          setIsDeletingQuotationXlsx(false);
+        }
+      },
+    });
   };
 
   const handleDeleteQuotation = async () => {
@@ -671,21 +699,36 @@ export function ProjectForm({ id }: ProjectFormProps) {
       return;
     }
 
-    try {
-      setIsDeletingQuotation(true);
-      const response = await fetch(withVersion(`/api/projects/${id}/quotation`, selectedVersionLabel), { method: "DELETE" });
-      if (!response.ok) {
-        throw new Error("Eliminazione preventivo fallita");
-      }
+    const previousFileName = quotationFileName;
+    const previousPreview = quotationPreviewUrl;
+    setQuotationFileName(null);
+    setQuotationPreviewUrl(null);
+    setIsDeletingQuotation(true);
 
-      setQuotationFileName(null);
-      setQuotationPreviewUrl(null);
-      toast.success("Preventivo eliminato.");
-    } catch {
-      toast.error("Eliminazione preventivo non riuscita.");
-    } finally {
-      setIsDeletingQuotation(false);
-    }
+    scheduleUndoableAction({
+      pendingMessage: `Preventivo "${previousFileName ?? "preventivo.pdf"}" in archiviazione...`,
+      successMessage: "Preventivo archiviato.",
+      errorMessage: "Archiviazione preventivo non riuscita.",
+      rollback: () => {
+        setIsDeletingQuotation(false);
+        setQuotationFileName(previousFileName);
+        setQuotationPreviewUrl(previousPreview);
+      },
+      commit: async () => {
+        try {
+          const response = await fetch(withVersion(`/api/projects/${id}/quotation`, selectedVersionLabel), {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ confirmText: "cancella" }),
+          });
+          if (!response.ok) {
+            throw new Error("Archiviazione preventivo non riuscita.");
+          }
+        } finally {
+          setIsDeletingQuotation(false);
+        }
+      },
+    });
   };
 
   const handleReanalyzeQuotation = async () => {
@@ -821,7 +864,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
               </Text>
               <PageHelpHint text="Compila i dati progetto e salva la commessa." />
             </div>
-            <Text variant="muted">{isEdit ? "Modifica Commessa" : "Nuova Commessa"}</Text>
+            <Text variant="muted">{isEdit ? "Modifica progetto" : "Nuovo progetto"}</Text>
           </div>
         </div>
 

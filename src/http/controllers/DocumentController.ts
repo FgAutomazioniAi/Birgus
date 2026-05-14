@@ -18,6 +18,10 @@ const putFileSchema = z.object({
   versionLabel: z.string().min(1).optional(),
 });
 
+const deleteProjectFileSchema = z.object({
+  confirmText: z.string().min(1),
+});
+
 export class DocumentController {
   private readonly service: DocumentArchiveService;
   private readonly moduleGuard: ModuleGuard;
@@ -140,6 +144,14 @@ export class DocumentController {
     try {
       await this.moduleGuard.requireModule(request.requestContext, ModuleKey.DOCUMENT_ARCHIVE);
       await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.DOCUMENTS_WRITE);
+      const body = deleteProjectFileSchema.parse(request.body);
+      if (body.confirmText.trim() !== "cancella") {
+        throw new AppError(
+          "Conferma eliminazione non valida: digita 'cancella'.",
+          "DELETE_CONFIRMATION_INVALID",
+          400,
+        );
+      }
 
       const workspaceId = request.requestContext.workspace.workspaceId;
       const projectId = this.getProjectId(request);

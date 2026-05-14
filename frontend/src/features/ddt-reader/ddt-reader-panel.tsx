@@ -9,6 +9,7 @@ import { Button, Card, Input, Text } from "@/components/atoms";
 import { PageHelpHint } from "@/components/molecules";
 import { cn } from "@/lib/cn";
 import { APP_ROUTES } from "@/lib/routes";
+import { scheduleUndoableAction } from "@/lib/undoable-action";
 
 import type { DdtReaderArticleItem, DdtReaderConfig, DdtReaderDocument } from "./types";
 
@@ -518,35 +519,52 @@ export function DdtReaderPanel() {
     setError("");
 
     if (PROCESSING_STATUSES.has(document.status)) {
-      const message = "Documento in elaborazione: attendi la fine prima di cancellarlo.";
+      const message = "Documento in elaborazione: attendi la fine prima di archiviarlo.";
       setError(message);
       toast.error(message);
       return;
     }
 
     setDeletingDocId(document.id);
-
-    try {
-      await requestJson<{ deleted: boolean; doc_id: number }>(
-        `/api/ddt-reader/documents/${document.id}`,
-        { method: "DELETE" },
-        "Errore durante la cancellazione del documento.",
-      );
-
-      if (selectedDocId === document.id) {
-        setSelectedDocId(null);
-      }
-
-      setFeedback("Documento cancellato.");
-      toast.success("Documento cancellato.");
-      await refreshDocuments();
-    } catch (deleteError) {
-      const message = handleRequestError(deleteError, "Errore durante la cancellazione del documento.");
-      setError(message);
-      toast.error(message);
-    } finally {
-      setDeletingDocId(null);
+    const previousDocuments = documents;
+    const previousSelectedDocId = selectedDocId;
+    const nextDocuments = documents.filter((item) => item.id !== document.id);
+    setDocuments(nextDocuments);
+    if (previousSelectedDocId === document.id) {
+      setSelectedDocId(null);
     }
+
+    scheduleUndoableAction({
+      pendingMessage: `Documento "${document.original_filename}" in archiviazione...`,
+      successMessage: "Documento archiviato.",
+      errorMessage: "Errore durante l'archiviazione del documento.",
+      rollback: () => {
+        setDeletingDocId(null);
+        setDocuments(previousDocuments);
+        setSelectedDocId(previousSelectedDocId);
+      },
+      commit: async () => {
+        try {
+          await requestJson<{ deleted: boolean; doc_id: number }>(
+            `/api/ddt-reader/documents/${document.id}`,
+            {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ confirmText: "cancella" }),
+            },
+            "Errore durante l'archiviazione del documento.",
+          );
+          setFeedback("Documento archiviato.");
+          await refreshDocuments();
+        } catch (deleteError) {
+          const message = handleRequestError(deleteError, "Errore durante l'archiviazione del documento.");
+          setError(message);
+          throw deleteError;
+        } finally {
+          setDeletingDocId(null);
+        }
+      },
+    });
   };
 
   return (
@@ -676,7 +694,7 @@ export function DdtReaderPanel() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          title="Cancella documento"
+                          title="Archivia documento"
                           onClick={(event) => {
                             void deleteDocument(document, event);
                           }}

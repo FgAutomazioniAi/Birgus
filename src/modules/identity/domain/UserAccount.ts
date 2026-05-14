@@ -4,6 +4,8 @@ export class UserAccount {
   public readonly firstName: string;
   public readonly lastName: string | null;
   public readonly passwordHash: string | null;
+  public readonly twoFactorEnabled: boolean;
+  public readonly twoFactorSecretCiphertext: string | null;
   public readonly isActive: boolean;
 
   public constructor(params: {
@@ -12,6 +14,8 @@ export class UserAccount {
     firstName: string;
     lastName: string | null;
     passwordHash: string | null;
+    twoFactorEnabled: boolean;
+    twoFactorSecretCiphertext: string | null;
     isActive: boolean;
   }) {
     this.id = params.id;
@@ -19,6 +23,8 @@ export class UserAccount {
     this.firstName = params.firstName;
     this.lastName = params.lastName;
     this.passwordHash = params.passwordHash;
+    this.twoFactorEnabled = params.twoFactorEnabled;
+    this.twoFactorSecretCiphertext = params.twoFactorSecretCiphertext;
     this.isActive = params.isActive;
   }
 }

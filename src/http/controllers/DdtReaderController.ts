@@ -1,4 +1,5 @@
 import { FastifyReply } from "fastify";
+import { z } from "zod";
 
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
 import { AppError } from "../../core/errors/AppError.js";
@@ -8,6 +9,10 @@ import { ModuleGuard } from "../middleware/ModuleGuard.js";
 import { PermissionGuard } from "../middleware/PermissionGuard.js";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest.js";
 import { MultipartFormReader } from "../utils/MultipartFormReader.js";
+
+const deleteDdtDocumentSchema = z.object({
+  confirmText: z.string().min(1),
+});
 
 export class DdtReaderController {
   private readonly service: DdtReaderService;
@@ -126,6 +131,14 @@ export class DdtReaderController {
     try {
       await this.moduleGuard.requireModule(request.requestContext, ModuleKey.DDT_PROCESSING);
       await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.DDT_PROCESS);
+      const body = deleteDdtDocumentSchema.parse(request.body);
+      if (body.confirmText.trim() !== "cancella") {
+        throw new AppError(
+          "Conferma eliminazione non valida: digita 'cancella'.",
+          "DELETE_CONFIRMATION_INVALID",
+          400,
+        );
+      }
 
       const workspaceId = request.requestContext.workspace.workspaceId;
       const documentId = this.getDocumentId(request);
@@ -182,6 +195,11 @@ export class DdtReaderController {
   }
 
   private sendError(reply: FastifyReply, error: unknown): void {
+    if (error instanceof z.ZodError) {
+      reply.code(400).send({ code: "VALIDATION_ERROR", message: "Invalid payload.", issues: error.issues });
+      return;
+    }
+
     if (error instanceof AppError) {
       reply.code(error.statusCode).send({ message: error.message, code: error.code });
       return;

@@ -10,6 +10,8 @@ export const APP_ROUTES = {
   spedizioni: "/spedizioni",
   shipmentDetail: (id: string) => `/spedizioni/${id}`,
   ddtReader: "/ddt-reader",
+  archive: "/archivio",
+  superadmin: "/superadmin",
   settings: "/settings",
   login: "/login",
 } as const;

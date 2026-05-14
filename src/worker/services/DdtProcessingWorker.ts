@@ -27,6 +27,8 @@ export class DdtProcessingWorker implements JobHandler<DdtProcessingJobPayload> 
 
   public async handle(job: Job<DdtProcessingJobPayload>): Promise<void> {
     const payload = job.payload;
+    const documentSummary = await this.repository.findDocumentReference(payload.ddtDocumentId);
+    const documentLabel = documentSummary?.fileName ?? "document.pdf";
 
     await this.repository.updateJobStatus(payload.jobId, "RUNNING");
     await this.repository.updateDocumentStatus(payload.ddtDocumentId, "OCR_PROCESSING");
@@ -45,7 +47,7 @@ export class DdtProcessingWorker implements JobHandler<DdtProcessingJobPayload> 
       await this.repository.appendEvent(payload.jobId, payload.ddtDocumentId, "completed", {
         articleCount: analysis.articleCount,
       });
-      await this.notify(payload.workspaceId, "Analisi DDT completata", `Completata l'analisi del documento ${payload.ddtDocumentId}.`);
+      await this.notify(payload.workspaceId, "DDT", `Analizzato "${documentLabel}".`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown processing error";
       await this.repository.updateDocumentStatus(payload.ddtDocumentId, "ERROR", message);
@@ -53,7 +55,7 @@ export class DdtProcessingWorker implements JobHandler<DdtProcessingJobPayload> 
       await this.repository.appendEvent(payload.jobId, payload.ddtDocumentId, "failed", {
         message,
       });
-      await this.notify(payload.workspaceId, "Analisi DDT fallita", `Analisi fallita per il documento ${payload.ddtDocumentId}: ${message}`);
+      await this.notify(payload.workspaceId, "DDT", `Analisi fallita su "${documentLabel}": ${message}`);
       throw error;
     }
   }

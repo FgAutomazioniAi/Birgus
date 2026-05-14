@@ -15,6 +15,11 @@ const loginSchema = z.object({
   rememberMe: z.boolean().optional(),
 });
 
+const login2faSchema = z.object({
+  challengeToken: z.string().min(1),
+  otpCode: z.string().min(6).max(10),
+});
+
 const forgotPasswordSchema = z.object({
   email: z.string().email(),
 });
@@ -54,6 +59,31 @@ export class AuthController {
         }),
       );
 
+      if (result.requiresTwoFactor) {
+        reply.code(202).send({
+          ok: true,
+          twoFactorRequired: true,
+          challengeToken: result.twoFactorChallengeToken,
+          setupRequired: result.twoFactorSetupRequired,
+          setup: result.twoFactorSetupRequired
+            ? {
+              secret: result.twoFactorSetupSecret,
+              otpauthUri: result.twoFactorSetupUri,
+            }
+            : null,
+          user: {
+            id: result.userId,
+            email: result.email,
+            fullName: result.fullName,
+          },
+        });
+        return;
+      }
+
+      if (!result.token || !result.expiresAt || !result.sessionId) {
+        throw new AppError("Invalid auth state.", "AUTH_STATE_INVALID", 500);
+      }
+
       const cookieMaxAgeSeconds = Math.max(
         1,
         Math.floor((result.expiresAt.getTime() - Date.now()) / 1000),
@@ -65,6 +95,47 @@ export class AuthController {
 
       reply.code(200).send({
         ok: true,
+        twoFactorRequired: false,
+        sessionId: result.sessionId,
+        token: result.token,
+        expiresAt: result.expiresAt,
+        user: {
+          id: result.userId,
+          email: result.email,
+          fullName: result.fullName,
+        },
+      });
+    } catch (error) {
+      this.sendError(reply, error);
+    }
+  };
+
+  public verifyLogin2fa = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    try {
+      const body = login2faSchema.parse(request.body);
+      const result = await this.authService.verifyTwoFactorLogin({
+        challengeToken: body.challengeToken,
+        otpCode: body.otpCode,
+        ipAddress: this.getIpAddress(request),
+        userAgent: this.getUserAgent(request),
+      });
+
+      if (!result.token || !result.expiresAt || !result.sessionId) {
+        throw new AppError("Invalid auth state.", "AUTH_STATE_INVALID", 500);
+      }
+
+      const cookieMaxAgeSeconds = Math.max(
+        1,
+        Math.floor((result.expiresAt.getTime() - Date.now()) / 1000),
+      );
+      reply.header(
+        "Set-Cookie",
+        this.sessionCookieFactory.createSessionCookie(result.token, cookieMaxAgeSeconds),
+      );
+
+      reply.code(200).send({
+        ok: true,
+        twoFactorRequired: false,
         sessionId: result.sessionId,
         token: result.token,
         expiresAt: result.expiresAt,

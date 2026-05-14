@@ -11,6 +11,10 @@ const configureUserModuleSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
+const clearUserOverrideSchema = z.object({
+  confirmText: z.string().min(1),
+});
+
 export class ModuleController {
   private readonly moduleManagementService: ModuleManagementService;
   private readonly permissionGuard: PermissionGuard;
@@ -140,6 +144,14 @@ export class ModuleController {
   public clearUserOverride = async (request: AuthenticatedRequest, reply: FastifyReply): Promise<void> => {
     try {
       await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.MODULES_CONFIGURE);
+      const body = clearUserOverrideSchema.parse(request.body);
+      if (body.confirmText.trim() !== "cancella") {
+        throw new AppError(
+          "Conferma eliminazione non valida: digita 'cancella'.",
+          "DELETE_CONFIRMATION_INVALID",
+          400,
+        );
+      }
 
       const workspaceId = request.requestContext.workspace.workspaceId;
       const userId = this.getUserId(request);

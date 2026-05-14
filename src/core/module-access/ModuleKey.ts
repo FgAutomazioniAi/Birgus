@@ -9,4 +9,5 @@ export class ModuleKey {
   public static readonly WORKFLOW_MANAGEMENT = "workflow_management";
   public static readonly NOTIFICATION_CENTER = "notification_center";
   public static readonly AUDIT_CENTER = "audit_center";
+  public static readonly SUPERADMIN_CENTER = "superadmin_center";
 }

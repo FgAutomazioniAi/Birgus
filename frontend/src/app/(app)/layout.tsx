@@ -41,12 +41,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       currentUserName = fullName;
     }
 
-    const roleKey = payload.user?.roleKeys?.[0]?.trim().toLowerCase();
-    if (roleKey === "superadmin") {
+    const normalizedRoleKeys = (payload.user?.roleKeys ?? []).map((item) => item.trim().toLowerCase());
+    if (normalizedRoleKeys.includes("superadmin")) {
       currentUserRole = "Superadmin";
-    } else if (roleKey === "admin") {
+    } else if (normalizedRoleKeys.includes("admin")) {
       currentUserRole = "Admin";
-    } else if (roleKey === "operator") {
+    } else if (normalizedRoleKeys.includes("operator")) {
       currentUserRole = "Operatore";
     }
 

@@ -15,6 +15,19 @@ import { AuthenticatedRequest } from "../types/AuthenticatedRequest.js";
 import { MultipartFormReader } from "../utils/MultipartFormReader.js";
 
 const QUOTATION_FILE_NAME = "preventivo.pdf";
+const deleteConfirmationSchema = {
+  parse: (value: unknown): { confirmText: string } => {
+    if (!value || typeof value !== "object") {
+      throw new AppError("Conferma eliminazione mancante.", "DELETE_CONFIRMATION_REQUIRED", 400);
+    }
+    const record = value as Record<string, unknown>;
+    const confirmText = typeof record.confirmText === "string" ? record.confirmText.trim() : "";
+    if (confirmText !== "cancella") {
+      throw new AppError("Conferma eliminazione non valida: digita 'cancella'.", "DELETE_CONFIRMATION_INVALID", 400);
+    }
+    return { confirmText };
+  },
+};
 
 const FILE_KIND_META: Record<FileKindValue, { defaultFileName: string; extension: string; contentType: string }> = {
   "email-pdf": {
@@ -228,6 +241,7 @@ export class ProjectAssetsController {
     try {
       await this.moduleGuard.requireModule(request.requestContext, ModuleKey.DOCUMENT_ARCHIVE);
       await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.DOCUMENTS_WRITE);
+      deleteConfirmationSchema.parse(request.body);
 
       const workspaceId = request.requestContext.workspace.workspaceId;
       const projectId = this.getProjectId(request);
@@ -403,6 +417,7 @@ export class ProjectAssetsController {
     try {
       await this.moduleGuard.requireModule(request.requestContext, ModuleKey.DOCUMENT_ARCHIVE);
       await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.DOCUMENTS_WRITE);
+      deleteConfirmationSchema.parse(request.body);
 
       const workspaceId = request.requestContext.workspace.workspaceId;
       const projectId = this.getProjectId(request);

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Eye, EyeOff, KeyRound, Lock, LogIn, Mail } from "lucide-react";
+import { ChevronRight, Eye, EyeOff, KeyRound, Lock, LogIn, Mail, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -16,6 +16,16 @@ interface LoginFormValues {
   rememberMe: boolean;
 }
 
+interface LoginApiSuccessPayload {
+  twoFactorRequired?: boolean;
+  challengeToken?: string;
+  setupRequired?: boolean;
+  setup?: {
+    secret?: string;
+    otpauthUri?: string;
+  } | null;
+}
+
 export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -27,10 +37,17 @@ export function LoginForm() {
   const [recoveryCode, setRecoveryCode] = useState("");
   const [recoveryPassword, setRecoveryPassword] = useState("");
   const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState("");
+  const [twoFactorChallengeToken, setTwoFactorChallengeToken] = useState<string | null>(null);
+  const [twoFactorSetupSecret, setTwoFactorSetupSecret] = useState<string | null>(null);
+  const [twoFactorSetupUri, setTwoFactorSetupUri] = useState<string | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [isVerifyingTwoFactor, setIsVerifyingTwoFactor] = useState(false);
+
   const router = useRouter();
   const {
     register,
     handleSubmit,
+    getValues,
     formState: { errors },
   } = useForm<LoginFormValues>({
     defaultValues: {
@@ -39,6 +56,13 @@ export function LoginForm() {
       rememberMe: false,
     },
   });
+
+  const resetTwoFactorState = () => {
+    setTwoFactorChallengeToken(null);
+    setTwoFactorSetupSecret(null);
+    setTwoFactorSetupUri(null);
+    setTwoFactorCode("");
+  };
 
   const onSubmit = async (data: LoginFormValues) => {
     try {
@@ -54,11 +78,34 @@ export function LoginForm() {
         }),
       });
 
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(payload?.message ?? "Credenziali non valide.");
+      const payload = (await response.json().catch(() => null)) as LoginApiSuccessPayload | { message?: string } | null;
+
+      if (
+        response.status === 202
+        && payload
+        && typeof payload === "object"
+        && "twoFactorRequired" in payload
+        && payload.twoFactorRequired
+      ) {
+        const challengeToken = typeof payload.challengeToken === "string" ? payload.challengeToken : "";
+        if (!challengeToken.trim()) {
+          throw new Error("Challenge 2FA non disponibile.");
+        }
+
+        setTwoFactorChallengeToken(challengeToken);
+        setTwoFactorSetupSecret(payload.setupRequired ? payload.setup?.secret ?? null : null);
+        setTwoFactorSetupUri(payload.setupRequired ? payload.setup?.otpauthUri ?? null : null);
+        setTwoFactorCode("");
+        toast.info("Inserisci il codice dell'app autenticatore per completare il login.");
+        return;
       }
 
+      if (!response.ok) {
+        const message = payload && typeof payload === "object" && "message" in payload ? payload.message : undefined;
+        throw new Error(message ?? "Credenziali non valide.");
+      }
+
+      resetTwoFactorState();
       toast.success("Accesso effettuato con successo.");
       router.push(APP_ROUTES.dashboard);
       router.refresh();
@@ -68,6 +115,46 @@ export function LoginForm() {
       toast.error(message || fallbackMessage);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleVerifyTwoFactor = async () => {
+    if (!twoFactorChallengeToken) {
+      toast.error("Challenge 2FA mancante. Ripeti il login.");
+      return;
+    }
+
+    const normalizedCode = twoFactorCode.replace(/\s+/g, "").trim();
+    if (!/^\d{6,10}$/.test(normalizedCode)) {
+      toast.error("Inserisci un codice OTP valido.");
+      return;
+    }
+
+    try {
+      setIsVerifyingTwoFactor(true);
+      const response = await fetch("/api/auth/login/2fa/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          challengeToken: twoFactorChallengeToken,
+          otpCode: normalizedCode,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(payload?.message ?? "Verifica 2FA non riuscita.");
+      }
+
+      resetTwoFactorState();
+      toast.success("Autenticazione a due fattori completata.");
+      router.push(APP_ROUTES.dashboard);
+      router.refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Verifica 2FA non riuscita.";
+      toast.error(message);
+    } finally {
+      setIsVerifyingTwoFactor(false);
     }
   };
 
@@ -154,6 +241,74 @@ export function LoginForm() {
     }
   };
 
+  const renderTwoFactorSection = twoFactorChallengeToken
+    ? (
+      <div className="mt-6 rounded-[var(--radius-md)] border border-border-default bg-bg-muted p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <ShieldCheck size={16} className="text-brand-primary" />
+          <p className="text-sm font-bold text-text-primary">Autenticazione a due fattori</p>
+        </div>
+
+        <div className="space-y-3">
+          {twoFactorSetupSecret && (
+            <div className="rounded-[var(--radius-sm)] border border-border-subtle bg-bg-surface p-3">
+              <p className="text-xs font-semibold text-text-secondary">Configura l'app (una sola volta)</p>
+              <p className="mt-1 text-xs text-text-muted">Secret TOTP</p>
+              <p className="mt-1 break-all rounded-[var(--radius-sm)] bg-bg-muted px-2 py-1 font-mono text-xs text-text-primary">
+                {twoFactorSetupSecret}
+              </p>
+              {twoFactorSetupUri && (
+                <>
+                  <p className="mt-2 text-xs text-text-muted">URI otpauth</p>
+                  <p className="mt-1 break-all rounded-[var(--radius-sm)] bg-bg-muted px-2 py-1 font-mono text-[11px] text-text-primary">
+                    {twoFactorSetupUri}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+
+          <div>
+            <Label htmlFor="two-factor-code">Codice OTP</Label>
+            <Input
+              id="two-factor-code"
+              value={twoFactorCode}
+              onChange={(event) => setTwoFactorCode(event.target.value)}
+              disabled={isVerifyingTwoFactor}
+              className="mt-1"
+              placeholder="123456"
+              inputMode="numeric"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 flex-1"
+              disabled={isVerifyingTwoFactor}
+              onClick={() => {
+                resetTwoFactorState();
+                const emailValue = getValues("email").trim().toLowerCase();
+                setRecoveryEmail((prev) => prev || emailValue);
+              }}
+            >
+              Annulla
+            </Button>
+            <Button
+              type="button"
+              className="h-10 flex-1"
+              onClick={() => void handleVerifyTwoFactor()}
+              disabled={isVerifyingTwoFactor}
+            >
+              {isVerifyingTwoFactor ? "Verifica..." : "Verifica 2FA"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+    : null;
+
   return (
     <div className="flex min-h-screen flex-col justify-center bg-bg-page px-4 py-12 sm:px-6 lg:px-8">
       <div className="text-center sm:mx-auto sm:w-full sm:max-w-md">
@@ -177,7 +332,7 @@ export function LoginForm() {
                   type="email"
                   autoComplete="email"
                   {...register("email", { required: "L'email e obbligatoria" })}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !!twoFactorChallengeToken || isVerifyingTwoFactor}
                   className="pl-10 pr-3"
                   placeholder="admin@fgautomazioni.it"
                 />
@@ -199,14 +354,14 @@ export function LoginForm() {
                     required: "La password e obbligatoria",
                     minLength: { value: 1, message: "Password non valida" },
                   })}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !!twoFactorChallengeToken || isVerifyingTwoFactor}
                   className="pl-10 pr-10"
                   placeholder="********"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !!twoFactorChallengeToken || isVerifyingTwoFactor}
                   className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 transition-colors hover:text-blue-600"
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
@@ -222,7 +377,7 @@ export function LoginForm() {
                 <input
                   id="remember-me"
                   type="checkbox"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !!twoFactorChallengeToken || isVerifyingTwoFactor}
                   {...register("rememberMe")}
                   className="h-4 w-4 cursor-pointer rounded-lg border-slate-300 text-brand-primary transition-colors focus:ring-blue-500"
                 />
@@ -236,6 +391,7 @@ export function LoginForm() {
                   type="button"
                   onClick={() => setIsRecoveryOpen((prev) => !prev)}
                   className="font-semibold text-brand-accent transition-colors hover:text-brand-accent-hover"
+                  disabled={!!twoFactorChallengeToken}
                 >
                   Password dimenticata?
                 </button>
@@ -243,13 +399,19 @@ export function LoginForm() {
             </div>
 
             <div>
-              <Button type="submit" className="h-14 w-full rounded-[var(--radius-md)] py-3.5" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                className="h-14 w-full rounded-[var(--radius-md)] py-3.5"
+                disabled={isSubmitting || !!twoFactorChallengeToken || isVerifyingTwoFactor}
+              >
                 <LogIn className="h-5 w-5" />
                 {isSubmitting ? "Accesso..." : "Accedi"}
                 <ChevronRight className="ml-1 h-4 w-4 opacity-50" />
               </Button>
             </div>
           </form>
+
+          {renderTwoFactorSection}
 
           {isRecoveryOpen && (
             <div className="mt-6 rounded-[var(--radius-md)] border border-border-default bg-bg-muted p-4">

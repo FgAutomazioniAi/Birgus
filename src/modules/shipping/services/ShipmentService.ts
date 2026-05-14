@@ -60,8 +60,8 @@ export class ShipmentService {
 
     await this.notify(
       command.workspaceId,
-      "Spedizione creata",
-      `Creata la spedizione ${created.code} per la versione ${versionSummary.projectVersionLabel.toUpperCase()}.`,
+      versionSummary.projectName,
+      `Spedizione ${created.code} creata per versione ${versionSummary.projectVersionLabel.toUpperCase()}.`,
     );
 
     return created;
@@ -80,8 +80,8 @@ export class ShipmentService {
     const updated = await this.repository.upsertShipmentSpecification(params);
     await this.notify(
       params.workspaceId,
-      "Specifica spedizione aggiornata",
-      `Aggiornata la configurazione della spedizione ${updated.code}.`,
+      updated.projectName,
+      `Specifica spedizione ${updated.code} aggiornata (${updated.projectVersionLabel.toUpperCase()}).`,
     );
     return updated;
   }
@@ -100,8 +100,8 @@ export class ShipmentService {
     const updated = await this.repository.replaceShipmentItems(params);
     await this.notify(
       params.workspaceId,
-      "Articoli spedizione aggiornati",
-      `Aggiornati gli articoli della spedizione ${updated.code}.`,
+      updated.projectName,
+      `Articoli spedizione ${updated.code} aggiornati (${updated.projectVersionLabel.toUpperCase()}).`,
     );
     return updated;
   }
@@ -117,8 +117,8 @@ export class ShipmentService {
     const updated = await this.repository.addShipmentEvent(params);
     await this.notify(
       params.workspaceId,
-      "Evento spedizione registrato",
-      `Registrato l'evento "${params.eventType}" per la spedizione ${updated.code}.`,
+      updated.projectName,
+      `Evento spedizione ${updated.code}: ${params.eventType}.`,
     );
     return updated;
   }

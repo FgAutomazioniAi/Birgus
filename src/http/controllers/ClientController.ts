@@ -27,6 +27,10 @@ const updateClientSchema = z.object({
   notes: z.string().trim().optional().default(""),
 });
 
+const deleteClientSchema = z.object({
+  confirmText: z.string().min(1),
+});
+
 export class ClientController {
   private readonly service: ClientService;
   private readonly moduleGuard: ModuleGuard;
@@ -157,6 +161,15 @@ export class ClientController {
     try {
       await this.moduleGuard.requireModule(request.requestContext, ModuleKey.PROJECT_MANAGEMENT);
       await this.permissionGuard.requirePermission(request.requestContext, PermissionKey.CLIENTS_WRITE);
+
+      const body = deleteClientSchema.parse(request.body);
+      if (body.confirmText.trim() !== "cancella") {
+        throw new AppError(
+          "Conferma eliminazione non valida: digita 'cancella'.",
+          "DELETE_CONFIRMATION_INVALID",
+          400,
+        );
+      }
 
       const workspaceId = request.requestContext.workspace.workspaceId;
       const clientId = this.getClientId(request);

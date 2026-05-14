@@ -17,6 +17,8 @@ export class PrismaUserAccountRepository implements UserAccountRepository {
         first_name: true,
         last_name: true,
         password_hash: true,
+        two_factor_enabled: true,
+        two_factor_secret_ciphertext: true,
         is_active: true,
       },
     });
@@ -31,6 +33,8 @@ export class PrismaUserAccountRepository implements UserAccountRepository {
       firstName: row.first_name,
       lastName: row.last_name,
       passwordHash: row.password_hash,
+      twoFactorEnabled: row.two_factor_enabled,
+      twoFactorSecretCiphertext: row.two_factor_secret_ciphertext,
       isActive: row.is_active,
     });
   }
@@ -49,6 +53,8 @@ export class PrismaUserAccountRepository implements UserAccountRepository {
         first_name: true,
         last_name: true,
         password_hash: true,
+        two_factor_enabled: true,
+        two_factor_secret_ciphertext: true,
         is_active: true,
       },
     });
@@ -63,6 +69,8 @@ export class PrismaUserAccountRepository implements UserAccountRepository {
       firstName: row.first_name,
       lastName: row.last_name,
       passwordHash: row.password_hash,
+      twoFactorEnabled: row.two_factor_enabled,
+      twoFactorSecretCiphertext: row.two_factor_secret_ciphertext,
       isActive: row.is_active,
     });
   }
@@ -77,6 +85,65 @@ export class PrismaUserAccountRepository implements UserAccountRepository {
       data: {
         password_hash: passwordHash,
         password_updated_at: new Date(),
+      },
+    });
+  }
+
+  public async isSuperadmin(userId: string): Promise<boolean> {
+    const prisma = PrismaClientManager.getClient();
+    const assignment = await prisma.userWorkspaceRole.findFirst({
+      where: {
+        user_id: userId,
+        role: {
+          key: "superadmin",
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return assignment !== null;
+  }
+
+  public async setTwoFactorSecret(userId: string, secretCiphertext: string): Promise<void> {
+    const prisma = PrismaClientManager.getClient();
+    await prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        two_factor_enabled: true,
+        two_factor_secret_ciphertext: secretCiphertext,
+        two_factor_enabled_at: new Date(),
+        two_factor_last_verified_at: new Date(),
+      },
+    });
+  }
+
+  public async clearTwoFactorSecret(userId: string): Promise<void> {
+    const prisma = PrismaClientManager.getClient();
+    await prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        two_factor_enabled: false,
+        two_factor_secret_ciphertext: null,
+        two_factor_enabled_at: null,
+        two_factor_last_verified_at: null,
+      },
+    });
+  }
+
+  public async markTwoFactorVerified(userId: string): Promise<void> {
+    const prisma = PrismaClientManager.getClient();
+    await prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        two_factor_last_verified_at: new Date(),
       },
     });
   }

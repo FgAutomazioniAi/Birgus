@@ -20,10 +20,11 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Text } from "@/components/atoms";
-import { ConfirmDeleteDialog, PageHelpHint, SearchField } from "@/components/molecules";
+import { PageHelpHint, SearchField } from "@/components/molecules";
 import { cn } from "@/lib/cn";
 import { downloadTablePdf } from "@/lib/pdf-export";
 import { APP_ROUTES } from "@/lib/routes";
+import { scheduleUndoableAction } from "@/lib/undoable-action";
 import type { Client } from "@/lib/types";
 
 type ClientColumnKey = "name" | "email" | "phone" | "notes" | "actions";
@@ -128,8 +129,6 @@ export function ClientsTable() {
   const [rowsPerPage, setRowsPerPage] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [isPreferencesReady, setIsPreferencesReady] = useState(false);
-  const [clientDeleteTarget, setClientDeleteTarget] = useState<Client | null>(null);
-  const [isDeletingClient, setIsDeletingClient] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const columnsMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -303,27 +302,27 @@ export function ClientsTable() {
 
   const totalVisibleColumns = Math.max(visibleColumns.length, 1);
 
-  const handleDelete = async (client: Client, confirmText: string) => {
-    try {
-      setIsDeletingClient(true);
-      const response = await fetch(`/api/clients/${client.id}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmText }),
-      });
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => ({ message: "Errore eliminazione cliente" }))) as { message?: string };
-        throw new Error(payload.message ?? "Errore eliminazione cliente");
-      }
+  const handleDelete = (client: Client) => {
+    const previousClients = clients;
+    setClients((prev) => prev.filter((item) => item.id !== client.id));
 
-      setClients((prev) => prev.filter((item) => item.id !== client.id));
-      setClientDeleteTarget(null);
-      toast.success("Cliente eliminato con successo.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Eliminazione cliente non riuscita.");
-    } finally {
-      setIsDeletingClient(false);
-    }
+    scheduleUndoableAction({
+      pendingMessage: `Cliente "${client.name}" in archiviazione...`,
+      successMessage: "Cliente archiviato.",
+      errorMessage: "Archiviazione cliente non riuscita.",
+      rollback: () => setClients(previousClients),
+      commit: async () => {
+        const response = await fetch(`/api/clients/${client.id}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirmText: "cancella" }),
+        });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({ message: "Errore archiviazione cliente" }))) as { message?: string };
+          throw new Error(payload.message ?? "Errore archiviazione cliente");
+        }
+      },
+    });
   };
 
   const toggleColumnVisibility = (key: ClientColumnKey) => {
@@ -545,7 +544,7 @@ export function ClientsTable() {
                             <Pencil size={18} />
                           </button>
                           <button
-                            onClick={() => setClientDeleteTarget(client)}
+                            onClick={() => handleDelete(client)}
                             className="rounded-lg p-1.5 text-status-danger-text transition-colors hover:bg-status-danger-bg"
                           >
                             <Trash2 size={18} />
@@ -630,19 +629,6 @@ export function ClientsTable() {
         </div>
       </Card>
 
-      <ConfirmDeleteDialog
-        open={Boolean(clientDeleteTarget)}
-        isBusy={isDeletingClient}
-        expectedText={clientDeleteTarget?.name ?? ""}
-        onCancel={() => setClientDeleteTarget(null)}
-        onConfirm={async (typedText) => {
-          if (!clientDeleteTarget) {
-            return;
-          }
-          await handleDelete(clientDeleteTarget, typedText);
-        }}
-        confirmLabel="Elimina cliente"
-      />
     </div>
   );
 }

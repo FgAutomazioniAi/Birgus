@@ -99,15 +99,6 @@ export class DocumentArchiveService {
       return false;
     }
 
-    if (removed.storagePath.startsWith("garage://")) {
-      try {
-        const parsed = GaragePath.parse(removed.storagePath);
-        await this.objectStorage.deleteObject(parsed.bucket, parsed.objectKey);
-      } catch {
-        // best effort cleanup
-      }
-    }
-
     return true;
   }
 

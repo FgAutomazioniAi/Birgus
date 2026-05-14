@@ -172,7 +172,9 @@ export class PrismaDdtProcessingRepository implements DdtProcessingRepository {
     });
   }
 
-  public async findDocumentReference(ddtDocumentId: string): Promise<{ workspaceId: string; documentId: string } | null> {
+  public async findDocumentReference(
+    ddtDocumentId: string,
+  ): Promise<{ workspaceId: string; documentId: string; fileName: string } | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.ddtDocument.findFirst({
       where: {
@@ -181,6 +183,12 @@ export class PrismaDdtProcessingRepository implements DdtProcessingRepository {
       select: {
         workspace_id: true,
         document_id: true,
+        original_filename: true,
+        document: {
+          select: {
+            filename: true,
+          },
+        },
       },
     });
 
@@ -191,6 +199,7 @@ export class PrismaDdtProcessingRepository implements DdtProcessingRepository {
     return {
       workspaceId: row.workspace_id,
       documentId: row.document_id,
+      fileName: row.original_filename?.trim() || row.document?.filename?.trim() || "document.pdf",
     };
   }
 

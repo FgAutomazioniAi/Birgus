@@ -110,6 +110,7 @@ export class QuotationOrchestratorService {
     requestedByUserId: string;
     clientName?: string | null;
   }): Promise<string> {
+    const projectName = await this.loadProjectName(params.workspaceId, params.projectId);
     const created = await this.repository.createJob({
       workspaceId: params.workspaceId,
       projectId: params.projectId,
@@ -126,7 +127,11 @@ export class QuotationOrchestratorService {
       void this.runJob(created.id);
     }, 100);
 
-    await this.notify(params.workspaceId, "Analisi preventivo avviata", `Accodata l'analisi del preventivo per la versione ${params.versionLabel.toUpperCase()}.`);
+    await this.notify(
+      params.workspaceId,
+      projectName ?? "Progetti",
+      `Analisi preventivo avviata (${params.versionLabel.toUpperCase()}).`,
+    );
 
     return created.id;
   }
@@ -382,10 +387,15 @@ export class QuotationOrchestratorService {
         mailError: mailOutcome.error,
         finalMessage: this.composeFinalMessage(analysis, versionContext.clientEmail, mailOutcome.message),
       });
+      const deliverySummary = mailOutcome.status === "SENT"
+        ? "Email inviata."
+        : mailOutcome.status === "SKIPPED"
+          ? "Email non inviata."
+          : "Email non riuscita.";
       await this.notify(
         queued.workspaceId,
-        "Preventivo completato",
-        `Completata la generazione del preventivo per ${queued.versionLabel.toUpperCase()}. ${mailOutcome.message}`,
+        versionContext.projectName ?? "Progetti",
+        `Preventivo ${queued.versionLabel.toUpperCase()} completato. ${deliverySummary}`,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Errore durante l'elaborazione.";
@@ -396,10 +406,36 @@ export class QuotationOrchestratorService {
         step: "failed",
         error: message,
       });
-      await this.notify(queued.workspaceId, "Preventivo fallito", `Elaborazione fallita per ${queued.versionLabel.toUpperCase()}: ${message}`);
+      const versionContext = await this.loadVersionContext({
+        workspaceId: queued.workspaceId,
+        projectId: queued.projectId,
+        versionLabel: queued.versionLabel,
+      });
+      await this.notify(
+        queued.workspaceId,
+        versionContext.projectName ?? "Progetti",
+        `Preventivo ${queued.versionLabel.toUpperCase()} fallito: ${message}`,
+      );
     } finally {
       this.runningJobs.delete(jobId);
     }
+  }
+
+  private async loadProjectName(workspaceId: string, projectId: string): Promise<string | null> {
+    const prisma = PrismaClientManager.getClient();
+    const project = await prisma.project.findFirst({
+      where: {
+        workspace_id: workspaceId,
+        id: projectId,
+        deleted_at: null,
+      },
+      select: {
+        name: true,
+      },
+    });
+
+    const name = project?.name?.trim();
+    return name && name.length > 0 ? name : null;
   }
 
   private async loadQuotationSource(params: {

@@ -16,6 +16,7 @@ const MODULE_KEYS = [
   "workflow_management",
   "notification_center",
   "audit_center",
+  "superadmin_center",
 ] as const;
 
 const ROLE_KEYS = ["superadmin", "admin", "operator"] as const;
@@ -334,6 +335,7 @@ async function main() {
   const workflowManagementModule = moduleByKey.get("workflow_management");
   const notificationCenterModule = moduleByKey.get("notification_center");
   const auditCenterModule = moduleByKey.get("audit_center");
+  const superadminCenterModule = moduleByKey.get("superadmin_center");
 
   if (projectManagementModule && agentManagementModule) {
     await prisma.moduleDependency.upsert({
@@ -686,11 +688,18 @@ async function main() {
   const agentManagementModuleId = agentManagementModule?.id;
   const workflowManagementModuleId = workflowManagementModule?.id;
   const auditCenterModuleId = auditCenterModule?.id;
+  const superadminCenterModuleId = superadminCenterModule?.id;
   pushOverride(
     adminUser.id,
     auditCenterModuleId,
     "DENY",
     "Il centro audit resta riservato al superadmin.",
+  );
+  pushOverride(
+    adminUser.id,
+    superadminCenterModuleId,
+    "DENY",
+    "Il centro superadmin resta riservato al superadmin.",
   );
 
   pushOverride(
@@ -716,6 +725,12 @@ async function main() {
     auditCenterModuleId,
     "DENY",
     "Il centro audit resta riservato al superadmin.",
+  );
+  pushOverride(
+    guestUser.id,
+    superadminCenterModuleId,
+    "DENY",
+    "Il centro superadmin resta riservato al superadmin.",
   );
 
   const desiredOverrideKeys = new Set<string>();

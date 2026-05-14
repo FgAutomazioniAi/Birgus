@@ -201,6 +201,10 @@ model User {
   email               String    @unique
   password_hash       String?
   password_updated_at DateTime  @default(now())
+  two_factor_enabled  Boolean   @default(false)
+  two_factor_secret_ciphertext String?
+  two_factor_enabled_at DateTime?
+  two_factor_last_verified_at DateTime?
   is_active           Boolean   @default(true)
   created_at          DateTime  @default(now())
   updated_at          DateTime  @updatedAt
@@ -209,6 +213,7 @@ model User {
   memberships                      WorkspaceMembership[]
   user_workspace_roles             UserWorkspaceRole[]
   auth_sessions                    AuthSession[]
+  auth_login_challenges            AuthLoginChallenge[]
   password_reset_codes             PasswordResetCode[]
   user_preferences                 UserPreference[]
   workspace_modules_configured     WorkspaceModule[]     @relation("workspace_module_configured_by")
@@ -342,6 +347,29 @@ model PasswordResetCode {
   @@index([used_at])
   @@index([user_id, code_hash, used_at, expires_at])
   @@map("password_reset_codes")
+}
+
+model AuthLoginChallenge {
+  id                           String    @id @default(uuid()) @db.Uuid
+  user_id                      String    @db.Uuid
+  challenge_hash               String    @unique
+  remember_me                  Boolean   @default(false)
+  requires_totp_setup          Boolean   @default(false)
+  setup_secret_ciphertext      String?
+  ip_address                   String?
+  user_agent                   String?
+  expires_at                   DateTime
+  consumed_at                  DateTime?
+  created_at                   DateTime  @default(now())
+  updated_at                   DateTime  @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([expires_at])
+  @@index([consumed_at])
+  @@index([user_id, consumed_at, expires_at])
+  @@map("auth_login_challenges")
 }
 
 model UserPreference {
