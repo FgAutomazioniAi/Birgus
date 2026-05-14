@@ -27,7 +27,7 @@ export function scheduleUndoableAction(options: UndoableActionOptions): void {
 
     committed = true;
     void options.commit().then(() => {
-      toast.success(options.successMessage);
+      //toast.success(options.successMessage);
     }).catch((error: unknown) => {
       options.rollback();
       const message = error instanceof Error && error.message.trim().length > 0

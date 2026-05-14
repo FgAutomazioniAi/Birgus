@@ -834,7 +834,7 @@ export function DdtReaderPanel() {
                       </p>
                     ) : (
                       <Text variant="muted">
-                        Il risultato comparira qui quando l elaborazione sara completata.
+                        Il risultato comparirè qui quando l&apos;elaborazione sarà completata.
                       </Text>
                     )}
                   </>
