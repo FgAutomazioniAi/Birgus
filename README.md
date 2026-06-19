@@ -1,6 +1,6 @@
-# Birgus Platform (Modular OOP)
+# Birgus Platform
 
-Backend modulare multi-tenant costruito da DEMO con separazione netta:
+Backend modulare multi-tenant:
 - `core`
 - `modules`
 - `storage`
