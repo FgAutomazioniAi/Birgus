@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -19,9 +20,14 @@ class Settings:
     smtp_user: str
     smtp_pass: str
     smtp_from: str
+    measure_report_analysis_mode: str
+    measure_report_max_pages: Optional[int]
+    measure_report_render_scale: float
+    measure_report_max_image_size: int
 
     @staticmethod
     def from_env() -> "Settings":
+        max_pages_raw = os.getenv("MEASURE_REPORT_MAX_PAGES", "").strip()
         return Settings(
             garage_s3_endpoint=os.getenv("GARAGE_S3_ENDPOINT", "http://garage:3900"),
             garage_s3_region=os.getenv("GARAGE_S3_REGION", "garage"),
@@ -36,4 +42,8 @@ class Settings:
             smtp_user=os.getenv("SMTP_USER", ""),
             smtp_pass=os.getenv("SMTP_PASS", ""),
             smtp_from=os.getenv("SMTP_FROM", ""),
+            measure_report_analysis_mode=os.getenv("MEASURE_REPORT_ANALYSIS_MODE", "auto"),
+            measure_report_max_pages=int(max_pages_raw) if max_pages_raw else None,
+            measure_report_render_scale=float(os.getenv("MEASURE_REPORT_RENDER_SCALE", "2.0")),
+            measure_report_max_image_size=int(os.getenv("MEASURE_REPORT_MAX_IMAGE_SIZE", "1800")),
         )

@@ -4,5 +4,6 @@ export * from "./form-field";
 export * from "./nav-item";
 export * from "./page-help-hint";
 export * from "./search-field";
+export * from "./select-dropdown";
 export * from "./status-badge";
 export * from "./user-chip";

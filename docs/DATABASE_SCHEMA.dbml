@@ -18,6 +18,7 @@ Enum DocumentScope {
   PROJECT
   SHIPMENT
   DDT
+  MEASURE_REPORT
   OTHER
 }
 
@@ -25,6 +26,14 @@ Enum DdtDocumentStatus {
   UPLOADED
   QUEUED
   OCR_PROCESSING
+  AI_PROCESSING
+  READY
+  ERROR
+}
+
+Enum MeasureReportDocumentStatus {
+  UPLOADED
+  QUEUED
   AI_PROCESSING
   READY
   ERROR
@@ -51,6 +60,13 @@ Enum MailDeliveryStatus {
   SENT
   FAILED
   SKIPPED
+}
+
+Enum BackendJobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
 }
 
 Enum AssistantSessionStatus {
@@ -612,6 +628,7 @@ Table module_workflow_nodes {
   input_schema json
   output_schema json
   is_enabled boolean [not null, default: true]
+  is_required boolean [not null, default: false]
   created_at timestamp [not null, default: `now()`]
   updated_at timestamp [not null]
 
@@ -623,6 +640,7 @@ Table module_workflow_nodes {
     (module_tool_id)
     (node_kind)
     (is_enabled)
+    (is_required)
   }
 }
 
@@ -667,6 +685,7 @@ Table module_workflow_runs {
   shipment_id varchar
   document_id varchar
   ddt_document_id varchar
+  measure_report_document_id varchar
   input_payload json
   result_payload json
   error_message text
@@ -687,6 +706,7 @@ Table module_workflow_runs {
     (shipment_id)
     (document_id)
     (ddt_document_id)
+    (measure_report_document_id)
     (status)
     (queued_at)
   }
@@ -925,6 +945,62 @@ Table ddt_processing_events {
   }
 }
 
+Table measure_report_documents {
+  id varchar [pk, not null, default: `uuid_generate_v4()`]
+  workspace_id varchar [not null]
+  document_id varchar [unique, not null]
+  status MeasureReportDocumentStatus [not null, default: 'UPLOADED']
+  original_filename varchar
+  document_type_requested varchar [not null, default: 'auto']
+  document_type_effective varchar
+  last_error varchar
+  requested_by_user_id varchar
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+
+  Indexes {
+    (workspace_id)
+    (status)
+    (requested_by_user_id)
+    (document_type_requested)
+    (document_type_effective)
+  }
+}
+
+Table measure_report_analysis_results {
+  id varchar [pk, not null, default: `uuid_generate_v4()`]
+  measure_report_document_id varchar [unique, not null]
+  document_type_used varchar [not null]
+  prompt_agent_key varchar
+  rows_count int [not null, default: 0]
+  summary varchar
+  raw_output text
+  raw_response json
+  execution_metadata json
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+
+  Indexes {
+    (document_type_used)
+    (prompt_agent_key)
+  }
+}
+
+Table measure_report_analysis_rows {
+  id int [pk, not null, increment]
+  analysis_result_id varchar [not null]
+  row_index int [not null]
+  row_text text [not null]
+  note varchar
+  page_hint varchar
+  raw_payload json
+
+  Indexes {
+    (analysis_result_id)
+    (row_index)
+  }
+}
+
 Table quotation_orchestrator_jobs {
   id varchar [pk, not null, default: `uuid_generate_v4()`]
   workspace_id varchar [not null]
@@ -958,6 +1034,27 @@ Table quotation_orchestrator_jobs {
     (status)
     (queued_at)
     (mail_delivery_status)
+  }
+}
+
+Table backend_jobs {
+  id varchar [pk, not null]
+  name varchar [not null]
+  payload json [not null]
+  status BackendJobStatus [not null, default: 'QUEUED']
+  available_at timestamp [not null, default: `now()`]
+  claimed_at timestamp
+  claimed_by varchar
+  attempts int [not null, default: 0]
+  last_error varchar
+  completed_at timestamp
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+
+  Indexes {
+    (status, available_at)
+    (claimed_by)
+    (created_at)
   }
 }
 
@@ -1241,6 +1338,7 @@ Ref: module_workflow_runs.client_id > clients.id [delete: set null]
 Ref: module_workflow_runs.shipment_id > shipments.id [delete: set null]
 Ref: module_workflow_runs.document_id > documents.id [delete: set null]
 Ref: module_workflow_runs.ddt_document_id > ddt_documents.id [delete: set null]
+Ref: module_workflow_runs.measure_report_document_id > measure_report_documents.id [delete: set null]
 Ref: module_workflow_run_steps.workspace_id > workspaces.id [delete: restrict]
 Ref: module_workflow_run_steps.workflow_run_id > module_workflow_runs.id [delete: cascade]
 Ref: module_workflow_run_steps.workflow_node_id > module_workflow_nodes.id [delete: set null]
@@ -1272,6 +1370,11 @@ Ref: ddt_processing_jobs.workspace_id > workspaces.id [delete: restrict]
 Ref: ddt_processing_jobs.ddt_document_id > ddt_documents.id [delete: cascade]
 Ref: ddt_processing_events.job_id > ddt_processing_jobs.id [delete: cascade]
 Ref: ddt_processing_events.ddt_document_id > ddt_documents.id [delete: cascade]
+Ref: measure_report_documents.workspace_id > workspaces.id [delete: restrict]
+Ref: measure_report_documents.document_id > documents.id [delete: restrict]
+Ref: measure_report_documents.requested_by_user_id > users.id [delete: set null]
+Ref: measure_report_analysis_results.measure_report_document_id > measure_report_documents.id [delete: cascade]
+Ref: measure_report_analysis_rows.analysis_result_id > measure_report_analysis_results.id [delete: cascade]
 Ref: quotation_orchestrator_jobs.workspace_id > workspaces.id [delete: restrict]
 Ref: quotation_orchestrator_jobs.project_id > projects.id [delete: cascade]
 Ref: quotation_orchestrator_jobs.requested_by_user_id > users.id [delete: set null]

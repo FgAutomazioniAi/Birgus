@@ -21,6 +21,45 @@ const isProtectedApiRequest = (input: RequestInfo | URL): boolean => {
   return requestUrl.startsWith("/api/") || requestUrl.startsWith(`${window.location.origin}/api/`);
 };
 
+const withWorkspaceHeader = (
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  workspaceId: string,
+): { input: RequestInfo | URL; init: RequestInit | undefined } => {
+  if (!workspaceId.trim()) {
+    return { input, init };
+  }
+
+  if (input instanceof Request) {
+    if (input.headers.has("x-workspace-id")) {
+      return { input, init };
+    }
+
+    const headers = new Headers(input.headers);
+    headers.set("x-workspace-id", workspaceId);
+
+    return {
+      input: new Request(input, { headers }),
+      init,
+    };
+  }
+
+  const headers = new Headers(init?.headers);
+  if (headers.has("x-workspace-id")) {
+    return { input, init };
+  }
+
+  headers.set("x-workspace-id", workspaceId);
+
+  return {
+    input,
+    init: {
+      ...init,
+      headers,
+    },
+  };
+};
+
 const redirectToLogin = () => {
   if (window.location.pathname !== APP_ROUTES.login) {
     window.location.replace(APP_ROUTES.login);
@@ -48,12 +87,15 @@ const inspectUnauthorizedResponse = async (response: Response): Promise<void> =>
   }
 };
 
-export function AuthSessionGuard() {
+export function AuthSessionGuard({ workspaceId }: { workspaceId: string }) {
   useEffect(() => {
     const originalFetch = window.fetch.bind(window);
 
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      const response = await originalFetch(input, init);
+      const requestWithWorkspace = isProtectedApiRequest(input)
+        ? withWorkspaceHeader(input, init, workspaceId)
+        : { input, init };
+      const response = await originalFetch(requestWithWorkspace.input, requestWithWorkspace.init);
 
       if (isProtectedApiRequest(input)) {
         void inspectUnauthorizedResponse(response);
@@ -65,7 +107,7 @@ export function AuthSessionGuard() {
     return () => {
       window.fetch = originalFetch;
     };
-  }, []);
+  }, [workspaceId]);
 
   return null;
 }

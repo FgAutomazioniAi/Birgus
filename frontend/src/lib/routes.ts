@@ -1,5 +1,6 @@
 export const APP_ROUTES = {
   dashboard: "/",
+  personalDashboard: "/home",
   projects: "/",
   projectNew: "/projects/new",
   projectVersions: (id: string) => `/projects/${id}`,
@@ -10,6 +11,7 @@ export const APP_ROUTES = {
   spedizioni: "/spedizioni",
   shipmentDetail: (id: string) => `/spedizioni/${id}`,
   ddtReader: "/ddt-reader",
+  measureReport: "/measure-report",
   archive: "/archivio",
   superadmin: "/superadmin",
   settings: "/settings",

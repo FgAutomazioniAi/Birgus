@@ -1,0 +1,62 @@
+services:
+  vllm:
+    image: "vllm/vllm-openai:${VLLM_IMAGE_TAG:-latest}"
+    container_name: birgus_vllm
+    restart: unless-stopped
+    ipc: host
+    environment:
+      HF_HOME: /root/.cache/huggingface
+      HUGGING_FACE_HUB_TOKEN: "${HUGGING_FACE_HUB_TOKEN:-}"
+    command:
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+      - "--model"
+      - "${VLLM_MODEL:?VLLM_MODEL is required}"
+      - "--served-model-name"
+      - "${VLLM_SERVED_MODEL_NAME:-${AI_PROVIDER_CHAT_MODEL:-birgus-vl}}"
+      - "--dtype"
+      - "${VLLM_DTYPE:-float16}"
+      - "--max-model-len"
+      - "${VLLM_MAX_MODEL_LEN:-1024}"
+      - "--max-num-seqs"
+      - "${VLLM_MAX_NUM_SEQS:-1}"
+      - "--gpu-memory-utilization"
+      - "${VLLM_GPU_MEMORY_UTILIZATION:-0.90}"
+      - "--limit-mm-per-prompt"
+      - "{\"image\":${VLLM_MAX_IMAGES_PER_PROMPT:-1}}"
+      - "--download-dir"
+      - "/root/.cache/huggingface"
+      - "--api-key"
+      - "${VLLM_API_KEY:?VLLM_API_KEY is required}"
+    gpus: all
+    volumes:
+      - vllm_cache:/root/.cache/huggingface
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)\""
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+
+  app:
+    environment:
+      AI_PROVIDER: "${AI_PROVIDER:-vllm}"
+      AI_PROVIDER_BASE_URL: "http://vllm:8000/v1"
+      AI_PROVIDER_API_KEY: "${AI_PROVIDER_API_KEY:-${VLLM_API_KEY:?VLLM_API_KEY is required}}"
+      AI_PROVIDER_CHAT_MODEL: "${AI_PROVIDER_CHAT_MODEL:-${VLLM_SERVED_MODEL_NAME:-birgus-vl}}"
+      ORCH_LM_BASE_URL: "http://vllm:8000/v1"
+      ORCH_LM_MODEL: "${ORCH_LM_MODEL:-${AI_PROVIDER_CHAT_MODEL:-${VLLM_SERVED_MODEL_NAME:-birgus-vl}}}"
+      MEASURE_REPORT_LM_BASE_URL: "${MEASURE_REPORT_LM_BASE_URL:-http://vllm:8000/v1}"
+      MEASURE_REPORT_LM_MODEL: "${MEASURE_REPORT_LM_MODEL:-${AI_PROVIDER_CHAT_MODEL:-${VLLM_SERVED_MODEL_NAME:-birgus-vl}}}"
+    depends_on:
+      vllm:
+        condition: service_healthy
+
+volumes:
+  vllm_cache:

@@ -17,25 +17,25 @@ export class KnowledgeEmbeddingService {
   public constructor() {
     this.provider = (process.env.KNOWLEDGE_EMBEDDING_PROVIDER ?? "local-hash").trim().toLowerCase();
     this.dimensions = this.toPositiveInt(process.env.KNOWLEDGE_EMBEDDING_DIMENSIONS, 256);
-    this.baseUrl = (process.env.ORCH_LM_BASE_URL ?? "http://host.docker.internal:1234").replace(/\/+$/, "");
+    this.baseUrl = (process.env.AI_PROVIDER_BASE_URL ?? process.env.ORCH_LM_BASE_URL ?? "http://vllm:8000/v1").replace(/\/+$/, "");
     this.embeddingsPath = this.normalizePath(process.env.KNOWLEDGE_LM_EMBEDDINGS_PATH ?? "/v1/embeddings");
     this.model = (process.env.KNOWLEDGE_EMBEDDING_MODEL ?? "").trim() || null;
-    this.timeoutMs = this.toPositiveInt(process.env.ORCH_LM_TIMEOUT_MS, 600000);
+    this.timeoutMs = this.toPositiveInt(process.env.AI_PROVIDER_TIMEOUT_MS ?? process.env.ORCH_LM_TIMEOUT_MS, 600000);
   }
 
   public async embed(text: string): Promise<EmbeddingResult> {
-    if (this.provider === "lm_studio" && this.model) {
+    if (["ai_provider", "openai_compatible", "lm_studio"].includes(this.provider) && this.model) {
       try {
-        return await this.embedWithLmStudio(text);
+        return await this.embedWithAiProvider(text);
       } catch (error) {
-        console.warn("[KnowledgeEmbeddingService] LM Studio embeddings failed, fallback to local-hash", error);
+        console.warn("[KnowledgeEmbeddingService] AI provider embeddings failed, fallback to local-hash", error);
       }
     }
 
     return this.embedWithLocalHash(text);
   }
 
-  private async embedWithLmStudio(text: string): Promise<EmbeddingResult> {
+  private async embedWithAiProvider(text: string): Promise<EmbeddingResult> {
     const endpoint = `${this.baseUrl}${this.embeddingsPath}`;
     const response = await fetch(endpoint, {
       method: "POST",
@@ -52,22 +52,22 @@ export class KnowledgeEmbeddingService {
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(`LM Studio embeddings HTTP ${response.status}: ${JSON.stringify(payload)}`);
+      throw new Error(`AI provider embeddings HTTP ${response.status}`);
     }
 
     const first = Array.isArray((payload as { data?: unknown[] }).data) ? (payload as { data: unknown[] }).data[0] : null;
     const embedding = first && typeof first === "object" ? (first as { embedding?: unknown }).embedding : null;
     if (!Array.isArray(embedding) || embedding.length === 0) {
-      throw new Error("LM Studio embeddings response missing vector.");
+      throw new Error("AI provider embeddings response missing vector.");
     }
 
     const vector = embedding.map((value) => Number(value)).filter((value) => Number.isFinite(value));
     if (vector.length === 0) {
-      throw new Error("LM Studio embeddings response contained invalid values.");
+      throw new Error("AI provider embeddings response contained invalid values.");
     }
 
     return {
-      provider: "lm_studio",
+      provider: "ai_provider",
       model: this.model,
       dimensions: vector.length,
       vector: this.normalizeVector(vector),

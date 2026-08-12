@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import { Job } from "../../../worker/queue/Job.js";
 import { JobQueue } from "../../../worker/queue/JobQueue.js";
 import { WorkflowRunDispatcher } from "./WorkflowRunDispatcher.js";
@@ -19,7 +17,11 @@ export class QueueWorkflowRunDispatcher implements WorkflowRunDispatcher {
 
   public async dispatch(runId: string): Promise<void> {
     await this.queue.enqueue(
-      new Job<WorkflowRunJobPayload>(randomUUID(), QueueWorkflowRunDispatcher.JOB_NAME, { runId }),
+      new Job<WorkflowRunJobPayload>(this.buildQueueJobId(runId), QueueWorkflowRunDispatcher.JOB_NAME, { runId }),
     );
+  }
+
+  private buildQueueJobId(runId: string): string {
+    return `workflow:${runId}`;
   }
 }

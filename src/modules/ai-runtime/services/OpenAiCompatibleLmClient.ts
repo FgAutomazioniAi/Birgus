@@ -1,0 +1,395 @@
+import { loadAiProviderConfig, type AiProviderConfig } from "../domain/AiProviderConfig.js";
+import type { AiChatMessage } from "../domain/AiChatMessage.js";
+import type { AiChatCompletionsResponse, AiModelItem } from "../domain/AiChatResponse.js";
+import type { AiToolDefinition } from "../domain/AiToolDefinition.js";
+
+interface OpenAiCompatibleClientOptions {
+  baseUrl?: string;
+  apiKey?: string;
+  modelsPath?: string;
+  completionsPath?: string;
+  timeoutMs?: number;
+  requestedModel?: string;
+  maxOutputTokens?: number;
+  reasoning?: string | null;
+  contextLength?: number | null;
+  store?: boolean;
+  temperature?: number;
+}
+
+interface LegacyChatResponseItem {
+  type?: string;
+  content?: string;
+}
+
+export interface LegacyChatResponse {
+  model_instance_id?: string;
+  output?: LegacyChatResponseItem[];
+  response_id?: string;
+  stats?: Record<string, unknown>;
+}
+
+function normalizePath(path: string): string {
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+export class OpenAiCompatibleLmClient {
+  private readonly config: AiProviderConfig;
+  private readonly requestedModel: string;
+  private readonly maxOutputTokens: number;
+  private readonly reasoning: string | null;
+  private readonly contextLength: number | null;
+  private readonly store: boolean;
+
+  public constructor(options: OpenAiCompatibleClientOptions = {}) {
+    this.config = loadAiProviderConfig({
+      baseUrl: options.baseUrl,
+      apiKey: options.apiKey,
+      modelsPath: options.modelsPath,
+      completionsPath: options.completionsPath,
+      timeoutMs: options.timeoutMs,
+      chatModel: options.requestedModel,
+      temperature: options.temperature,
+    });
+    this.requestedModel = (options.requestedModel ?? this.config.chatModel).trim();
+    this.maxOutputTokens = options.maxOutputTokens ?? this.parsePositiveInt(process.env.AI_PROVIDER_MAX_OUTPUT_TOKENS ?? process.env.ORCH_LM_MAX_OUTPUT_TOKENS, 512);
+    this.reasoning = options.reasoning ?? this.parseReasoning(process.env.AI_PROVIDER_REASONING ?? process.env.ORCH_LM_REASONING);
+    this.contextLength = options.contextLength ?? this.parseOptionalPositiveInt(process.env.AI_PROVIDER_CONTEXT_LENGTH ?? process.env.ORCH_LM_CONTEXT_LENGTH);
+    this.store = options.store ?? this.parseBoolean(process.env.AI_PROVIDER_STORE ?? process.env.ORCH_LM_STORE, false);
+  }
+
+  public async selectModel(): Promise<string> {
+    const available = await this.listModels();
+    const availableIds = new Set(available.map((item) => item.id));
+
+    if (this.requestedModel && availableIds.has(this.requestedModel)) {
+      return this.requestedModel;
+    }
+
+    if (this.requestedModel && available.length === 0) {
+      return this.requestedModel;
+    }
+
+    if (this.requestedModel && available.length > 0) {
+      throw new Error(`Modello AI provider non disponibile: ${this.requestedModel}`);
+    }
+
+    const candidate = available.find((item) => {
+      const lowered = item.id.toLowerCase();
+      return item.type !== "embedding" && !lowered.includes("embed") && !lowered.includes("embedding");
+    });
+
+    if (!candidate) {
+      throw new Error("Nessun modello chat disponibile sull'AI provider.");
+    }
+
+    return candidate.id;
+  }
+
+  public async chat(inputText: string): Promise<{ model: string; response: LegacyChatResponse }> {
+    const result = await this.completeMessages({
+      messages: [{ role: "user", content: inputText }],
+      maxTokens: this.maxOutputTokens,
+    });
+
+    return {
+      model: result.model,
+      response: {
+        model_instance_id: result.model,
+        output: [{ type: "text", content: result.content }],
+        response_id: result.response.id,
+        stats: result.response.stats,
+      },
+    };
+  }
+
+  public async completeJsonSchema(options: {
+    systemPrompt: string;
+    userContext: string;
+    schemaName: string;
+    schema: Record<string, unknown>;
+    maxTokens?: number | null;
+    temperature?: number;
+  }): Promise<{ model: string; response: AiChatCompletionsResponse; content: string }> {
+    return this.completeMessages({
+      messages: [
+        { role: "system", content: options.systemPrompt },
+        { role: "user", content: options.userContext },
+      ],
+      responseFormat: {
+        type: "json_schema",
+        json_schema: {
+          name: options.schemaName,
+          strict: true,
+          schema: options.schema,
+        },
+      },
+      maxTokens: options.maxTokens,
+      temperature: options.temperature,
+    });
+  }
+
+  public async completeMultimodal(options: {
+    systemPrompt?: string;
+    userText: string;
+    imageUrls: string[];
+    maxTokens?: number | null;
+    temperature?: number;
+  }): Promise<{ model: string; response: AiChatCompletionsResponse; content: string }> {
+    const userContent: Array<Record<string, unknown>> = [
+      { type: "text", text: options.userText },
+      ...options.imageUrls.map((imageUrl) => ({
+        type: "image_url",
+        image_url: { url: imageUrl },
+      })),
+    ];
+
+    const messages: AiChatMessage[] = [];
+    if ((options.systemPrompt ?? "").trim().length > 0) {
+      messages.push({ role: "system", content: options.systemPrompt ?? "" });
+    }
+    messages.push({ role: "user", content: userContent });
+
+    return this.completeMessages({
+      messages,
+      maxTokens: options.maxTokens,
+      temperature: options.temperature,
+    });
+  }
+
+  public async completeWithTools(options: {
+    messages: AiChatMessage[];
+    tools: AiToolDefinition[];
+    toolChoice?: "auto" | "none" | "required";
+    temperature?: number;
+  }): Promise<{ model: string; response: AiChatCompletionsResponse; content: string | null; toolCalls: Array<Record<string, unknown>> }> {
+    const model = await this.selectModel();
+    const requestPayload: Record<string, unknown> = {
+      model,
+      temperature: options.temperature ?? this.config.temperature,
+      stream: false,
+      messages: options.messages,
+    };
+
+    if (options.tools.length > 0) {
+      requestPayload.tools = options.tools;
+      requestPayload.tool_choice = options.toolChoice ?? "auto";
+    }
+
+    const payload = await this.postChatCompletions(requestPayload);
+    const message = payload.choices?.[0]?.message;
+    return {
+      model,
+      response: payload,
+      content: typeof message?.content === "string" ? message.content : null,
+      toolCalls: Array.isArray(message?.tool_calls) ? message.tool_calls : [],
+    };
+  }
+
+  private async completeMessages(options: {
+    messages: AiChatMessage[];
+    responseFormat?: Record<string, unknown>;
+    maxTokens?: number | null;
+    temperature?: number;
+  }): Promise<{ model: string; response: AiChatCompletionsResponse; content: string }> {
+    const model = await this.selectModel();
+    const requestPayload: Record<string, unknown> = {
+      model,
+      temperature: options.temperature ?? this.config.temperature,
+      stream: false,
+      messages: options.messages,
+    };
+
+    if (options.responseFormat) {
+      requestPayload.response_format = options.responseFormat;
+    }
+    if (options.maxTokens && Number.isFinite(options.maxTokens) && options.maxTokens > 0) {
+      requestPayload.max_tokens = Math.trunc(options.maxTokens);
+    }
+    if (this.contextLength) {
+      requestPayload.context_length = this.contextLength;
+    }
+    if (this.reasoning) {
+      requestPayload.reasoning = this.reasoning;
+    }
+    if (this.store) {
+      requestPayload.store = true;
+    }
+
+    const payload = await this.postChatCompletions(requestPayload);
+    const content = String(payload?.choices?.[0]?.message?.content ?? "").trim();
+    if (!content) {
+      throw new Error("AI provider ha restituito risposta vuota.");
+    }
+
+    return { model, response: payload, content };
+  }
+
+  private async postChatCompletions(requestPayload: Record<string, unknown>): Promise<AiChatCompletionsResponse> {
+    const endpoint = this.resolveEndpoint(this.config.completionsPath);
+    this.logAiTraffic("request", endpoint, requestPayload);
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: this.buildHeaders(),
+      body: JSON.stringify(requestPayload),
+      signal: AbortSignal.timeout(this.config.timeoutMs),
+      cache: "no-store",
+    }).catch((error: unknown) => {
+      if (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) {
+        throw new Error("AI provider request timeout");
+      }
+
+      throw new Error("AI provider request failed");
+    });
+
+    const responsePayload = await response.json().catch(() => ({}));
+    this.logAiTraffic("response", endpoint, responsePayload, {
+      status: response.status,
+      ok: response.ok,
+    });
+
+    if (!response.ok) {
+      throw new Error(`AI provider HTTP ${response.status}`);
+    }
+
+    return responsePayload as AiChatCompletionsResponse;
+  }
+
+  private async listModels(): Promise<AiModelItem[]> {
+    const timeout = Math.max(5000, Math.min(this.config.timeoutMs, 30000));
+    const response = await fetch(this.resolveEndpoint(this.config.modelsPath), {
+      method: "GET",
+      headers: this.buildHeaders(),
+      signal: AbortSignal.timeout(timeout),
+      cache: "no-store",
+    }).catch(() => null);
+
+    if (!response || !response.ok) {
+      return [];
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    const items = Array.isArray((payload as { models?: unknown[] }).models)
+      ? (payload as { models: unknown[] }).models
+      : Array.isArray((payload as { data?: unknown[] }).data)
+        ? (payload as { data: unknown[] }).data
+        : [];
+
+    return items
+      .map((item: unknown) => {
+        if (!item || typeof item !== "object") {
+          return null;
+        }
+
+        const row = item as Record<string, unknown>;
+        const id = String(row.key ?? row.id ?? "").trim();
+        const type = String(row.type ?? row.object ?? "").trim().toLowerCase();
+        if (!id) {
+          return null;
+        }
+
+        return { id, type };
+      })
+      .filter((item: AiModelItem | null): item is AiModelItem => item !== null);
+  }
+
+  private buildHeaders(): HeadersInit {
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+    };
+
+    if (this.config.apiKey) {
+      headers.authorization = `Bearer ${this.config.apiKey}`;
+    }
+
+    return headers;
+  }
+
+  private resolveEndpoint(path: string): string {
+    const normalizedBaseUrl = this.config.baseUrl.replace(/\/+$/, "");
+    const normalizedPath = normalizePath(path);
+    if (normalizedBaseUrl.endsWith("/v1") && normalizedPath.startsWith("/v1/")) {
+      return `${normalizedBaseUrl}${normalizedPath.slice(3)}`;
+    }
+    return `${normalizedBaseUrl}${normalizedPath}`;
+  }
+
+  private parsePositiveInt(value: string | undefined, fallback: number): number {
+    const parsed = Number.parseInt(value ?? "", 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  }
+
+  private parseOptionalPositiveInt(value: string | undefined): number | null {
+    const parsed = Number.parseInt(value ?? "", 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return null;
+    }
+    return parsed;
+  }
+
+  private parseBoolean(value: string | undefined, fallback: boolean): boolean {
+    if (!value) {
+      return fallback;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    if (["1", "true", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["0", "false", "no", "off"].includes(normalized)) {
+      return false;
+    }
+
+    return fallback;
+  }
+
+  private parseReasoning(value: string | undefined): string | null {
+    const normalized = (value ?? "").trim().toLowerCase();
+    if (!normalized) {
+      return null;
+    }
+
+    if (["on", "low", "medium", "high"].includes(normalized)) {
+      return normalized;
+    }
+
+    return null;
+  }
+
+  private logAiTraffic(
+    direction: "request" | "response",
+    endpoint: string,
+    payload: unknown,
+    meta?: Record<string, unknown>,
+  ): void {
+    if (!this.parseBoolean(process.env.LOG_LM_TRAFFIC ?? process.env.LOG_AI_TRAFFIC, false)) {
+      return;
+    }
+
+    const stamp = new Date().toISOString();
+    const head = `[Birgus][AI Provider][${direction.toUpperCase()}] ${stamp} ${endpoint}`;
+    const safeMeta = {
+      ...(meta ?? {}),
+      payload: this.summarizePayload(payload),
+    };
+
+    console.log(head, safeMeta);
+  }
+
+  private summarizePayload(payload: unknown): Record<string, unknown> {
+    if (!payload || typeof payload !== "object") {
+      return { type: typeof payload };
+    }
+
+    const row = payload as Record<string, unknown>;
+    return {
+      type: Array.isArray(payload) ? "array" : "object",
+      keys: Object.keys(row).slice(0, 20),
+      jsonBytes: JSON.stringify(payload).length,
+      messages: Array.isArray(row.messages) ? row.messages.length : undefined,
+      choices: Array.isArray(row.choices) ? row.choices.length : undefined,
+      outputItems: Array.isArray(row.output) ? row.output.length : undefined,
+    };
+  }
+}

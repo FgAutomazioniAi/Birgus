@@ -26,11 +26,13 @@ export default async function SuperadminPage() {
     }
 
     const sessionPayload = (await sessionResponse.json()) as {
+      workspaceId?: string;
       userId?: string;
       user?: { roleKeys?: string[] };
     };
 
     const userId = sessionPayload.userId?.trim() ?? "";
+    const workspaceId = sessionPayload.workspaceId?.trim() ?? "";
     const isSuperadmin = (sessionPayload.user?.roleKeys ?? []).some((item) => item.trim().toLowerCase() === "superadmin");
     if (!isSuperadmin || !userId) {
       return <NotFoundPanel />;
@@ -40,6 +42,7 @@ export default async function SuperadminPage() {
       cache: "no-store",
       headers: {
         cookie: `${AUTH_CONFIGURED_COOKIE_NAME}=${encodeURIComponent(token)}`,
+        ...(workspaceId ? { "x-workspace-id": workspaceId } : {}),
       },
     });
 

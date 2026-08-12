@@ -8,6 +8,8 @@ dist
 postgres_data/
 garage/meta/
 garage/data/
+garage/garage.local.toml
+Caddyfile.https.local
 frontend/.next/
 frontend/node_modules/
 __pycache__/

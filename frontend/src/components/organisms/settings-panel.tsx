@@ -3,7 +3,7 @@
 import { Palette } from "lucide-react";
 
 import { Card, Text } from "@/components/atoms";
-import { PageHelpHint } from "@/components/molecules";
+import { PageHelpHint, SelectDropdown } from "@/components/molecules";
 import { useTheme } from "@/components/organisms/theme-provider";
 import type { ThemeId } from "@/lib/themes";
 
@@ -29,18 +29,13 @@ export function SettingsPanel() {
             <Palette size={16} className="text-brand-primary" />
             Palette colore
           </label>
-          <select
+          <SelectDropdown
             id="theme-selector"
-            className="h-10 w-full cursor-pointer appearance-none rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-3 py-2 text-sm text-text-secondary focus:outline-none focus:ring-2 focus:ring-ring-primary sm:w-72"
+            className="w-full sm:w-72"
             value={theme}
-            onChange={(event) => setTheme(event.target.value as ThemeId)}
-          >
-            {options.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => setTheme(value as ThemeId)}
+            options={options.map((option) => ({ value: option.id, label: option.label }))}
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] border border-border-subtle bg-bg-muted px-3 py-2">

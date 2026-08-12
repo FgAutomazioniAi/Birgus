@@ -1,0 +1,33 @@
+FROM node:22-alpine AS deps
+
+WORKDIR /app/frontend
+
+COPY frontend/package*.json ./
+RUN npm ci
+
+FROM deps AS build
+
+ARG BIRGUS_API_BASE_URL=http://app:3000
+ENV BIRGUS_API_BASE_URL=${BIRGUS_API_BASE_URL}
+
+COPY frontend ./
+
+RUN npm run build \
+  && npm prune --omit=dev
+
+FROM node:22-alpine AS runner
+
+ENV NODE_ENV=production
+ENV PORT=3100
+
+WORKDIR /app/frontend
+
+COPY --from=build /app/frontend/package*.json ./
+COPY --from=build /app/frontend/node_modules ./node_modules
+COPY --from=build /app/frontend/.next ./.next
+COPY --from=build /app/frontend/public ./public
+COPY --from=build /app/frontend/next.config.ts ./next.config.ts
+
+EXPOSE 3100
+
+CMD ["npm", "run", "start"]

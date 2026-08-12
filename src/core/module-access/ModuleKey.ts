@@ -3,6 +3,7 @@ export class ModuleKey {
   public static readonly AGENT_MANAGEMENT = "agent_management";
   public static readonly SHIPMENT_MANAGEMENT = "shipment_management";
   public static readonly DDT_PROCESSING = "ddt_processing";
+  public static readonly MEASURE_REPORT = "measure_report";
   public static readonly DOCUMENT_ARCHIVE = "document_archive";
   public static readonly DOCUMENT_INTELLIGENCE = "document_intelligence";
   public static readonly CONVERSATIONAL_ASSISTANT = "conversational_assistant";

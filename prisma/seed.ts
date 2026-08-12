@@ -10,6 +10,7 @@ const MODULE_KEYS = [
   "agent_management",
   "shipment_management",
   "ddt_processing",
+  "measure_report",
   "document_archive",
   "document_intelligence",
   "conversational_assistant",
@@ -36,6 +37,8 @@ const PERMISSION_KEYS = [
   "shipments.write",
   "ddt.read",
   "ddt.process",
+  "measure_report.read",
+  "measure_report.process",
   "knowledge.read",
   "knowledge.write",
   "assistant.read",
@@ -66,6 +69,8 @@ const ROLE_PERMISSION_MATRIX: Record<(typeof ROLE_KEYS)[number], readonly (typeo
     "shipments.write",
     "ddt.read",
     "ddt.process",
+    "measure_report.read",
+    "measure_report.process",
     "knowledge.read",
     "knowledge.write",
     "assistant.read",
@@ -91,6 +96,8 @@ const ROLE_PERMISSION_MATRIX: Record<(typeof ROLE_KEYS)[number], readonly (typeo
     "shipments.write",
     "ddt.read",
     "ddt.process",
+    "measure_report.read",
+    "measure_report.process",
     "knowledge.read",
     "assistant.read",
     "assistant.write",
@@ -141,7 +148,17 @@ async function hashPassword(password: string): Promise<string> {
   return `scrypt$${salt}$${derived.toString("base64url")}`;
 }
 
+function readSeedPassword(): string {
+  const password = process.env.BIRGUS_SEED_PASSWORD?.trim() ?? "";
+  if (password.length < 12) {
+    throw new Error("BIRGUS_SEED_PASSWORD is required and must be at least 12 characters.");
+  }
+
+  return password;
+}
+
 async function main() {
+  const seedPassword = readSeedPassword();
   const organizationCode = "birgus";
   const workspaceCode = "main";
 
@@ -591,7 +608,7 @@ async function main() {
 
   const seededUsers = new Map<string, { id: string; email: string; roleKey: string }>();
   for (const account of accountDefinitions) {
-    const passwordHash = await hashPassword("admin");
+    const passwordHash = await hashPassword(seedPassword);
     const user = await prisma.user.upsert({
       where: { email: account.email },
       update: {
@@ -1142,6 +1159,54 @@ async function main() {
       ],
     },
     {
+      moduleKey: "measure_report",
+      workflowKey: "measure_report_pipeline",
+      name: "measure_report_pipeline",
+      label: "Pipeline Measure Report",
+      description: "Workflow base per analisi report misurazioni e persistenza delle righe fuori tolleranza.",
+      isDefault: true,
+      nodes: [
+        {
+          nodeKey: "measure_report_pdf_input",
+          nodeKind: "INPUT" as const,
+          label: "PDF report misurazioni",
+          positionX: 0,
+          positionY: 80,
+          isRequired: true,
+          inputKind: "pdf",
+          configuration: {
+            acceptedMimeTypes: ["application/pdf"],
+            isRequired: true,
+          },
+        },
+        {
+          nodeKey: "measure_report_analysis_agent",
+          nodeKind: "AGENT" as const,
+          label: "Agente analisi report misurazioni",
+          positionX: 360,
+          positionY: 80,
+          isRequired: true,
+          moduleAgentRef: "measure_report:measure_report_zeiss_1_prompt",
+        },
+        {
+          nodeKey: "measure_report_output",
+          nodeKind: "OUTPUT" as const,
+          label: "Esito report misurazioni",
+          positionX: 760,
+          positionY: 80,
+          isRequired: true,
+          outputKind: "measure_report_analysis_result",
+          configuration: {
+            persistenceTarget: "measure_report",
+          },
+        },
+      ],
+      edges: [
+        { source: "measure_report_pdf_input", target: "measure_report_analysis_agent", orderNo: 1 },
+        { source: "measure_report_analysis_agent", target: "measure_report_output", orderNo: 2 },
+      ],
+    },
+    {
       moduleKey: "ddt_processing",
       workflowKey: "ddt_reader_pipeline",
       name: "ddt_reader_pipeline",
@@ -1360,7 +1425,6 @@ async function main() {
     users: accountDefinitions.map((item) => ({
       email: item.email,
       role: item.roleKey,
-      password: "admin",
     })),
     modules: MODULE_KEYS.length,
   });

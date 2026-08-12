@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { IconButton } from "@/components/atoms";
 import { UserChip } from "@/components/molecules";
 import { APP_ROUTES } from "@/lib/routes";
-import { scheduleUndoableAction } from "@/lib/undoable-action";
 
 export interface TopNavProps {
   collapsed: boolean;
@@ -44,7 +43,6 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const notificationRef = useRef<HTMLDivElement | null>(null);
   const notificationsEnabled = currentUser.enabledModuleKeys.includes("notification_center");
 
@@ -125,42 +123,32 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
   const handleClearNotifications = async () => {
     const previousNotifications = notifications;
     setNotifications([]);
-
-    scheduleUndoableAction({
-      pendingMessage: "Notifiche in cancellazione...",
-      successMessage: "Notifiche eliminate.",
-      errorMessage: "Cancellazione notifiche non riuscita.",
-      rollback: () => setNotifications(previousNotifications),
-      commit: async () => {
-        const response = await fetch("/api/notifications", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ confirmText: "cancella" }),
-        });
-        if (!response.ok) {
-          const payload = (await response.json().catch(() => ({ message: "Cancellazione notifiche non riuscita." }))) as { message?: string };
-          throw new Error(payload.message ?? "Cancellazione notifiche non riuscita.");
-        }
-      },
-    });
-  };
-
-  const handleLogout = async () => {
-    if (isLoggingOut) {
-      return;
-    }
-
     try {
-      setIsLoggingOut(true);
-      await fetch("/api/auth/logout", { method: "POST" });
-    } finally {
-      router.push(APP_ROUTES.login);
-      router.refresh();
-      setIsLoggingOut(false);
+      const response = await fetch("/api/notifications", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmText: "cancella" }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({ message: "Cancellazione notifiche non riuscita." }))) as { message?: string };
+        throw new Error(payload.message ?? "Cancellazione notifiche non riuscita.");
+      }
+
+      toast.success("Notifiche eliminate.");
+    } catch (error) {
+      setNotifications(previousNotifications);
+      const message = error instanceof Error && error.message.trim().length > 0
+        ? error.message
+        : "Cancellazione notifiche non riuscita.";
+      toast.error(message);
     }
   };
 
-  const userName = `${currentUser.nome} VL`;
+  const handleOpenPersonalDashboard = () => {
+    router.push(APP_ROUTES.personalDashboard);
+  };
+
+  const userName = currentUser.nome;
   const hasUnreadNotifications = notifications.some((notification) => !notification.readAt);
 
   return (
@@ -233,8 +221,8 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
             </>
           ) : null}
 
-          <button onClick={() => void handleLogout()} disabled={isLoggingOut} title="Esci">
-            <UserChip name={userName} role={currentUser.ruolo} />
+          <button onClick={handleOpenPersonalDashboard} title="Apri dashboard personale">
+            <UserChip name={userName} />
           </button>
         </div>
       </div>

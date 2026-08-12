@@ -1,0 +1,23 @@
+services:
+  reverse_proxy:
+    image: caddy:2.8-alpine
+    container_name: birgus_reverse_proxy
+    restart: unless-stopped
+    environment:
+      BIRGUS_PUBLIC_HOST: "${BIRGUS_PUBLIC_HOST:?BIRGUS_PUBLIC_HOST is required}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.https.local:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_started
+      app:
+        condition: service_started
+
+volumes:
+  caddy_data:
+  caddy_config:

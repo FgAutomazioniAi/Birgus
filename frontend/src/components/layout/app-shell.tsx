@@ -13,6 +13,7 @@ export interface AppShellProps {
     id: string;
     nome: string;
     ruolo: string;
+    workspaceId: string;
     enabledModuleKeys: string[];
   };
 }
@@ -22,8 +23,8 @@ export function AppShell({ children, currentUser }: AppShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-bg-page">
-      <AuthSessionGuard />
+    <div className="flex min-h-screen bg-bg-page" data-workspace-id={currentUser.workspaceId}>
+      <AuthSessionGuard workspaceId={currentUser.workspaceId} />
       <Sidebar
         open={sidebarOpen}
         collapsed={sidebarCollapsed}

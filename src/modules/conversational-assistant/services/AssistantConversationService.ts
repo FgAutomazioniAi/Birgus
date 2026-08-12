@@ -1,14 +1,14 @@
 import { AppError } from "../../../core/errors/AppError.js";
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
+import { OpenAiCompatibleToolChatClient } from "../../ai-runtime/services/OpenAiCompatibleToolChatClient.js";
+import { DocumentChatContext, DocumentIntelligenceService } from "../../document-intelligence/services/DocumentIntelligenceService.js";
 import { AssistantMessageEntity } from "../domain/AssistantMessageEntity.js";
+import { PrismaAssistantSessionRepository } from "../infra/PrismaAssistantSessionRepository.js";
 import { AssistantSessionRepository } from "../repositories/AssistantSessionRepository.js";
 import { AssistantToolDefinition, AssistantToolExecutionContext } from "../tools/AssistantToolDefinition.js";
-import { PrismaAssistantSessionRepository } from "../infra/PrismaAssistantSessionRepository.js";
 import { AssistantSessionService } from "./AssistantSessionService.js";
 import { AssistantToolAccessService } from "./AssistantToolAccessService.js";
 import { AssistantToolRegistry } from "./AssistantToolRegistry.js";
-import { DocumentChatContext, DocumentIntelligenceService } from "../../document-intelligence/services/DocumentIntelligenceService.js";
-import { LmStudioChatClient } from "./LmStudioChatClient.js";
 
 interface ModelMessage {
   role: "system" | "user" | "assistant" | "tool";
@@ -23,21 +23,21 @@ export class AssistantConversationService {
   private readonly toolRegistry: AssistantToolRegistry;
   private readonly toolAccessService: AssistantToolAccessService;
   private readonly documentIntelligenceService: DocumentIntelligenceService;
-  private readonly chatClient: LmStudioChatClient;
+  private readonly chatClient: OpenAiCompatibleToolChatClient;
 
   public constructor(params: {
     sessionService: AssistantSessionService;
     toolRegistry: AssistantToolRegistry;
     toolAccessService: AssistantToolAccessService;
     documentIntelligenceService: DocumentIntelligenceService;
-    chatClient?: LmStudioChatClient;
+    chatClient?: OpenAiCompatibleToolChatClient;
     repository?: AssistantSessionRepository;
   }) {
     this.sessionService = params.sessionService;
     this.toolRegistry = params.toolRegistry;
     this.toolAccessService = params.toolAccessService;
     this.documentIntelligenceService = params.documentIntelligenceService;
-    this.chatClient = params.chatClient ?? new LmStudioChatClient();
+    this.chatClient = params.chatClient ?? new OpenAiCompatibleToolChatClient();
     this.repository = params.repository ?? new PrismaAssistantSessionRepository();
   }
 

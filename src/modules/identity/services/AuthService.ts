@@ -241,6 +241,27 @@ export class AuthService {
     await this.sessionRepository.revokeAllForUser(userId);
   }
 
+  public async changePassword(params: {
+    userId: string;
+    currentPassword: string;
+    newPassword: string;
+    currentSessionId: string;
+  }): Promise<void> {
+    const user = await this.userRepository.findById(params.userId);
+    if (!user || !user.isActive || !user.passwordHash) {
+      throw new AppError("Utente non valido.", "AUTH_USER_INVALID", 401);
+    }
+
+    const currentPasswordValid = await this.passwordHasher.verifyPassword(params.currentPassword, user.passwordHash);
+    if (!currentPasswordValid) {
+      throw new AppError("Password attuale non corretta.", "AUTH_CURRENT_PASSWORD_INVALID", 401);
+    }
+
+    const nextHash = await this.passwordHasher.hashPassword(params.newPassword);
+    await this.userRepository.updatePassword(user.id, nextHash);
+    await this.sessionRepository.revokeAllForUserExceptSession(user.id, params.currentSessionId);
+  }
+
   private resolveExpiration(rememberMe: boolean): Date {
     const milliseconds = rememberMe
       ? this.rememberDays * 24 * 60 * 60 * 1000

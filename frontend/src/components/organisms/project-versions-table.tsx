@@ -18,7 +18,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Text } from "@/components/atoms";
-import { PageHelpHint, SearchField } from "@/components/molecules";
+import { PageHelpHint, SearchField, SelectDropdown } from "@/components/molecules";
 import { cn } from "@/lib/cn";
 import { downloadTablePdf } from "@/lib/pdf-export";
 import { PROJECT_STATUS_OPTIONS, getProjectStatusLabel } from "@/lib/project-status";
@@ -561,33 +561,28 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
             placeholder="Descrizione breve"
             disabled={isSubmitting}
           />
-          <select
+          <SelectDropdown
             value={newStatus}
-            onChange={(event) => setNewStatus(event.target.value as ProjectStatus)}
+            onChange={(value) => setNewStatus(value as ProjectStatus)}
             disabled={isSubmitting}
-            className="h-11 w-full cursor-pointer appearance-none rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-4 text-sm text-text-secondary focus:outline-none focus:ring-2 focus:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {PROJECT_STATUS_OPTIONS.map((status) => (
-              <option key={status.key} value={status.key}>
-                {status.label}
-              </option>
-            ))}
-          </select>
+            options={PROJECT_STATUS_OPTIONS.map((status) => ({
+              value: status.key,
+              label: status.label,
+            }))}
+          />
         </div>
         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr),auto,auto]">
-          <select
+          <SelectDropdown
             value={newClientId}
-            onChange={(event) => setNewClientId(event.target.value)}
+            onChange={setNewClientId}
             disabled={isSubmitting}
-            className="h-11 w-full cursor-pointer appearance-none rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-4 text-sm text-text-secondary focus:outline-none focus:ring-2 focus:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <option value="">Nessun cliente associato</option>
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
+            options={clients.map((client) => ({
+              value: client.id,
+              label: client.name,
+            }))}
+            placeholder="Nessun cliente associato"
+            allowEmpty
+          />
           <Button type="button" variant="outline" onClick={() => setIsClientModalOpen(true)} className="h-11 px-4">
             <PlusCircle size={16} />
             Nuovo cliente

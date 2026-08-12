@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, FileSearch, FolderKanban, LogOut, Settings, ShieldCheck, Truck, Users } from "lucide-react";
+import { Archive, FileSearch, FolderKanban, LogOut, Ruler, Settings, ShieldCheck, Truck, Users } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -15,6 +15,7 @@ const menuItems = [
   // DDT_READER_FEATURE_START
   { icon: FileSearch, label: "DDT Reader", path: APP_ROUTES.ddtReader, moduleKey: "ddt_processing" },
   // DDT_READER_FEATURE_END
+  { icon: Ruler, label: "Measure Report", path: APP_ROUTES.measureReport, moduleKey: "measure_report" },
   { icon: Archive, label: "Archivio", path: APP_ROUTES.archive, moduleKey: "document_archive" },
   { icon: ShieldCheck, label: "Superadmin", path: APP_ROUTES.superadmin, moduleKey: "superadmin_center" },
   { icon: Settings, label: "Impostazioni", path: APP_ROUTES.settings },

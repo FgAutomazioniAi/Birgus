@@ -4,6 +4,8 @@ import { AuditLogRepository } from "../repositories/AuditLogRepository.js";
 
 export class AuditLogService {
   private readonly repository: AuditLogRepository;
+  private static readonly UUID_REGEX =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   public constructor(repository: AuditLogRepository) {
     this.repository = repository;
@@ -27,7 +29,7 @@ export class AuditLogService {
       moduleId,
       action: params.action,
       entityType: params.entityType,
-      entityId: params.entityId ?? null,
+      entityId: this.normalizeEntityId(params.entityId ?? null),
       payload: params.payload ?? null,
       ipAddress: params.ipAddress ?? null,
       userAgent: params.userAgent ?? null,
@@ -65,5 +67,18 @@ export class AuditLogService {
     });
 
     return moduleRow?.id ?? null;
+  }
+
+  private normalizeEntityId(entityId: string | null): string | null {
+    if (!entityId) {
+      return null;
+    }
+
+    const normalized = entityId.trim();
+    if (!normalized) {
+      return null;
+    }
+
+    return AuditLogService.UUID_REGEX.test(normalized) ? normalized : null;
   }
 }

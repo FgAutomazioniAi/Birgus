@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 
+import { AppError } from "../../../core/errors/AppError.js";
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { DdtDocumentEntity } from "../domain/DdtDocumentEntity.js";
 import { DdtAnalysisInput, DdtProcessingRepository, RecoverableDdtProcessingJob } from "../repositories/DdtProcessingRepository.js";
@@ -11,6 +12,20 @@ export class PrismaDdtProcessingRepository implements DdtProcessingRepository {
     requestedByUserId: string | null;
   }): Promise<DdtDocumentEntity> {
     const prisma = PrismaClientManager.getClient();
+    const sourceDocument = await prisma.document.findFirst({
+      where: {
+        id: params.documentId,
+        workspace_id: params.workspaceId,
+        deleted_at: null,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!sourceDocument) {
+      throw new AppError("Documento non trovato.", "DDT_DOCUMENT_NOT_FOUND", 404);
+    }
 
     const row = await prisma.ddtDocument.upsert({
       where: {

@@ -19,6 +19,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   let currentUserName = "Utente";
   let currentUserId = "";
   let currentUserRole = "Operatore";
+  let currentWorkspaceId = "";
   let enabledModuleKeys: string[] = [];
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/auth/session`, {
@@ -33,6 +34,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     }
 
     const payload = (await response.json()) as {
+      workspaceId?: string;
       userId?: string;
       user?: { fullName?: string; roleKeys?: string[] };
     };
@@ -40,6 +42,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     if (fullName && fullName.length > 0) {
       currentUserName = fullName;
     }
+
+    currentWorkspaceId = payload.workspaceId?.trim() ?? "";
 
     const normalizedRoleKeys = (payload.user?.roleKeys ?? []).map((item) => item.trim().toLowerCase());
     if (normalizedRoleKeys.includes("superadmin")) {
@@ -57,6 +61,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         cache: "no-store",
         headers: {
           cookie: `${AUTH_CONFIGURED_COOKIE_NAME}=${encodeURIComponent(token)}`,
+          ...(currentWorkspaceId ? { "x-workspace-id": currentWorkspaceId } : {}),
         },
       });
 
@@ -75,7 +80,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AppShell currentUser={{ id: currentUserId, nome: currentUserName, ruolo: currentUserRole, enabledModuleKeys }}>
+    <AppShell
+      currentUser={{
+        id: currentUserId,
+        nome: currentUserName,
+        ruolo: currentUserRole,
+        workspaceId: currentWorkspaceId,
+        enabledModuleKeys,
+      }}
+    >
       {children}
     </AppShell>
   );

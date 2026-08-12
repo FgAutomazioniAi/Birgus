@@ -13,6 +13,11 @@ import { NotificationService } from "../../notifications/services/NotificationSe
 import { NextOrchestratorDdtAnalyzer } from "../../ddt-processing/services/NextOrchestratorDdtAnalyzer.js";
 import { DdtAnalysisInput } from "../../ddt-processing/repositories/DdtProcessingRepository.js";
 import { NextOrchestratorQuotationAnalyzer } from "../../quotation-orchestrator/services/NextOrchestratorQuotationAnalyzer.js";
+import { MeasureReportAnalysisInput, MeasureReportAnalyzer } from "../../measure-report/services/MeasureReportAnalyzer.js";
+import { normalizeMeasureReportDocumentType } from "../../measure-report/services/MeasureReportDocumentTypes.js";
+import { Job } from "../../../worker/queue/Job.js";
+import { JobQueue } from "../../../worker/queue/JobQueue.js";
+import { QueueWorkflowRunDispatcher, WorkflowRunJobPayload } from "./QueueWorkflowRunDispatcher.js";
 
 interface StepExecutionContext {
   workspaceId: string;
@@ -28,6 +33,7 @@ interface StepExecutionContext {
   projectName: string | null;
   documentId: string | null;
   ddtDocumentId: string | null;
+  measureReportDocumentId: string | null;
   quotationSource: {
     documentId: string;
     storagePath: string;
@@ -36,6 +42,12 @@ interface StepExecutionContext {
   ddtSource: {
     storagePath: string;
     fileName: string;
+  } | null;
+  measureReportSource: {
+    storagePath: string;
+    fileName: string;
+    requestedDocumentType: string | null;
+    effectiveDocumentType: string | null;
   } | null;
   inputPayload: Record<string, unknown> | null;
   nodeOutputs: Map<string, unknown>;
@@ -59,22 +71,28 @@ export class WorkflowRunExecutorService {
   private readonly documentIntelligenceService: DocumentIntelligenceService;
   private readonly quotationAnalyzer: NextOrchestratorQuotationAnalyzer;
   private readonly ddtAnalyzer: NextOrchestratorDdtAnalyzer;
+  private readonly measureReportAnalyzer: MeasureReportAnalyzer;
   private readonly pythonModulesClient: BackendPythonModulesClient;
   private readonly notificationService: NotificationService | null;
+  private readonly jobQueue: JobQueue | null;
 
   public constructor(params: {
     documentArchiveService: DocumentArchiveService;
     documentIntelligenceService: DocumentIntelligenceService;
     quotationAnalyzer: NextOrchestratorQuotationAnalyzer;
     ddtAnalyzer: NextOrchestratorDdtAnalyzer;
+    measureReportAnalyzer: MeasureReportAnalyzer;
     pythonModulesClient: BackendPythonModulesClient;
+    jobQueue?: JobQueue | null;
     notificationService?: NotificationService | null;
   }) {
     this.documentArchiveService = params.documentArchiveService;
     this.documentIntelligenceService = params.documentIntelligenceService;
     this.quotationAnalyzer = params.quotationAnalyzer;
     this.ddtAnalyzer = params.ddtAnalyzer;
+    this.measureReportAnalyzer = params.measureReportAnalyzer;
     this.pythonModulesClient = params.pythonModulesClient;
+    this.jobQueue = params.jobQueue ?? null;
     this.notificationService = params.notificationService ?? null;
   }
 
@@ -97,6 +115,17 @@ export class WorkflowRunExecutorService {
 
     for (const row of rows) {
       try {
+        if (this.jobQueue) {
+          await this.jobQueue.enqueue(
+            new Job<WorkflowRunJobPayload>(
+              this.buildQueueJobId(row.id),
+              QueueWorkflowRunDispatcher.JOB_NAME,
+              { runId: row.id },
+            ),
+          );
+          continue;
+        }
+
         await this.executeRun(row.id);
       } catch (error) {
         console.error("[WorkflowRunExecutorService] Unable to resume workflow run", {
@@ -318,6 +347,20 @@ export class WorkflowRunExecutorService {
             },
           },
         },
+        measure_report_document: {
+          select: {
+            id: true,
+            original_filename: true,
+            document_type_requested: true,
+            document_type_effective: true,
+            document: {
+              select: {
+                storage_path: true,
+                filename: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -358,6 +401,14 @@ export class WorkflowRunExecutorService {
           fileName: row.ddt_document.original_filename ?? row.ddt_document.document.filename ?? "document.pdf",
         }
       : null;
+    const measureReportSource = row.measure_report_document?.document?.storage_path
+      ? {
+          storagePath: row.measure_report_document.document.storage_path,
+          fileName: row.measure_report_document.original_filename ?? row.measure_report_document.document.filename ?? "document.pdf",
+          requestedDocumentType: row.measure_report_document.document_type_requested ?? null,
+          effectiveDocumentType: row.measure_report_document.document_type_effective ?? null,
+        }
+      : null;
 
     return {
       workspaceId: row.workspace_id,
@@ -373,8 +424,10 @@ export class WorkflowRunExecutorService {
       projectName: row.project_version?.project?.name?.trim() || null,
       documentId: row.document_id,
       ddtDocumentId: row.ddt_document_id,
+      measureReportDocumentId: row.measure_report_document_id,
       quotationSource,
       ddtSource,
+      measureReportSource,
       inputPayload: (row.input_payload ?? null) as Record<string, unknown> | null,
       nodeOutputs: new Map<string, unknown>(),
     };
@@ -456,6 +509,9 @@ export class WorkflowRunExecutorService {
       if (node.node_key === "ddt_pdf_input") {
         return context.ddtSource;
       }
+      if (node.node_key === "measure_report_pdf_input") {
+        return context.measureReportSource;
+      }
       return context.inputPayload;
     }
 
@@ -506,6 +562,24 @@ export class WorkflowRunExecutorService {
       return analysis;
     }
 
+    if (
+      agentKey.startsWith("measure_report_")
+      || node.node_key === "measure_report_analysis_agent"
+      || context.moduleKey === ModuleKey.MEASURE_REPORT
+    ) {
+      if (!context.measureReportSource) {
+        throw new Error("Sorgente measure report mancante.");
+      }
+      const analysis = await this.measureReportAnalyzer.analyze({
+        workspaceId: context.workspaceId,
+        fileName: context.measureReportSource.fileName,
+        storagePath: context.measureReportSource.storagePath,
+        requestedDocumentType: context.measureReportSource.effectiveDocumentType
+          ?? context.measureReportSource.requestedDocumentType,
+      });
+      return analysis;
+    }
+
     throw new Error(`Agent node non supportato: ${agentKey}`);
   }
 
@@ -546,7 +620,7 @@ export class WorkflowRunExecutorService {
     action: string,
   ): Record<string, unknown> {
     if (moduleName === "ocr_engine" && action === "extract_text_from_pdf_storage") {
-      const source = context.quotationSource ?? context.ddtSource;
+      const source = context.quotationSource ?? context.ddtSource ?? context.measureReportSource;
       if (!source) {
         throw new Error("Sorgente PDF mancante per OCR.");
       }
@@ -680,6 +754,22 @@ export class WorkflowRunExecutorService {
       };
     }
 
+    if (node.output_kind === "measure_report_analysis_result") {
+      const analysis = this.findNodeOutput(context, "measure_report_analysis_agent") as MeasureReportAnalysisInput | null;
+      if (!context.measureReportDocumentId || !analysis) {
+        return {
+          persisted: false,
+          reason: "missing_measure_report_context_or_analysis",
+        };
+      }
+
+      await this.persistMeasureReportAnalysis(context.workspaceId, context.measureReportDocumentId, analysis);
+      return {
+        persisted: true,
+        measureReportDocumentId: context.measureReportDocumentId,
+      };
+    }
+
     return {
       nodeKey: node.node_key,
       outputKind: node.output_kind,
@@ -754,25 +844,98 @@ export class WorkflowRunExecutorService {
     });
   }
 
+  private async persistMeasureReportAnalysis(
+    workspaceId: string,
+    measureReportDocumentId: string,
+    analysis: MeasureReportAnalysisInput,
+  ): Promise<void> {
+    const prisma = PrismaClientManager.getClient();
+    await prisma.$transaction(async (tx) => {
+      const result = await tx.measureReportAnalysisResult.upsert({
+        where: {
+          measure_report_document_id: measureReportDocumentId,
+        },
+        update: {
+          document_type_used: analysis.documentTypeUsed,
+          prompt_agent_key: analysis.promptAgentKey,
+          rows_count: analysis.rows.length,
+          summary: analysis.summary,
+          raw_output: analysis.rawOutput,
+          raw_response: this.toInputJson(analysis.rawResponse ?? {}),
+          execution_metadata: this.toInputJson(analysis.executionMetadata ?? {}),
+        },
+        create: {
+          measure_report_document_id: measureReportDocumentId,
+          document_type_used: analysis.documentTypeUsed,
+          prompt_agent_key: analysis.promptAgentKey,
+          rows_count: analysis.rows.length,
+          summary: analysis.summary,
+          raw_output: analysis.rawOutput,
+          raw_response: this.toInputJson(analysis.rawResponse ?? {}),
+          execution_metadata: this.toInputJson(analysis.executionMetadata ?? {}),
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      await tx.measureReportAnalysisRow.deleteMany({
+        where: {
+          analysis_result_id: result.id,
+        },
+      });
+
+      if (analysis.rows.length > 0) {
+        await tx.measureReportAnalysisRow.createMany({
+          data: analysis.rows.map((row, index) => ({
+            analysis_result_id: result.id,
+            row_index: index + 1,
+            row_text: row.rowText,
+            note: row.note,
+            page_hint: row.pageHint,
+            raw_payload: this.toInputJson(row.rawPayload ?? {}),
+          })),
+        });
+      }
+
+      await tx.measureReportDocument.update({
+        where: {
+          id: measureReportDocumentId,
+        },
+        data: {
+          workspace_id: workspaceId,
+          status: "READY",
+          document_type_effective: normalizeMeasureReportDocumentType(analysis.documentTypeUsed),
+          last_error: null,
+        },
+      });
+    });
+  }
+
   private async handlePreStepStatus(context: StepExecutionContext, nodeKey: string): Promise<void> {
-    if (!context.ddtDocumentId) {
-      return;
+    if (context.ddtDocumentId) {
+      if (nodeKey === "ddt_ocr_tool") {
+        await this.updateDdtDocumentStatus(context.ddtDocumentId, "OCR_PROCESSING");
+        return;
+      }
+      if (nodeKey === "ddt_analysis_agent") {
+        await this.updateDdtDocumentStatus(context.ddtDocumentId, "AI_PROCESSING");
+        return;
+      }
     }
 
-    if (nodeKey === "ddt_ocr_tool") {
-      await this.updateDdtDocumentStatus(context.ddtDocumentId, "OCR_PROCESSING");
-      return;
-    }
-    if (nodeKey === "ddt_analysis_agent") {
-      await this.updateDdtDocumentStatus(context.ddtDocumentId, "AI_PROCESSING");
+    if (context.measureReportDocumentId && nodeKey === "measure_report_analysis_agent") {
+      await this.updateMeasureReportDocumentStatus(context.measureReportDocumentId, "AI_PROCESSING");
     }
   }
 
   private async handleRunFailureStatus(context: StepExecutionContext, message: string): Promise<void> {
-    if (!context.ddtDocumentId) {
-      return;
+    if (context.ddtDocumentId) {
+      await this.updateDdtDocumentStatus(context.ddtDocumentId, "ERROR", message);
     }
-    await this.updateDdtDocumentStatus(context.ddtDocumentId, "ERROR", message);
+    if (context.measureReportDocumentId) {
+      await this.updateMeasureReportDocumentStatus(context.measureReportDocumentId, "ERROR", message);
+    }
   }
 
   private async updateDdtDocumentStatus(
@@ -784,6 +947,23 @@ export class WorkflowRunExecutorService {
     await prisma.ddtDocument.update({
       where: {
         id: ddtDocumentId,
+      },
+      data: {
+        status,
+        last_error: lastError ?? null,
+      },
+    });
+  }
+
+  private async updateMeasureReportDocumentStatus(
+    measureReportDocumentId: string,
+    status: "AI_PROCESSING" | "READY" | "ERROR",
+    lastError?: string | null,
+  ): Promise<void> {
+    const prisma = PrismaClientManager.getClient();
+    await prisma.measureReportDocument.update({
+      where: {
+        id: measureReportDocumentId,
       },
       data: {
         status,
@@ -886,6 +1066,10 @@ export class WorkflowRunExecutorService {
     return required ? "FAILED" : "SKIPPED";
   }
 
+  private buildQueueJobId(runId: string): string {
+    return `workflow:${runId}`;
+  }
+
   private toInputJson(value: unknown): Prisma.InputJsonValue {
     if (value === undefined || value === null) {
       return {};
@@ -932,6 +1116,13 @@ export class WorkflowRunExecutorService {
       return status === "completed"
         ? { title: "DDT", message: `Analizzato "${documentName}".` }
         : { title: "DDT", message: `Analisi fallita su "${documentName}": ${error ?? "errore sconosciuto"}` };
+    }
+
+    if (context.moduleKey === ModuleKey.MEASURE_REPORT) {
+      const documentName = context.measureReportSource?.fileName ?? "document.pdf";
+      return status === "completed"
+        ? { title: "Measure Report", message: `Analizzato "${documentName}".` }
+        : { title: "Measure Report", message: `Analisi fallita su "${documentName}": ${error ?? "errore sconosciuto"}` };
     }
 
     if (context.projectName) {

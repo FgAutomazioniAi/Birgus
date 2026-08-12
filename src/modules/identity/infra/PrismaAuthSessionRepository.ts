@@ -94,4 +94,21 @@ export class PrismaAuthSessionRepository implements AuthSessionRepository {
       },
     });
   }
+
+  public async revokeAllForUserExceptSession(userId: string, currentSessionId: string): Promise<void> {
+    const prisma = PrismaClientManager.getClient();
+
+    await prisma.authSession.updateMany({
+      where: {
+        user_id: userId,
+        revoked_at: null,
+        id: {
+          not: currentSessionId,
+        },
+      },
+      data: {
+        revoked_at: new Date(),
+      },
+    });
+  }
 }

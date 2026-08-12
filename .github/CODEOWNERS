@@ -1,0 +1,14 @@
+* @samuel
+
+/src/nest/ @samuel
+/src/modules/identity/ @samuel
+/src/modules/superadmin/ @samuel
+/src/shared/http/ @samuel
+/prisma/ @samuel
+/docker-compose*.yml @samuel
+/Dockerfile* @samuel
+/garage/ @samuel
+/.github/ @samuel
+/docs/SECURITY_EXCEPTION_TEMPLATE.md @samuel
+/docs/CODING_STYLE_SECURITY.md @samuel
+/docs/APPROVED_LIBRARIES.md @samuel

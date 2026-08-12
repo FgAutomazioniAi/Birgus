@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Label, Text } from "@/components/atoms";
+import { SelectDropdown } from "@/components/molecules";
 
 type WorkspaceDto = {
   id: string;
@@ -83,15 +84,33 @@ export function SuperadminPanel() {
   const [userModules, setUserModules] = useState<UserModuleStateDto[]>([]);
   const [selectedRoleKeys, setSelectedRoleKeys] = useState<string[]>([]);
 
-  const [passwordResetValue, setPasswordResetValue] = useState("admin");
+  const [passwordResetValue, setPasswordResetValue] = useState("");
   const [createEmail, setCreateEmail] = useState("");
   const [createFirstName, setCreateFirstName] = useState("");
   const [createLastName, setCreateLastName] = useState("");
-  const [createPassword, setCreatePassword] = useState("admin");
+  const [createPassword, setCreatePassword] = useState("");
   const [createRoleKeys, setCreateRoleKeys] = useState<string[]>(["operator"]);
   const [isSaving, setIsSaving] = useState(false);
 
   const selectedUser = useMemo(() => users.find((item) => item.id === selectedUserId) ?? null, [users, selectedUserId]);
+  const workspaceOptions = useMemo(
+    () => workspaces.map((workspace) => ({
+      value: workspace.id,
+      label: `${workspace.organizationCode}/${workspace.code}`,
+    })),
+    [workspaces],
+  );
+  const overridableModules = useMemo(
+    () => modules.filter((module) => module.key !== "superadmin_center"),
+    [modules],
+  );
+  const userOptions = useMemo(
+    () => users.map((user) => ({
+      value: user.id,
+      label: `${user.firstName} ${user.lastName ?? ""} (${user.email})`,
+    })),
+    [users],
+  );
 
   const loadBase = async () => {
     setLoading(true);
@@ -208,7 +227,7 @@ export function SuperadminPanel() {
       setCreateEmail("");
       setCreateFirstName("");
       setCreateLastName("");
-      setCreatePassword("admin");
+      setCreatePassword("");
       setCreateRoleKeys(["operator"]);
       toast.success(`Utente creato: ${payload.email}`);
     } catch (error) {
@@ -428,35 +447,29 @@ export function SuperadminPanel() {
           </div>
           <div>
             <Label htmlFor="superadmin-workspace">Workspace</Label>
-            <select
+            <SelectDropdown
               id="superadmin-workspace"
               value={selectedWorkspaceId}
-              onChange={(event) => setSelectedWorkspaceId(event.target.value)}
-              className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-3 text-sm text-text-secondary"
-            >
-              <option value="">Seleziona workspace</option>
-              {workspaces.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.organizationCode}/{workspace.code}
-                </option>
-              ))}
-            </select>
+              onChange={(nextValue) => setSelectedWorkspaceId(nextValue)}
+              options={workspaceOptions}
+              placeholder="Seleziona workspace"
+              disabled={loading || isSaving}
+              allowEmpty
+              className="mt-1"
+            />
           </div>
           <div>
             <Label htmlFor="superadmin-user">Utente</Label>
-            <select
+            <SelectDropdown
               id="superadmin-user"
               value={selectedUserId}
-              onChange={(event) => setSelectedUserId(event.target.value)}
-              className="mt-1 h-11 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-3 text-sm text-text-secondary"
-            >
-              <option value="">Seleziona utente</option>
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.firstName} {user.lastName ?? ""} ({user.email})
-                </option>
-              ))}
-            </select>
+              onChange={(nextValue) => setSelectedUserId(nextValue)}
+              options={userOptions}
+              placeholder="Seleziona utente"
+              disabled={loading || isSaving}
+              allowEmpty
+              className="mt-1"
+            />
           </div>
           <div className="flex items-end">
             <Button onClick={() => void handleRefreshUsers()} disabled={loading || isSaving} className="h-11 w-full">
@@ -631,7 +644,7 @@ export function SuperadminPanel() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border-subtle">
-              {modules.map((module) => {
+              {overridableModules.map((module) => {
                 const state = userModules.find((item) => item.moduleKey === module.key) ?? null;
                 return (
                   <tr key={module.key}>

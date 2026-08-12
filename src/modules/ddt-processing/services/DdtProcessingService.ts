@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import { Job } from "../../../worker/queue/Job.js";
 import { JobQueue } from "../../../worker/queue/JobQueue.js";
 import { StartDdtProcessingCommand } from "../dto/StartDdtProcessingCommand.js";
@@ -42,7 +40,7 @@ export class DdtProcessingService {
       jobId,
     };
 
-    await this.queue.enqueue(new Job(randomUUID(), DdtProcessingService.JOB_NAME, payload));
+    await this.queue.enqueue(new Job(this.buildQueueJobId(jobId), DdtProcessingService.JOB_NAME, payload));
 
     return {
       jobId,
@@ -64,7 +62,11 @@ export class DdtProcessingService {
         jobId: job.jobId,
       };
 
-      await this.queue.enqueue(new Job(randomUUID(), DdtProcessingService.JOB_NAME, payload));
+      await this.queue.enqueue(new Job(this.buildQueueJobId(job.jobId), DdtProcessingService.JOB_NAME, payload));
     }
+  }
+
+  private buildQueueJobId(jobId: string): string {
+    return `ddt:${jobId}`;
   }
 }

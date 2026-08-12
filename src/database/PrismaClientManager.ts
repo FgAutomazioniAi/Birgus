@@ -5,9 +5,13 @@ export class PrismaClientManager {
 
   public static getClient(): PrismaClient {
     if (!PrismaClientManager.instance) {
-      PrismaClientManager.instance = new PrismaClient({ log: ["error"] });
+      throw new Error("PrismaClientManager not initialized. Use the Nest PrismaService runtime.");
     }
 
     return PrismaClientManager.instance;
+  }
+
+  public static setClient(client: PrismaClient): void {
+    PrismaClientManager.instance = client;
   }
 }

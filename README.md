@@ -9,7 +9,7 @@ Backend modulare multi-tenant costruito da DEMO con separazione netta:
 
 ## Stack
 - TypeScript
-- Fastify
+- NestJS + Fastify
 - Prisma + PostgreSQL
 - Garage (S3-compatible)
 
@@ -18,6 +18,7 @@ Backend modulare multi-tenant costruito da DEMO con separazione netta:
 npm install
 cd frontend && npm install && cd ..
 cp .env.example .env
+cp garage/garage.toml.example garage/garage.local.toml
 npm run db:generate
 npm run db:push
 npm run db:seed
@@ -26,7 +27,7 @@ npm run dev:frontend
 ```
 
 Server API: `http://localhost:3000`
-Frontend legacy (Next): `http://localhost:3100`
+Frontend Next: `http://localhost:3100`
 Health: `GET /health`
 
 ## Avvio Docker
@@ -36,24 +37,12 @@ docker compose up --build -d
 
 Servizi:
 - API app: `http://localhost:3000`
-- Frontend legacy Next: `http://localhost:3100`
+- Frontend Next: `http://localhost:3100`
 - PostgreSQL: `localhost:5432`
 - Garage S3 API: `http://localhost:3900`
 - Garage Admin API: `http://localhost:3903`
 
 Nota: il container `app` esegue `db:push` + `db:seed` all'avvio.
-
-## Test rapidi (smoke)
-Con stack Docker avviato:
-```bash
-npm run test:smoke
-```
-
-Variabili opzionali:
-- `SMOKE_API_BASE_URL` (default `http://localhost:3000`)
-- `SMOKE_FRONTEND_BASE_URL` (default `http://localhost:3100`)
-- `SMOKE_LOGIN_EMAIL` (default `superuser@birgus.it`)
-- `SMOKE_LOGIN_PASSWORD` (default `admin`)
 
 ## Endpoint principali
 - `POST /api/auth/login`
@@ -128,20 +117,49 @@ Compatibilità frontend storico:
 - Le dipendenze tra moduli vengono validate quando abiliti/disabiliti un modulo.
 
 ## Seed iniziale
-Utente seed:
-- email: `superuser@birgus.it`
-- password: `admin`
-
 Il seed crea organization/workspace, ruoli, permessi, moduli, status base e associazioni iniziali.
+
+Per evitare credenziali deboli nel codice, la password degli utenti seed deve essere fornita tramite:
+
+```bash
+BIRGUS_SEED_PASSWORD="una-password-temporanea-lunga"
+```
+
+La variabile e obbligatoria e deve contenere almeno 12 caratteri.
+
+## Garage locale
+Il file `garage/garage.local.toml` e richiesto da Docker Compose ma non deve essere versionato. Crealo da `garage/garage.toml.example` e sostituisci `rpc_secret`, `admin_token` e `metrics_token` con valori casuali per ogni ambiente.
 
 ## Stato corrente
 - Architettura OOP modulare attiva
-- Worker DDT integrato nel processo app (queue in-memory)
-- Pipeline DDT analyzer collegata a LM Studio via endpoint configurabili da `.env`
+- Worker backend integrati nel processo app con queue Postgres-backed
+- Pipeline OCR/IA collegata a provider OpenAI-compatible configurabile da `.env` (`AI_PROVIDER_*`, vLLM per MVP)
 
-## Documentazione database
-- Guida completa tabelle/relazioni: `docs/DATABASE_README.md`
-- Deploy/reverse proxy locale-LAN: `docs/DEPLOYMENT.md`
+## vLLM MVP
+Il provider IA interno parte tramite overlay Docker dedicato:
+
+```bash
+VLLM_MODEL="Qwen/Qwen2-VL-2B-Instruct" \
+VLLM_SERVED_MODEL_NAME="birgus-vl" \
+VLLM_API_KEY="token-locale-lungo" \
+docker compose -f docker-compose.yml -f docker-compose.vllm.yml up
+```
+
+L'app usa `http://vllm:8000/v1` dentro la rete Docker e verifica il provider con `GET /health/ai-provider`. Non esporre la porta `8000` in produzione.
+Per uno smoke test diretto:
+
+```bash
+AI_PROVIDER_BASE_URL="http://127.0.0.1:8000/v1" \
+AI_PROVIDER_API_KEY="token-locale-lungo" \
+AI_PROVIDER_CHAT_MODEL="birgus-vl" \
+npm run ai:smoke
+```
+
+## Documentazione sicurezza
+- Librerie approvate: `docs/APPROVED_LIBRARIES.md`
+- Coding style sicuro: `docs/CODING_STYLE_SECURITY.md`
+- Eccezioni sicurezza: `docs/SECURITY_EXCEPTION_TEMPLATE.md`
+- HTTPS finale: `docs/HTTPS_FINAL_STEP.md`
 
 ## Variabili ambiente auth/proxy
 - `AUTH_COOKIE_NAME` (default `vl_session`)

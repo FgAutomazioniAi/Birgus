@@ -24,7 +24,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Text } from "@/components/atoms";
-import { PageHelpHint } from "@/components/molecules";
+import { PageHelpHint, SelectDropdown } from "@/components/molecules";
 import { APP_ROUTES } from "@/lib/routes";
 import {
   calcolaSpedizioni,
@@ -623,14 +623,14 @@ export function ShippingPanel({ shipmentId }: { shipmentId: string }) {
             <div className="grid gap-3 md:grid-cols-4">
               <div className="space-y-1">
                 <Text variant="caption">Tipo</Text>
-                <select
-                  className="h-11 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 text-sm text-text-secondary"
+                <SelectDropdown
                   value={form.bloccoType}
-                  onChange={(event) => setForm((prev) => ({ ...prev, bloccoType: event.target.value as SpedizioniInput["bloccoType"] }))}
-                >
-                  <option value="cucito">Cucito</option>
-                  <option value="fresato">Fresato</option>
-                </select>
+                  onChange={(value) => setForm((prev) => ({ ...prev, bloccoType: value as SpedizioniInput["bloccoType"] }))}
+                  options={[
+                    { value: "cucito", label: "Cucito" },
+                    { value: "fresato", label: "Fresato" },
+                  ]}
+                />
               </div>
               <div className="space-y-1">
                 <Text variant="caption">Pagine testo 1</Text>
@@ -661,17 +661,14 @@ export function ShippingPanel({ shipmentId }: { shipmentId: string }) {
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
                 <Text variant="caption">Tipologia</Text>
-                <select
-                  className="h-11 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 text-sm text-text-secondary"
+                <SelectDropdown
                   value={form.copertinaType}
-                  onChange={(event) => setForm((prev) => ({ ...prev, copertinaType: event.target.value as CopertinaType }))}
-                >
-                  {copertinaOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => setForm((prev) => ({ ...prev, copertinaType: value as CopertinaType }))}
+                  options={copertinaOptions.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  }))}
+                />
               </div>
               <div className="space-y-1">
                 <Text variant="caption">Spessore cartoni (mm)</Text>
@@ -698,17 +695,14 @@ export function ShippingPanel({ shipmentId }: { shipmentId: string }) {
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
                 <Text variant="caption">Tipo</Text>
-                <select
-                  className="h-11 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 text-sm text-text-secondary"
+                <SelectDropdown
                   value={form.sopracopertaType}
-                  onChange={(event) => setForm((prev) => ({ ...prev, sopracopertaType: event.target.value as SopracopertaType }))}
-                >
-                  {sopracopertaOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => setForm((prev) => ({ ...prev, sopracopertaType: value as SopracopertaType }))}
+                  options={sopracopertaOptions.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  }))}
+                />
               </div>
               <div className="space-y-1">
                 <Text variant="caption">Alette (mm)</Text>
@@ -735,15 +729,15 @@ export function ShippingPanel({ shipmentId }: { shipmentId: string }) {
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
                 <Text variant="caption">Tipo custodia</Text>
-                <select
-                  className="h-11 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 text-sm text-text-secondary"
-                  value={form.custodiaType}
-                  onChange={(event) => setForm((prev) => ({ ...prev, custodiaType: Number(event.target.value) as SpedizioniInput["custodiaType"] }))}
-                >
-                  <option value={1}>Cus1 Rigida</option>
-                  <option value={2}>Cus2 Doppio spessore</option>
-                  <option value={3}>Cus3 Morbida</option>
-                </select>
+                <SelectDropdown
+                  value={String(form.custodiaType)}
+                  onChange={(value) => setForm((prev) => ({ ...prev, custodiaType: Number(value) as SpedizioniInput["custodiaType"] }))}
+                  options={[
+                    { value: "1", label: "Cus1 Rigida" },
+                    { value: "2", label: "Cus2 Doppio spessore" },
+                    { value: "3", label: "Cus3 Morbida" },
+                  ]}
+                />
               </div>
               <div className="space-y-1">
                 <Text variant="caption">Dimensione K33 (mm)</Text>
@@ -816,14 +810,14 @@ export function ShippingPanel({ shipmentId }: { shipmentId: string }) {
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
                 <Text variant="caption">Bancale</Text>
-                <select
-                  className="h-11 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 text-sm text-text-secondary"
+                <SelectDropdown
                   value={form.bancaleType}
-                  onChange={(event) => setForm((prev) => ({ ...prev, bancaleType: event.target.value as SpedizioniInput["bancaleType"] }))}
-                >
-                  <option value="100x120">100 x 120</option>
-                  <option value="80x120">80 x 120</option>
-                </select>
+                  onChange={(value) => setForm((prev) => ({ ...prev, bancaleType: value as SpedizioniInput["bancaleType"] }))}
+                  options={[
+                    { value: "100x120", label: "100 x 120" },
+                    { value: "80x120", label: "80 x 120" },
+                  ]}
+                />
               </div>
               <div className="space-y-1">
                 <Text variant="caption">Prodotto cartonata</Text>

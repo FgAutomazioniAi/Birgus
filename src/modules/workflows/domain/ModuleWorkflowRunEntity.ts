@@ -54,6 +54,7 @@ export class ModuleWorkflowRunEntity {
   public readonly shipmentId: string | null;
   public readonly documentId: string | null;
   public readonly ddtDocumentId: string | null;
+  public readonly measureReportDocumentId: string | null;
   public readonly inputPayload: unknown | null;
   public readonly resultPayload: unknown | null;
   public readonly errorMessage: string | null;
@@ -78,6 +79,7 @@ export class ModuleWorkflowRunEntity {
     shipmentId?: string | null;
     documentId?: string | null;
     ddtDocumentId?: string | null;
+    measureReportDocumentId?: string | null;
     inputPayload?: unknown | null;
     resultPayload?: unknown | null;
     errorMessage?: string | null;
@@ -101,6 +103,7 @@ export class ModuleWorkflowRunEntity {
     this.shipmentId = params.shipmentId ?? null;
     this.documentId = params.documentId ?? null;
     this.ddtDocumentId = params.ddtDocumentId ?? null;
+    this.measureReportDocumentId = params.measureReportDocumentId ?? null;
     this.inputPayload = params.inputPayload ?? null;
     this.resultPayload = params.resultPayload ?? null;
     this.errorMessage = params.errorMessage ?? null;

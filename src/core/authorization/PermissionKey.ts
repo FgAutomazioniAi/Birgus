@@ -17,6 +17,8 @@ export class PermissionKey {
 
   public static readonly DDT_READ = "ddt.read";
   public static readonly DDT_PROCESS = "ddt.process";
+  public static readonly MEASURE_REPORT_READ = "measure_report.read";
+  public static readonly MEASURE_REPORT_PROCESS = "measure_report.process";
 
   public static readonly KNOWLEDGE_READ = "knowledge.read";
   public static readonly KNOWLEDGE_WRITE = "knowledge.write";

@@ -15,7 +15,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Text } from "@/components/atoms";
-import { PageHelpHint, SearchField } from "@/components/molecules";
+import { PageHelpHint, SearchField, SelectDropdown } from "@/components/molecules";
 import { cn } from "@/lib/cn";
 import { downloadTablePdf } from "@/lib/pdf-export";
 import { APP_ROUTES } from "@/lib/routes";
@@ -558,17 +558,16 @@ export function DashboardTable() {
             </p>
             <label className="flex items-center gap-2 text-xs text-text-muted">
               <span>Righe</span>
-              <select
-                value={rowsPerPage}
-                onChange={(event) => setRowsPerPage(Number(event.target.value))}
-                className="h-8 cursor-pointer rounded-md border border-border-default bg-bg-muted px-2 text-xs text-text-secondary focus:outline-none focus:ring-2 focus:ring-ring-primary"
-              >
-                {ROWS_PER_PAGE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
+              <SelectDropdown
+                size="sm"
+                value={String(rowsPerPage)}
+                onChange={(value) => setRowsPerPage(Number(value))}
+                options={ROWS_PER_PAGE_OPTIONS.map((option) => ({
+                  value: String(option),
+                  label: String(option),
+                }))}
+                className="min-w-[72px]"
+              />
             </label>
           </div>
           <div className="flex gap-2">

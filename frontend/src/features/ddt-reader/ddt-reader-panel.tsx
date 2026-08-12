@@ -10,6 +10,7 @@ import { PageHelpHint } from "@/components/molecules";
 import { cn } from "@/lib/cn";
 import { APP_ROUTES } from "@/lib/routes";
 import { scheduleUndoableAction } from "@/lib/undoable-action";
+import { appendWorkspaceId } from "@/lib/workspace";
 
 import type { DdtReaderArticleItem, DdtReaderConfig, DdtReaderDocument } from "./types";
 
@@ -347,7 +348,7 @@ export function DdtReaderPanel() {
       }
 
       try {
-        const response = await fetch(`/api/ddt-reader/documents/${selectedDocId}/file`, {
+        const response = await fetch(appendWorkspaceId(`/api/ddt-reader/documents/${selectedDocId}/file`), {
           method: "GET",
           cache: "no-store",
         });
@@ -497,7 +498,7 @@ export function DdtReaderPanel() {
         "Errore durante l avvio dell analisi.",
       );
 
-      setFeedback("Analisi avviata: OCR + interrogazione LM Studio in corso.");
+      setFeedback("Analisi avviata: OCR + interrogazione provider IA in corso.");
       toast.success("Analisi avviata.");
       await refreshDocuments();
     } catch (analyzeError) {
@@ -718,7 +719,7 @@ export function DdtReaderPanel() {
               Risultato Analisi
             </Text>
             <Text variant="caption">
-              Modello LM Studio: <span className="font-semibold text-text-secondary">{lmModel}</span>
+              Modello IA: <span className="font-semibold text-text-secondary">{lmModel}</span>
             </Text>
           </div>
 
@@ -751,7 +752,7 @@ export function DdtReaderPanel() {
                 <div className="flex items-center justify-between gap-3">
                   <Text className="text-sm font-bold text-text-primary">Anteprima PDF</Text>
                   <a
-                    href={`/api/ddt-reader/documents/${selectedDocument.id}/file`}
+                    href={appendWorkspaceId(`/api/ddt-reader/documents/${selectedDocument.id}/file`)}
                     target="_blank"
                     rel="noreferrer"
                     className="text-xs font-semibold text-brand-accent transition-colors hover:text-brand-accent-hover"

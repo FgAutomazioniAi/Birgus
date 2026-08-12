@@ -1,65 +1,35 @@
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { GaragePath } from "../../../storage/GaragePath.js";
 import { ProjectBinaryStorage } from "../../../storage/ProjectBinaryStorage.js";
+import { OpenAiCompatibleLmClient } from "../../ai-runtime/services/OpenAiCompatibleLmClient.js";
+import {
+  ddtAnalysisJsonSchema,
+  parseDdtAnalysisModelPayload,
+  type DdtAnalysisModelPayload,
+} from "../domain/DdtAnalysisModelSchema.js";
 import { DdtAnalysisInput } from "../repositories/DdtProcessingRepository.js";
 import { DdtAnalyzer } from "./DdtAnalyzer.js";
 
-interface LmStudioChatResponseItem {
-  content?: string;
-  type?: string;
-}
-
-interface LmStudioChatResponse {
-  model_instance_id?: string;
-  output?: LmStudioChatResponseItem[];
-  response_id?: string;
-  stats?: Record<string, unknown>;
-}
-
-interface RawArticleItem {
-  articleType?: unknown;
-  article_type?: unknown;
-  quantity?: unknown;
-  unit?: unknown;
-}
-
-interface RawAnalysisPayload {
-  articleItems?: RawArticleItem[];
-  article_items?: RawArticleItem[];
-  articleCount?: unknown;
-  article_count?: unknown;
-  bollaNumber?: unknown;
-  bolla_number?: unknown;
-  commessaReference?: unknown;
-  commessa_reference?: unknown;
-  mainWarehouseAction?: unknown;
-  main_warehouse_action?: unknown;
-  movementScope?: unknown;
-  movement_scope?: unknown;
-  movementType?: unknown;
-  movement_type?: unknown;
-  summary?: unknown;
-  transferNote?: unknown;
-  transfer_note?: unknown;
-  warehouseDelta?: unknown;
-  warehouse_delta?: unknown;
-}
-
 export class LmStudioDdtAnalyzer implements DdtAnalyzer {
   private readonly objectStorage: ProjectBinaryStorage;
+  private readonly lmClient: OpenAiCompatibleLmClient;
   private readonly model: string;
-  private readonly baseUrl: string;
-  private readonly chatPath: string;
   private readonly timeoutMs: number;
   private readonly maxPdfTextChars: number;
 
-  public constructor(storage: ProjectBinaryStorage) {
+  public constructor(storage: ProjectBinaryStorage, lmClient?: OpenAiCompatibleLmClient) {
     this.objectStorage = storage;
-    this.model = process.env.DDT_READER_LM_MODEL ?? "";
-    this.baseUrl = (process.env.DDT_READER_LM_BASE_URL ?? "").replace(/\/+$/, "");
-    this.chatPath = process.env.DDT_READER_LM_CHAT_PATH ?? "/api/v1/chat";
-    this.timeoutMs = this.toPositiveInt(process.env.DDT_READER_LM_TIMEOUT_MS, 45000);
+    this.model = process.env.DDT_READER_LM_MODEL ?? process.env.AI_PROVIDER_CHAT_MODEL ?? process.env.ORCH_LM_MODEL ?? "";
+    this.timeoutMs = this.toPositiveInt(process.env.DDT_READER_LM_TIMEOUT_MS ?? process.env.AI_PROVIDER_TIMEOUT_MS, 45000);
     this.maxPdfTextChars = this.toPositiveInt(process.env.DDT_READER_LM_MAX_PDF_TEXT_CHARS, 20000);
+    this.lmClient = lmClient ?? new OpenAiCompatibleLmClient({
+      baseUrl: process.env.DDT_READER_LM_BASE_URL ?? process.env.AI_PROVIDER_BASE_URL ?? process.env.ORCH_LM_BASE_URL,
+      apiKey: process.env.DDT_READER_LM_API_KEY ?? process.env.AI_PROVIDER_API_KEY ?? process.env.VLLM_API_KEY,
+      requestedModel: this.model,
+      completionsPath: process.env.DDT_READER_LM_COMPLETIONS_PATH ?? process.env.AI_PROVIDER_COMPLETIONS_PATH ?? process.env.ORCH_LM_COMPLETIONS_PATH,
+      modelsPath: process.env.DDT_READER_LM_MODELS_PATH ?? process.env.AI_PROVIDER_MODELS_PATH ?? process.env.ORCH_LM_MODELS_PATH,
+      timeoutMs: this.timeoutMs,
+    });
   }
 
   public async analyze(ddtDocumentId: string): Promise<DdtAnalysisInput> {
@@ -67,26 +37,22 @@ export class LmStudioDdtAnalyzer implements DdtAnalyzer {
       throw new Error("DDT_READER_LM_MODEL mancante.");
     }
 
-    if (!this.baseUrl.trim()) {
-      throw new Error("DDT_READER_LM_BASE_URL mancante.");
-    }
-
     const row = await this.loadDdtDocument(ddtDocumentId);
     const pdfBytes = await this.loadDocumentBytes(row.storage_path);
     const extractedText = this.extractTextFromPdf(pdfBytes).slice(0, this.maxPdfTextChars);
     const prompt = this.buildPrompt(extractedText, row.original_filename ?? row.filename ?? "document.pdf");
 
-    const responsePayload = await this.callLmStudio(prompt);
-    const parsed = this.parseLmJson(responsePayload);
+    const responsePayload = await this.callAiProvider(prompt);
+    const parsed = this.parseProviderJson(responsePayload.content);
     const normalized = this.normalizeAnalysis(parsed);
 
     return {
       ...normalized,
       rawResponse: {
-        provider: "lm-studio",
-        model: this.model,
+        provider: "openai-compatible-chat-completions-json-schema",
+        model: responsePayload.model,
         documentId: ddtDocumentId,
-        response: responsePayload,
+        response: responsePayload.response,
       },
     };
   }
@@ -254,97 +220,79 @@ export class LmStudioDdtAnalyzer implements DdtAnalyzer {
     return `${analysisPrompt}\n\nFILE: ${fileName}\n\nTESTO_DDT:\n${safeText}`;
   }
 
-  private async callLmStudio(prompt: string): Promise<LmStudioChatResponse> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+  private async callAiProvider(prompt: string): Promise<{
+    model: string;
+    content: string;
+    response: Record<string, unknown>;
+  }> {
+    this.logAiTraffic("request", { model: this.model, promptChars: prompt.length });
+    const responsePayload = await this.lmClient.completeJsonSchema({
+      systemPrompt: "Estrai dati DDT e rispondi solo con JSON valido conforme allo schema.",
+      userContext: prompt,
+      schemaName: "ddt_analysis",
+      schema: ddtAnalysisJsonSchema,
+      maxTokens: this.toPositiveInt(process.env.ORCH_DDT_LM_MAX_TOKENS, 700),
+      temperature: 0,
+    });
+    this.logAiTraffic("response", {
+      model: responsePayload.model,
+      contentChars: responsePayload.content.length,
+    });
 
-    try {
-      const endpoint = `${this.baseUrl}${this.chatPath}`;
-      const requestPayload = {
-        model: this.model,
-        input: prompt,
-      };
-
-      console.log(`[Birgus][LM Studio][REQUEST] ${new Date().toISOString()} ${endpoint}`);
-      console.log(requestPayload);
-
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestPayload),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        console.log(`[Birgus][LM Studio][RESPONSE] ${new Date().toISOString()} ${endpoint}`, {
-          status: response.status,
-          ok: response.ok,
-        });
-        console.log(text);
-        throw new Error(`LM Studio HTTP ${response.status}: ${text || "no body"}`);
-      }
-
-      const responsePayload = (await response.json()) as LmStudioChatResponse;
-      console.log(`[Birgus][LM Studio][RESPONSE] ${new Date().toISOString()} ${endpoint}`, {
-        status: response.status,
-        ok: response.ok,
-      });
-      console.log(responsePayload);
-
-      return responsePayload;
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    return {
+      model: responsePayload.model,
+      content: responsePayload.content,
+      response: responsePayload.response as Record<string, unknown>,
+    };
   }
 
-  private parseLmJson(payload: LmStudioChatResponse): RawAnalysisPayload {
-    const content = payload.output?.map((item) => item.content ?? "").join("\n").trim() ?? "";
+  private logAiTraffic(direction: "request" | "response", meta: Record<string, unknown>): void {
+    const enabled = ["1", "true", "yes", "on"].includes((process.env.LOG_LM_TRAFFIC ?? "").trim().toLowerCase());
+    if (!enabled) {
+      return;
+    }
+
+    console.log(`[Birgus][DDT AI Provider][${direction.toUpperCase()}] ${new Date().toISOString()}`, meta);
+  }
+
+  private parseProviderJson(content: string): DdtAnalysisModelPayload {
     if (!content) {
-      throw new Error("LM Studio ha restituito output vuoto.");
+      throw new Error("AI provider ha restituito output vuoto.");
     }
 
-    const start = content.indexOf("{");
-    const end = content.lastIndexOf("}");
-    const candidate = start >= 0 && end > start ? content.slice(start, end + 1) : content;
-
-    try {
-      return JSON.parse(candidate) as RawAnalysisPayload;
-    } catch (error) {
-      throw new Error(`Risposta LM non parseabile come JSON: ${error instanceof Error ? error.message : "errore sconosciuto"}`);
-    }
+    return parseDdtAnalysisModelPayload(content);
   }
 
-  private normalizeAnalysis(payload: RawAnalysisPayload): DdtAnalysisInput {
-    const articleItemsRaw = Array.isArray(payload.articleItems)
-      ? payload.articleItems
-      : Array.isArray(payload.article_items)
-        ? payload.article_items
-        : [];
-
-    const articleItems = articleItemsRaw.map((item) => ({
-      articleType: this.toStringOrDefault(item.articleType ?? item.article_type, "sconosciuto"),
+  private normalizeAnalysis(payload: DdtAnalysisModelPayload): DdtAnalysisInput {
+    const articleItems = payload.article_items.map((item) => ({
+      articleType: this.toStringOrDefault(item.article_type, "sconosciuto"),
       quantity: this.toNumber(item.quantity),
       unit: this.toStringOrDefault(item.unit, "pz"),
     }));
 
-    const articleCountRaw = payload.articleCount ?? payload.article_count;
-
     return {
-      movementType: this.toNullableString(payload.movementType ?? payload.movement_type),
-      movementScope: this.toNullableString(payload.movementScope ?? payload.movement_scope),
-      mainWarehouseAction: this.toNullableString(payload.mainWarehouseAction ?? payload.main_warehouse_action),
-      bollaNumber: this.toNullableString(payload.bollaNumber ?? payload.bolla_number),
-      commessaReference: this.toNullableString(payload.commessaReference ?? payload.commessa_reference),
-      transferNote: this.toNullableString(payload.transferNote ?? payload.transfer_note),
-      articleCount: Number.isFinite(Number(articleCountRaw)) ? Number(articleCountRaw) : articleItems.length,
-      warehouseDelta: this.toNumber(payload.warehouseDelta ?? payload.warehouse_delta),
-      summary: this.toNullableString(payload.summary),
+      movementType: this.toNullableString(payload.movement_type),
+      movementScope: this.toNullableString(payload.movement_scope),
+      mainWarehouseAction: this.toNullableString(payload.main_warehouse_action),
+      bollaNumber: this.toNullableString(payload.bolla_number),
+      commessaReference: this.toNullableString(payload.commessa_reference),
+      transferNote: this.toNullableString(payload.transfer_note),
+      articleCount: payload.article_count,
+      warehouseDelta: this.computeWarehouseDelta(payload.main_warehouse_action, payload.article_count),
+      summary: this.toNullableString(payload.analysis_summary),
       rawResponse: payload as Record<string, unknown>,
       articleItems,
     };
+  }
+
+  private computeWarehouseDelta(mainAction: string, articleCount: number): number {
+    if (mainAction === "aggiunta_principale") {
+      return articleCount;
+    }
+    if (mainAction === "rimozione_principale") {
+      return -articleCount;
+    }
+    return 0;
   }
 
   private toNullableString(value: unknown): string | null {

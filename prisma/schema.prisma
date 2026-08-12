@@ -23,6 +23,7 @@ enum DocumentScope {
   PROJECT
   SHIPMENT
   DDT
+  MEASURE_REPORT
   OTHER
 }
 
@@ -41,6 +42,14 @@ enum DdtJobStatus {
   COMPLETED
   FAILED
   CANCELED
+}
+
+enum MeasureReportDocumentStatus {
+  UPLOADED
+  QUEUED
+  AI_PROCESSING
+  READY
+  ERROR
 }
 
 enum QuotationJobStatus {
@@ -125,6 +134,13 @@ enum WorkflowStepStatus {
   CANCELED
 }
 
+enum BackendJobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
 model Organization {
   id         String      @id @default(uuid()) @db.Uuid
   code       String      @unique
@@ -171,6 +187,7 @@ model Workspace {
   shipments                  Shipment[]
   shipment_specifications    ShipmentSpecification[]
   ddt_documents              DdtDocument[]
+  measure_report_documents   MeasureReportDocument[]
   ddt_processing_jobs        DdtProcessingJob[]
   quotation_orchestrator_jobs QuotationOrchestratorJob[]
   notifications              Notification[]
@@ -230,6 +247,7 @@ model User {
   shipments_created                Shipment[]            @relation("shipment_created_by")
   shipment_events                  ShipmentEvent[]       @relation("shipment_event_actor")
   ddt_documents_requested          DdtDocument[]         @relation("ddt_document_requested_by")
+  measure_report_documents_requested MeasureReportDocument[] @relation("measure_report_document_requested_by")
   notifications                    Notification[]
   audit_logs                       AuditLog[]
   assistant_sessions_opened        AssistantSession[]    @relation("assistant_session_opened_by")
@@ -547,6 +565,7 @@ model Document {
   module              Module?             @relation(fields: [module_id], references: [id], onDelete: SetNull)
   uploaded_by_user    User?               @relation("document_uploaded_by", fields: [uploaded_by_user_id], references: [id], onDelete: SetNull)
   ddt_document        DdtDocument?
+  measure_report_document MeasureReportDocument?
   assistant_sessions  AssistantSession[]
   workflow_runs       ModuleWorkflowRun[]
   knowledge_documents KnowledgeDocument[]
@@ -885,6 +904,7 @@ model ModuleWorkflowRun {
   shipment_id         String?           @db.Uuid
   document_id         String?           @db.Uuid
   ddt_document_id     String?           @db.Uuid
+  measure_report_document_id String?    @db.Uuid
   input_payload       Json?
   result_payload      Json?
   error_message       String?
@@ -904,6 +924,7 @@ model ModuleWorkflowRun {
   shipment           Shipment?              @relation(fields: [shipment_id], references: [id], onDelete: SetNull)
   document           Document?              @relation(fields: [document_id], references: [id], onDelete: SetNull)
   ddt_document       DdtDocument?           @relation(fields: [ddt_document_id], references: [id], onDelete: SetNull)
+  measure_report_document MeasureReportDocument? @relation(fields: [measure_report_document_id], references: [id], onDelete: SetNull)
   steps              ModuleWorkflowRunStep[]
 
   @@index([workspace_id])
@@ -916,6 +937,7 @@ model ModuleWorkflowRun {
   @@index([shipment_id])
   @@index([document_id])
   @@index([ddt_document_id])
+  @@index([measure_report_document_id])
   @@index([status])
   @@index([queued_at])
   @@map("module_workflow_runs")
@@ -1205,6 +1227,70 @@ model DdtProcessingEvent {
   @@map("ddt_processing_events")
 }
 
+model MeasureReportDocument {
+  id                      String                      @id @default(uuid()) @db.Uuid
+  workspace_id            String                      @db.Uuid
+  document_id             String                      @unique @db.Uuid
+  status                  MeasureReportDocumentStatus @default(UPLOADED)
+  original_filename       String?
+  document_type_requested String                      @default("auto")
+  document_type_effective String?
+  last_error              String?
+  requested_by_user_id    String?                     @db.Uuid
+  created_at              DateTime                    @default(now())
+  updated_at              DateTime                    @updatedAt
+
+  workspace         Workspace                 @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  document          Document                  @relation(fields: [document_id], references: [id], onDelete: Restrict)
+  requested_by_user User?                     @relation("measure_report_document_requested_by", fields: [requested_by_user_id], references: [id], onDelete: SetNull)
+  analysis_result   MeasureReportAnalysisResult?
+  workflow_runs     ModuleWorkflowRun[]
+
+  @@index([workspace_id])
+  @@index([status])
+  @@index([requested_by_user_id])
+  @@index([document_type_requested])
+  @@index([document_type_effective])
+  @@map("measure_report_documents")
+}
+
+model MeasureReportAnalysisResult {
+  id                         String   @id @default(uuid()) @db.Uuid
+  measure_report_document_id String   @unique @db.Uuid
+  document_type_used         String
+  prompt_agent_key           String?
+  rows_count                 Int      @default(0)
+  summary                    String?
+  raw_output                 String?  @db.Text
+  raw_response               Json?
+  execution_metadata         Json?
+  created_at                 DateTime @default(now())
+  updated_at                 DateTime @updatedAt
+
+  measure_report_document MeasureReportDocument      @relation(fields: [measure_report_document_id], references: [id], onDelete: Cascade)
+  rows                    MeasureReportAnalysisRow[]
+
+  @@index([document_type_used])
+  @@index([prompt_agent_key])
+  @@map("measure_report_analysis_results")
+}
+
+model MeasureReportAnalysisRow {
+  id                 Int     @id @default(autoincrement())
+  analysis_result_id String  @db.Uuid
+  row_index          Int
+  row_text           String  @db.Text
+  note               String?
+  page_hint          String?
+  raw_payload        Json?
+
+  analysis_result MeasureReportAnalysisResult @relation(fields: [analysis_result_id], references: [id], onDelete: Cascade)
+
+  @@index([analysis_result_id])
+  @@index([row_index])
+  @@map("measure_report_analysis_rows")
+}
+
 model QuotationOrchestratorJob {
   id                       String             @id @default(uuid()) @db.Uuid
   workspace_id             String             @db.Uuid
@@ -1242,6 +1328,26 @@ model QuotationOrchestratorJob {
   @@index([queued_at])
   @@index([mail_delivery_status])
   @@map("quotation_orchestrator_jobs")
+}
+
+model BackendJob {
+  id           String           @id
+  name         String
+  payload      Json
+  status       BackendJobStatus @default(QUEUED)
+  available_at DateTime         @default(now())
+  claimed_at   DateTime?
+  claimed_by   String?
+  attempts     Int              @default(0)
+  last_error   String?
+  completed_at DateTime?
+  created_at   DateTime         @default(now())
+  updated_at   DateTime         @updatedAt
+
+  @@index([status, available_at])
+  @@index([claimed_by])
+  @@index([created_at])
+  @@map("backend_jobs")
 }
 
 model AssistantSession {

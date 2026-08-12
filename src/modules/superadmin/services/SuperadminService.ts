@@ -640,7 +640,7 @@ export class SuperadminService {
       moduleKey: "superadmin_center",
       action: "superadmin.module.override_set",
       entityType: "UserModuleOverride",
-      entityId: `${params.workspaceId}:${params.targetUserId}:${params.moduleKey}`,
+      entityId: params.targetUserId,
       payload: {
         workspaceId: params.workspaceId,
         targetUserId: params.targetUserId,
@@ -672,7 +672,7 @@ export class SuperadminService {
       moduleKey: "superadmin_center",
       action: "superadmin.module.override_cleared",
       entityType: "UserModuleOverride",
-      entityId: `${params.workspaceId}:${params.targetUserId}:${params.moduleKey}`,
+      entityId: params.targetUserId,
       payload: {
         workspaceId: params.workspaceId,
         targetUserId: params.targetUserId,
@@ -740,7 +740,7 @@ export class SuperadminService {
       moduleKey: "superadmin_center",
       action: "superadmin.roles.replaced",
       entityType: "UserWorkspaceRole",
-      entityId: `${params.workspaceId}:${params.targetUserId}`,
+      entityId: params.targetUserId,
       payload: {
         workspaceId: params.workspaceId,
         targetUserId: params.targetUserId,

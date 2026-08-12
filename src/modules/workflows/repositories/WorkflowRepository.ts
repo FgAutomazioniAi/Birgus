@@ -64,6 +64,7 @@ export interface WorkflowRepository {
     shipmentId: string | null;
     documentId: string | null;
     ddtDocumentId: string | null;
+    measureReportDocumentId: string | null;
     inputPayload: unknown | null;
   }): Promise<ModuleWorkflowRunEntity>;
 }

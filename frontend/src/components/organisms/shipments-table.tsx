@@ -14,7 +14,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Text } from "@/components/atoms";
-import { PageHelpHint, SearchField } from "@/components/molecules";
+import { PageHelpHint, SearchField, SelectDropdown } from "@/components/molecules";
 import { cn } from "@/lib/cn";
 import { downloadTablePdf } from "@/lib/pdf-export";
 import { APP_ROUTES } from "@/lib/routes";
@@ -426,17 +426,15 @@ export function ShipmentsTable() {
             />
 
             <div className="flex items-center gap-2">
-              <select
-                value={rowsPerPage}
-                onChange={(event) => setRowsPerPage(Number(event.target.value))}
-                className="h-10 rounded-lg border border-border-default bg-bg-surface px-3 text-sm text-text-secondary"
-              >
-                {ROWS_PER_PAGE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option} righe
-                  </option>
-                ))}
-              </select>
+              <SelectDropdown
+                value={String(rowsPerPage)}
+                onChange={(value) => setRowsPerPage(Number(value))}
+                options={ROWS_PER_PAGE_OPTIONS.map((option) => ({
+                  value: String(option),
+                  label: `${option} righe`,
+                }))}
+                className="min-w-[120px]"
+              />
 
               <div className="relative" ref={columnsMenuRef}>
                 <Button

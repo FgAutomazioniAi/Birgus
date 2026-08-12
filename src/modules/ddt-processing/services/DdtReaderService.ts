@@ -88,8 +88,8 @@ export class DdtReaderService {
   public getConfig(): { single_document_mode: boolean; lm_model: string; lm_base_url: string } {
     return {
       single_document_mode: true,
-      lm_model: process.env.DDT_READER_LM_MODEL ?? "",
-      lm_base_url: process.env.DDT_READER_LM_BASE_URL ?? "",
+      lm_model: process.env.DDT_READER_LM_MODEL ?? process.env.AI_PROVIDER_CHAT_MODEL ?? "",
+      lm_base_url: process.env.DDT_READER_LM_BASE_URL ?? process.env.AI_PROVIDER_BASE_URL ?? "",
     };
   }
 
@@ -323,6 +323,7 @@ export class DdtReaderService {
       shipmentId: null,
       documentId: row.document_id,
       ddtDocumentId: row.id,
+      measureReportDocumentId: null,
       inputPayload: {
         ddtDocumentId: row.id,
         documentId: row.document_id,

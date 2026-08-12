@@ -374,6 +374,7 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
       shipmentId: row.shipment_id,
       documentId: row.document_id,
       ddtDocumentId: row.ddt_document_id,
+      measureReportDocumentId: row.measure_report_document_id,
       inputPayload: row.input_payload,
       resultPayload: row.result_payload,
       errorMessage: row.error_message,
@@ -418,6 +419,7 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
       shipmentId: row.shipment_id,
       documentId: row.document_id,
       ddtDocumentId: row.ddt_document_id,
+      measureReportDocumentId: row.measure_report_document_id,
       inputPayload: row.input_payload,
       resultPayload: row.result_payload,
       errorMessage: row.error_message,
@@ -453,6 +455,7 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
     shipmentId: string | null;
     documentId: string | null;
     ddtDocumentId: string | null;
+    measureReportDocumentId: string | null;
     inputPayload: unknown | null;
   }): Promise<ModuleWorkflowRunEntity> {
     const prisma = PrismaClientManager.getClient();
@@ -486,6 +489,7 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
         shipment_id: params.shipmentId,
         document_id: params.documentId,
         ddt_document_id: params.ddtDocumentId,
+        measure_report_document_id: params.measureReportDocumentId,
         input_payload: params.inputPayload as never,
       },
     });

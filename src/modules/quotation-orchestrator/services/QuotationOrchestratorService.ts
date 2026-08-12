@@ -12,6 +12,9 @@ import { QuotationEmailNotifier } from "./QuotationEmailNotifier.js";
 import { QuotationDocxBuilder } from "./QuotationDocxBuilder.js";
 import { WorkflowService } from "../../workflows/services/WorkflowService.js";
 import { ModuleWorkflowEntity, ModuleWorkflowNodeEntity } from "../../workflows/domain/ModuleWorkflowEntity.js";
+import { Job } from "../../../worker/queue/Job.js";
+import { JobQueue } from "../../../worker/queue/JobQueue.js";
+import { QuotationJobPayload } from "../../../worker/services/QuotationOrchestratorWorker.js";
 
 type OrchestratorJobStatus = "queued" | "running" | "completed" | "failed";
 
@@ -72,6 +75,7 @@ interface QuotationExecutionStep {
 
 export class QuotationOrchestratorService {
   private static readonly QUOTATION_WORKFLOW_KEY = "quotation_document_pipeline";
+  public static readonly JOB_NAME = "quotation.orchestrator";
   private readonly documentArchiveService: DocumentArchiveService;
   private readonly quotationAnalyzer: NextOrchestratorQuotationAnalyzer;
   private readonly docxBuilder: QuotationDocxBuilder;
@@ -80,6 +84,7 @@ export class QuotationOrchestratorService {
   private readonly documentIntelligenceService: DocumentIntelligenceService;
   private readonly workflowService: WorkflowService;
   private readonly notificationService: NotificationService | null;
+  private readonly jobQueue: JobQueue | null;
   private readonly runningJobs: Set<string>;
 
   public constructor(
@@ -90,6 +95,7 @@ export class QuotationOrchestratorService {
     emailNotifier: QuotationEmailNotifier,
     documentIntelligenceService: DocumentIntelligenceService,
     workflowService: WorkflowService,
+    jobQueue?: JobQueue | null,
     notificationService?: NotificationService | null,
   ) {
     this.documentArchiveService = documentArchiveService;
@@ -99,6 +105,7 @@ export class QuotationOrchestratorService {
     this.emailNotifier = emailNotifier;
     this.documentIntelligenceService = documentIntelligenceService;
     this.workflowService = workflowService;
+    this.jobQueue = jobQueue ?? null;
     this.notificationService = notificationService ?? null;
     this.runningJobs = new Set();
   }
@@ -123,15 +130,25 @@ export class QuotationOrchestratorService {
       step: "queued",
     });
 
-    setTimeout(() => {
-      void this.runJob(created.id);
-    }, 100);
-
     await this.notify(
       params.workspaceId,
       projectName ?? "Progetti",
       `Analisi preventivo avviata (${params.versionLabel.toUpperCase()}).`,
     );
+
+    if (this.jobQueue) {
+      await this.jobQueue.enqueue(
+        new Job<QuotationJobPayload>(
+          this.buildQueueJobId(created.id),
+          QuotationOrchestratorService.JOB_NAME,
+          { jobId: created.id },
+        ),
+      );
+    } else {
+      setTimeout(() => {
+        void this.executeJob(created.id);
+      }, 100);
+    }
 
     return created.id;
   }
@@ -192,17 +209,24 @@ export class QuotationOrchestratorService {
   public async resumePendingJobs(): Promise<void> {
     const recoverable = await this.repository.listRecoverableJobs();
     for (const job of recoverable) {
-      if (this.runningJobs.has(job.id)) {
+      if (this.jobQueue) {
+        await this.jobQueue.enqueue(
+          new Job<QuotationJobPayload>(
+            this.buildQueueJobId(job.id),
+            QuotationOrchestratorService.JOB_NAME,
+            { jobId: job.id },
+          ),
+        );
         continue;
       }
 
       setTimeout(() => {
-        void this.runJob(job.id);
+        void this.executeJob(job.id);
       }, 100);
     }
   }
 
-  private async runJob(jobId: string): Promise<void> {
+  public async executeJob(jobId: string): Promise<void> {
     if (this.runningJobs.has(jobId)) {
       return;
     }
@@ -419,6 +443,10 @@ export class QuotationOrchestratorService {
     } finally {
       this.runningJobs.delete(jobId);
     }
+  }
+
+  private buildQueueJobId(jobId: string): string {
+    return `quotation:${jobId}`;
   }
 
   private async loadProjectName(workspaceId: string, projectId: string): Promise<string | null> {

@@ -3,15 +3,16 @@
 import { ArrowLeft, Briefcase, CheckCircle2, Eye, FileCheck, FileSpreadsheet, FileText, Loader2, PlusCircle, RefreshCw, Save, Sparkles, Trash2, Upload, Users, X, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Text } from "@/components/atoms";
-import { FormField, PageHelpHint } from "@/components/molecules";
+import { FormField, PageHelpHint, SelectDropdown } from "@/components/molecules";
 import { PROJECT_STATUS_OPTIONS } from "@/lib/project-status";
 import { APP_ROUTES } from "@/lib/routes";
 import { scheduleUndoableAction } from "@/lib/undoable-action";
 import type { ProjectStatus } from "@/lib/types";
+import { appendWorkspaceId } from "@/lib/workspace";
 
 interface ProjectFormValues {
   clientId: string;
@@ -74,7 +75,7 @@ const LOCAL_PDF_KIND_MAP: Record<LocalPdfKey, string> = {
 
 const buildVersionQuery = (versionLabel: string) => `version=${encodeURIComponent(versionLabel)}`;
 const withVersion = (url: string, versionLabel: string) =>
-  `${url}${url.includes("?") ? "&" : "?"}${buildVersionQuery(versionLabel)}`;
+  appendWorkspaceId(`${url}${url.includes("?") ? "&" : "?"}${buildVersionQuery(versionLabel)}`);
 
 export interface ProjectFormProps {
   id?: string;
@@ -130,6 +131,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
   const finalStatusNotifiedRef = useRef<string | null>(null);
 
   const {
+    control,
     register,
     handleSubmit,
     reset,
@@ -181,7 +183,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
       const quotation = (await quotationResponse.json()) as QuotationApiDetail;
       if (quotation.found) {
         setQuotationFileName(quotation.fileName ?? "preventivo.pdf");
-        setQuotationPreviewUrl(quotation.previewUrl ?? withVersion(`/api/projects/${projectId}/quotation/file`, versionLabel));
+        setQuotationPreviewUrl(appendWorkspaceId(quotation.previewUrl ?? withVersion(`/api/projects/${projectId}/quotation/file`, versionLabel)));
       }
     }
 
@@ -190,7 +192,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
       setLocalPdfNames((prev) => ({ ...prev, emailPdf: emailFile.found ? (emailFile.fileName ?? "email.pdf") : null }));
       setLocalPdfPreviewUrls((prev) => ({
         ...prev,
-        emailPdf: emailFile.found ? (emailFile.previewUrl ?? withVersion(`/api/projects/${projectId}/files/email-pdf/content`, versionLabel)) : null,
+        emailPdf: emailFile.found ? appendWorkspaceId(emailFile.previewUrl ?? withVersion(`/api/projects/${projectId}/files/email-pdf/content`, versionLabel)) : null,
       }));
     }
 
@@ -199,7 +201,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
       setLocalPdfNames((prev) => ({ ...prev, techPdf: techFile.found ? (techFile.fileName ?? "specifica-tecnica.pdf") : null }));
       setLocalPdfPreviewUrls((prev) => ({
         ...prev,
-        techPdf: techFile.found ? (techFile.previewUrl ?? withVersion(`/api/projects/${projectId}/files/tech-pdf/content`, versionLabel)) : null,
+        techPdf: techFile.found ? appendWorkspaceId(techFile.previewUrl ?? withVersion(`/api/projects/${projectId}/files/tech-pdf/content`, versionLabel)) : null,
       }));
     }
 
@@ -207,7 +209,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
       const docxFile = (await docxResponse.json()) as GenericProjectFileDetail;
       setQuotationDocxName(docxFile.found ? (docxFile.fileName ?? "preventivo.docx") : null);
       setQuotationDocxPreviewUrl(
-        docxFile.found ? (docxFile.previewUrl ?? withVersion(`/api/projects/${projectId}/files/quotation-docx/content`, versionLabel)) : null,
+        docxFile.found ? appendWorkspaceId(docxFile.previewUrl ?? withVersion(`/api/projects/${projectId}/files/quotation-docx/content`, versionLabel)) : null,
       );
     }
 
@@ -215,7 +217,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
       const xlsxFile = (await xlsxResponse.json()) as GenericProjectFileDetail;
       setQuotationXlsxName(xlsxFile.found ? (xlsxFile.fileName ?? "preventivo.xlsx") : null);
       setQuotationXlsxPreviewUrl(
-        xlsxFile.found ? (xlsxFile.previewUrl ?? withVersion(`/api/projects/${projectId}/files/quotation-xlsx/content`, versionLabel)) : null,
+        xlsxFile.found ? appendWorkspaceId(xlsxFile.previewUrl ?? withVersion(`/api/projects/${projectId}/files/quotation-xlsx/content`, versionLabel)) : null,
       );
     }
   }, [resetVersionedFiles]);
@@ -416,7 +418,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
                 if (targetVersionLabel === selectedVersionLabel) {
                   setQuotationDocxName(docxFile.found ? (docxFile.fileName ?? "preventivo.docx") : null);
                   setQuotationDocxPreviewUrl(
-                    docxFile.found ? (docxFile.previewUrl ?? withVersion(`/api/projects/${id}/files/quotation-docx/content`, targetVersionLabel)) : null,
+                    docxFile.found ? appendWorkspaceId(docxFile.previewUrl ?? withVersion(`/api/projects/${id}/files/quotation-docx/content`, targetVersionLabel)) : null,
                   );
                 }
               }
@@ -500,7 +502,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
 
       const payload = (await response.json()) as { filename?: string; orchestratorJobId?: string | null; previewUrl?: string };
       setQuotationFileName(payload.filename ?? "preventivo.pdf");
-      setQuotationPreviewUrl(payload.previewUrl ?? withVersion(`/api/projects/${id}/quotation/file`, selectedVersionLabel));
+      setQuotationPreviewUrl(appendWorkspaceId(payload.previewUrl ?? withVersion(`/api/projects/${id}/quotation/file`, selectedVersionLabel)));
       setShowQuotationPopup(true);
 
       if (payload.orchestratorJobId) {
@@ -508,7 +510,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
         setActiveJobVersionLabel(selectedVersionLabel);
         setJobStatus("queued");
         setJobProgress(1);
-        setJobMessage("Job OCR/LM Studio avviato");
+        setJobMessage("Job OCR/IA avviato");
         setShowProgressWidget(true);
       }
 
@@ -752,7 +754,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
       setActiveJobVersionLabel(selectedVersionLabel);
       setJobStatus("queued");
       setJobProgress(1);
-      setJobMessage("Rianalisi OCR/LM Studio avviata");
+      setJobMessage("Rianalisi OCR/IA avviata");
       setShowProgressWidget(true);
       toast.success("Rianalisi avviata.");
     } catch {
@@ -880,18 +882,24 @@ export function ProjectForm({ id }: ProjectFormProps) {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:gap-10">
             <FormField label="Nome Cliente" icon={<Users size={18} className="text-brand-primary" />} error={errors.clientId?.message}>
               <div className="space-y-2">
-                <select
-                  {...register("clientId", { required: "Seleziona un cliente" })}
-                  disabled={isLoading || isSubmitting}
-                  className="h-12 w-full cursor-pointer appearance-none rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-4 py-3 text-sm text-text-secondary focus:outline-none focus:ring-2 focus:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <option value="">Seleziona un cliente...</option>
-                  {clientOptions.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.name}
-                    </option>
-                  ))}
-                </select>
+                <Controller
+                  name="clientId"
+                  control={control}
+                  rules={{ required: "Seleziona un cliente" }}
+                  render={({ field }) => (
+                    <SelectDropdown
+                      value={field.value}
+                      onChange={(value) => field.onChange(value)}
+                      disabled={isLoading || isSubmitting}
+                      options={clientOptions.map((client) => ({
+                        value: client.id,
+                        label: client.name,
+                      }))}
+                      placeholder="Seleziona un cliente..."
+                      allowEmpty
+                    />
+                  )}
+                />
                 <button
                   type="button"
                   onClick={() => setIsClientModalOpen(true)}
@@ -917,17 +925,22 @@ export function ProjectForm({ id }: ProjectFormProps) {
             </FormField>
 
             <FormField label="Stato Progetto" icon={<CheckCircle2 size={18} className="text-brand-primary" />} error={errors.status?.message}>
-              <select
-                {...register("status", { required: "Seleziona lo stato progetto" })}
-                disabled={isLoading || isSubmitting}
-                className="h-12 w-full cursor-pointer appearance-none rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-4 py-3 text-sm text-text-secondary focus:outline-none focus:ring-2 focus:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {PROJECT_STATUS_OPTIONS.map((status) => (
-                  <option key={status.key} value={status.key}>
-                    {status.label}
-                  </option>
-                ))}
-              </select>
+              <Controller
+                name="status"
+                control={control}
+                rules={{ required: "Seleziona lo stato progetto" }}
+                render={({ field }) => (
+                  <SelectDropdown
+                    value={field.value}
+                    onChange={(value) => field.onChange(value as ProjectStatus)}
+                    disabled={isLoading || isSubmitting}
+                    options={PROJECT_STATUS_OPTIONS.map((status) => ({
+                      value: status.key,
+                      label: status.label,
+                    }))}
+                  />
+                )}
+              />
             </FormField>
           </div>
 
@@ -962,21 +975,17 @@ export function ProjectForm({ id }: ProjectFormProps) {
               </div>
 
               <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr),auto] md:items-center">
-                <select
+                <SelectDropdown
                   value={selectedVersionLabel}
-                  onChange={(event) => void handleVersionSelection(event.target.value)}
+                  onChange={(value) => void handleVersionSelection(value)}
                   disabled={isSwitchingVersion || isCreatingVersion || !projectVersions.length}
-                  className="h-11 w-full cursor-pointer appearance-none rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-4 text-sm text-text-secondary focus:outline-none focus:ring-2 focus:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {!projectVersions.length && (
-                    <option value="v1">Versione iniziale (V1)</option>
-                  )}
-                  {projectVersions.map((version) => (
-                    <option key={version.versionLabel} value={version.versionLabel}>
-                      {getVersionDisplayLabel(version)}
-                    </option>
-                  ))}
-                </select>
+                  options={projectVersions.length
+                    ? projectVersions.map((version) => ({
+                      value: version.versionLabel,
+                      label: getVersionDisplayLabel(version),
+                    }))
+                    : [{ value: "v1", label: "Versione iniziale (V1)" }]}
+                />
 
                 <span className="inline-flex h-11 items-center rounded-md border border-border-subtle bg-bg-surface px-3 text-xs font-medium text-text-muted">
                   URL: {selectedVersionLabel}
@@ -995,33 +1004,28 @@ export function ProjectForm({ id }: ProjectFormProps) {
                       placeholder="Es: Aggiornamento prezzi aprile 2026"
                       disabled={isCreatingVersion}
                     />
-                    <select
+                    <SelectDropdown
                       value={newVersionStatus}
-                      onChange={(event) => setNewVersionStatus(event.target.value as ProjectStatus)}
+                      onChange={(value) => setNewVersionStatus(value as ProjectStatus)}
                       disabled={isCreatingVersion}
-                      className="h-11 w-full cursor-pointer appearance-none rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-4 text-sm text-text-secondary focus:outline-none focus:ring-2 focus:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {PROJECT_STATUS_OPTIONS.map((status) => (
-                        <option key={status.key} value={status.key}>
-                          {status.label}
-                        </option>
-                      ))}
-                    </select>
+                      options={PROJECT_STATUS_OPTIONS.map((status) => ({
+                        value: status.key,
+                        label: status.label,
+                      }))}
+                    />
                   </div>
                   <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr),auto]">
-                    <select
+                    <SelectDropdown
                       value={newVersionClientId}
-                      onChange={(event) => setNewVersionClientId(event.target.value)}
+                      onChange={setNewVersionClientId}
                       disabled={isCreatingVersion}
-                      className="h-11 w-full cursor-pointer appearance-none rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-4 text-sm text-text-secondary focus:outline-none focus:ring-2 focus:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <option value="">Nessun cliente</option>
-                      {clientOptions.map((client) => (
-                        <option key={client.id} value={client.id}>
-                          {client.name}
-                        </option>
-                      ))}
-                    </select>
+                      options={clientOptions.map((client) => ({
+                        value: client.id,
+                        label: client.name,
+                      }))}
+                      placeholder="Nessun cliente"
+                      allowEmpty
+                    />
                     <button
                       type="button"
                       onClick={() => setIsClientModalOpen(true)}
