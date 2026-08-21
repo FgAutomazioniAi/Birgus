@@ -1,18 +1,18 @@
 services:
   postgres:
     ports: !override
-      - "${BIRGUS_HOST_DB_PORT:-5433}:5432"
+      - "${BIRGUS_HOST_DB_PORT:-15433}:5432"
 
   app:
     ports: !override
-      - "${BIRGUS_HOST_API_PORT:-3001}:3000"
+      - "${BIRGUS_HOST_API_PORT:-13001}:3000"
 
   frontend:
     ports: !override
-      - "${BIRGUS_HOST_FRONTEND_PORT:-3100}:3100"
+      - "${BIRGUS_HOST_FRONTEND_PORT:-13100}:3100"
 
   garage:
     ports: !override
-      - "${BIRGUS_HOST_GARAGE_S3_PORT:-3900}:3900"
-      - "${BIRGUS_HOST_GARAGE_RPC_PORT:-3901}:3901"
-      - "${BIRGUS_HOST_GARAGE_ADMIN_PORT:-3903}:3903"
+      - "${BIRGUS_HOST_GARAGE_S3_PORT:-13900}:3900"
+      - "${BIRGUS_HOST_GARAGE_RPC_PORT:-13901}:3901"
+      - "${BIRGUS_HOST_GARAGE_ADMIN_PORT:-13903}:3903"

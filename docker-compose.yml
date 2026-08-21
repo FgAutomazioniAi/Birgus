@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: birgus
     ports:
-      - "5433:5432"
+      - "15433:5432"
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
@@ -31,9 +31,9 @@ services:
       GARAGE_DEFAULT_BUCKET: "${GARAGE_S3_BUCKET:?GARAGE_S3_BUCKET is required}"
     command: ["/garage", "-c", "/etc/garage.toml", "server"]
     ports:
-      - "3900:3900"
-      - "3901:3901"
-      - "3903:3903"
+      - "13900:3900"
+      - "13901:3901"
+      - "13903:3903"
     volumes:
       - ./garage/garage.local.toml:/etc/garage.toml:ro
       - ./garage/meta:/var/lib/garage/meta
@@ -76,6 +76,7 @@ services:
       AI_PROVIDER_MAX_OUTPUT_TOKENS: "${AI_PROVIDER_MAX_OUTPUT_TOKENS:-800}"
       WHATSAPP_ACCESS_TOKEN: "${WHATSAPP_ACCESS_TOKEN:-}"
       WHATSAPP_PHONE_NUMBER_ID: "${WHATSAPP_PHONE_NUMBER_ID:-}"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
       MEASURE_REPORT_ANALYSIS_MODE: "${MEASURE_REPORT_ANALYSIS_MODE:-auto}"
       MEASURE_REPORT_MAX_PAGES: "${MEASURE_REPORT_MAX_PAGES:-}"
       MEASURE_REPORT_RENDER_SCALE: "${MEASURE_REPORT_RENDER_SCALE:-2.0}"
@@ -174,7 +175,7 @@ services:
       python_modules:
         condition: service_started
     ports:
-      - "3000:3000"
+      - "13001:3000"
 
   frontend:
     build:
@@ -192,6 +193,6 @@ services:
       app:
         condition: service_started
     ports:
-      - "3100:3100"
+      - "13100:3100"
 
 volumes: {}

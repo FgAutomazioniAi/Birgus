@@ -1207,57 +1207,6 @@ async function main() {
     },
   ] as const;
 
-  const desiredEmails = accountDefinitions.map((item) => item.email);
-  const staleUsers = await prisma.user.findMany({
-    where: {
-      email: {
-        notIn: desiredEmails,
-      },
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  const staleUserIds = staleUsers.map((item) => item.id);
-  if (staleUserIds.length > 0) {
-    await prisma.userModuleOverride.deleteMany({
-      where: {
-        user_id: {
-          in: staleUserIds,
-        },
-      },
-    });
-    await prisma.userWorkspaceRole.deleteMany({
-      where: {
-        user_id: {
-          in: staleUserIds,
-        },
-      },
-    });
-    await prisma.workspaceMembership.deleteMany({
-      where: {
-        user_id: {
-          in: staleUserIds,
-        },
-      },
-    });
-    await prisma.userPreference.deleteMany({
-      where: {
-        user_id: {
-          in: staleUserIds,
-        },
-      },
-    });
-    await prisma.user.deleteMany({
-      where: {
-        id: {
-          in: staleUserIds,
-        },
-      },
-    });
-  }
-
   const seededUsers = new Map<string, { id: string; email: string; roleKey: string }>();
   for (const account of accountDefinitions) {
     const passwordHash = await hashPassword(seedPassword);

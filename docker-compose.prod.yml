@@ -58,6 +58,7 @@ services:
       SMTP_USER: "${SMTP_USER:?SMTP_USER is required}"
       SMTP_PASS: "${SMTP_PASS:?SMTP_PASS is required}"
       SMTP_FROM: "${SMTP_FROM:?SMTP_FROM is required}"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
       MEASURE_REPORT_ANALYSIS_MODE: "${MEASURE_REPORT_ANALYSIS_MODE:-auto}"
       MEASURE_REPORT_MAX_PAGES: "${MEASURE_REPORT_MAX_PAGES:-}"
       MEASURE_REPORT_RENDER_SCALE: "${MEASURE_REPORT_RENDER_SCALE:-2.0}"
@@ -149,7 +150,7 @@ services:
       python_modules:
         condition: service_started
     ports:
-      - "3000:3000"
+      - "13001:3000"
 
   frontend:
     build:
@@ -167,4 +168,4 @@ services:
       app:
         condition: service_started
     ports:
-      - "3100:3100"
+      - "13100:3100"

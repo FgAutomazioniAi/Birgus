@@ -6,8 +6,8 @@ services:
     environment:
       BIRGUS_PUBLIC_HOST: "${BIRGUS_PUBLIC_HOST:?BIRGUS_PUBLIC_HOST is required}"
     ports:
-      - "80:80"
-      - "443:443"
+      - "${BIRGUS_HOST_HTTP_PORT:-13080}:80"
+      - "${BIRGUS_HOST_HTTPS_PORT:-13443}:443"
     volumes:
       - ./Caddyfile.https.local:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
