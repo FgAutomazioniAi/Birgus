@@ -28,6 +28,14 @@ export class PermissionKey {
   public static readonly WORKFLOWS_READ = "workflows.read";
   public static readonly WORKFLOWS_WRITE = "workflows.write";
   public static readonly WORKFLOWS_CONFIGURE = "workflows.configure";
+  public static readonly CUSTOMER_MAP_READ = "customer_map.read";
+  public static readonly CUSTOMER_MAP_WRITE = "customer_map.write";
+  public static readonly OFFER_PRIORITY_READ = "offer_priority.read";
+  public static readonly OFFER_PRIORITY_WRITE = "offer_priority.write";
+  public static readonly MAINTENANCE_PROPOSALS_READ = "maintenance_proposals.read";
+  public static readonly MAINTENANCE_PROPOSALS_WRITE = "maintenance_proposals.write";
+  public static readonly MAINTENANCE_CALENDAR_READ = "maintenance_calendar.read";
+  public static readonly MAINTENANCE_CALENDAR_WRITE = "maintenance_calendar.write";
 
   public static readonly NOTIFICATIONS_READ = "notifications.read";
   public static readonly NOTIFICATIONS_WRITE = "notifications.write";

@@ -13,6 +13,7 @@ import { PasswordHasher } from "../../modules/identity/services/PasswordHasher.j
 import { PasswordResetService } from "../../modules/identity/services/PasswordResetService.js";
 import { SessionTokenService } from "../../modules/identity/services/SessionTokenService.js";
 import { SmtpPasswordResetNotifier } from "../../modules/identity/services/SmtpPasswordResetNotifier.js";
+import { MailProviderSettingsService } from "../../modules/mail-runtime/services/MailProviderSettingsService.js";
 import { TotpSecretCipherService } from "../../modules/identity/services/TotpSecretCipherService.js";
 import { TotpService } from "../../modules/identity/services/TotpService.js";
 import { SessionCookieFactory } from "../../shared/http/SessionCookieFactory.js";
@@ -69,7 +70,8 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
     },
     {
       provide: SmtpPasswordResetNotifier,
-      useFactory: () => new SmtpPasswordResetNotifier(),
+      useFactory: (mailProviderSettingsService: MailProviderSettingsService) => new SmtpPasswordResetNotifier(mailProviderSettingsService),
+      inject: [MailProviderSettingsService],
     },
     {
       provide: AuthService,

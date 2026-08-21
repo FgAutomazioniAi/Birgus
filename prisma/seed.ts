@@ -15,6 +15,10 @@ const MODULE_KEYS = [
   "document_intelligence",
   "conversational_assistant",
   "workflow_management",
+  "customer_map",
+  "offer_priority",
+  "maintenance_proposals",
+  "maintenance_calendar",
   "notification_center",
   "audit_center",
   "superadmin_center",
@@ -47,6 +51,14 @@ const PERMISSION_KEYS = [
   "workflows.read",
   "workflows.write",
   "workflows.configure",
+  "customer_map.read",
+  "customer_map.write",
+  "offer_priority.read",
+  "offer_priority.write",
+  "maintenance_proposals.read",
+  "maintenance_proposals.write",
+  "maintenance_calendar.read",
+  "maintenance_calendar.write",
   "notifications.read",
   "notifications.write",
   "audit.read",
@@ -79,6 +91,14 @@ const ROLE_PERMISSION_MATRIX: Record<(typeof ROLE_KEYS)[number], readonly (typeo
     "workflows.read",
     "workflows.write",
     "workflows.configure",
+    "customer_map.read",
+    "customer_map.write",
+    "offer_priority.read",
+    "offer_priority.write",
+    "maintenance_proposals.read",
+    "maintenance_proposals.write",
+    "maintenance_calendar.read",
+    "maintenance_calendar.write",
     "notifications.read",
     "notifications.write",
   ],
@@ -102,6 +122,10 @@ const ROLE_PERMISSION_MATRIX: Record<(typeof ROLE_KEYS)[number], readonly (typeo
     "assistant.read",
     "assistant.write",
     "workflows.read",
+    "customer_map.read",
+    "offer_priority.read",
+    "maintenance_proposals.read",
+    "maintenance_calendar.read",
     "notifications.read",
   ],
 } as const;
@@ -155,6 +179,634 @@ function readSeedPassword(): string {
   }
 
   return password;
+}
+
+async function seedOperationsDemoData(workspaceId: string): Promise<void> {
+  const sourceSystem = "demo_seed";
+
+  const customers = await Promise.all([
+    prisma.operationalCustomer.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "customer-veneta-packaging",
+        },
+      },
+      update: {
+        name: "Veneta Packaging S.p.A.",
+        email: "ufficio.tecnico@venetapackaging.example",
+        phone: "+39 0423 000001",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        source_system: sourceSystem,
+        external_id: "customer-veneta-packaging",
+        name: "Veneta Packaging S.p.A.",
+        email: "ufficio.tecnico@venetapackaging.example",
+        phone: "+39 0423 000001",
+      },
+    }),
+    prisma.operationalCustomer.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "customer-nord-meccanica",
+        },
+      },
+      update: {
+        name: "Nord Meccanica S.r.l.",
+        email: "acquisti@nordmeccanica.example",
+        phone: "+39 0437 000002",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        source_system: sourceSystem,
+        external_id: "customer-nord-meccanica",
+        name: "Nord Meccanica S.r.l.",
+        email: "acquisti@nordmeccanica.example",
+        phone: "+39 0437 000002",
+      },
+    }),
+    prisma.operationalCustomer.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "customer-alpina-food",
+        },
+      },
+      update: {
+        name: "Alpina Food S.p.A.",
+        email: "maintenance@alpinafood.example",
+        phone: "+39 0445 000003",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        source_system: sourceSystem,
+        external_id: "customer-alpina-food",
+        name: "Alpina Food S.p.A.",
+        email: "maintenance@alpinafood.example",
+        phone: "+39 0445 000003",
+      },
+    }),
+  ]);
+
+  const [veneta, nord, alpina] = customers;
+
+  await Promise.all([
+    prisma.customerAddress.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "address-veneta-main",
+        },
+      },
+      update: {
+        customer_id: veneta.id,
+        label: "Sede produttiva",
+        address_line_1: "Via dell'Industria, 18",
+        postal_code: "31044",
+        city: "Montebelluna",
+        province: "TV",
+        country: "IT",
+        geocoding_status: "SUCCESS",
+        latitude: "45.7751000",
+        longitude: "12.0453000",
+        geocoding_provider: "demo",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        customer_id: veneta.id,
+        source_system: sourceSystem,
+        external_id: "address-veneta-main",
+        label: "Sede produttiva",
+        address_line_1: "Via dell'Industria, 18",
+        postal_code: "31044",
+        city: "Montebelluna",
+        province: "TV",
+        country: "IT",
+        geocoding_query: "Via dell'Industria 18, Montebelluna, Italia",
+        geocoding_status: "SUCCESS",
+        latitude: "45.7751000",
+        longitude: "12.0453000",
+        geocoding_provider: "demo",
+        last_geocoded_at: new Date("2026-08-01T08:00:00.000Z"),
+      },
+    }),
+    prisma.customerAddress.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "address-nord-main",
+        },
+      },
+      update: {
+        customer_id: nord.id,
+        label: "Stabilimento",
+        address_line_1: "Zona Industriale, 7",
+        postal_code: "32100",
+        city: "Belluno",
+        province: "BL",
+        country: "IT",
+        geocoding_status: "SUCCESS",
+        latitude: "46.1392000",
+        longitude: "12.2167000",
+        geocoding_provider: "demo",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        customer_id: nord.id,
+        source_system: sourceSystem,
+        external_id: "address-nord-main",
+        label: "Stabilimento",
+        address_line_1: "Zona Industriale, 7",
+        postal_code: "32100",
+        city: "Belluno",
+        province: "BL",
+        country: "IT",
+        geocoding_query: "Zona Industriale 7, Belluno, Italia",
+        geocoding_status: "SUCCESS",
+        latitude: "46.1392000",
+        longitude: "12.2167000",
+        geocoding_provider: "demo",
+        last_geocoded_at: new Date("2026-08-01T08:05:00.000Z"),
+      },
+    }),
+    prisma.customerAddress.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "address-alpina-main",
+        },
+      },
+      update: {
+        customer_id: alpina.id,
+        label: "Linea confezionamento",
+        address_line_1: "Via Pasubio, 42",
+        postal_code: "36015",
+        city: "Schio",
+        province: "VI",
+        country: "IT",
+        geocoding_status: "SUCCESS",
+        latitude: "45.7128000",
+        longitude: "11.3569000",
+        geocoding_provider: "demo",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        customer_id: alpina.id,
+        source_system: sourceSystem,
+        external_id: "address-alpina-main",
+        label: "Linea confezionamento",
+        address_line_1: "Via Pasubio, 42",
+        postal_code: "36015",
+        city: "Schio",
+        province: "VI",
+        country: "IT",
+        geocoding_query: "Via Pasubio 42, Schio, Italia",
+        geocoding_status: "SUCCESS",
+        latitude: "45.7128000",
+        longitude: "11.3569000",
+        geocoding_provider: "demo",
+        last_geocoded_at: new Date("2026-08-01T08:10:00.000Z"),
+      },
+    }),
+  ]);
+
+  const workReferences = await Promise.all([
+    prisma.operationalWorkReference.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "work-comm-24017",
+        },
+      },
+      update: {
+        customer_id: veneta.id,
+        code: "COMM-24017",
+        name: "Linea imballaggio cartoni",
+        category: "impianto",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        customer_id: veneta.id,
+        source_system: sourceSystem,
+        external_id: "work-comm-24017",
+        code: "COMM-24017",
+        name: "Linea imballaggio cartoni",
+        category: "impianto",
+        started_at: new Date("2024-02-12T00:00:00.000Z"),
+      },
+    }),
+    prisma.operationalWorkReference.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "work-comm-25008",
+        },
+      },
+      update: {
+        customer_id: nord.id,
+        code: "COMM-25008",
+        name: "Revamping quadro automazione",
+        category: "lavorazione",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        customer_id: nord.id,
+        source_system: sourceSystem,
+        external_id: "work-comm-25008",
+        code: "COMM-25008",
+        name: "Revamping quadro automazione",
+        category: "lavorazione",
+        started_at: new Date("2025-01-20T00:00:00.000Z"),
+      },
+    }),
+    prisma.operationalWorkReference.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "work-comm-23041",
+        },
+      },
+      update: {
+        customer_id: alpina.id,
+        code: "COMM-23041",
+        name: "Confezionatrice verticale",
+        category: "impianto",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        customer_id: alpina.id,
+        source_system: sourceSystem,
+        external_id: "work-comm-23041",
+        code: "COMM-23041",
+        name: "Confezionatrice verticale",
+        category: "impianto",
+        started_at: new Date("2023-05-08T00:00:00.000Z"),
+      },
+    }),
+  ]);
+
+  const [venetaWork, nordWork, alpinaWork] = workReferences;
+
+  const offers = await Promise.all([
+    prisma.commercialOffer.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "offer-ric-226",
+        },
+      },
+      update: {
+        customer_id: veneta.id,
+        work_reference_id: venetaWork.id,
+        offer_code: "RIC/226",
+        status: "In corso",
+        subject: "Ricambi e kit manutenzione linea imballaggio",
+        total_amount: "18450.00",
+        issued_at: new Date("2026-05-18T00:00:00.000Z"),
+        competence: "Service",
+        conversion_rate: "0.3750",
+        priority_score: "0.82000",
+        priority_band: "HIGH",
+        abc_class: "A",
+        cumulative_share: "0.47000",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        customer_id: veneta.id,
+        work_reference_id: venetaWork.id,
+        source_system: sourceSystem,
+        external_id: "offer-ric-226",
+        offer_code: "RIC/226",
+        offer_number: "226",
+        offer_series: "RIC",
+        status: "In corso",
+        subject: "Ricambi e kit manutenzione linea imballaggio",
+        total_amount: "18450.00",
+        issued_at: new Date("2026-05-18T00:00:00.000Z"),
+        competence: "Service",
+        conversion_rate: "0.3750",
+        priority_score: "0.82000",
+        priority_band: "HIGH",
+        abc_class: "A",
+        cumulative_share: "0.47000",
+      },
+    }),
+    prisma.commercialOffer.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "offer-aut-104",
+        },
+      },
+      update: {
+        customer_id: nord.id,
+        work_reference_id: nordWork.id,
+        offer_code: "AUT/104",
+        status: "In corso",
+        subject: "Upgrade supervisione PLC e HMI",
+        total_amount: "12600.00",
+        issued_at: new Date("2026-04-09T00:00:00.000Z"),
+        competence: "Automation",
+        conversion_rate: "0.5200",
+        priority_score: "0.64000",
+        priority_band: "MEDIUM",
+        abc_class: "B",
+        cumulative_share: "0.79000",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        customer_id: nord.id,
+        work_reference_id: nordWork.id,
+        source_system: sourceSystem,
+        external_id: "offer-aut-104",
+        offer_code: "AUT/104",
+        offer_number: "104",
+        offer_series: "AUT",
+        status: "In corso",
+        subject: "Upgrade supervisione PLC e HMI",
+        total_amount: "12600.00",
+        issued_at: new Date("2026-04-09T00:00:00.000Z"),
+        competence: "Automation",
+        conversion_rate: "0.5200",
+        priority_score: "0.64000",
+        priority_band: "MEDIUM",
+        abc_class: "B",
+        cumulative_share: "0.79000",
+      },
+    }),
+  ]);
+
+  const [venetaOffer, nordOffer] = offers;
+
+  await Promise.all([
+    prisma.commercialOfferLine.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "line-ric-226-1",
+        },
+      },
+      update: {
+        offer_id: venetaOffer.id,
+        line_number: 1,
+        item_code: "KIT-MAN-450",
+        description: "Kit manutenzione rulli e cinghie",
+        quantity: "2.000",
+        unit_price: "3850.00",
+        total_amount: "7700.00",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        offer_id: venetaOffer.id,
+        source_system: sourceSystem,
+        external_id: "line-ric-226-1",
+        line_number: 1,
+        item_code: "KIT-MAN-450",
+        description: "Kit manutenzione rulli e cinghie",
+        quantity: "2.000",
+        unit_price: "3850.00",
+        total_amount: "7700.00",
+      },
+    }),
+    prisma.commercialOfferLine.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "line-ric-226-2",
+        },
+      },
+      update: {
+        offer_id: venetaOffer.id,
+        line_number: 2,
+        item_code: "SVC-START",
+        description: "Intervento tecnico programmato",
+        quantity: "3.000",
+        unit_price: "950.00",
+        total_amount: "2850.00",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        offer_id: venetaOffer.id,
+        source_system: sourceSystem,
+        external_id: "line-ric-226-2",
+        line_number: 2,
+        item_code: "SVC-START",
+        description: "Intervento tecnico programmato",
+        quantity: "3.000",
+        unit_price: "950.00",
+        total_amount: "2850.00",
+      },
+    }),
+    prisma.commercialOfferLine.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "line-aut-104-1",
+        },
+      },
+      update: {
+        offer_id: nordOffer.id,
+        line_number: 1,
+        item_code: "PLC-UPG",
+        description: "Upgrade PLC safety e diagnostica",
+        quantity: "1.000",
+        unit_price: "7600.00",
+        total_amount: "7600.00",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        offer_id: nordOffer.id,
+        source_system: sourceSystem,
+        external_id: "line-aut-104-1",
+        line_number: 1,
+        item_code: "PLC-UPG",
+        description: "Upgrade PLC safety e diagnostica",
+        quantity: "1.000",
+        unit_price: "7600.00",
+        total_amount: "7600.00",
+      },
+    }),
+  ]);
+
+  await Promise.all([
+    prisma.maintenanceProposal.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "proposal-veneta-2026-09",
+        },
+      },
+      update: {
+        work_reference_id: venetaWork.id,
+        customer_name_snapshot: veneta.name,
+        work_reference_snapshot: venetaWork.name,
+        last_service_at: new Date("2026-02-14T00:00:00.000Z"),
+        suggested_at: new Date("2026-09-08T00:00:00.000Z"),
+        estimated_frequency_days: 180,
+        historical_events_count: 5,
+        historical_work_minutes: 1860,
+        preferred_operator: "Alberto Libertini",
+        annual_plan_hint: "Settembre, settimana 37",
+        urgency: "DUE_SOON",
+        reason: "Storico manutenzioni semestrale e ultima visita oltre 170 giorni fa.",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        work_reference_id: venetaWork.id,
+        source_system: sourceSystem,
+        external_id: "proposal-veneta-2026-09",
+        customer_name_snapshot: veneta.name,
+        work_reference_snapshot: venetaWork.name,
+        last_service_at: new Date("2026-02-14T00:00:00.000Z"),
+        suggested_at: new Date("2026-09-08T00:00:00.000Z"),
+        estimated_frequency_days: 180,
+        historical_events_count: 5,
+        historical_work_minutes: 1860,
+        preferred_operator: "Alberto Libertini",
+        annual_plan_hint: "Settembre, settimana 37",
+        urgency: "DUE_SOON",
+        reason: "Storico manutenzioni semestrale e ultima visita oltre 170 giorni fa.",
+      },
+    }),
+    prisma.maintenanceProposal.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "proposal-alpina-2026-08",
+        },
+      },
+      update: {
+        work_reference_id: alpinaWork.id,
+        customer_name_snapshot: alpina.name,
+        work_reference_snapshot: alpinaWork.name,
+        last_service_at: new Date("2025-12-12T00:00:00.000Z"),
+        suggested_at: new Date("2026-08-28T00:00:00.000Z"),
+        estimated_frequency_days: 210,
+        historical_events_count: 4,
+        historical_work_minutes: 1320,
+        preferred_operator: "Marco R.",
+        annual_plan_hint: "Agosto, settimana 35",
+        urgency: "OVERDUE",
+        reason: "La cadenza stimata indica manutenzione gia in scadenza.",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        work_reference_id: alpinaWork.id,
+        source_system: sourceSystem,
+        external_id: "proposal-alpina-2026-08",
+        customer_name_snapshot: alpina.name,
+        work_reference_snapshot: alpinaWork.name,
+        last_service_at: new Date("2025-12-12T00:00:00.000Z"),
+        suggested_at: new Date("2026-08-28T00:00:00.000Z"),
+        estimated_frequency_days: 210,
+        historical_events_count: 4,
+        historical_work_minutes: 1320,
+        preferred_operator: "Marco R.",
+        annual_plan_hint: "Agosto, settimana 35",
+        urgency: "OVERDUE",
+        reason: "La cadenza stimata indica manutenzione gia in scadenza.",
+      },
+    }),
+  ]);
+
+  await Promise.all([
+    prisma.maintenancePlanEntry.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "calendar-veneta-2026-09-08",
+        },
+      },
+      update: {
+        work_reference_id: venetaWork.id,
+        title: "Manutenzione linea imballaggio",
+        planned_start_at: new Date("2026-09-08T07:30:00.000Z"),
+        planned_end_at: new Date("2026-09-08T15:30:00.000Z"),
+        status: "PLANNED",
+        assignee_name: "Alberto Libertini",
+        note: "Verifica rulli, cinghie e fotocellule.",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        work_reference_id: venetaWork.id,
+        source_system: sourceSystem,
+        external_id: "calendar-veneta-2026-09-08",
+        title: "Manutenzione linea imballaggio",
+        planned_start_at: new Date("2026-09-08T07:30:00.000Z"),
+        planned_end_at: new Date("2026-09-08T15:30:00.000Z"),
+        status: "PLANNED",
+        assignee_name: "Alberto Libertini",
+        note: "Verifica rulli, cinghie e fotocellule.",
+      },
+    }),
+    prisma.maintenancePlanEntry.upsert({
+      where: {
+        workspace_id_source_system_external_id: {
+          workspace_id: workspaceId,
+          source_system: sourceSystem,
+          external_id: "calendar-alpina-2026-08-28",
+        },
+      },
+      update: {
+        work_reference_id: alpinaWork.id,
+        title: "Controllo confezionatrice verticale",
+        planned_start_at: new Date("2026-08-28T08:00:00.000Z"),
+        planned_end_at: new Date("2026-08-28T12:00:00.000Z"),
+        status: "CONFIRMED",
+        assignee_name: "Marco R.",
+        note: "Intervento prioritario da proposta scaduta.",
+        deleted_at: null,
+      },
+      create: {
+        workspace_id: workspaceId,
+        work_reference_id: alpinaWork.id,
+        source_system: sourceSystem,
+        external_id: "calendar-alpina-2026-08-28",
+        title: "Controllo confezionatrice verticale",
+        planned_start_at: new Date("2026-08-28T08:00:00.000Z"),
+        planned_end_at: new Date("2026-08-28T12:00:00.000Z"),
+        status: "CONFIRMED",
+        assignee_name: "Marco R.",
+        note: "Intervento prioritario da proposta scaduta.",
+      },
+    }),
+  ]);
 }
 
 async function main() {
@@ -937,6 +1589,164 @@ async function main() {
       },
     },
     {
+      moduleKey: "document_intelligence",
+      toolKey: "document_set_ai_analysis",
+      name: "document_set_ai_analysis",
+      label: "Analizza documenti",
+      description: "Indicizza se necessario e chiede all'AI di riassumere o analizzare piu documenti archiviati.",
+      runtimeKind: "BACKEND" as const,
+      handlerKey: "document_intelligence.analyze_document_set",
+      inputSchema: {
+        type: "object",
+        required: ["documentIds"],
+        properties: {
+          documentIds: {
+            type: "array",
+            items: { type: "string", format: "uuid" },
+          },
+          prompt: { type: "string" },
+          use_deep_reasoning: { type: "boolean" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          reply: { type: "string" },
+          documents: { type: "array" },
+          reasoning_structure: { type: "object" },
+        },
+      },
+      configuration: {
+        endpoint: "/api/knowledge/document-set/analyze",
+      },
+    },
+    {
+      moduleKey: "workflow_management",
+      toolKey: "langchain_chat",
+      name: "langchain_chat",
+      label: "AI Chat",
+      description: "Esegue una richiesta chat generica tramite orchestratore Python LangChain.",
+      runtimeKind: "PYTHON_MODULE" as const,
+      handlerKey: "langchain_orchestrator.chat",
+      inputSchema: {
+        type: "object",
+        required: ["input_text"],
+        properties: {
+          input_text: { type: "string" },
+          instructions: { type: "string" },
+          max_tokens: { type: "integer" },
+          temperature: { type: "number" },
+          use_deep_reasoning: { type: "boolean" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          reply: { type: "string" },
+          model: { type: "string" },
+          reasoning_structure: { type: "object" },
+        },
+      },
+      configuration: {
+        module: "langchain_orchestrator",
+        action: "chat",
+      },
+    },
+    {
+      moduleKey: "workflow_management",
+      toolKey: "langchain_structure_text",
+      name: "langchain_structure_text",
+      label: "Struttura testo",
+      description: "Estrae dati strutturati JSON da testo/OCR tramite orchestratore Python LangChain.",
+      runtimeKind: "PYTHON_MODULE" as const,
+      handlerKey: "langchain_orchestrator.structure_text",
+      inputSchema: {
+        type: "object",
+        required: ["extracted_text", "instructions"],
+        properties: {
+          extracted_text: { type: "string" },
+          instructions: { type: "string" },
+          json_schema: { type: "object" },
+          max_tokens: { type: "integer" },
+          temperature: { type: "number" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          structured_data: { type: "object" },
+          raw_output: { type: "string" },
+          model: { type: "string" },
+        },
+      },
+      configuration: {
+        module: "langchain_orchestrator",
+        action: "structure_text",
+      },
+    },
+    {
+      moduleKey: "workflow_management",
+      toolKey: "langchain_compose_email",
+      name: "langchain_compose_email",
+      label: "Componi email",
+      description: "Compone oggetto e corpo email senza invio, usando il contesto del workflow.",
+      runtimeKind: "PYTHON_MODULE" as const,
+      handlerKey: "langchain_orchestrator.compose_email",
+      inputSchema: {
+        type: "object",
+        required: ["context"],
+        properties: {
+          context: { type: "string" },
+          client_name: { type: "string" },
+          project_name: { type: "string" },
+          tone: { type: "string" },
+          extra_instructions: { type: "string" },
+          max_tokens: { type: "integer" },
+          temperature: { type: "number" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          subject: { type: "string" },
+          text: { type: "string" },
+          model: { type: "string" },
+        },
+      },
+      configuration: {
+        module: "langchain_orchestrator",
+        action: "compose_email",
+      },
+    },
+    {
+      moduleKey: "workflow_management",
+      toolKey: "langchain_pipeline_execute",
+      name: "langchain_pipeline_execute",
+      label: "LangChain pipeline",
+      description: "Esegue una mini-pipeline LangChain definita in configurazione nodo.",
+      runtimeKind: "PYTHON_MODULE" as const,
+      handlerKey: "langchain_orchestrator.pipeline_execute",
+      inputSchema: {
+        type: "object",
+        required: ["steps"],
+        properties: {
+          steps: { type: "array" },
+          continue_on_error: { type: "boolean" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          completed: { type: "boolean" },
+          results: { type: "array" },
+        },
+      },
+      configuration: {
+        module: "langchain_orchestrator",
+        action: "pipeline_execute",
+      },
+    },
+    {
       moduleKey: "project_management",
       toolKey: "quotation_docx_builder",
       name: "quotation_docx_builder",
@@ -964,6 +1774,45 @@ async function main() {
       configuration: {
         module: "docx_engine",
         action: "build_quotation_docx",
+      },
+    },
+    {
+      moduleKey: "workflow_management",
+      toolKey: "generic_document_generator",
+      name: "generic_document_generator",
+      label: "Generatore documento generico",
+      description: "Genera un documento DOCX/PDF da testo o blocchi strutturati, riusando il contenuto prodotto dai nodi precedenti.",
+      runtimeKind: "PYTHON_MODULE" as const,
+      handlerKey: "docx_engine.generate_document",
+      inputSchema: {
+        type: "object",
+        required: ["content"],
+        properties: {
+          content: {
+            oneOf: [
+              { type: "string" },
+              { type: "array" },
+              { type: "object" },
+            ],
+          },
+          title: { type: "string" },
+          format: { type: "string", enum: ["docx", "pdf"] },
+          file_name: { type: "string" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          file_name: { type: "string" },
+          content_type: { type: "string" },
+          size_bytes: { type: "integer" },
+          document_base64: { type: "string" },
+        },
+      },
+      configuration: {
+        module: "docx_engine",
+        action: "generate_document",
+        format: "docx",
       },
     },
     {
@@ -999,6 +1848,136 @@ async function main() {
       configuration: {
         module: "mail_engine",
         action: "send_quotation_email",
+      },
+    },
+    {
+      moduleKey: "workflow_management",
+      toolKey: "generic_mail_delivery",
+      name: "generic_mail_delivery",
+      label: "Invio email generica",
+      description: "Invia email testuali con allegati opzionali prodotti dal workflow.",
+      runtimeKind: "PYTHON_MODULE" as const,
+      handlerKey: "mail_engine.send_email",
+      inputSchema: {
+        type: "object",
+        required: ["to", "subject", "text"],
+        properties: {
+          to: { type: "string", format: "email" },
+          subject: { type: "string" },
+          text: { type: "string" },
+          attachments: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["file_name", "content_base64"],
+              properties: {
+                file_name: { type: "string" },
+                content_base64: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          status: { type: "string" },
+          to: { type: "string" },
+          subject: { type: "string" },
+          attachments_sent: { type: "array" },
+          transport_result: {},
+        },
+      },
+      configuration: {
+        module: "mail_engine",
+        action: "send_email",
+      },
+    },
+    {
+      moduleKey: "workflow_management",
+      toolKey: "telegram_message_delivery",
+      name: "telegram_message_delivery",
+      label: "Invia Telegram",
+      description: "Invia un messaggio Telegram usando il testo prodotto dal workflow o la configurazione del nodo.",
+      runtimeKind: "PYTHON_MODULE" as const,
+      handlerKey: "messaging_engine.send_telegram",
+      inputSchema: {
+        type: "object",
+        required: ["chat_id", "text"],
+        properties: {
+          chat_id: { type: "string" },
+          text: { type: "string" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          status: { type: "string" },
+          chat_id: { type: "string" },
+          provider: { type: "string" },
+        },
+      },
+      configuration: {
+        module: "messaging_engine",
+        action: "send_telegram",
+      },
+    },
+    {
+      moduleKey: "workflow_management",
+      toolKey: "whatsapp_message_delivery",
+      name: "whatsapp_message_delivery",
+      label: "Invia WhatsApp",
+      description: "Invia un messaggio WhatsApp Business usando il testo prodotto dal workflow o la configurazione del nodo.",
+      runtimeKind: "PYTHON_MODULE" as const,
+      handlerKey: "messaging_engine.send_whatsapp",
+      inputSchema: {
+        type: "object",
+        required: ["to", "text"],
+        properties: {
+          to: { type: "string" },
+          text: { type: "string" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          status: { type: "string" },
+          to: { type: "string" },
+          provider: { type: "string" },
+        },
+      },
+      configuration: {
+        module: "messaging_engine",
+        action: "send_whatsapp",
+      },
+    },
+    {
+      moduleKey: "workflow_management",
+      toolKey: "scheduled_report_delivery",
+      name: "scheduled_report_delivery",
+      label: "Pianifica resoconto",
+      description: "Pianifica l'invio differito o ricorrente di Email, Telegram o WhatsApp collegati al nodo Schedule.",
+      runtimeKind: "BACKEND" as const,
+      handlerKey: "workflow_scheduler.schedule_report_delivery",
+      inputSchema: {
+        type: "object",
+        required: ["scheduleWhen"],
+        properties: {
+          scheduleWhen: { type: "string", format: "date-time" },
+          scheduleRepeatValue: { type: "string" },
+          scheduleRepeatUnit: { type: "string", enum: ["hours", "days"] },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          status: { type: "string" },
+          scheduled: { type: "array" },
+        },
+      },
+      configuration: {
+        module: "workflow_scheduler",
+        action: "schedule_report_delivery",
       },
     },
   ];
@@ -1080,12 +2059,17 @@ async function main() {
       name: "quotation_document_pipeline",
       label: "Pipeline preventivo",
       description: "Workflow base per OCR, strutturazione preventivo, generazione DOCX e invio email.",
+      configuration: {
+        contextPolicy: {
+          knowledgeMode: "on_demand",
+        },
+      },
       isDefault: true,
       nodes: [
         {
           nodeKey: "quotation_pdf_input",
           nodeKind: "INPUT" as const,
-          label: "PDF preventivo",
+          label: "PDF",
           positionX: 0,
           positionY: 80,
           isRequired: true,
@@ -1098,7 +2082,7 @@ async function main() {
         {
           nodeKey: "quotation_ocr_tool",
           nodeKind: "TOOL" as const,
-          label: "OCR preventivo",
+          label: "OCR",
           positionX: 260,
           positionY: 80,
           isRequired: true,
@@ -1110,7 +2094,7 @@ async function main() {
         {
           nodeKey: "quotation_structuring_agent",
           nodeKind: "AGENT" as const,
-          label: "Agente strutturazione preventivo",
+          label: "Agente strutturazione",
           positionX: 520,
           positionY: 80,
           isRequired: true,
@@ -1131,7 +2115,7 @@ async function main() {
         {
           nodeKey: "quotation_mail_delivery_tool",
           nodeKind: "TOOL" as const,
-          label: "Invia mail preventivo",
+          label: "Invia mail",
           positionX: 780,
           positionY: 150,
           isRequired: false,
@@ -1140,7 +2124,7 @@ async function main() {
         {
           nodeKey: "quotation_delivery_output",
           nodeKind: "OUTPUT" as const,
-          label: "Esito preventivo",
+          label: "Esito",
           positionX: 1040,
           positionY: 90,
           isRequired: true,
@@ -1164,12 +2148,17 @@ async function main() {
       name: "measure_report_pipeline",
       label: "Pipeline Measure Report",
       description: "Workflow base per analisi report misurazioni e persistenza delle righe fuori tolleranza.",
+      configuration: {
+        contextPolicy: {
+          knowledgeMode: "on_demand",
+        },
+      },
       isDefault: true,
       nodes: [
         {
           nodeKey: "measure_report_pdf_input",
           nodeKind: "INPUT" as const,
-          label: "PDF report misurazioni",
+          label: "PDF",
           positionX: 0,
           positionY: 80,
           isRequired: true,
@@ -1182,7 +2171,7 @@ async function main() {
         {
           nodeKey: "measure_report_analysis_agent",
           nodeKind: "AGENT" as const,
-          label: "Agente analisi report misurazioni",
+          label: "Agente analisi",
           positionX: 360,
           positionY: 80,
           isRequired: true,
@@ -1191,7 +2180,7 @@ async function main() {
         {
           nodeKey: "measure_report_output",
           nodeKind: "OUTPUT" as const,
-          label: "Esito report misurazioni",
+          label: "Esito",
           positionX: 760,
           positionY: 80,
           isRequired: true,
@@ -1212,12 +2201,17 @@ async function main() {
       name: "ddt_reader_pipeline",
       label: "Pipeline DDT Reader",
       description: "Workflow base per OCR, analisi DDT e indicizzazione knowledge finale.",
+      configuration: {
+        contextPolicy: {
+          knowledgeMode: "on_demand",
+        },
+      },
       isDefault: true,
       nodes: [
         {
           nodeKey: "ddt_pdf_input",
           nodeKind: "INPUT" as const,
-          label: "PDF DDT",
+          label: "PDF",
           positionX: 0,
           positionY: 80,
           isRequired: true,
@@ -1230,7 +2224,7 @@ async function main() {
         {
           nodeKey: "ddt_ocr_tool",
           nodeKind: "TOOL" as const,
-          label: "OCR DDT",
+          label: "OCR",
           positionX: 250,
           positionY: 80,
           isRequired: true,
@@ -1239,7 +2233,7 @@ async function main() {
         {
           nodeKey: "ddt_analysis_agent",
           nodeKind: "AGENT" as const,
-          label: "Agente analisi DDT",
+          label: "Agente analisi",
           positionX: 500,
           positionY: 80,
           isRequired: true,
@@ -1257,7 +2251,7 @@ async function main() {
         {
           nodeKey: "ddt_analysis_output",
           nodeKind: "OUTPUT" as const,
-          label: "Esito analisi DDT",
+          label: "Esito analisi",
           positionX: 1020,
           positionY: 80,
           isRequired: true,
@@ -1302,6 +2296,7 @@ async function main() {
             name: definition.name,
             label: definition.label,
             description: definition.description,
+            configuration: definition.configuration,
             version_no: 1,
             is_enabled: true,
             is_default: definition.isDefault,
@@ -1320,6 +2315,7 @@ async function main() {
             name: definition.name,
             label: definition.label,
             description: definition.description,
+            configuration: definition.configuration,
             version_no: 1,
             is_enabled: true,
             is_default: definition.isDefault,
@@ -1418,6 +2414,8 @@ async function main() {
       }),
     });
   }
+
+  await seedOperationsDemoData(workspace.id);
 
   console.log("Seed completed:", {
     organization: organization.code,

@@ -13,6 +13,7 @@ export class AssistantSessionEntity {
   public readonly shipmentId!: string | null;
   public readonly documentId!: string | null;
   public readonly ddtDocumentId!: string | null;
+  public readonly configuration!: Record<string, unknown> | null;
   public readonly openedAt!: Date;
   public readonly lastActivityAt!: Date;
   public readonly closedAt!: Date | null;
@@ -34,6 +35,7 @@ export class AssistantSessionEntity {
     shipmentId: string | null;
     documentId: string | null;
     ddtDocumentId: string | null;
+    configuration: Record<string, unknown> | null;
     openedAt: Date;
     lastActivityAt: Date;
     closedAt: Date | null;

@@ -17,8 +17,14 @@ export interface AssistantSessionRepository {
     shipmentId: string | null;
     documentId: string | null;
     ddtDocumentId: string | null;
+    configuration: Record<string, unknown> | null;
   }): Promise<AssistantSessionEntity>;
   findSessionById(workspaceId: string, sessionId: string): Promise<AssistantSessionEntity | null>;
+  updateSessionConfiguration(params: {
+    workspaceId: string;
+    sessionId: string;
+    configuration: Record<string, unknown>;
+  }): Promise<AssistantSessionEntity>;
   closeSession(workspaceId: string, sessionId: string): Promise<void>;
   appendMessage(params: {
     sessionId: string;

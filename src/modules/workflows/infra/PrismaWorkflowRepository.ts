@@ -65,6 +65,7 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
       name: row.name,
       label: row.label,
       description: row.description,
+      configuration: row.configuration,
       versionNo: row.version_no,
       isEnabled: row.is_enabled,
       isDefault: row.is_default,
@@ -156,6 +157,7 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
               name: input.name,
               label: input.label,
               description: input.description,
+              configuration: input.configuration as never,
               is_enabled: input.isEnabled,
               is_default: input.isDefault,
               updated_by_user_id: input.actorUserId,
@@ -171,6 +173,7 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
               name: input.name,
               label: input.label,
               description: input.description,
+              configuration: input.configuration as never,
               is_enabled: input.isEnabled,
               is_default: input.isDefault,
               created_by_user_id: input.actorUserId,
@@ -201,45 +204,14 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
         },
       });
       const existingNodeByKey = new Map(existingNodes.map((row) => [row.node_key, row.id]));
-      const existingRequiredByKey = new Map(
-        existingNodes
-          .filter((row) => row.is_required)
-          .map((row) => [row.node_key, row]),
-      );
-
       const normalizedNodes = [...input.nodes];
-      for (const [requiredKey, requiredNode] of existingRequiredByKey) {
-        const existsInPayload = normalizedNodes.some((node) => node.nodeKey === requiredKey);
-        if (existsInPayload) {
-          continue;
-        }
-
-        normalizedNodes.push({
-          id: requiredNode.id,
-          nodeKey: requiredNode.node_key,
-          nodeKind: requiredNode.node_kind,
-          label: requiredNode.label,
-          positionX: requiredNode.position_x,
-          positionY: requiredNode.position_y,
-          moduleAgentId: requiredNode.module_agent_id,
-          moduleToolId: requiredNode.module_tool_id,
-          inputKind: requiredNode.input_kind,
-          outputKind: requiredNode.output_kind,
-          configuration: requiredNode.configuration,
-          inputSchema: requiredNode.input_schema,
-          outputSchema: requiredNode.output_schema,
-          isEnabled: true,
-          isRequired: true,
-        });
-      }
 
       const nextNodeIds = new Set<string>();
       const nodeIdByKey = new Map<string, string>();
 
       for (const node of normalizedNodes) {
         const targetId = node.id ?? existingNodeByKey.get(node.nodeKey) ?? null;
-        const existingRow = targetId ? existingNodes.find((item) => item.id === targetId) ?? null : null;
-        const resolvedIsRequired = existingRow?.is_required ? true : (node.isRequired ?? false);
+        const resolvedIsRequired = node.isRequired ?? false;
         const resolvedIsEnabled = resolvedIsRequired ? true : node.isEnabled;
         const savedNode = targetId
           ? await tx.moduleWorkflowNode.update({
@@ -508,6 +480,7 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
     name: string;
     label: string;
     description: string | null;
+    configuration: unknown | null;
     version_no: number;
     is_enabled: boolean;
     is_default: boolean;

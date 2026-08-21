@@ -64,6 +64,10 @@ export class AssistantToolRegistry {
       query: z.string().min(2),
       topK: z.number().int().positive().max(10).optional(),
     });
+    const sessionDocumentsSearchSchema = z.object({
+      query: z.string().min(2),
+      topK: z.number().int().positive().max(10).optional(),
+    });
     const targetedSearchSchema = z.object({
       query: z.string().min(2),
       topK: z.number().int().positive().max(10).optional(),
@@ -76,6 +80,7 @@ export class AssistantToolRegistry {
     type SemanticSearchArgs = z.infer<typeof semanticSearchSchema>;
     type TargetedSearchArgs = z.infer<typeof targetedSearchSchema>;
     type LinkedDocumentSearchArgs = z.infer<typeof linkedDocumentSearchSchema>;
+    type SessionDocumentsSearchArgs = z.infer<typeof sessionDocumentsSearchSchema>;
 
     return [
       {
@@ -366,6 +371,88 @@ export class AssistantToolRegistry {
           return {
             found: false,
             reason: "SESSION_DOCUMENT_NOT_LINKED",
+          };
+        },
+      },
+      {
+        name: "search_session_documents_knowledge",
+        description: "Cerca informazioni solo nei documenti allegati alla sessione assistente corrente.",
+        moduleKeys: [ModuleKey.CONVERSATIONAL_ASSISTANT, ModuleKey.DOCUMENT_INTELLIGENCE],
+        permissionKeys: [PermissionKey.ASSISTANT_READ, PermissionKey.KNOWLEDGE_READ],
+        parametersSchema: sessionDocumentsSearchSchema,
+        parametersJsonSchema: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            query: { type: "string" },
+            topK: { type: "integer" },
+          },
+          required: ["query"],
+        },
+        execute: async (context, args: SessionDocumentsSearchArgs) => {
+          const prisma = PrismaClientManager.getClient();
+          const links = await prisma.assistantSessionDocument.findMany({
+            where: {
+              workspace_id: context.workspaceId,
+              session_id: context.sessionId,
+              deleted_at: null,
+            },
+            select: {
+              id: true,
+              document_id: true,
+              display_name: true,
+            },
+            orderBy: {
+              created_at: "asc",
+            },
+            take: 20,
+          });
+
+          if (links.length === 0) {
+            return { found: false, reason: "SESSION_DOCUMENTS_EMPTY" };
+          }
+
+          const topK = Math.min(args.topK ?? 5, 10);
+          const hits = [];
+          for (const link of links) {
+            const documentContext = await this.documentIntelligenceService.getDocumentChatContext({
+              workspaceId: context.workspaceId,
+              documentId: link.document_id,
+            });
+            const documentHits = await this.documentIntelligenceService.searchWorkspaceKnowledge({
+              workspaceId: context.workspaceId,
+              query: args.query,
+              topK,
+              sourceEntityType: documentContext.sourceEntityType,
+              sourceEntityId: documentContext.sourceEntityId,
+            });
+
+            hits.push(...documentHits.map((hit) => ({
+              sessionDocumentId: link.id,
+              sessionDocumentName: link.display_name ?? documentContext.title,
+              chunkId: hit.chunkId,
+              knowledgeDocumentId: hit.knowledgeDocumentId,
+              documentId: hit.documentId,
+              sourceEntityType: hit.sourceEntityType,
+              sourceEntityId: hit.sourceEntityId,
+              title: hit.title,
+              sourceLabel: hit.sourceLabel,
+              chunkIndex: hit.chunkIndex,
+              contentText: hit.contentText,
+              distance: hit.distance,
+            })));
+          }
+
+          hits.sort((left, right) => left.distance - right.distance);
+          return {
+            found: hits.length > 0,
+            scope: "assistant_session_documents",
+            documents: links.map((link) => ({
+              sessionDocumentId: link.id,
+              documentId: link.document_id,
+              fileName: link.display_name,
+            })),
+            hits: hits.slice(0, topK),
           };
         },
       },

@@ -67,10 +67,6 @@ export class AppConfigService {
       "DATABASE_URL",
       "AUTH_PEPPER",
       "AUTH_TOTP_ENCRYPTION_KEY",
-      "SMTP_HOST",
-      "SMTP_USER",
-      "SMTP_PASS",
-      "SMTP_FROM",
       "GARAGE_S3_BUCKET",
       "GARAGE_S3_ACCESS_KEY_ID",
       "GARAGE_S3_SECRET_ACCESS_KEY",
@@ -78,6 +74,20 @@ export class AppConfigService {
       "MEASURE_REPORT_LM_MODEL",
     ];
     const missingKeys = requiredKeys.filter((key) => !this.getString(key).trim());
+    const mailProvider = this.getString("MAIL_PROVIDER", "smtp").trim().toLowerCase();
+    if (mailProvider === "resend") {
+      for (const key of ["RESEND_API_KEY", "MAIL_FROM"]) {
+        if (!this.getString(key).trim()) {
+          missingKeys.push(key);
+        }
+      }
+    } else {
+      for (const key of ["SMTP_HOST", "SMTP_FROM"]) {
+        if (!this.getString(key).trim()) {
+          missingKeys.push(key);
+        }
+      }
+    }
     const hasAiProviderConfig = this.getString("AI_PROVIDER_BASE_URL").trim() && this.getString("AI_PROVIDER_CHAT_MODEL").trim();
     const hasLegacyLmConfig = this.getString("ORCH_LM_BASE_URL").trim() && this.getString("ORCH_LM_MODEL").trim();
     if (!hasAiProviderConfig && !hasLegacyLmConfig) {

@@ -36,6 +36,7 @@ export class PrismaAssistantSessionRepository implements AssistantSessionReposit
     shipmentId: string | null;
     documentId: string | null;
     ddtDocumentId: string | null;
+    configuration: Record<string, unknown> | null;
   }): Promise<AssistantSessionEntity> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.assistantSession.create({
@@ -52,6 +53,7 @@ export class PrismaAssistantSessionRepository implements AssistantSessionReposit
         shipment_id: params.shipmentId,
         document_id: params.documentId,
         ddt_document_id: params.ddtDocumentId,
+        configuration: this.toInputJson(params.configuration),
       },
     });
 
@@ -69,6 +71,26 @@ export class PrismaAssistantSessionRepository implements AssistantSessionReposit
     });
 
     return row ? this.toSessionEntity(row) : null;
+  }
+
+  public async updateSessionConfiguration(params: {
+    workspaceId: string;
+    sessionId: string;
+    configuration: Record<string, unknown>;
+  }): Promise<AssistantSessionEntity> {
+    const prisma = PrismaClientManager.getClient();
+    const row = await prisma.assistantSession.update({
+      where: {
+        id: params.sessionId,
+        workspace_id: params.workspaceId,
+      },
+      data: {
+        configuration: this.toInputJson(params.configuration),
+        last_activity_at: new Date(),
+      },
+    });
+
+    return this.toSessionEntity(row);
   }
 
   public async closeSession(workspaceId: string, sessionId: string): Promise<void> {
@@ -281,6 +303,7 @@ export class PrismaAssistantSessionRepository implements AssistantSessionReposit
       shipmentId: typeof row.shipment_id === "string" ? row.shipment_id : null,
       documentId: typeof row.document_id === "string" ? row.document_id : null,
       ddtDocumentId: typeof row.ddt_document_id === "string" ? row.ddt_document_id : null,
+      configuration: row.configuration && typeof row.configuration === "object" ? row.configuration as Record<string, unknown> : null,
       openedAt: row.opened_at instanceof Date ? row.opened_at : new Date(String(row.opened_at)),
       lastActivityAt: row.last_activity_at instanceof Date ? row.last_activity_at : new Date(String(row.last_activity_at)),
       closedAt: row.closed_at instanceof Date ? row.closed_at : row.closed_at ? new Date(String(row.closed_at)) : null,

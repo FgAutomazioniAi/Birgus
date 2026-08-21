@@ -1,10 +1,13 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Inject } from "@nestjs/common";
 
 import { AiGatewayService } from "../../modules/ai-runtime/services/AiGatewayService.js";
 
 @Controller()
 export class HealthController {
-  public constructor(private readonly aiGatewayService: AiGatewayService) {}
+  public constructor(
+    @Inject(AiGatewayService)
+    private readonly aiGatewayService: AiGatewayService,
+  ) {}
 
   @Get("/health")
   public getHealth(): { ok: true; timestamp: string } {

@@ -2,6 +2,7 @@ import { AppError } from "../../../core/errors/AppError.js";
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { OpenAiCompatibleToolChatClient } from "../../ai-runtime/services/OpenAiCompatibleToolChatClient.js";
 import { DocumentChatContext, DocumentIntelligenceService } from "../../document-intelligence/services/DocumentIntelligenceService.js";
+import { normalizeKnowledgeMode, type KnowledgeMode } from "../../document-intelligence/domain/KnowledgeMode.js";
 import { AssistantMessageEntity } from "../domain/AssistantMessageEntity.js";
 import { PrismaAssistantSessionRepository } from "../infra/PrismaAssistantSessionRepository.js";
 import { AssistantSessionRepository } from "../repositories/AssistantSessionRepository.js";
@@ -78,7 +79,9 @@ export class AssistantConversationService {
       contentPayload: null,
     });
 
-    const documentContext = await this.resolveLinkedDocumentContext(params.workspaceId, session);
+    const knowledgeMode = this.resolveSessionKnowledgeMode(session.configuration);
+    const documentContext = await this.resolveLinkedDocumentContext(params.workspaceId, session, knowledgeMode);
+    const attachedDocumentsContext = await this.resolveAttachedDocumentsContext(params.workspaceId, session.id, knowledgeMode);
     const history = await this.repository.listMessages(params.workspaceId, session.id);
     const memorySnapshot = await this.sessionService.findLatestMemorySnapshot(params.workspaceId, params.userId, session.id);
     const initialMessages = this.buildModelMessages({
@@ -86,19 +89,14 @@ export class AssistantConversationService {
       history,
       memorySummary: memorySnapshot?.summaryText ?? null,
       documentContext,
+      attachedDocumentsContext,
+      knowledgeMode,
     });
 
     const toolDefinitions = this.toolRegistry.listDefinitions();
-    const firstPass = await this.chatClient.chatWithTools({
+    const firstPass = await this.chatWithOptionalTools({
       messages: initialMessages,
-      tools: toolDefinitions.map((tool) => ({
-        type: "function",
-        function: {
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.parametersJsonSchema,
-        },
-      })),
+      toolDefinitions,
     });
 
     const toolCalls = await this.executeToolCalls({
@@ -328,6 +326,65 @@ export class AssistantConversationService {
     return { persisted, modelMessages };
   }
 
+  private async chatWithOptionalTools(params: {
+    messages: ModelMessage[];
+    toolDefinitions: AssistantToolDefinition[];
+  }): Promise<{
+    model: string;
+    content: string | null;
+    toolCalls: Array<{
+      id: string;
+      type: string;
+      function: {
+        name: string;
+        arguments: string;
+      };
+    }>;
+    promptTokens: number | null;
+    completionTokens: number | null;
+    raw: Record<string, unknown>;
+  }> {
+    try {
+      return await this.chatClient.chatWithTools({
+        messages: params.messages,
+        tools: params.toolDefinitions.map((tool) => ({
+          type: "function",
+          function: {
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.parametersJsonSchema,
+          },
+        })),
+      });
+    } catch (error) {
+      if (!this.isToolCallingRejected(error)) {
+        throw error;
+      }
+
+      const fallback = await this.chatClient.chat({
+        messages: [
+          ...params.messages,
+          {
+            role: "system",
+            content: (
+              "Il provider AI corrente non accetta tool-calling OpenAI in questa richiesta. "
+              + "Rispondi usando il contesto gia presente nei messaggi; se serve accesso a dati non inclusi, dichiaralo."
+            ),
+          },
+        ],
+      });
+
+      return {
+        ...fallback,
+        toolCalls: [],
+        raw: {
+          ...fallback.raw,
+          birgus_tool_calling_fallback: true,
+        },
+      };
+    }
+  }
+
   private async refreshMemorySnapshot(
     workspaceId: string,
     sessionId: string,
@@ -339,6 +396,7 @@ export class AssistantConversationService {
       ddtDocumentId: string | null;
       contextEntityType: string | null;
       contextEntityId: string | null;
+      configuration: Record<string, unknown> | null;
     },
     recentMessageCountHint: number,
   ): Promise<void> {
@@ -370,6 +428,7 @@ export class AssistantConversationService {
         shipmentId: session.shipmentId,
         documentId: session.documentId,
         ddtDocumentId: session.ddtDocumentId,
+        knowledgeMode: this.resolveSessionKnowledgeMode(session.configuration),
       },
       messageCount: Math.max(messages.length, recentMessageCountHint),
       tokenEstimate: Math.max(1, Math.ceil(summary.length / 4)),
@@ -390,16 +449,23 @@ export class AssistantConversationService {
     history: AssistantMessageEntity[];
     memorySummary: string | null;
     documentContext: DocumentChatContext | null;
+    attachedDocumentsContext: string | null;
+    knowledgeMode: KnowledgeMode;
   }): ModelMessage[] {
     const messages: ModelMessage[] = [
       {
         role: "system",
         content: [
           "Sei l'assistente applicativo interno di Birgus.",
-          "Rispondi in italiano, in modo chiaro e concreto.",
+          "Rispondi sempre in italiano, salvo richiesta esplicita contraria.",
+          "Usa frasi brevi, operative e verificabili.",
+          "Mantieni un tono professionale e diretto.",
           "Ogni conversazione e limitata alla sessione corrente: non usare memoria esterna o richieste precedenti non presenti nella sessione.",
           "Per leggere dati di business usa solo i tool disponibili. Non assumere accesso diretto al database, a Garage o ai file.",
           "Se il backend ti fornisce un contesto documentale gia estratto per questa sessione, puoi usarlo come fonte primaria del documento collegato.",
+          "Se citi dati dai documenti, indica il documento o il titolo quando disponibile.",
+          "Se la sessione contiene documenti allegati, considera quel contesto prima della knowledge globale.",
+          "Quando devi cercare nei documenti allegati alla chat, usa il tool search_session_documents_knowledge.",
           "Se devi approfondire il documento collegato alla sessione, preferisci il tool dedicato al documento collegato prima di allargare la ricerca all'intero workspace.",
           "Se l'utente richiede esplicitamente ricerca 'semantica', usa il tool semantico; se richiede ricerca 'mirata', 'keyword' o 'puntuale', usa il tool targeted.",
           "Non inventare dati mancanti. Se il contesto non basta, chiedi conferma o usa il tool piu adatto.",
@@ -443,6 +509,18 @@ export class AssistantConversationService {
       messages.push({
         role: "system",
         content: structuredParts.join("\n"),
+      });
+    }
+
+    messages.push({
+      role: "system",
+      content: `Policy knowledge della sessione: ${params.knowledgeMode}. on_demand aggiorna i documenti quando serve; saved usa solo knowledge gia salvata; hybrid usa knowledge salvata e aggiorna se manca.`,
+    });
+
+    if (params.attachedDocumentsContext) {
+      messages.push({
+        role: "system",
+        content: `Documenti allegati alla sessione:\n${params.attachedDocumentsContext}`,
       });
     }
 
@@ -492,6 +570,7 @@ export class AssistantConversationService {
       documentId: string | null;
       ddtDocumentId: string | null;
     },
+    knowledgeMode: KnowledgeMode,
   ): Promise<DocumentChatContext | null> {
     if (session.ddtDocumentId) {
       return this.documentIntelligenceService.getDdtDocumentChatContext({
@@ -501,13 +580,63 @@ export class AssistantConversationService {
     }
 
     if (session.documentId) {
-      return this.documentIntelligenceService.getDocumentChatContext({
+      return this.documentIntelligenceService.getDocumentChatContextForMode({
         workspaceId,
         documentId: session.documentId,
+        knowledgeMode,
       });
     }
 
     return null;
+  }
+
+  private async resolveAttachedDocumentsContext(workspaceId: string, sessionId: string, knowledgeMode: KnowledgeMode): Promise<string | null> {
+    const prisma = PrismaClientManager.getClient();
+    const links = await prisma.assistantSessionDocument.findMany({
+      where: {
+        workspace_id: workspaceId,
+        session_id: sessionId,
+        deleted_at: null,
+      },
+      include: {
+        document: {
+          select: {
+            id: true,
+            filename: true,
+          },
+        },
+      },
+      orderBy: {
+        created_at: "asc",
+      },
+      take: 6,
+    });
+
+    if (links.length === 0) {
+      return null;
+    }
+
+    const parts: string[] = [];
+    for (const [index, link] of links.entries()) {
+      const context = await this.documentIntelligenceService.getDocumentChatContextForMode({
+        workspaceId,
+        documentId: link.document_id,
+        knowledgeMode,
+      });
+      parts.push([
+        `Documento allegato ${index + 1}: ${link.display_name ?? context.title ?? link.document.filename ?? link.document_id}`,
+        `documentId: ${link.document_id}`,
+        `sessionDocumentId: ${link.id}`,
+        context.summaryText ? `Riassunto: ${context.summaryText}` : null,
+        context.contentPreview ? `Estratto: ${context.contentPreview.slice(0, 2000)}` : null,
+      ].filter((value): value is string => Boolean(value)).join("\n"));
+    }
+
+    return parts.join("\n\n---\n\n");
+  }
+
+  private resolveSessionKnowledgeMode(configuration: Record<string, unknown> | null): KnowledgeMode {
+    return normalizeKnowledgeMode(configuration?.knowledgeMode, "hybrid");
   }
 
   private toModelRole(role: string): ModelMessage["role"] | null {
@@ -552,6 +681,10 @@ export class AssistantConversationService {
     }
 
     return new AppError("Errore imprevisto durante l'esecuzione del tool.", "ASSISTANT_TOOL_ERROR", 500);
+  }
+
+  private isToolCallingRejected(error: unknown): boolean {
+    return error instanceof Error && /AI provider HTTP 400/i.test(error.message);
   }
 
   private async resolvePrimaryModuleId(moduleKey: string | null): Promise<number | null> {

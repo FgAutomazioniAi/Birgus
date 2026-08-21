@@ -21,6 +21,8 @@ class MailEngineModule(PythonModule):
     def execute(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
         if action == "send_quotation_email":
             return self._send_quotation_email(payload)
+        if action == "send_email":
+            return self._send_email(payload)
 
         raise ValueError(f"Action non supportata per mail_engine: {action}")
 
@@ -55,6 +57,7 @@ class MailEngineModule(PythonModule):
             version_label=version_label,
             file_name=file_name,
             docx_bytes=docx_bytes,
+            mail_provider=self._mail_provider(payload),
         )
         print(
             "[python_modules][mail_engine][done] "
@@ -74,3 +77,56 @@ class MailEngineModule(PythonModule):
             return None
         normalized = value.strip()
         return normalized or None
+
+    def _send_email(self, payload: dict[str, Any]) -> dict[str, Any]:
+        to = str(payload.get("to", "")).strip()
+        subject = str(payload.get("subject", "")).strip()
+        text = str(payload.get("text", "")).strip()
+        if not to:
+            raise ValueError("Campo obbligatorio mancante: input.to")
+        if not subject:
+            raise ValueError("Campo obbligatorio mancante: input.subject")
+        if not text:
+            raise ValueError("Campo obbligatorio mancante: input.text")
+
+        attachments = self._decode_attachments(payload.get("attachments"))
+        transport_result = self._smtp_mail_service.send_email(
+            to=to,
+            subject=subject,
+            text=text,
+            attachments=attachments,
+            mail_provider=self._mail_provider(payload),
+        )
+
+        return {
+            "status": "sent",
+            "to": to,
+            "subject": subject,
+            "attachments_sent": [str(attachment.get("file_name")) for attachment in attachments],
+            "transport_result": transport_result,
+        }
+
+    def _decode_attachments(self, value: Any) -> list[dict[str, Any]]:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("Campo non valido: input.attachments")
+
+        attachments: list[dict[str, Any]] = []
+        for item in value:
+            if not isinstance(item, dict):
+                raise ValueError("Campo non valido: input.attachments[]")
+            file_name = str(item.get("file_name") or item.get("filename") or "attachment.bin").strip() or "attachment.bin"
+            encoded = str(item.get("content_base64") or item.get("base64") or "").strip()
+            if not encoded:
+                raise ValueError(f"Base64 mancante per allegato '{file_name}'")
+            try:
+                content = base64.b64decode(encoded)
+            except Exception as exc:  # noqa: BLE001
+                raise ValueError(f"Base64 non valido per allegato '{file_name}'") from exc
+            attachments.append({"file_name": file_name, "content": content})
+        return attachments
+
+    def _mail_provider(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        provider = payload.get("mail_provider")
+        return provider if isinstance(provider, dict) else None

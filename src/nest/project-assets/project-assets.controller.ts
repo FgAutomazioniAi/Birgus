@@ -10,7 +10,7 @@ import { FileKind, FileKindValue } from "../../modules/document-archive/domain/F
 import { PutProjectFileCommand } from "../../modules/document-archive/dto/PutProjectFileCommand.js";
 import { DocumentArchiveService } from "../../modules/document-archive/services/DocumentArchiveService.js";
 import { ProjectService } from "../../modules/projects/services/ProjectService.js";
-import { QuotationOrchestratorService } from "../../modules/quotation-orchestrator/services/QuotationOrchestratorService.js";
+import { WorkflowService } from "../../modules/workflows/services/WorkflowService.js";
 import { AccessPolicyGuard } from "../auth/access-policy.guard.js";
 import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
 import { CurrentRequestContext } from "../common/decorators/request-context.decorator.js";
@@ -19,6 +19,7 @@ import { RequirePermission } from "../common/decorators/require-permission.decor
 import { MultipartFormReader } from "../../shared/http/MultipartFormReader.js";
 
 const QUOTATION_FILE_NAME = "preventivo.pdf";
+const QUOTATION_WORKFLOW_KEY = "quotation_document_pipeline";
 const deleteConfirmationSchema = {
   parse: (value: unknown): { confirmText: string } => {
     if (!value || typeof value !== "object") {
@@ -69,8 +70,8 @@ export class NestProjectAssetsController {
     private readonly documentArchiveService: DocumentArchiveService,
     @Inject(ProjectService)
     private readonly projectService: ProjectService,
-    @Inject(QuotationOrchestratorService)
-    private readonly orchestratorService: QuotationOrchestratorService,
+    @Inject(WorkflowService)
+    private readonly workflowService: WorkflowService,
   ) {}
 
   @Get("files")
@@ -396,23 +397,18 @@ export class NestProjectAssetsController {
       }),
     );
 
-    let orchestratorJobId: string | null = null;
-    try {
-      orchestratorJobId = await this.orchestratorService.queueJob({
-        workspaceId,
-        projectId,
-        versionLabel,
-        requestedByUserId: userId,
-        clientName: await this.resolveClientName(workspaceId, projectId, versionLabel),
-      });
-    } catch {
-      orchestratorJobId = null;
-    }
+    const workflowRun = await this.queueQuotationWorkflowRun({
+      workspaceId,
+      projectId,
+      versionLabel,
+      requestedByUserId: userId,
+    });
 
     return {
       filename: QUOTATION_FILE_NAME,
       ok: true,
-      orchestratorJobId,
+      orchestratorJobId: workflowRun.id,
+      workflowRunId: workflowRun.id,
       storagePath: saved.storagePath,
     };
   }
@@ -530,23 +526,73 @@ export class NestProjectAssetsController {
       throw new AppError("PDF preventivo non migrato su Garage. Eseguire la migrazione storage.", "QUOTATION_NOT_GARAGE", 409);
     }
 
-    let jobId: string;
-    try {
-      jobId = await this.orchestratorService.queueJob({
-        workspaceId,
-        projectId,
-        versionLabel,
-        requestedByUserId: userId,
-        clientName: await this.resolveClientName(workspaceId, projectId, versionLabel),
-      });
-    } catch {
-      throw new AppError("Servizio orchestratore non raggiungibile.", "ORCHESTRATOR_UNAVAILABLE", 503);
-    }
+    const workflowRun = await this.queueQuotationWorkflowRun({
+      workspaceId,
+      projectId,
+      versionLabel,
+      requestedByUserId: userId,
+    });
 
     return {
-      jobId,
+      jobId: workflowRun.id,
+      workflowRunId: workflowRun.id,
       ok: true,
     };
+  }
+
+  private async queueQuotationWorkflowRun(params: {
+    workspaceId: string;
+    projectId: string;
+    versionLabel: string;
+    requestedByUserId: string | null;
+  }) {
+    const prisma = PrismaClientManager.getClient();
+    const [workflow, version] = await Promise.all([
+      this.workflowService.findWorkflowByKey(
+        params.workspaceId,
+        ModuleKey.PROJECT_MANAGEMENT,
+        QUOTATION_WORKFLOW_KEY,
+      ),
+      prisma.projectVersion.findFirst({
+        where: {
+          workspace_id: params.workspaceId,
+          project_id: params.projectId,
+          version_label: params.versionLabel,
+          deleted_at: null,
+        },
+        select: {
+          id: true,
+          client_id: true,
+        },
+      }),
+    ]);
+
+    if (!workflow) {
+      throw new AppError("Workflow preventivo progetto non configurato.", "PROJECT_QUOTATION_WORKFLOW_NOT_FOUND", 503);
+    }
+    if (!version) {
+      throw new AppError("Versione progetto non trovata.", "PROJECT_VERSION_NOT_FOUND", 404);
+    }
+
+    return this.workflowService.createWorkflowRun({
+      workspaceId: params.workspaceId,
+      workflowId: workflow.id,
+      requestedByUserId: params.requestedByUserId,
+      triggerSource: "project_quotation",
+      contextEntityType: "Project",
+      contextEntityId: params.projectId,
+      projectId: params.projectId,
+      projectVersionId: version.id,
+      clientId: version.client_id,
+      shipmentId: null,
+      documentId: null,
+      ddtDocumentId: null,
+      measureReportDocumentId: null,
+      inputPayload: {
+        projectId: params.projectId,
+        versionLabel: params.versionLabel,
+      },
+    });
   }
 
   private getProjectId(projectId: string): string {

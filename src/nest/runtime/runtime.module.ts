@@ -6,12 +6,14 @@ import { DocumentIntelligenceService } from "../../modules/document-intelligence
 import { NotificationService } from "../../modules/notifications/services/NotificationService.js";
 import { QuotationOrchestratorService } from "../../modules/quotation-orchestrator/services/QuotationOrchestratorService.js";
 import { WorkflowRunExecutorService } from "../../modules/workflows/services/WorkflowRunExecutorService.js";
+import { TelegramLinkPollingService } from "../../modules/connected-apps/services/TelegramLinkPollingService.js";
 import { JobQueue } from "../../worker/queue/JobQueue.js";
 import { DdtProcessingWorker } from "../../worker/services/DdtProcessingWorker.js";
 import { QuotationOrchestratorWorker } from "../../worker/services/QuotationOrchestratorWorker.js";
 import { WorkerCoordinator } from "../../worker/services/WorkerCoordinator.js";
 import { WorkflowRunWorker } from "../../worker/services/WorkflowRunWorker.js";
 import { JOB_QUEUE } from "../common/tokens.js";
+import { ConnectedAppsNestModule } from "../connected-apps/connected-apps.module.js";
 import { DdtReaderNestModule } from "../ddt-reader/ddt-reader.module.js";
 import { KnowledgeNestModule } from "../knowledge/knowledge.module.js";
 import { NotificationsNestModule } from "../notifications/notifications.module.js";
@@ -24,6 +26,7 @@ import { BackendRuntimeService } from "./runtime.service.js";
 @Module({
   imports: [
     BackendProvidersModule,
+    ConnectedAppsNestModule,
     DdtReaderNestModule,
     KnowledgeNestModule,
     NotificationsNestModule,

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pypdfium2 as pdfium
+from PIL import Image
 
 from app.config import Settings
 
@@ -57,6 +59,23 @@ class PaddleOcrService:
                 pdf.close()
 
         return "\n\n".join(page_texts).strip(), len(page_texts)
+
+    def extract_text_from_image_bytes(self, image_bytes: bytes) -> tuple[str, int]:
+        ocr = self._get_ocr()
+        image = Image.open(BytesIO(image_bytes)).convert("RGB")
+        image_np = np.array(image)
+        prediction = ocr.predict(image_np)
+        lines: list[str] = []
+
+        if prediction:
+            for item in prediction:
+                rec_texts = item.get("rec_texts", []) if hasattr(item, "get") else []
+                for value in rec_texts:
+                    cleaned = str(value).strip()
+                    if cleaned:
+                        lines.append(cleaned)
+
+        return "[IMAGE 1]\n" + "\n".join(lines), 1
 
     def _get_ocr(self) -> Any:
         if self._ocr is not None:

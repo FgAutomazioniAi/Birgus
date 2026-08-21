@@ -4,8 +4,10 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 
 import { AuthSessionGuard } from "@/components/auth/auth-session-guard";
+import { FloatingAssistant } from "@/components/organisms/floating-assistant";
 import { Sidebar } from "@/components/organisms/sidebar";
 import { TopNav } from "@/components/organisms/top-nav";
+import { ModuleAccessProvider } from "@/lib/module-access";
 
 export interface AppShellProps {
   children: ReactNode;
@@ -13,6 +15,7 @@ export interface AppShellProps {
     id: string;
     nome: string;
     ruolo: string;
+    isSuperadmin: boolean;
     workspaceId: string;
     enabledModuleKeys: string[];
   };
@@ -29,6 +32,7 @@ export function AppShell({ children, currentUser }: AppShellProps) {
         open={sidebarOpen}
         collapsed={sidebarCollapsed}
         enabledModuleKeys={currentUser.enabledModuleKeys}
+        isSuperadmin={currentUser.isSuperadmin}
         onClose={() => setSidebarOpen(false)}
       />
 
@@ -44,7 +48,10 @@ export function AppShell({ children, currentUser }: AppShellProps) {
           onMenuClick={() => setSidebarOpen(true)}
           onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
         />
-        <div className="flex-1 overflow-auto p-4 lg:p-8">{children}</div>
+        <ModuleAccessProvider enabledModuleKeys={currentUser.enabledModuleKeys}>
+          <div className="min-h-0 flex-1 overflow-auto p-4 lg:p-8">{children}</div>
+          <FloatingAssistant enabled={currentUser.enabledModuleKeys.includes("conversational_assistant")} />
+        </ModuleAccessProvider>
       </main>
     </div>
   );

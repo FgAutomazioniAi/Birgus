@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, FileSearch, FolderKanban, LogOut, Ruler, Settings, ShieldCheck, Truck, Users } from "lucide-react";
+import { Archive, CalendarDays, FileSearch, FolderKanban, GitBranch, LogOut, Map, Ruler, Settings, ShieldCheck, TrendingUp, Truck, Users, Wrench } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -16,23 +16,32 @@ const menuItems = [
   { icon: FileSearch, label: "DDT Reader", path: APP_ROUTES.ddtReader, moduleKey: "ddt_processing" },
   // DDT_READER_FEATURE_END
   { icon: Ruler, label: "Measure Report", path: APP_ROUTES.measureReport, moduleKey: "measure_report" },
+  { icon: Map, label: "Mappa clienti", path: APP_ROUTES.customerMap, moduleKey: "customer_map" },
+  { icon: TrendingUp, label: "Priorita offerte", path: APP_ROUTES.offerPriority, moduleKey: "offer_priority" },
+  { icon: Wrench, label: "Proposte manutenzione", path: APP_ROUTES.maintenanceProposals, moduleKey: "maintenance_proposals" },
+  { icon: CalendarDays, label: "Calendario manutenzioni", path: APP_ROUTES.maintenanceCalendar, moduleKey: "maintenance_calendar" },
+  { icon: GitBranch, label: "Workflow", path: APP_ROUTES.workflows, moduleKey: "workflow_management" },
   { icon: Archive, label: "Archivio", path: APP_ROUTES.archive, moduleKey: "document_archive" },
-  { icon: ShieldCheck, label: "Superadmin", path: APP_ROUTES.superadmin, moduleKey: "superadmin_center" },
+  { icon: ShieldCheck, label: "Superadmin", path: APP_ROUTES.superadmin, moduleKey: "superadmin_center", superadminOnly: true },
   { icon: Settings, label: "Impostazioni", path: APP_ROUTES.settings },
 ];
 
 export interface SidebarProps {
   collapsed: boolean;
   enabledModuleKeys: string[];
+  isSuperadmin: boolean;
   onClose: () => void;
   open: boolean;
 }
 
-export function Sidebar({ collapsed, enabledModuleKeys, onClose, open }: SidebarProps) {
+export function Sidebar({ collapsed, enabledModuleKeys, isSuperadmin, onClose, open }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const visibleMenuItems = menuItems.filter((item) => !item.moduleKey || enabledModuleKeys.includes(item.moduleKey));
+  const visibleMenuItems = menuItems.filter((item) =>
+    (!item.moduleKey || enabledModuleKeys.includes(item.moduleKey))
+    && (!item.superadminOnly || isSuperadmin),
+  );
 
   const handleLogout = async () => {
     if (isLoggingOut) {

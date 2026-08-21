@@ -1,11 +1,15 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req, UseGuards } from "@nestjs/common";
+import { FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
+import { AppError } from "../../core/errors/AppError.js";
 import { ModuleKey } from "../../core/module-access/ModuleKey.js";
 import { RequestContext } from "../../core/tenancy/RequestContext.js";
 import { AssistantConversationService } from "../../modules/conversational-assistant/services/AssistantConversationService.js";
+import { AssistantSessionDocumentService } from "../../modules/conversational-assistant/services/AssistantSessionDocumentService.js";
 import { AssistantSessionService } from "../../modules/conversational-assistant/services/AssistantSessionService.js";
+import { MultipartFormReader } from "../../shared/http/MultipartFormReader.js";
 import { AccessPolicyGuard } from "../auth/access-policy.guard.js";
 import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
 import { CurrentRequestContext } from "../common/decorators/request-context.decorator.js";
@@ -23,6 +27,7 @@ const createSessionSchema = z.object({
   shipmentId: z.string().uuid().optional().nullable(),
   documentId: z.string().uuid().optional().nullable(),
   ddtDocumentId: z.string().uuid().optional().nullable(),
+  knowledgeMode: z.enum(["on_demand", "saved", "hybrid"]).optional().nullable(),
 });
 
 const sessionIdParamsSchema = z.object({
@@ -31,6 +36,10 @@ const sessionIdParamsSchema = z.object({
 
 const postMessageSchema = z.object({
   content: z.string().min(1),
+});
+
+const updateSessionPreferencesSchema = z.object({
+  knowledgeMode: z.enum(["on_demand", "saved", "hybrid"]),
 });
 
 @Controller("/api/assistant")
@@ -42,6 +51,8 @@ export class NestAssistantController {
     private readonly sessionService: AssistantSessionService,
     @Inject(AssistantConversationService)
     private readonly conversationService: AssistantConversationService,
+    @Inject(AssistantSessionDocumentService)
+    private readonly sessionDocumentService: AssistantSessionDocumentService,
   ) {}
 
   @Get("sessions")
@@ -68,6 +79,7 @@ export class NestAssistantController {
         shipmentId: session.shipmentId,
         documentId: session.documentId,
         ddtDocumentId: session.ddtDocumentId,
+        knowledgeMode: session.configuration?.knowledgeMode ?? "hybrid",
         openedAt: session.openedAt,
         lastActivityAt: session.lastActivityAt,
         closedAt: session.closedAt,
@@ -98,12 +110,14 @@ export class NestAssistantController {
       shipmentId: body.shipmentId ?? null,
       documentId: body.documentId ?? null,
       ddtDocumentId: body.ddtDocumentId ?? null,
+      knowledgeMode: body.knowledgeMode ?? null,
     });
 
     return {
       id: session.id,
       status: session.status,
       title: session.title,
+      knowledgeMode: session.configuration?.knowledgeMode ?? "hybrid",
       openedAt: session.openedAt,
     };
   }
@@ -133,6 +147,7 @@ export class NestAssistantController {
       shipmentId: session.shipmentId,
       documentId: session.documentId,
       ddtDocumentId: session.ddtDocumentId,
+      knowledgeMode: session.configuration?.knowledgeMode ?? "hybrid",
       openedAt: session.openedAt,
       lastActivityAt: session.lastActivityAt,
       closedAt: session.closedAt,
@@ -165,6 +180,100 @@ export class NestAssistantController {
         completionTokens: message.completionTokens,
         createdAt: message.createdAt,
       })),
+    };
+  }
+
+  @Post("sessions/:sessionId/preferences")
+  @HttpCode(200)
+  @RequirePermission(PermissionKey.ASSISTANT_WRITE)
+  public async updateSessionPreferences(
+    @Param() paramsRaw: unknown,
+    @Body() bodyRaw: unknown,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const { sessionId } = sessionIdParamsSchema.parse(paramsRaw);
+    const body = updateSessionPreferencesSchema.parse(bodyRaw ?? {});
+    const workspaceId = requestContext.workspace.workspaceId;
+    const userId = requestContext.workspace.userId;
+    const session = await this.sessionService.updateKnowledgeModeForUser(
+      workspaceId,
+      userId,
+      sessionId,
+      body.knowledgeMode,
+    );
+
+    return {
+      sessionId,
+      knowledgeMode: session.configuration?.knowledgeMode ?? "hybrid",
+    };
+  }
+
+  @Get("sessions/:sessionId/documents")
+  @RequirePermission(PermissionKey.ASSISTANT_READ, PermissionKey.KNOWLEDGE_READ)
+  public async listSessionDocuments(
+    @Param() paramsRaw: unknown,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const { sessionId } = sessionIdParamsSchema.parse(paramsRaw);
+    const workspaceId = requestContext.workspace.workspaceId;
+    const userId = requestContext.workspace.userId;
+    await this.sessionService.getSessionForUser(workspaceId, userId, sessionId);
+    const documents = await this.sessionDocumentService.listSessionDocuments({ workspaceId, sessionId });
+
+    return {
+      sessionId,
+      documents: documents.map((document) => ({
+        id: document.id,
+        documentId: document.documentId,
+        fileName: document.fileName,
+        contentType: document.contentType,
+        sizeBytes: document.sizeBytes,
+        knowledgeDocumentId: document.knowledgeDocumentId,
+        extractionStatus: document.extractionStatus,
+        createdAt: document.createdAt,
+      })),
+    };
+  }
+
+  @Post("sessions/:sessionId/documents")
+  @HttpCode(201)
+  @RequirePermission(PermissionKey.ASSISTANT_WRITE, PermissionKey.KNOWLEDGE_READ)
+  public async uploadSessionDocument(
+    @Param() paramsRaw: unknown,
+    @Req() request: FastifyRequest,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const { sessionId } = sessionIdParamsSchema.parse(paramsRaw);
+    const workspaceId = requestContext.workspace.workspaceId;
+    const userId = requestContext.workspace.userId;
+    await this.sessionService.getSessionForUser(workspaceId, userId, sessionId);
+
+    const multipart = await MultipartFormReader.read(request);
+    const uploaded = multipart.files.find((item) => item.fieldName === "file") ?? multipart.files[0];
+    if (!uploaded) {
+      throw new AppError("File mancante.", "ASSISTANT_DOCUMENT_REQUIRED", 400);
+    }
+
+    const document = await this.sessionDocumentService.uploadSessionDocument({
+      workspaceId,
+      sessionId,
+      userId,
+      fileName: uploaded.fileName,
+      mimeType: uploaded.mimeType,
+      bytes: uploaded.bytes,
+    });
+
+    return {
+      document: {
+        id: document.id,
+        documentId: document.documentId,
+        fileName: document.fileName,
+        contentType: document.contentType,
+        sizeBytes: document.sizeBytes,
+        knowledgeDocumentId: document.knowledgeDocumentId,
+        extractionStatus: document.extractionStatus,
+        createdAt: document.createdAt,
+      },
     };
   }
 

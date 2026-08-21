@@ -4,6 +4,7 @@ import { AssistantMessageEntity } from "../domain/AssistantMessageEntity.js";
 import { AssistantSessionEntity } from "../domain/AssistantSessionEntity.js";
 import { AssistantSessionRepository } from "../repositories/AssistantSessionRepository.js";
 import { PrismaAssistantSessionRepository } from "../infra/PrismaAssistantSessionRepository.js";
+import { normalizeKnowledgeMode, type KnowledgeMode } from "../../document-intelligence/domain/KnowledgeMode.js";
 
 export interface AssistantMemorySnapshotView {
   summaryText: string;
@@ -37,6 +38,7 @@ export class AssistantSessionService {
     shipmentId?: string | null;
     documentId?: string | null;
     ddtDocumentId?: string | null;
+    knowledgeMode?: KnowledgeMode | string | null;
   }): Promise<AssistantSessionEntity> {
     const moduleId = await this.resolveModuleId(params.moduleKey ?? null);
     return this.repository.createSession({
@@ -52,6 +54,27 @@ export class AssistantSessionService {
       shipmentId: this.normalizeOptionalText(params.shipmentId),
       documentId: this.normalizeOptionalText(params.documentId),
       ddtDocumentId: this.normalizeOptionalText(params.ddtDocumentId),
+      configuration: {
+        knowledgeMode: normalizeKnowledgeMode(params.knowledgeMode, "hybrid"),
+      },
+    });
+  }
+
+  public async updateKnowledgeModeForUser(
+    workspaceId: string,
+    userId: string,
+    sessionId: string,
+    knowledgeMode: KnowledgeMode | string | null,
+  ): Promise<AssistantSessionEntity> {
+    const session = await this.getSessionForUser(workspaceId, userId, sessionId);
+    const nextConfiguration = {
+      ...(session.configuration ?? {}),
+      knowledgeMode: normalizeKnowledgeMode(knowledgeMode, "hybrid"),
+    };
+    return this.repository.updateSessionConfiguration({
+      workspaceId,
+      sessionId,
+      configuration: nextConfiguration,
     });
   }
 

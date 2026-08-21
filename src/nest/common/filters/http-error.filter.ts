@@ -1,4 +1,4 @@
-import { ArgumentsHost, Catch, ExceptionFilter } from "@nestjs/common";
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException } from "@nestjs/common";
 import { FastifyReply } from "fastify";
 import { ZodError } from "zod";
 
@@ -22,6 +22,20 @@ export class HttpErrorFilter implements ExceptionFilter {
       response.status(exception.statusCode).send({
         code: exception.code,
         message: exception.message,
+      });
+      return;
+    }
+
+    if (exception instanceof HttpException) {
+      const payload = exception.getResponse();
+      const message = typeof payload === "string"
+        ? payload
+        : typeof (payload as { message?: unknown }).message === "string"
+          ? (payload as { message: string }).message
+          : exception.message;
+      response.status(exception.getStatus()).send({
+        code: "HTTP_ERROR",
+        message,
       });
       return;
     }

@@ -1,12 +1,15 @@
 import { Global, Module } from "@nestjs/common";
 
+import { AiProviderSettingsService } from "../../modules/ai-runtime/services/AiProviderSettingsService.js";
 import { AiGatewayService } from "../../modules/ai-runtime/services/AiGatewayService.js";
 import { OpenAiCompatibleLmClient } from "../../modules/ai-runtime/services/OpenAiCompatibleLmClient.js";
 import { BackendPythonModulesClient } from "../../modules/document-intelligence/services/BackendPythonModulesClient.js";
+import { MailProviderSettingsService } from "../../modules/mail-runtime/services/MailProviderSettingsService.js";
 import { LocalLmOrchestrator } from "../../modules/orchestration/services/LocalLmOrchestrator.js";
 import { StorageSelector } from "../../storage/StorageSelector.js";
 import { PostgresJobQueue } from "../../worker/queue/PostgresJobQueue.js";
 import { JOB_QUEUE, PROJECT_BINARY_STORAGE } from "../common/tokens.js";
+import { PrismaService } from "../prisma/prisma.service.js";
 
 @Global()
 @Module({
@@ -24,8 +27,22 @@ import { JOB_QUEUE, PROJECT_BINARY_STORAGE } from "../common/tokens.js";
       useFactory: () => new BackendPythonModulesClient(),
     },
     {
+      provide: AiProviderSettingsService,
+      useFactory: (prisma: PrismaService) => new AiProviderSettingsService(prisma),
+      inject: [PrismaService],
+    },
+    {
+      provide: MailProviderSettingsService,
+      useFactory: (prisma: PrismaService) => new MailProviderSettingsService(prisma),
+      inject: [PrismaService],
+    },
+    {
       provide: OpenAiCompatibleLmClient,
-      useFactory: () => new OpenAiCompatibleLmClient(),
+      useFactory: (settingsService: AiProviderSettingsService) => {
+        OpenAiCompatibleLmClient.setRuntimeConfigResolver(() => settingsService.getRuntimeConfig());
+        return new OpenAiCompatibleLmClient();
+      },
+      inject: [AiProviderSettingsService],
     },
     {
       provide: AiGatewayService,
@@ -44,6 +61,8 @@ import { JOB_QUEUE, PROJECT_BINARY_STORAGE } from "../common/tokens.js";
   exports: [
     PROJECT_BINARY_STORAGE,
     JOB_QUEUE,
+    AiProviderSettingsService,
+    MailProviderSettingsService,
     BackendPythonModulesClient,
     AiGatewayService,
     OpenAiCompatibleLmClient,

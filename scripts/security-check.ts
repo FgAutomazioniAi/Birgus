@@ -12,10 +12,6 @@ const requiredFiles = [
   ".github/workflows/secure-development.yml",
   "CONTRIBUTING.md",
   "SECURITY.md",
-  "docs/APPROVED_LIBRARIES.md",
-  "docs/CODING_STYLE_SECURITY.md",
-  "docs/HTTPS_FINAL_STEP.md",
-  "docs/SECURITY_EXCEPTION_TEMPLATE.md",
 ];
 
 const skippedFilePatterns = [

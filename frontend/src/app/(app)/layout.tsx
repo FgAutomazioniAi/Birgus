@@ -19,6 +19,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   let currentUserName = "Utente";
   let currentUserId = "";
   let currentUserRole = "Operatore";
+  let isSuperadmin = false;
   let currentWorkspaceId = "";
   let enabledModuleKeys: string[] = [];
   try {
@@ -48,6 +49,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     const normalizedRoleKeys = (payload.user?.roleKeys ?? []).map((item) => item.trim().toLowerCase());
     if (normalizedRoleKeys.includes("superadmin")) {
       currentUserRole = "Superadmin";
+      isSuperadmin = true;
     } else if (normalizedRoleKeys.includes("admin")) {
       currentUserRole = "Admin";
     } else if (normalizedRoleKeys.includes("operator")) {
@@ -85,6 +87,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         id: currentUserId,
         nome: currentUserName,
         ruolo: currentUserRole,
+        isSuperadmin,
         workspaceId: currentWorkspaceId,
         enabledModuleKeys,
       }}

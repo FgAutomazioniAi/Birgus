@@ -15,6 +15,7 @@ interface OpenAiCompatibleClientOptions {
   contextLength?: number | null;
   store?: boolean;
   temperature?: number;
+  useRuntimeConfig?: boolean;
 }
 
 interface LegacyChatResponseItem {
@@ -29,17 +30,21 @@ export interface LegacyChatResponse {
   stats?: Record<string, unknown>;
 }
 
+type AiProviderRuntimeConfigResolver = () => Partial<AiProviderConfig> | Promise<Partial<AiProviderConfig>>;
+
 function normalizePath(path: string): string {
   return path.startsWith("/") ? path : `/${path}`;
 }
 
 export class OpenAiCompatibleLmClient {
+  private static runtimeConfigResolver: AiProviderRuntimeConfigResolver | null = null;
+
   private readonly config: AiProviderConfig;
-  private readonly requestedModel: string;
   private readonly maxOutputTokens: number;
   private readonly reasoning: string | null;
   private readonly contextLength: number | null;
   private readonly store: boolean;
+  private readonly useRuntimeConfig: boolean;
 
   public constructor(options: OpenAiCompatibleClientOptions = {}) {
     this.config = loadAiProviderConfig({
@@ -51,27 +56,51 @@ export class OpenAiCompatibleLmClient {
       chatModel: options.requestedModel,
       temperature: options.temperature,
     });
-    this.requestedModel = (options.requestedModel ?? this.config.chatModel).trim();
     this.maxOutputTokens = options.maxOutputTokens ?? this.parsePositiveInt(process.env.AI_PROVIDER_MAX_OUTPUT_TOKENS ?? process.env.ORCH_LM_MAX_OUTPUT_TOKENS, 512);
     this.reasoning = options.reasoning ?? this.parseReasoning(process.env.AI_PROVIDER_REASONING ?? process.env.ORCH_LM_REASONING);
     this.contextLength = options.contextLength ?? this.parseOptionalPositiveInt(process.env.AI_PROVIDER_CONTEXT_LENGTH ?? process.env.ORCH_LM_CONTEXT_LENGTH);
     this.store = options.store ?? this.parseBoolean(process.env.AI_PROVIDER_STORE ?? process.env.ORCH_LM_STORE, false);
+    this.useRuntimeConfig = options.useRuntimeConfig ?? true;
+  }
+
+  public static setRuntimeConfigResolver(resolver: AiProviderRuntimeConfigResolver | null): void {
+    OpenAiCompatibleLmClient.runtimeConfigResolver = resolver;
   }
 
   public async selectModel(): Promise<string> {
-    const available = await this.listModels();
+    const config = await this.resolveConfig();
+    return this.selectModelForConfig(config);
+  }
+
+  public async discoverModels(): Promise<AiModelItem[]> {
+    const config = await this.resolveConfig();
+    return this.listModels(config);
+  }
+
+  public async discoverModelsStrict(): Promise<AiModelItem[]> {
+    const config = await this.resolveConfig();
+    return this.listModels(config, true);
+  }
+
+  public async validateConnection(): Promise<{ model: string }> {
+    return { model: await this.selectModel() };
+  }
+
+  private async selectModelForConfig(config: AiProviderConfig): Promise<string> {
+    const requestedModel = config.chatModel.trim();
+    const available = await this.listModels(config);
     const availableIds = new Set(available.map((item) => item.id));
 
-    if (this.requestedModel && availableIds.has(this.requestedModel)) {
-      return this.requestedModel;
+    if (requestedModel && availableIds.has(requestedModel)) {
+      return requestedModel;
     }
 
-    if (this.requestedModel && available.length === 0) {
-      return this.requestedModel;
+    if (requestedModel && available.length === 0) {
+      return requestedModel;
     }
 
-    if (this.requestedModel && available.length > 0) {
-      throw new Error(`Modello AI provider non disponibile: ${this.requestedModel}`);
+    if (requestedModel && available.length > 0) {
+      throw new Error(`Modello AI provider non disponibile: ${requestedModel}`);
     }
 
     const candidate = available.find((item) => {
@@ -163,10 +192,11 @@ export class OpenAiCompatibleLmClient {
     toolChoice?: "auto" | "none" | "required";
     temperature?: number;
   }): Promise<{ model: string; response: AiChatCompletionsResponse; content: string | null; toolCalls: Array<Record<string, unknown>> }> {
-    const model = await this.selectModel();
+    const config = await this.resolveConfig();
+    const model = await this.selectModelForConfig(config);
     const requestPayload: Record<string, unknown> = {
       model,
-      temperature: options.temperature ?? this.config.temperature,
+      temperature: options.temperature ?? config.temperature,
       stream: false,
       messages: options.messages,
     };
@@ -176,7 +206,7 @@ export class OpenAiCompatibleLmClient {
       requestPayload.tool_choice = options.toolChoice ?? "auto";
     }
 
-    const payload = await this.postChatCompletions(requestPayload);
+    const payload = await this.postChatCompletions(requestPayload, config);
     const message = payload.choices?.[0]?.message;
     return {
       model,
@@ -192,10 +222,11 @@ export class OpenAiCompatibleLmClient {
     maxTokens?: number | null;
     temperature?: number;
   }): Promise<{ model: string; response: AiChatCompletionsResponse; content: string }> {
-    const model = await this.selectModel();
+    const config = await this.resolveConfig();
+    const model = await this.selectModelForConfig(config);
     const requestPayload: Record<string, unknown> = {
       model,
-      temperature: options.temperature ?? this.config.temperature,
+      temperature: options.temperature ?? config.temperature,
       stream: false,
       messages: options.messages,
     };
@@ -216,7 +247,7 @@ export class OpenAiCompatibleLmClient {
       requestPayload.store = true;
     }
 
-    const payload = await this.postChatCompletions(requestPayload);
+    const payload = await this.postChatCompletions(requestPayload, config);
     const content = String(payload?.choices?.[0]?.message?.content ?? "").trim();
     if (!content) {
       throw new Error("AI provider ha restituito risposta vuota.");
@@ -225,15 +256,15 @@ export class OpenAiCompatibleLmClient {
     return { model, response: payload, content };
   }
 
-  private async postChatCompletions(requestPayload: Record<string, unknown>): Promise<AiChatCompletionsResponse> {
-    const endpoint = this.resolveEndpoint(this.config.completionsPath);
+  private async postChatCompletions(requestPayload: Record<string, unknown>, config: AiProviderConfig): Promise<AiChatCompletionsResponse> {
+    const endpoint = this.resolveEndpoint(config, config.completionsPath);
     this.logAiTraffic("request", endpoint, requestPayload);
 
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: this.buildHeaders(),
+      headers: this.buildHeaders(config),
       body: JSON.stringify(requestPayload),
-      signal: AbortSignal.timeout(this.config.timeoutMs),
+      signal: AbortSignal.timeout(config.timeoutMs),
       cache: "no-store",
     }).catch((error: unknown) => {
       if (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) {
@@ -256,16 +287,27 @@ export class OpenAiCompatibleLmClient {
     return responsePayload as AiChatCompletionsResponse;
   }
 
-  private async listModels(): Promise<AiModelItem[]> {
-    const timeout = Math.max(5000, Math.min(this.config.timeoutMs, 30000));
-    const response = await fetch(this.resolveEndpoint(this.config.modelsPath), {
+  private async listModels(config: AiProviderConfig, strict = false): Promise<AiModelItem[]> {
+    const timeout = Math.max(5000, Math.min(config.timeoutMs, 30000));
+    const response = await fetch(this.resolveEndpoint(config, config.modelsPath), {
       method: "GET",
-      headers: this.buildHeaders(),
+      headers: this.buildHeaders(config),
       signal: AbortSignal.timeout(timeout),
       cache: "no-store",
-    }).catch(() => null);
+    }).catch((error: unknown) => {
+      if (!strict) {
+        return null;
+      }
+      if (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) {
+        throw new Error("AI provider models request timeout");
+      }
+      throw new Error("AI provider models request failed");
+    });
 
     if (!response || !response.ok) {
+      if (strict && response) {
+        throw new Error(`AI provider models HTTP ${response.status}`);
+      }
       return [];
     }
 
@@ -294,25 +336,37 @@ export class OpenAiCompatibleLmClient {
       .filter((item: AiModelItem | null): item is AiModelItem => item !== null);
   }
 
-  private buildHeaders(): HeadersInit {
+  private buildHeaders(config: AiProviderConfig): HeadersInit {
     const headers: Record<string, string> = {
       "content-type": "application/json",
     };
 
-    if (this.config.apiKey) {
-      headers.authorization = `Bearer ${this.config.apiKey}`;
+    if (config.apiKey) {
+      headers.authorization = `Bearer ${config.apiKey}`;
     }
 
     return headers;
   }
 
-  private resolveEndpoint(path: string): string {
-    const normalizedBaseUrl = this.config.baseUrl.replace(/\/+$/, "");
+  private resolveEndpoint(config: AiProviderConfig, path: string): string {
+    const normalizedBaseUrl = config.baseUrl.replace(/\/+$/, "");
     const normalizedPath = normalizePath(path);
     if (normalizedBaseUrl.endsWith("/v1") && normalizedPath.startsWith("/v1/")) {
       return `${normalizedBaseUrl}${normalizedPath.slice(3)}`;
     }
     return `${normalizedBaseUrl}${normalizedPath}`;
+  }
+
+  private async resolveConfig(): Promise<AiProviderConfig> {
+    if (!this.useRuntimeConfig || !OpenAiCompatibleLmClient.runtimeConfigResolver) {
+      return this.config;
+    }
+
+    const runtimeConfig = await OpenAiCompatibleLmClient.runtimeConfigResolver();
+    return {
+      ...this.config,
+      ...runtimeConfig,
+    };
   }
 
   private parsePositiveInt(value: string | undefined, fallback: number): number {

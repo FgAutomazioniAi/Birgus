@@ -15,6 +15,7 @@ async function bootstrap(): Promise<void> {
     new FastifyAdapter({
       logger: true,
       trustProxy: resolveTrustProxy(),
+      bodyLimit: resolveNumberEnv("JSON_BODY_LIMIT_BYTES", 30 * 1024 * 1024),
     }),
   );
   await app.register(multipart, {

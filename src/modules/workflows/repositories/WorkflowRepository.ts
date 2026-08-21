@@ -10,6 +10,7 @@ export type WorkflowDefinitionInput = {
   name: string;
   label: string;
   description: string | null;
+  configuration?: unknown | null;
   isEnabled: boolean;
   isDefault: boolean;
   actorUserId: string | null;

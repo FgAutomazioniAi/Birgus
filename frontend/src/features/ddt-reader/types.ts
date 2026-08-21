@@ -13,7 +13,7 @@ export interface DdtReaderArticleItem {
 }
 
 export interface DdtReaderDocument {
-  id: number;
+  id: string;
   original_filename: string;
   status: DdtReaderDocumentStatus | string;
   movement_type?: "entrata" | "uscita" | "sconosciuto" | string | null;

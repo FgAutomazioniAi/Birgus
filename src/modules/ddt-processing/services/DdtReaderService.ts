@@ -150,7 +150,13 @@ export class DdtReaderService {
 
     const prisma = PrismaClientManager.getClient();
     const fileName = this.resolveFileName(params.fileName);
-    const objectKey = this.buildObjectKey(params.workspaceId, fileName, params.bytes);
+    const fileSha = this.objectStorage.sha256Hex(params.bytes);
+    const existing = await this.findDdtDocumentByFileSha(params.workspaceId, fileSha);
+    if (existing) {
+      return this.toDocumentDto(existing);
+    }
+
+    const objectKey = this.buildObjectKey(params.workspaceId, fileName, fileSha);
 
     const storedObject = await this.objectStorage.putObject({
       bucket: this.objectStorage.defaultBucket(),
@@ -614,8 +620,7 @@ export class DdtReaderService {
     }
   }
 
-  private buildObjectKey(workspaceId: string, fileName: string, bytes: Buffer): string {
-    const fileSha = this.objectStorage.sha256Hex(bytes);
+  private buildObjectKey(workspaceId: string, fileName: string, fileSha: string): string {
     const safeName = this.sanitizeFileName(fileName);
 
     return [
@@ -626,6 +631,47 @@ export class DdtReaderService {
       `${Date.now()}-${randomUUID()}`,
       safeName,
     ].join("/");
+  }
+
+  private async findDdtDocumentByFileSha(workspaceId: string, fileSha: string): Promise<DdtDocumentRow | null> {
+    const prisma = PrismaClientManager.getClient();
+    const row = await prisma.ddtDocument.findFirst({
+      where: {
+        workspace_id: workspaceId,
+        document: {
+          is: {
+            deleted_at: null,
+            storage_path: {
+              contains: `/${fileSha}/`,
+            },
+          },
+        },
+      },
+      include: {
+        document: {
+          select: {
+            id: true,
+            filename: true,
+            storage_path: true,
+            deleted_at: true,
+          },
+        },
+        analysis_result: {
+          include: {
+            article_items: {
+              orderBy: {
+                id: "asc",
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        updated_at: "desc",
+      },
+    });
+
+    return row ? (row as unknown as DdtDocumentRow) : null;
   }
 
   private sanitizeFileName(fileName: string): string {

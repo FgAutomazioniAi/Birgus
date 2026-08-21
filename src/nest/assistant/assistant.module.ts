@@ -5,6 +5,7 @@ import { ModuleAccessPolicy } from "../../core/module-access/ModuleAccessPolicy.
 import { OpenAiCompatibleToolChatClient } from "../../modules/ai-runtime/services/OpenAiCompatibleToolChatClient.js";
 import { PrismaAssistantSessionRepository } from "../../modules/conversational-assistant/infra/PrismaAssistantSessionRepository.js";
 import { AssistantConversationService } from "../../modules/conversational-assistant/services/AssistantConversationService.js";
+import { AssistantSessionDocumentService } from "../../modules/conversational-assistant/services/AssistantSessionDocumentService.js";
 import { AssistantSessionService } from "../../modules/conversational-assistant/services/AssistantSessionService.js";
 import { AssistantToolAccessService } from "../../modules/conversational-assistant/services/AssistantToolAccessService.js";
 import { AssistantToolRegistry } from "../../modules/conversational-assistant/services/AssistantToolRegistry.js";
@@ -41,6 +42,11 @@ import { NestAssistantController } from "./assistant.controller.js";
         permissionPolicy: PermissionPolicy,
       ) => new AssistantToolAccessService(moduleAccessPolicy, permissionPolicy),
       inject: [ModuleAccessPolicy, PermissionPolicy],
+    },
+    {
+      provide: AssistantSessionDocumentService,
+      useFactory: (documentIntelligenceService: DocumentIntelligenceService) => new AssistantSessionDocumentService(documentIntelligenceService),
+      inject: [DocumentIntelligenceService],
     },
     {
       provide: AssistantConversationService,

@@ -199,14 +199,14 @@ const isPdfFile = (file: File): boolean => {
 export function DdtReaderPanel() {
   const router = useRouter();
   const [documents, setDocuments] = useState<DdtReaderDocument[]>([]);
-  const [selectedDocId, setSelectedDocId] = useState<number | null>(null);
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [lmModel, setLmModel] = useState("non configurato");
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string>("");
 
   const [isUploading, setIsUploading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [deletingDocId, setDeletingDocId] = useState<number | null>(null);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
 
   const [feedback, setFeedback] = useState<string>("");
   const [error, setError] = useState<string>("");
@@ -234,13 +234,9 @@ export function DdtReaderPanel() {
     return PROCESSING_STATUSES.has(selectedDocument.status);
   }, [selectedDocument]);
 
-  const canAnalyze = useMemo(() => {
-    if (!selectedDocument) {
-      return false;
-    }
-
-    return !hasProcessing && !isAnalyzing && !PROCESSING_STATUSES.has(selectedDocument.status);
-  }, [hasProcessing, isAnalyzing, selectedDocument]);
+  const canUploadAndAnalyze = useMemo(() => {
+    return Boolean(selectedFile) && !hasProcessing && !isUploading && !isAnalyzing;
+  }, [hasProcessing, isAnalyzing, isUploading, selectedFile]);
 
   const recentTimings = useMemo(() => {
     return documents
@@ -432,7 +428,19 @@ export function DdtReaderPanel() {
     setSelectedFile(file);
   };
 
-  const uploadDocument = async () => {
+  const queueDocumentAnalysis = async (documentId: string) => {
+    await requestJson<{ queued: boolean; doc_id: string; status: string; job_id: string }>(
+      `/api/ddt-reader/documents/${documentId}/analyze`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      },
+      "Errore durante l avvio dell analisi.",
+    );
+  };
+
+  const uploadAndAnalyzeDocument = async () => {
     setFeedback("");
     setError("");
 
@@ -444,6 +452,7 @@ export function DdtReaderPanel() {
     }
 
     setIsUploading(true);
+    setIsAnalyzing(true);
 
     try {
       const formData = new FormData();
@@ -455,7 +464,18 @@ export function DdtReaderPanel() {
         "Errore durante il caricamento del PDF.",
       );
 
-      setFeedback("PDF caricato con successo.");
+      if (document.status === "ready") {
+        setFeedback("Documento già caricato e analizzato: risultato recuperato.");
+        toast.success("Documento già analizzato.");
+      } else if (PROCESSING_STATUSES.has(document.status)) {
+        setFeedback("Documento già caricato: workflow DDT già in corso.");
+        toast.info("Workflow DDT già in corso.");
+      } else {
+        await queueDocumentAnalysis(document.id);
+        setFeedback("Workflow DDT avviato: upload, OCR e analisi AI in coda.");
+        toast.success("Workflow DDT avviato.");
+      }
+
       setSelectedFile(null);
       setSelectedDocId(document.id);
 
@@ -463,49 +483,13 @@ export function DdtReaderPanel() {
         fileInputRef.current.value = "";
       }
 
-      toast.success("PDF caricato con successo.");
       await refreshDocuments();
     } catch (uploadError) {
-      const message = handleRequestError(uploadError, "Errore durante il caricamento del PDF.");
+      const message = handleRequestError(uploadError, "Errore durante l'avvio del workflow DDT.");
       setError(message);
       toast.error(message);
     } finally {
       setIsUploading(false);
-    }
-  };
-
-  const analyzeSelectedDocument = async () => {
-    setFeedback("");
-    setError("");
-
-    if (!selectedDocId) {
-      const message = "Seleziona un documento da analizzare.";
-      setError(message);
-      toast.error(message);
-      return;
-    }
-
-    setIsAnalyzing(true);
-
-    try {
-      await requestJson<{ queued: boolean; doc_id: number; status: string }>(
-        `/api/ddt-reader/documents/${selectedDocId}/analyze`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: "{}",
-        },
-        "Errore durante l avvio dell analisi.",
-      );
-
-      setFeedback("Analisi avviata: OCR + interrogazione provider IA in corso.");
-      toast.success("Analisi avviata.");
-      await refreshDocuments();
-    } catch (analyzeError) {
-      const message = handleRequestError(analyzeError, "Errore durante l avvio dell analisi.");
-      setError(message);
-      toast.error(message);
-    } finally {
       setIsAnalyzing(false);
     }
   };
@@ -546,7 +530,7 @@ export function DdtReaderPanel() {
       },
       commit: async () => {
         try {
-          await requestJson<{ deleted: boolean; doc_id: number }>(
+          await requestJson<{ deleted: boolean; doc_id: string }>(
             `/api/ddt-reader/documents/${document.id}`,
             {
               method: "DELETE",
@@ -586,10 +570,10 @@ export function DdtReaderPanel() {
         <Card className="space-y-5 p-4 lg:p-5">
           <div className="space-y-2">
             <Text as="h2" variant="h2" className="text-lg">
-              Caricamento DDT (PDF)
+              Workflow DDT
             </Text>
             <Text variant="caption">
-              Seleziona un PDF e caricalo nel servizio di analisi.
+              Seleziona un PDF: il modulo lo salva e avvia il workflow OCR + analisi AI.
             </Text>
           </div>
 
@@ -605,41 +589,22 @@ export function DdtReaderPanel() {
               onChange={onFileChange}
               className="cursor-pointer file:mr-3 file:rounded-[var(--radius-sm)] file:border-0 file:bg-status-info-bg file:px-2 file:py-1 file:text-xs file:font-semibold file:text-status-info-text"
             />
-            <Button onClick={() => void uploadDocument()} disabled={isUploading} className="w-full sm:w-auto">
-              {isUploading ? (
+            <Button onClick={() => void uploadAndAnalyzeDocument()} disabled={!canUploadAndAnalyze} className="w-full">
+              {isUploading || isAnalyzing ? (
                 <>
                   <LoaderCircle size={16} className="animate-spin" />
-                  Caricamento...
+                  Avvio workflow...
                 </>
               ) : (
                 <>
                   <Upload size={16} />
-                  Carica PDF
+                  Carica e analizza
                 </>
               )}
             </Button>
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <Button
-              onClick={() => void analyzeSelectedDocument()}
-              disabled={!canAnalyze}
-              variant="accent"
-              className="w-full sm:w-auto"
-            >
-              {isAnalyzing ? (
-                <>
-                  <LoaderCircle size={16} className="animate-spin" />
-                  Avvio analisi...
-                </>
-              ) : (
-                <>
-                  <Bot size={16} />
-                  Applica OCR + Analizza
-                </>
-              )}
-            </Button>
-            <Text variant="caption">Seleziona un documento cliccando il riquadro.</Text>
+            {hasProcessing ? (
+              <Text variant="caption">Attendi la fine del workflow in corso prima di avviarne un altro.</Text>
+            ) : null}
           </div>
 
           <div className="space-y-3">

@@ -6,6 +6,7 @@ import { FileKind } from "../../document-archive/domain/FileKind.js";
 import { DocumentArchiveService } from "../../document-archive/services/DocumentArchiveService.js";
 import { KnowledgeDocumentEntity } from "../domain/KnowledgeDocumentEntity.js";
 import { KnowledgeSearchHitEntity } from "../domain/KnowledgeSearchHitEntity.js";
+import { DEFAULT_KNOWLEDGE_MODE, normalizeKnowledgeMode, type KnowledgeMode } from "../domain/KnowledgeMode.js";
 import { PrismaKnowledgeRepository } from "../infra/PrismaKnowledgeRepository.js";
 import { KnowledgeRepository, SourceDocumentRecord } from "../repositories/KnowledgeRepository.js";
 import { BackendPythonModulesClient } from "./BackendPythonModulesClient.js";
@@ -79,6 +80,80 @@ export class DocumentIntelligenceService {
     return knowledgeDocument;
   }
 
+  public async getOrRefreshKnowledgeDocument(workspaceId: string, documentId: string): Promise<KnowledgeDocumentEntity> {
+    const source = await this.loadNormalizedSourceDocument(workspaceId, documentId);
+    if (!source) {
+      throw new AppError("Documento sorgente non trovato.", "KNOWLEDGE_SOURCE_NOT_FOUND", 404);
+    }
+    return this.ensureDocumentKnowledge(source);
+  }
+
+  public async analyzeDocumentSet(params: {
+    workspaceId: string;
+    documentIds: string[];
+    prompt: string;
+    knowledgeMode?: KnowledgeMode;
+    useDeepReasoning?: boolean;
+    aiProvider?: Record<string, unknown> | null;
+  }): Promise<Record<string, unknown>> {
+    const knowledgeMode = normalizeKnowledgeMode(params.knowledgeMode, DEFAULT_KNOWLEDGE_MODE);
+    const documentIds = Array.from(new Set(params.documentIds.map((id) => id.trim()).filter(Boolean)));
+    if (documentIds.length === 0) {
+      throw new AppError("Seleziona almeno un documento.", "DOCUMENT_SET_EMPTY", 400);
+    }
+    if (documentIds.length > 20) {
+      throw new AppError("Puoi analizzare al massimo 20 documenti alla volta.", "DOCUMENT_SET_TOO_LARGE", 400);
+    }
+
+    const documents = [];
+    for (const documentId of documentIds) {
+      const knowledge = await this.resolveKnowledgeDocumentForMode(params.workspaceId, documentId, knowledgeMode);
+      documents.push({
+        documentId,
+        knowledgeDocumentId: knowledge.id,
+        title: knowledge.title ?? documentId,
+        sourceLabel: knowledge.sourceLabel,
+        summaryText: knowledge.summaryText,
+        contentText: knowledge.contentText ?? "",
+        extractionKind: knowledge.extractionKind,
+      });
+    }
+
+    const prompt = params.prompt.trim() || "Riassumi i documenti, evidenziando punti principali, differenze e azioni suggerite.";
+    const inputText = this.buildDocumentSetPrompt(prompt, documents);
+    const response = await this.pythonModulesClient.execute("langchain_orchestrator", "chat", {
+      instructions: (
+        "Sei un assistente documentale. Rispondi in italiano. "
+        + "Usa solo le informazioni presenti nei documenti forniti; se manca un dato, dichiaralo."
+      ),
+      input_text: inputText,
+      use_deep_reasoning: params.useDeepReasoning === true,
+      ai_provider: params.aiProvider ?? null,
+      max_tokens: params.useDeepReasoning ? 2048 : 1200,
+      temperature: 0.2,
+    });
+    const output = response.output && typeof response.output === "object"
+      ? response.output as Record<string, unknown>
+      : {};
+
+    return {
+      reply: typeof output.reply === "string" ? output.reply : "",
+      reasoning_structure: output.reasoning_structure ?? null,
+      model: output.model ?? null,
+      documents: documents.map((document) => ({
+        documentId: document.documentId,
+        knowledgeDocumentId: document.knowledgeDocumentId,
+        title: document.title,
+        sourceLabel: document.sourceLabel,
+        summaryText: document.summaryText,
+        extractionKind: document.extractionKind,
+      })),
+      contextPolicy: {
+        knowledgeMode,
+      },
+    };
+  }
+
   public async getDocumentChatContext(params: {
     workspaceId: string;
     documentId: string;
@@ -89,6 +164,36 @@ export class DocumentIntelligenceService {
     }
 
     const knowledge = await this.ensureDocumentKnowledge(source);
+    return {
+      kind: "document",
+      documentId: source.id,
+      ddtDocumentId: null,
+      sourceEntityType: knowledge.sourceEntityType,
+      sourceEntityId: knowledge.sourceEntityId,
+      title: knowledge.title ?? source.filename,
+      sourceLabel: knowledge.sourceLabel ?? source.nodePath,
+      summaryText: knowledge.summaryText,
+      contentPreview: this.buildPreviewText(knowledge.contentText),
+      structuredPayload: knowledge.structuredPayload,
+      ddtAnalysis: null,
+    };
+  }
+
+  public async getDocumentChatContextForMode(params: {
+    workspaceId: string;
+    documentId: string;
+    knowledgeMode?: KnowledgeMode;
+  }): Promise<DocumentChatContext> {
+    const source = await this.loadNormalizedSourceDocument(params.workspaceId, params.documentId);
+    if (!source) {
+      throw new AppError("Documento sorgente non trovato.", "KNOWLEDGE_SOURCE_NOT_FOUND", 404);
+    }
+
+    const knowledgeMode = normalizeKnowledgeMode(params.knowledgeMode, DEFAULT_KNOWLEDGE_MODE);
+    const knowledge = knowledgeMode === "on_demand"
+      ? await this.refreshDocumentKnowledge(params.workspaceId, source.id)
+      : await this.resolveKnowledgeDocumentForMode(params.workspaceId, source.id, knowledgeMode);
+
     return {
       kind: "document",
       documentId: source.id,
@@ -382,6 +487,33 @@ export class DocumentIntelligenceService {
     return this.refreshDocumentKnowledge(source.workspaceId, source.id);
   }
 
+  private async resolveKnowledgeDocumentForMode(
+    workspaceId: string,
+    documentId: string,
+    knowledgeMode: KnowledgeMode,
+  ): Promise<KnowledgeDocumentEntity> {
+    const source = await this.loadNormalizedSourceDocument(workspaceId, documentId);
+    if (!source) {
+      throw new AppError("Documento sorgente non trovato.", "KNOWLEDGE_SOURCE_NOT_FOUND", 404);
+    }
+
+    const representationKey = this.isPdfDocument(source) ? "ocr_text" : "plain_text";
+    const existing = await this.repository.findKnowledgeDocumentByDocumentId(workspaceId, source.id, representationKey);
+    if (existing && existing.extractionStatus === "READY" && (existing.contentText?.trim() || existing.summaryText?.trim())) {
+      return existing;
+    }
+
+    if (knowledgeMode === "saved") {
+      throw new AppError(
+        "Knowledge non disponibile per uno dei documenti selezionati. Usa on-demand o hybrid per indicizzarlo automaticamente.",
+        "KNOWLEDGE_DOCUMENT_NOT_INDEXED",
+        409,
+      );
+    }
+
+    return this.ensureDocumentKnowledge(source);
+  }
+
   private async loadNormalizedSourceDocument(workspaceId: string, documentId: string): Promise<SourceDocumentRecord | null> {
     const source = await this.repository.findSourceDocumentById(workspaceId, documentId);
     if (!source) {
@@ -437,6 +569,43 @@ export class DocumentIntelligenceService {
     }
 
     return normalized.slice(0, 6000);
+  }
+
+  private buildDocumentSetPrompt(
+    prompt: string,
+    documents: Array<{
+      documentId: string;
+      title: string;
+      sourceLabel: string | null;
+      summaryText: string | null;
+      contentText: string;
+    }>,
+  ): string {
+    const maxTotalChars = 50_000;
+    const maxPerDocumentChars = Math.max(2_000, Math.floor(maxTotalChars / Math.max(1, documents.length)));
+    const parts = [
+      `Richiesta utente:\n${prompt}`,
+      "Documenti disponibili:",
+    ];
+    let usedChars = parts.join("\n\n").length;
+
+    documents.forEach((document, index) => {
+      const compactContent = document.contentText.replace(/\s+/g, " ").trim();
+      const remaining = Math.max(0, maxTotalChars - usedChars);
+      const sliceLength = Math.min(maxPerDocumentChars, remaining);
+      const content = compactContent.slice(0, sliceLength);
+      const section = [
+        `Documento ${index + 1}: ${document.title}`,
+        `document_id: ${document.documentId}`,
+        document.sourceLabel ? `percorso: ${document.sourceLabel}` : null,
+        document.summaryText ? `summary esistente: ${document.summaryText}` : null,
+        `contenuto:\n${content}${compactContent.length > content.length ? "\n[contenuto troncato]" : ""}`,
+      ].filter(Boolean).join("\n");
+      parts.push(section);
+      usedChars += section.length;
+    });
+
+    return parts.join("\n\n---\n\n");
   }
 
   private buildSummary(text: string): string {

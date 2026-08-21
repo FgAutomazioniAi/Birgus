@@ -92,6 +92,7 @@ export class ModuleWorkflowEntity {
   public readonly name: string;
   public readonly label: string;
   public readonly description: string | null;
+  public readonly configuration: unknown | null;
   public readonly versionNo: number;
   public readonly isEnabled: boolean;
   public readonly isDefault: boolean;
@@ -107,6 +108,7 @@ export class ModuleWorkflowEntity {
     name: string;
     label: string;
     description?: string | null;
+    configuration?: unknown | null;
     versionNo: number;
     isEnabled: boolean;
     isDefault: boolean;
@@ -121,6 +123,7 @@ export class ModuleWorkflowEntity {
     this.name = params.name;
     this.label = params.label;
     this.description = params.description ?? null;
+    this.configuration = params.configuration ?? null;
     this.versionNo = params.versionNo;
     this.isEnabled = params.isEnabled;
     this.isDefault = params.isDefault;

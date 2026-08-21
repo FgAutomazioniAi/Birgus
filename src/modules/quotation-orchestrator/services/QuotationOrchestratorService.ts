@@ -529,39 +529,31 @@ export class QuotationOrchestratorService {
     };
   }
 
-  private async resolveQuotationWorkflow(workspaceId: string): Promise<ModuleWorkflowEntity | null> {
+  private async resolveQuotationWorkflow(workspaceId: string): Promise<ModuleWorkflowEntity> {
     try {
-      return await this.workflowService.findWorkflowByKey(
+      const workflow = await this.workflowService.findWorkflowByKey(
         workspaceId,
         ModuleKey.PROJECT_MANAGEMENT,
         QuotationOrchestratorService.QUOTATION_WORKFLOW_KEY,
       );
+      if (!workflow) {
+        throw new Error("Workflow preventivo progetto non configurato.");
+      }
+      return workflow;
     } catch (error) {
-      console.error("[QuotationOrchestratorService] Workflow lookup failed, fallback to default pipeline.", {
+      console.error("[QuotationOrchestratorService] Workflow lookup failed.", {
         workspaceId,
         workflowKey: QuotationOrchestratorService.QUOTATION_WORKFLOW_KEY,
         error,
       });
-      return null;
+      throw error;
     }
   }
 
-  private buildExecutionPlan(workflow: ModuleWorkflowEntity | null): QuotationExecutionStep[] {
-    const fallback: QuotationExecutionStep[] = [
-      { action: "resolve_source" },
-      { action: "analyzing" },
-      { action: "docx_generation" },
-      { action: "mail_delivery" },
-      { action: "completed" },
-    ];
-
-    if (!workflow) {
-      return fallback;
-    }
-
+  private buildExecutionPlan(workflow: ModuleWorkflowEntity): QuotationExecutionStep[] {
     const enabledNodes = workflow.nodes.filter((node) => node.isEnabled || node.isRequired);
     if (enabledNodes.length === 0) {
-      return fallback;
+      throw new Error("Workflow preventivo progetto vuoto o senza nodi attivi.");
     }
 
     const orderedNodeIds = this.computeOrderedNodeIds(workflow, enabledNodes);
@@ -598,7 +590,7 @@ export class QuotationOrchestratorService {
     }
 
     pushUnique("completed");
-    return steps.length > 0 ? steps : fallback;
+    return steps;
   }
 
   private computeOrderedNodeIds(workflow: ModuleWorkflowEntity, nodes: ModuleWorkflowNodeEntity[]): string[] {

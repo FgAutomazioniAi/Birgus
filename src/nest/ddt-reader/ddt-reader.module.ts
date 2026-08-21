@@ -12,12 +12,11 @@ import { JOB_QUEUE, PROJECT_BINARY_STORAGE } from "../common/tokens.js";
 import { NotificationsNestModule } from "../notifications/notifications.module.js";
 import { BackendProvidersModule } from "../providers/backend-providers.module.js";
 import { WorkflowsNestModule } from "../workflows/workflows.module.js";
-import { NestDdtController } from "../ddt-processing/ddt.controller.js";
 import { NestDdtReaderController } from "./ddt-reader.controller.js";
 
 @Module({
   imports: [AuthModule, BackendProvidersModule, NotificationsNestModule, WorkflowsNestModule],
-  controllers: [NestDdtReaderController, NestDdtController],
+  controllers: [NestDdtReaderController],
   providers: [
     {
       provide: DdtProcessingService,

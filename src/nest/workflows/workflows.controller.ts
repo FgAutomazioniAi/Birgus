@@ -67,6 +67,7 @@ const createWorkflowSchema = z.object({
   name: z.string().min(1),
   label: z.string().min(1),
   description: z.string().nullable().optional(),
+  configuration: jsonObjectSchema.nullable().optional(),
   isEnabled: z.boolean().default(true),
   isDefault: z.boolean().default(false),
   nodes: z.array(workflowNodeSchema).min(1),
@@ -82,6 +83,19 @@ const updateWorkflowSchema = createWorkflowSchema.partial().extend({
   edges: z.array(workflowEdgeSchema).optional(),
 });
 
+type WorkflowRunJsonValue = string | number | boolean | null | WorkflowRunJsonValue[] | { [key: string]: WorkflowRunJsonValue };
+
+const workflowRunJsonValueSchema: z.ZodType<WorkflowRunJsonValue> = z.lazy(() =>
+  z.union([
+    z.string().max(30_000_000),
+    z.number().finite(),
+    z.boolean(),
+    z.null(),
+    z.array(workflowRunJsonValueSchema).max(500),
+    z.record(z.string().min(1).max(200), workflowRunJsonValueSchema),
+  ]),
+);
+
 const createWorkflowRunSchema = z.object({
   triggerSource: z.string().nullable().optional(),
   contextEntityType: z.string().nullable().optional(),
@@ -93,7 +107,7 @@ const createWorkflowRunSchema = z.object({
   documentId: z.string().uuid().nullable().optional(),
   ddtDocumentId: z.string().uuid().nullable().optional(),
   measureReportDocumentId: z.string().uuid().nullable().optional(),
-  inputPayload: jsonValueSchema.nullable().optional(),
+  inputPayload: workflowRunJsonValueSchema.nullable().optional(),
 });
 
 @Controller("/api")
@@ -152,6 +166,7 @@ export class NestWorkflowsController {
         name: item.name,
         label: item.label,
         description: item.description,
+        configuration: item.configuration,
         versionNo: item.versionNo,
         isEnabled: item.isEnabled,
         isDefault: item.isDefault,
@@ -178,6 +193,7 @@ export class NestWorkflowsController {
       name: body.name,
       label: body.label,
       description: body.description ?? null,
+      configuration: body.configuration ?? null,
       isEnabled: body.isEnabled,
       isDefault: body.isDefault,
       actorUserId: userId,
@@ -221,6 +237,7 @@ export class NestWorkflowsController {
       name: body.name ?? current.name,
       label: body.label ?? current.label,
       description: body.description ?? current.description,
+      configuration: body.configuration ?? current.configuration,
       isEnabled: body.isEnabled ?? current.isEnabled,
       isDefault: body.isDefault ?? current.isDefault,
       actorUserId: userId,
@@ -351,6 +368,7 @@ export class NestWorkflowsController {
       name: workflow.name,
       label: workflow.label,
       description: workflow.description,
+      configuration: workflow.configuration,
       versionNo: workflow.versionNo,
       isEnabled: workflow.isEnabled,
       isDefault: workflow.isDefault,

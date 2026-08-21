@@ -1,0 +1,1219 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+import {
+  Background,
+  Controls,
+  Handle,
+  MiniMap,
+  Position,
+  ReactFlow,
+  addEdge,
+  useEdgesState,
+  useNodesState,
+  type Connection,
+  type Edge,
+  type EdgeChange,
+  type Node,
+  type NodeChange,
+  type NodeProps,
+  type OnNodeDrag,
+  type ReactFlowInstance,
+} from "@xyflow/react";
+import {
+  ArrowLeft,
+  Bot,
+  Boxes,
+  Check,
+  GitBranch,
+  Pencil,
+  Play,
+  RotateCcw,
+  RotateCw,
+  Save,
+  Sparkles,
+  Trash2,
+  Upload,
+  Wrench,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { Badge, Button, Card, Text } from "@/components/atoms";
+import { cn } from "@/lib/cn";
+import type {
+  WorkflowAgent,
+  WorkflowDetail,
+  WorkflowKnowledgeMode,
+  WorkflowRun,
+  WorkflowSummary,
+  WorkflowTool,
+} from "./types";
+import {
+  baseInputNode,
+  baseOutputNode,
+  buildModuleCards,
+  cleanWorkflowLabel,
+  findToolForFlowNodeType,
+  flowNodeDescription,
+  formatDateTime,
+  isAdvancedLangChainTool,
+  isAgentTool,
+  isLangChainTool,
+  MAX_WORKFLOW_UPLOAD_BYTES,
+  NODE_KIND_BORDER,
+  NODE_KIND_ICONS,
+  NODE_KIND_LABELS,
+  nodeKindIcon,
+  parsePaletteDragPayload,
+  parseRunInput,
+  PLAYGROUND_KEY,
+  readFileAsBase64,
+  toDraftEdge,
+  toDraftNode,
+  toFlowEdge,
+  toFlowNode,
+  toRecord,
+  toRecordOrNull,
+  toolIcon,
+  TOOLBAR_GROUPS,
+  uniqueNodeKey,
+  uuidPattern,
+  type CanvasNodeData,
+  type DraftEdge,
+  type DraftNode,
+  type FlowNodeType,
+  type ModuleCard,
+  type Snapshot,
+  type UploadedWorkflowFile,
+  type WorkflowScreen,
+} from "./workflow-model";
+import { PaletteButton, PaletteSection, RunResultsPanel, TelegramChannelField, ToolbarDropdown, ToolConfigurationForm } from "./workflow-components";
+
+function resolveWorkflowKnowledgeMode(configuration: unknown): WorkflowKnowledgeMode {
+  const config = toRecord(configuration);
+  const contextPolicy = toRecord(config.contextPolicy);
+  const value = config.knowledgeMode ?? config.knowledge_mode ?? contextPolicy.knowledgeMode ?? contextPolicy.knowledge_mode;
+  return value === "saved" || value === "hybrid" || value === "on_demand" ? value : "on_demand";
+}
+
+function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
+  const Icon = NODE_KIND_ICONS[data.type] ?? (data.paletteKind === "AGENT" ? Bot : data.paletteKind === "TOOL" ? Wrench : nodeKindIcon[data.kind]);
+  const hasTarget = data.type !== "input-text";
+  const hasSource = data.type !== "output";
+  const config = data.configuration;
+  const fieldId = (name: string) => `workflow-${data.nodeId}-${name}`;
+  const stringConfig = (key: string) => typeof config[key] === "string" ? String(config[key]) : "";
+  const boolConfig = (key: string) => config[key] === true;
+  const patchConfig = (key: string, value: string) => data.onConfigChange?.({ [key]: value });
+
+  return (
+    <div
+      className={cn(
+        "w-64 rounded-lg border-2 bg-bg-surface p-3 shadow-card",
+        NODE_KIND_BORDER[data.type],
+        selected ? "ring-2 ring-ring-primary" : "",
+      )}
+    >
+      {hasTarget ? <Handle type="target" position={Position.Left} /> : null}
+      <div className="mb-2 flex items-center gap-2">
+        <Icon className="h-4 w-4 text-text-primary" />
+        <span className="text-sm font-medium text-text-primary">{data.label}</span>
+      </div>
+
+      {data.type === "input-text" ? (
+        <textarea
+          id={fieldId("promptText")}
+          name={fieldId("promptText")}
+          value={stringConfig("promptText")}
+          onChange={(event) => patchConfig("promptText", event.target.value)}
+          placeholder="Enter the prompt text..."
+          rows={3}
+          className="nodrag w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+        />
+      ) : null}
+
+      {data.type === "input-file" ? (
+        <div className="nodrag flex flex-col gap-1">
+          <label
+            htmlFor={fieldId("file")}
+            className="flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border-default bg-bg-page px-2 py-2 text-xs font-medium text-text-secondary hover:border-brand-primary hover:text-brand-primary"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            {data.uploadedFileName || "Carica documento"}
+          </label>
+          <input
+            id={fieldId("file")}
+            name={fieldId("file")}
+            type="file"
+            accept="application/pdf,.pdf,image/png,image/jpeg"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                data.onFileChange?.(file);
+              }
+            }}
+            className="sr-only"
+          />
+        </div>
+      ) : null}
+
+      {data.type === "input-knowledge" ? (
+        <div className="nodrag flex flex-col gap-1">
+          <input
+            id={fieldId("query")}
+            name={fieldId("query")}
+            type="text"
+            value={stringConfig("query")}
+            onChange={(event) => patchConfig("query", event.target.value)}
+            placeholder="What should this look up?"
+            className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+          />
+          <select
+            id={fieldId("category")}
+            name={fieldId("category")}
+            value={stringConfig("category")}
+            onChange={(event) => patchConfig("category", event.target.value)}
+            className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+          >
+            <option value="">All categories</option>
+            <option value="contract">Contract</option>
+            <option value="quotation">Quotation</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      ) : null}
+
+      {data.type === "document-set-ai" ? (
+        <div className="nodrag flex flex-col gap-1">
+          <textarea
+            id={fieldId("documentIds")}
+            name={fieldId("documentIds")}
+            value={stringConfig("documentIds")}
+            onChange={(event) => patchConfig("documentIds", event.target.value)}
+            placeholder="Document IDs, uno per riga"
+            rows={3}
+            className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+          />
+          <textarea
+            id={fieldId("prompt")}
+            name={fieldId("prompt")}
+            value={stringConfig("prompt")}
+            onChange={(event) => patchConfig("prompt", event.target.value)}
+            placeholder="Richiesta, es. riassumi i documenti"
+            rows={2}
+            className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+          />
+          <label className="flex items-center gap-1.5 text-xs text-text-secondary">
+            <input
+              id={fieldId("documentSetDeepReasoning")}
+              name={fieldId("documentSetDeepReasoning")}
+              type="checkbox"
+              checked={boolConfig("use_deep_reasoning")}
+              onChange={(event) => data.onConfigChange?.({ use_deep_reasoning: event.target.checked })}
+              className="nodrag"
+            />
+            Self-Discover
+          </label>
+        </div>
+      ) : null}
+
+      {data.type === "llm" ? (
+        <div className="nodrag flex flex-col gap-2">
+          <textarea
+            id={fieldId("input_text")}
+            name={fieldId("input_text")}
+            value={stringConfig("input_text")}
+            onChange={(event) => patchConfig("input_text", event.target.value)}
+            placeholder="Leave blank to use the previous step's output"
+            rows={2}
+            className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+          />
+          <textarea
+            id={fieldId("instructions")}
+            name={fieldId("instructions")}
+            value={stringConfig("instructions")}
+            onChange={(event) => patchConfig("instructions", event.target.value)}
+            placeholder="Instructions"
+            rows={3}
+            className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+          />
+          <label className="flex items-center gap-1.5 text-xs text-text-secondary">
+            <input
+              id={fieldId("use_deep_reasoning")}
+              name={fieldId("use_deep_reasoning")}
+              type="checkbox"
+              checked={boolConfig("use_deep_reasoning")}
+              onChange={(event) => data.onConfigChange?.({ use_deep_reasoning: event.target.checked })}
+              className="nodrag"
+            />
+            Self-Discover
+          </label>
+        </div>
+      ) : null}
+
+      {data.type === "structure-data" ? (
+        <div className="nodrag flex flex-col gap-2">
+          <textarea
+            id={fieldId("structure-input")}
+            name={fieldId("structure-input")}
+            value={stringConfig("input_text")}
+            onChange={(event) => patchConfig("input_text", event.target.value)}
+            placeholder="Leave blank to use the previous step's output"
+            rows={2}
+            className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+          />
+          <textarea
+            id={fieldId("structure-instructions")}
+            name={fieldId("structure-instructions")}
+            value={stringConfig("instructions")}
+            onChange={(event) => patchConfig("instructions", event.target.value)}
+            placeholder="Instructions (required)"
+            rows={3}
+            className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+          />
+        </div>
+      ) : null}
+
+      {data.type === "generate-document" || data.type === "quotation-docx" ? (
+        <div className="nodrag flex flex-col gap-1">
+          <textarea
+            id={fieldId(data.type === "quotation-docx" ? "quotationDataJson" : "content")}
+            name={fieldId(data.type === "quotation-docx" ? "quotationDataJson" : "content")}
+            value={stringConfig(data.type === "quotation-docx" ? "quotationDataJson" : "content")}
+            onChange={(event) => patchConfig(data.type === "quotation-docx" ? "quotationDataJson" : "content", event.target.value)}
+            placeholder={data.type === "quotation-docx" ? "Quotation data JSON" : "Document content"}
+            rows={3}
+            className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+          />
+          <input
+            id={fieldId("file_name")}
+            name={fieldId("file_name")}
+            type="text"
+            value={stringConfig("file_name")}
+            onChange={(event) => patchConfig("file_name", event.target.value)}
+            placeholder="File name"
+            className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+          />
+        </div>
+      ) : null}
+
+      {data.type === "send-email" ? (
+        <div className="nodrag flex flex-col gap-1">
+          <input id={fieldId("to")} name={fieldId("to")} type="email" value={stringConfig("to")} onChange={(event) => patchConfig("to", event.target.value)} placeholder="Recipient email" className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+          <input id={fieldId("subject")} name={fieldId("subject")} type="text" value={stringConfig("subject")} onChange={(event) => patchConfig("subject", event.target.value)} placeholder="Subject" className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+          <textarea id={fieldId("text")} name={fieldId("text")} value={stringConfig("text")} onChange={(event) => patchConfig("text", event.target.value)} placeholder="Body (leave blank to use previous output)" rows={3} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+        </div>
+      ) : null}
+
+      {data.type === "send-telegram" ? (
+        <div className="nodrag flex flex-col gap-1">
+          <TelegramChannelField
+            value={stringConfig("telegram_channel_id")}
+            manualChatId={stringConfig("chat_id")}
+            idPrefix={fieldId("telegram")}
+            onChange={(channelId) => data.onConfigChange?.({ telegram_channel_id: channelId, chat_id: channelId ? "" : stringConfig("chat_id") })}
+            onManualChatIdChange={(chatId) => patchConfig("chat_id", chatId)}
+          />
+          <textarea id={fieldId("text")} name={fieldId("text")} value={stringConfig("text")} onChange={(event) => patchConfig("text", event.target.value)} placeholder="Message (leave blank to use previous output)" rows={3} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+        </div>
+      ) : null}
+
+      {data.type === "send-whatsapp" ? (
+        <div className="nodrag flex flex-col gap-1">
+          <input id={fieldId("to")} name={fieldId("to")} type="tel" value={stringConfig("to")} onChange={(event) => patchConfig("to", event.target.value)} placeholder="WhatsApp number, es. 393..." className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+          <textarea id={fieldId("text")} name={fieldId("text")} value={stringConfig("text")} onChange={(event) => patchConfig("text", event.target.value)} placeholder="Message (leave blank to use previous output)" rows={3} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+        </div>
+      ) : null}
+
+      {data.type === "schedule" ? (
+        <div className="nodrag flex flex-col gap-1">
+          <label className="flex flex-col gap-0.5 text-[10px] font-medium uppercase tracking-wide text-text-muted">
+            Quando
+            <input
+              id={fieldId("scheduleWhen")}
+              name={fieldId("scheduleWhen")}
+              type="datetime-local"
+              value={stringConfig("scheduleWhen")}
+              onChange={(event) => patchConfig("scheduleWhen", event.target.value)}
+              className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs normal-case tracking-normal text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+            />
+          </label>
+          <label className="flex flex-col gap-0.5 text-[10px] font-medium uppercase tracking-wide text-text-muted">
+            Ripeti ogni
+            <div className="flex gap-1">
+              <input
+                id={fieldId("scheduleRepeatValue")}
+                name={fieldId("scheduleRepeatValue")}
+                type="number"
+                min={1}
+                value={stringConfig("scheduleRepeatValue")}
+                onChange={(event) => patchConfig("scheduleRepeatValue", event.target.value)}
+                placeholder="7"
+                className="w-1/2 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs normal-case tracking-normal text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+              />
+              <select
+                id={fieldId("scheduleRepeatUnit")}
+                name={fieldId("scheduleRepeatUnit")}
+                value={stringConfig("scheduleRepeatUnit") || "days"}
+                onChange={(event) => patchConfig("scheduleRepeatUnit", event.target.value)}
+                className="w-1/2 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs normal-case tracking-normal text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+              >
+                <option value="hours">ore</option>
+                <option value="days">giorni</option>
+              </select>
+            </div>
+          </label>
+          <p className="text-xs text-text-muted">
+            Collegalo direttamente a Email, Telegram o WhatsApp: il nodo collegato verra' pianificato e non inviato subito.
+          </p>
+        </div>
+      ) : null}
+
+      {data.type === "compose-email" ? (
+        <div className="nodrag flex flex-col gap-1">
+          <textarea id={fieldId("context")} name={fieldId("context")} value={stringConfig("context")} onChange={(event) => patchConfig("context", event.target.value)} placeholder="What's the email about?" rows={2} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+          <input id={fieldId("tone")} name={fieldId("tone")} type="text" value={stringConfig("tone")} onChange={(event) => patchConfig("tone", event.target.value)} placeholder="Tone (professionale)" className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+          <textarea id={fieldId("extra_instructions")} name={fieldId("extra_instructions")} value={stringConfig("extra_instructions")} onChange={(event) => patchConfig("extra_instructions", event.target.value)} placeholder="Extra instructions" rows={2} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+        </div>
+      ) : null}
+
+      {data.type === "check-mailbox" ? (
+        <p className="text-xs text-text-muted">Checks the inbox and processes attachments when this workflow runs.</p>
+      ) : null}
+
+      {hasSource ? <Handle type="source" position={Position.Right} /> : null}
+    </div>
+  );
+}
+
+const nodeTypes = { workflowNode: FlowNodeCard };
+
+export function WorkflowCanvasPanel() {
+  const [screen, setScreen] = useState<WorkflowScreen>("modules");
+  const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
+  const [tools, setTools] = useState<WorkflowTool[]>([]);
+  const [agents, setAgents] = useState<WorkflowAgent[]>([]);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
+  const [workflow, setWorkflow] = useState<WorkflowDetail | null>(null);
+  const [draftNodes, setDraftNodes] = useState<DraftNode[]>([]);
+  const [draftEdges, setDraftEdges] = useState<DraftEdge[]>([]);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [label, setLabel] = useState("");
+  const [description, setDescription] = useState("");
+  const [knowledgeMode, setKnowledgeMode] = useState<WorkflowKnowledgeMode>("on_demand");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isCreatingPlayground, setIsCreatingPlayground] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+  const [latestRun, setLatestRun] = useState<WorkflowRun | null>(null);
+  const [expandedResultCard, setExpandedResultCard] = useState<string | null>(null);
+  const [openToolbarGroup, setOpenToolbarGroup] = useState<string | null>(null);
+  const [promptDraft, setPromptDraft] = useState("");
+  const [runInputText, setRunInputText] = useState("{}");
+  const [uploadedFiles, setUploadedFiles] = useState<Record<string, UploadedWorkflowFile>>({});
+  const [past, setPast] = useState<Snapshot[]>([]);
+  const [future, setFuture] = useState<Snapshot[]>([]);
+  const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<Node<CanvasNodeData>, Edge> | null>(null);
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node<CanvasNodeData>>([]);
+  const [edges, setEdges, onEdgesChangeBase] = useEdgesState<Edge>([]);
+
+  const selectedNode = useMemo(
+    () => draftNodes.find((item) => item.clientId === selectedNodeId) ?? null,
+    [draftNodes, selectedNodeId],
+  );
+  const toolById = useMemo(() => new Map(tools.map((tool) => [tool.id, tool])), [tools]);
+  const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents]);
+  const selectedAgent = selectedNode?.moduleAgentId ? agentById.get(selectedNode.moduleAgentId) ?? null : null;
+  const selectedTool = selectedNode?.moduleToolId ? toolById.get(selectedNode.moduleToolId) ?? null : null;
+  const moduleCards = useMemo(() => buildModuleCards(workflows, tools, agents), [agents, tools, workflows]);
+  const nodeLabelByKey = useMemo(() => new Map(draftNodes.map((node) => [node.nodeKey, cleanWorkflowLabel(node.label)])), [draftNodes]);
+  const latestRunReference = latestRun
+    ? `${workflow?.label ?? latestRun.workflowKey ?? "Workflow"} - ${formatDateTime(latestRun.startedAt ?? latestRun.queuedAt ?? latestRun.completedAt)}`
+    : "";
+
+  const isPlaygroundWorkflow = workflow?.key === PLAYGROUND_KEY;
+  const availableAgents: WorkflowAgent[] = [];
+  const agentTools = useMemo(() => tools.filter(isAgentTool), [tools]);
+  const advancedLangChainTools = useMemo(() => tools.filter(isAdvancedLangChainTool), [tools]);
+  const actionTools = useMemo(() => {
+    if (!workflow || isPlaygroundWorkflow) {
+      return tools.filter((tool) => !isLangChainTool(tool));
+    }
+    return tools.filter((tool) => !isLangChainTool(tool) && (tool.moduleKey === workflow.moduleKey || tool.moduleKey === "document_intelligence"));
+  }, [isPlaygroundWorkflow, tools, workflow]);
+  const canEditSelectedAgentPrompt = Boolean(selectedAgent && workflow && !isPlaygroundWorkflow && selectedAgent.moduleKey === workflow.moduleKey);
+
+  useEffect(() => {
+    setExpandedResultCard(null);
+  }, [latestRun?.id]);
+
+  const loadCatalog = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [workflowsResponse, toolsResponse, agentsResponse] = await Promise.all([
+        fetch("/api/workflows", { cache: "no-store" }),
+        fetch("/api/workflows/tools", { cache: "no-store" }),
+        fetch("/api/agents", { cache: "no-store" }),
+      ]);
+      if (!workflowsResponse.ok || !toolsResponse.ok || !agentsResponse.ok) {
+        throw new Error("Impossibile caricare il workspace workflow.");
+      }
+      const workflowsPayload = (await workflowsResponse.json()) as { workflows?: WorkflowSummary[] };
+      const toolsPayload = (await toolsResponse.json()) as { tools?: WorkflowTool[] };
+      const agentsPayload = (await agentsResponse.json()) as { agents?: WorkflowAgent[] };
+      setWorkflows(workflowsPayload.workflows ?? []);
+      setTools(toolsPayload.tools ?? []);
+      setAgents(agentsPayload.agents ?? []);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Errore caricamento workflow.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const loadWorkflow = useCallback(async (workflowId: string) => {
+    if (!workflowId) {
+      setWorkflow(null);
+      setDraftNodes([]);
+      setDraftEdges([]);
+      setNodes([]);
+      setEdges([]);
+      setFlowInstance(null);
+      setUploadedFiles({});
+      return;
+    }
+    const response = await fetch(`/api/workflows/${workflowId}`, { cache: "no-store" });
+    if (!response.ok) {
+      toast.error("Impossibile caricare il workflow selezionato.");
+      return;
+    }
+    const detail = (await response.json()) as WorkflowDetail;
+    const nextDraftNodes = detail.nodes.map(toDraftNode);
+    const idToClientId = new Map(nextDraftNodes.map((node) => [node.id ?? node.nodeKey, node.clientId]));
+    const nextDraftEdges = detail.edges.map((edge) => toDraftEdge(edge, idToClientId));
+    setWorkflow(detail);
+    setSelectedWorkflowId(detail.id);
+    setLabel(detail.label || detail.name);
+    setDescription(detail.description ?? "");
+    setKnowledgeMode(resolveWorkflowKnowledgeMode(detail.configuration));
+    setLatestRun(null);
+    setFlowInstance(null);
+    setUploadedFiles({});
+    setDraftNodes(nextDraftNodes);
+    setDraftEdges(nextDraftEdges);
+    setPast([]);
+    setFuture([]);
+    setSelectedNodeId(nextDraftNodes[0]?.clientId ?? null);
+    setScreen("canvas");
+  }, [setEdges, setNodes]);
+
+  useEffect(() => {
+    void loadCatalog();
+  }, [loadCatalog]);
+
+  const commitHistory = useCallback(() => {
+    setPast((current) => [...current, { nodes: draftNodes, edges: draftEdges }]);
+    setFuture([]);
+  }, [draftEdges, draftNodes]);
+
+  const patchNodeConfiguration = useCallback((clientId: string, patch: Record<string, unknown>) => {
+    setDraftNodes((current) =>
+      current.map((node) =>
+        node.clientId === clientId
+          ? { ...node, configuration: { ...node.configuration, ...patch } }
+          : node,
+      ),
+    );
+  }, []);
+
+  const handleNodeFileChange = useCallback(async (clientId: string, file: File) => {
+    if (file.size > MAX_WORKFLOW_UPLOAD_BYTES) {
+      toast.error("File troppo grande per il Playground workflow. Limite: 15 MB.");
+      return;
+    }
+    const fileBase64 = await readFileAsBase64(file);
+    setUploadedFiles((current) => ({
+      ...current,
+      [clientId]: {
+        fileName: file.name,
+        contentType: file.type || "application/octet-stream",
+        fileBase64,
+        sizeBytes: file.size,
+      },
+    }));
+    setDraftNodes((current) =>
+      current.map((node) =>
+        node.clientId === clientId
+          ? {
+              ...node,
+              configuration: {
+                ...node.configuration,
+                file_name: file.name,
+                content_type: file.type || "application/octet-stream",
+                size_bytes: file.size,
+              },
+            }
+          : node,
+      ),
+    );
+  }, []);
+
+  useEffect(() => {
+    setNodes(draftNodes.map((item) => toFlowNode(item, toolById, agentById, uploadedFiles, patchNodeConfiguration, handleNodeFileChange)));
+    setEdges(draftEdges.map(toFlowEdge));
+  }, [agentById, draftEdges, draftNodes, handleNodeFileChange, patchNodeConfiguration, setEdges, setNodes, toolById, uploadedFiles]);
+
+  useEffect(() => {
+    setPromptDraft(selectedAgent?.activePrompt ?? "");
+  }, [selectedAgent]);
+
+  useEffect(() => {
+    if (screen !== "canvas" || !flowInstance || nodes.length === 0) {
+      return;
+    }
+    const frameId = requestAnimationFrame(() => {
+      void flowInstance.fitView({ padding: 0.2 });
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [flowInstance, nodes.length, screen]);
+
+  const openModule = async (card: ModuleCard) => {
+    if (card.isPlayground) {
+      if (card.workflow) {
+        await loadWorkflow(card.workflow.id);
+        return;
+      }
+      await createPlayground();
+      return;
+    }
+    if (card.workflow) {
+      await loadWorkflow(card.workflow.id);
+      return;
+    }
+    toast.info("Nessun workflow configurato per questo modulo.");
+  };
+
+  const createPlayground = async () => {
+    const existingPlayground = workflows.find((item) => item.key === PLAYGROUND_KEY);
+    if (existingPlayground) {
+      await loadWorkflow(existingPlayground.id);
+      return;
+    }
+
+    setIsCreatingPlayground(true);
+    try {
+      const response = await fetch("/api/workflows", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          moduleKey: "workflow_management",
+          key: PLAYGROUND_KEY,
+          name: PLAYGROUND_KEY,
+          label: "Playground",
+          description: "Workflow libero per testare combinazioni di agent e tool.",
+          isEnabled: true,
+          isDefault: false,
+          nodes: [
+            baseInputNode(80, 180),
+            baseOutputNode(760, 180),
+          ],
+          edges: [{ sourceNodeKey: "input", targetNodeKey: "output", orderNo: 1, isEnabled: true }],
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(typeof payload?.message === "string" ? payload.message : "Creazione Playground non riuscita.");
+      }
+      const created = (await response.json()) as WorkflowDetail;
+      await loadCatalog();
+      await loadWorkflow(created.id);
+      toast.success("Playground creato.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Errore creazione Playground.");
+    } finally {
+      setIsCreatingPlayground(false);
+    }
+  };
+
+  const addAgentNode = (agent: WorkflowAgent, position?: { x: number; y: number }) => {
+    commitHistory();
+    const nextIndex = draftNodes.filter((item) => item.nodeKind === "AGENT").length + 1;
+    const nodeKey = uniqueNodeKey(draftNodes, `${agent.key}_${nextIndex}`);
+    const node: DraftNode = {
+      clientId: `node_${Date.now()}_${nextIndex}`,
+      nodeKey,
+      nodeKind: "AGENT",
+      label: cleanWorkflowLabel(agent.label),
+      positionX: position?.x ?? 320 + nextIndex * 44,
+      positionY: position?.y ?? 130 + nextIndex * 44,
+      moduleAgentId: agent.id,
+      configuration: { purpose: agent.key },
+      isEnabled: true,
+      isRequired: false,
+    };
+    setDraftNodes((current) => [...current, node]);
+    setSelectedNodeId(node.clientId);
+  };
+
+  const addToolNode = (tool: WorkflowTool, position?: { x: number; y: number }) => {
+    commitHistory();
+    const nextIndex = draftNodes.filter((item) => item.nodeKind === "TOOL").length + 1;
+    const nodeKey = uniqueNodeKey(draftNodes, `${tool.key}_${nextIndex}`);
+    const node: DraftNode = {
+      clientId: `node_${Date.now()}_${nextIndex}`,
+      nodeKey,
+      nodeKind: "TOOL",
+      label: cleanWorkflowLabel(tool.label),
+      positionX: position?.x ?? 340 + nextIndex * 44,
+      positionY: position?.y ?? 160 + nextIndex * 44,
+      moduleToolId: tool.id,
+      configuration: toRecord(tool.configuration),
+      inputSchema: toRecordOrNull(tool.inputSchema),
+      outputSchema: toRecordOrNull(tool.outputSchema),
+      isEnabled: true,
+      isRequired: false,
+    };
+    setDraftNodes((current) => [...current, node]);
+    setSelectedNodeId(node.clientId);
+  };
+
+  const addFlowNode = (kind: FlowNodeType, dropPosition?: { x: number; y: number }) => {
+    setOpenToolbarGroup(null);
+    const nextIndex = draftNodes.length + 1;
+    const position = dropPosition ?? { x: 100 + nextIndex * 40, y: 100 + nextIndex * 40 };
+
+    if (kind === "input-text" || kind === "input-file") {
+      commitHistory();
+      const nodeKey = uniqueNodeKey(draftNodes, `${kind}_${nextIndex}`);
+      const node: DraftNode = {
+        clientId: `node_${Date.now()}_${nextIndex}`,
+        nodeKey,
+        nodeKind: "INPUT",
+        label: NODE_KIND_LABELS[kind],
+        positionX: position.x,
+        positionY: position.y,
+        inputKind: kind === "input-file" ? "document" : "text",
+        configuration: kind === "input-text" ? { promptText: "" } : { documentUrl: "" },
+        isEnabled: true,
+        isRequired: false,
+      };
+      setDraftNodes((current) => [...current, node]);
+      setSelectedNodeId(node.clientId);
+      return;
+    }
+
+    if (kind === "output") {
+      commitHistory();
+      const nodeKey = uniqueNodeKey(draftNodes, `output_${nextIndex}`);
+      const node: DraftNode = {
+        clientId: `node_${Date.now()}_${nextIndex}`,
+        nodeKey,
+        nodeKind: "OUTPUT",
+        label: NODE_KIND_LABELS[kind],
+        positionX: position.x,
+        positionY: position.y,
+        outputKind: "generic_result",
+        configuration: {},
+        isEnabled: true,
+        isRequired: false,
+      };
+      setDraftNodes((current) => [...current, node]);
+      setSelectedNodeId(node.clientId);
+      return;
+    }
+
+    const tool = findToolForFlowNodeType(kind, tools);
+    if (!tool) {
+      toast.info(`Tool backend non configurato per ${NODE_KIND_LABELS[kind]}.`);
+      return;
+    }
+    addToolNode(tool, position);
+  };
+
+  const handleDeleteSelected = () => {
+    const selectedNodeIds = new Set(nodes.filter((node) => node.selected).map((node) => node.id));
+    const selectedEdgeIds = new Set(edges.filter((edge) => edge.selected).map((edge) => edge.id));
+    if (selectedNodeIds.size === 0 && selectedEdgeIds.size === 0) {
+      return;
+    }
+    commitHistory();
+    setDraftNodes((current) => current.filter((node) => !selectedNodeIds.has(node.clientId)));
+    setDraftEdges((current) =>
+      current.filter((edge) =>
+        !selectedEdgeIds.has(edge.clientId)
+        && !selectedNodeIds.has(edge.sourceClientId)
+        && !selectedNodeIds.has(edge.targetClientId),
+      ),
+    );
+    setSelectedNodeId(null);
+  };
+
+  const handleUndo = () => {
+    const previous = past[past.length - 1];
+    if (!previous) {
+      return;
+    }
+    setPast((current) => current.slice(0, -1));
+    setFuture((current) => [{ nodes: draftNodes, edges: draftEdges }, ...current]);
+    setDraftNodes(previous.nodes);
+    setDraftEdges(previous.edges);
+    setSelectedNodeId(null);
+  };
+
+  const handleRedo = () => {
+    const next = future[0];
+    if (!next) {
+      return;
+    }
+    setFuture((current) => current.slice(1));
+    setPast((current) => [...current, { nodes: draftNodes, edges: draftEdges }]);
+    setDraftNodes(next.nodes);
+    setDraftEdges(next.edges);
+    setSelectedNodeId(null);
+  };
+
+  const patchSelectedNode = (patch: Partial<DraftNode>) => {
+    if (!selectedNode) {
+      return;
+    }
+    setDraftNodes((current) => current.map((item) => item.clientId === selectedNode.clientId ? { ...item, ...patch } : item));
+  };
+
+  const patchSelectedConfig = (patch: Record<string, unknown>) => {
+    if (!selectedNode) {
+      return;
+    }
+    patchSelectedNode({ configuration: { ...selectedNode.configuration, ...patch } });
+  };
+
+  const savePrompt = async () => {
+    if (!selectedAgent) {
+      return;
+    }
+    setIsSavingPrompt(true);
+    try {
+      const response = await fetch(`/api/agents/${selectedAgent.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ activePrompt: promptDraft }),
+      });
+      if (!response.ok) {
+        throw new Error("Salvataggio prompt non riuscito.");
+      }
+      await loadCatalog();
+      toast.success("Prompt aggiornato.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Errore salvataggio prompt.");
+    } finally {
+      setIsSavingPrompt(false);
+    }
+  };
+
+  const resetPrompt = async () => {
+    if (!selectedAgent) {
+      return;
+    }
+    setIsSavingPrompt(true);
+    try {
+      const response = await fetch(`/api/agents/${selectedAgent.id}/reset-prompt`, { method: "POST" });
+      if (!response.ok) {
+        throw new Error("Reset prompt non riuscito.");
+      }
+      const payload = (await response.json()) as { activePrompt?: string };
+      setPromptDraft(payload.activePrompt ?? selectedAgent.originalPrompt);
+      await loadCatalog();
+      toast.success("Prompt ripristinato.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Errore reset prompt.");
+    } finally {
+      setIsSavingPrompt(false);
+    }
+  };
+
+  const saveWorkflow = async () => {
+    if (!workflow) {
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const payloadNodes = draftNodes.map((node) => ({
+        ...(node.id && uuidPattern.test(node.id) ? { id: node.id } : {}),
+        nodeKey: node.nodeKey,
+        nodeKind: node.nodeKind,
+        label: node.label,
+        positionX: node.positionX,
+        positionY: node.positionY,
+        moduleAgentId: node.moduleAgentId ?? null,
+        moduleToolId: node.moduleToolId ?? null,
+        inputKind: node.inputKind ?? null,
+        outputKind: node.outputKind ?? null,
+        configuration: node.configuration,
+        inputSchema: node.inputSchema ?? null,
+        outputSchema: node.outputSchema ?? null,
+        isEnabled: node.isEnabled,
+        isRequired: false,
+      }));
+      const nodeKeyByClientId = new Map(draftNodes.map((node) => [node.clientId, node.nodeKey]));
+      const payloadEdges = draftEdges.map((edge, index) => ({
+        ...(edge.id && uuidPattern.test(edge.id) ? { id: edge.id } : {}),
+        sourceNodeKey: nodeKeyByClientId.get(edge.sourceClientId) ?? edge.sourceClientId,
+        targetNodeKey: nodeKeyByClientId.get(edge.targetClientId) ?? edge.targetClientId,
+        sourceHandle: edge.sourceHandle ?? null,
+        targetHandle: edge.targetHandle ?? null,
+        label: edge.label ?? null,
+        conditionPayload: null,
+        orderNo: index + 1,
+        isEnabled: edge.isEnabled,
+      }));
+
+      const response = await fetch(`/api/workflows/${workflow.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          label: label.trim() || workflow.label,
+          description: description.trim() || null,
+          configuration: {
+            ...toRecord(workflow.configuration),
+            contextPolicy: {
+              ...toRecord(toRecord(workflow.configuration).contextPolicy),
+              knowledgeMode,
+            },
+          },
+          name: workflow.name,
+          moduleKey: workflow.moduleKey,
+          key: workflow.key,
+          nodes: payloadNodes,
+          edges: payloadEdges,
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(typeof payload?.message === "string" ? payload.message : "Salvataggio workflow non riuscito.");
+      }
+      toast.success("Workflow salvato.");
+      await loadWorkflow(workflow.id);
+      await loadCatalog();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Errore salvataggio workflow.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const runWorkflow = async () => {
+    if (!workflow) {
+      return;
+    }
+    setIsRunning(true);
+    try {
+      const parsedInput = parseRunInput(runInputText);
+      const workflowFiles = Object.fromEntries(
+        draftNodes
+          .map((node) => {
+            const uploaded = uploadedFiles[node.clientId];
+            return uploaded ? [node.nodeKey, uploaded] : null;
+          })
+          .filter((item): item is [string, UploadedWorkflowFile] => Boolean(item)),
+      );
+      const inputPayload = Object.keys(workflowFiles).length > 0
+        ? { ...parsedInput, knowledgeMode, workflow_files: workflowFiles }
+        : { ...parsedInput, knowledgeMode };
+      const response = await fetch(`/api/workflows/${workflow.id}/runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ triggerSource: "workflow_canvas", inputPayload }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(typeof payload?.message === "string" ? payload.message : "Avvio run non riuscito.");
+      }
+      const run = (await response.json()) as WorkflowRun;
+      setLatestRun(run);
+      toast.success("Run accodata.");
+      await pollRun(run.id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Errore avvio run.");
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const pollRun = async (runId: string) => {
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      const response = await fetch(`/api/workflow-runs/${runId}`, { cache: "no-store" });
+      if (!response.ok) {
+        return;
+      }
+      const run = (await response.json()) as WorkflowRun;
+      setLatestRun(run);
+      if (["COMPLETED", "FAILED", "CANCELED"].includes(run.status)) {
+        if (run.status === "FAILED") {
+          toast.error(run.errorMessage || "L'esecuzione del workflow non e' riuscita.");
+        } else if (run.status === "CANCELED") {
+          toast.warning("L'esecuzione del workflow e' stata annullata.");
+        }
+        return;
+      }
+    }
+    toast.warning("L'esecuzione e' ancora in corso: controlla i risultati tra qualche istante.");
+  };
+
+  const onNodesChange = useCallback((changes: NodeChange<Node<CanvasNodeData>>[]) => {
+    onNodesChangeBase(changes);
+    const removedIds = new Set(changes.filter((change) => change.type === "remove").map((change) => change.id));
+    if (removedIds.size > 0) {
+      setDraftNodes((current) => current.filter((draft) => !removedIds.has(draft.clientId)));
+      setDraftEdges((current) => current.filter((edge) => !removedIds.has(edge.sourceClientId) && !removedIds.has(edge.targetClientId)));
+      setSelectedNodeId((current) => current && removedIds.has(current) ? null : current);
+      return;
+    }
+  }, [onNodesChangeBase]);
+
+  const onNodeDragStop = useCallback<OnNodeDrag<Node<CanvasNodeData>>>((_, node) => {
+    commitHistory();
+    setDraftNodes((current) =>
+      current.map((draft) =>
+        draft.clientId === node.id
+          ? { ...draft, positionX: node.position.x, positionY: node.position.y }
+          : draft,
+      ),
+    );
+  }, [commitHistory]);
+
+  const onConnect = useCallback((connection: Connection) => {
+    if (!connection.source || !connection.target) {
+      return;
+    }
+    commitHistory();
+    const edge: DraftEdge = {
+      clientId: `edge_${Date.now()}`,
+      sourceClientId: connection.source,
+      targetClientId: connection.target,
+      sourceHandle: connection.sourceHandle,
+      targetHandle: connection.targetHandle,
+      orderNo: draftEdges.length + 1,
+      isEnabled: true,
+    };
+    setDraftEdges((current) => [...current, edge]);
+    setEdges((current) => addEdge({ ...connection, id: edge.clientId, animated: true }, current));
+  }, [commitHistory, draftEdges.length, setEdges]);
+
+  const onEdgesChange = useCallback((changes: EdgeChange<Edge>[]) => {
+    onEdgesChangeBase(changes);
+    const removedIds = new Set(changes.filter((change) => change.type === "remove").map((change) => change.id));
+    if (removedIds.size > 0) {
+      setDraftEdges((current) => current.filter((edge) => !removedIds.has(edge.clientId)));
+    }
+  }, [onEdgesChangeBase]);
+
+  const onPaletteDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (!flowInstance) {
+      return;
+    }
+    const payload = parsePaletteDragPayload(event.dataTransfer.getData("application/x-birgus-workflow-node"));
+    if (!payload) {
+      return;
+    }
+    const position = flowInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    if (payload.kind === "FLOW") {
+      addFlowNode(payload.id as FlowNodeType, position);
+      return;
+    }
+    if (payload.kind === "AGENT") {
+      const agent = agents.find((item) => item.id === payload.id);
+      if (agent) {
+        addAgentNode(agent, position);
+      }
+      return;
+    }
+    const tool = tools.find((item) => item.id === payload.id);
+    if (tool) {
+      addToolNode(tool, position);
+    }
+  }, [addFlowNode, agents, flowInstance, tools]);
+
+  const onPaletteDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  if (screen === "modules") {
+    return (
+      <div className="flex min-h-[calc(100vh-2rem)] flex-col gap-4 p-4">
+        <div>
+          <Text as="h1" variant="h1">Workflow</Text>
+          <Text variant="muted">Scegli il modulo da configurare o apri il Playground.</Text>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {moduleCards.map((card) => (
+            <button
+              key={card.cardKey}
+              className="min-h-44 rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-5 text-left shadow-card transition hover:border-brand-primary hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border-default disabled:hover:bg-bg-surface"
+              onClick={() => void openModule(card)}
+              disabled={isLoading || (!card.workflow && !card.isPlayground) || (card.isPlayground && isCreatingPlayground)}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-bg-muted text-brand-primary">
+                  {card.isPlayground ? <Sparkles className="h-5 w-5" /> : <Boxes className="h-5 w-5" />}
+                </div>
+                <Badge tone={card.workflow ? "success" : card.isPlayground ? "progress" : "info"}>
+                  {card.workflow ? `v${card.workflow.versionNo}` : card.isPlayground ? "Libero" : "Non configurato"}
+                </Badge>
+              </div>
+              <p className="mt-4 text-base font-bold text-text-primary">{card.title}</p>
+              <p className="mt-2 min-h-10 text-sm text-text-muted">{card.description}</p>
+              <div className="mt-4 flex gap-2 text-xs text-text-muted">
+                <span>{card.agentsCount} agent</span>
+                <span>{card.toolsCount} tool</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-[calc(100vh-8rem)] min-h-[640px] flex-col overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-default bg-bg-surface px-6 py-3">
+        <label className="sr-only" htmlFor="workflow-name">Nome workflow</label>
+        <input
+          id="workflow-name"
+          name="workflow-name"
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          className="rounded-md border border-transparent bg-transparent px-2 py-1 text-lg font-semibold text-text-primary hover:border-border-default focus:border-border-default focus:outline-none"
+        />
+        <div className="flex flex-wrap gap-2">
+          <label className="flex items-center gap-2 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs font-medium text-text-secondary">
+            Knowledge
+            <select
+              id="workflow-knowledge-mode"
+              name="workflow-knowledge-mode"
+              value={knowledgeMode}
+              onChange={(event) => setKnowledgeMode(event.target.value as WorkflowKnowledgeMode)}
+              className="rounded border border-border-default bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+            >
+              <option value="on_demand">On-demand</option>
+              <option value="saved">Saved</option>
+              <option value="hybrid">Hybrid</option>
+            </select>
+          </label>
+          {TOOLBAR_GROUPS.map((group) => (
+            <ToolbarDropdown
+              key={group.title}
+              count={group.items.length}
+              isOpen={openToolbarGroup === group.title}
+              onOpenChange={(isOpen) => setOpenToolbarGroup(isOpen ? group.title : null)}
+              title={group.title}
+            >
+              {group.items.map((kind) => {
+                const Icon = NODE_KIND_ICONS[kind];
+                return (
+                  <PaletteButton
+                    key={kind}
+                    icon={<Icon className="h-4 w-4" />}
+                    title={NODE_KIND_LABELS[kind]}
+                    subtitle={flowNodeDescription(kind)}
+                    dragPayload={{ kind: "FLOW", id: kind }}
+                    onClick={() => addFlowNode(kind)}
+                  />
+                );
+              })}
+            </ToolbarDropdown>
+          ))}
+          <button
+            type="button"
+            onClick={handleDeleteSelected}
+            className="flex items-center gap-1.5 rounded-md border border-border-default px-3 py-1.5 text-sm font-medium text-status-danger-text hover:bg-bg-muted"
+          >
+            <Trash2 className="h-4 w-4" />
+            Elimina selezionati
+          </button>
+          <button
+            type="button"
+            onClick={handleUndo}
+            disabled={past.length === 0}
+            className="flex items-center gap-1.5 rounded-md border border-border-default px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-muted disabled:opacity-40"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Annulla
+          </button>
+          <button
+            type="button"
+            onClick={handleRedo}
+            disabled={future.length === 0}
+            className="flex items-center gap-1.5 rounded-md border border-border-default px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-muted disabled:opacity-40"
+          >
+            <RotateCw className="h-4 w-4" />
+            Ripristina
+          </button>
+          <button
+            type="button"
+            onClick={runWorkflow}
+            disabled={!workflow || isRunning}
+            className="flex items-center gap-1.5 rounded-md border border-status-success-text bg-status-success-bg px-3 py-1.5 text-sm font-medium text-status-success-text hover:opacity-80 disabled:opacity-60"
+          >
+            <Play className="h-4 w-4" />
+            {isRunning ? "Esecuzione..." : "Esegui"}
+          </button>
+          <button
+            type="button"
+            onClick={saveWorkflow}
+            disabled={!workflow || isSaving}
+            className="flex items-center gap-1.5 rounded-md bg-brand-primary px-3 py-1.5 text-sm font-medium text-text-inverse hover:bg-brand-primary-hover disabled:opacity-60"
+          >
+            <Save className="h-4 w-4" />
+            {isSaving ? "Salvataggio..." : "Salva"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setScreen("modules")}
+            className="rounded-md border border-border-default px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-muted"
+          >
+            Indietro
+          </button>
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+          <ReactFlow<Node<CanvasNodeData>, Edge>
+            key={workflow?.id ?? "workflow-canvas"}
+            className="workflow-react-flow h-full w-full"
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeDragStop={onNodeDragStop}
+            onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+            onPaneClick={() => {
+              setSelectedNodeId(null);
+              setOpenToolbarGroup(null);
+            }}
+            onNodesDelete={() => setSelectedNodeId(null)}
+            onInit={setFlowInstance}
+            deleteKeyCode={["Backspace", "Delete"]}
+            fitView
+          >
+            <Background />
+            <Controls />
+            <MiniMap />
+          </ReactFlow>
+        </div>
+        <RunResultsPanel
+          expandedResultCard={expandedResultCard}
+          latestRun={latestRun}
+          latestRunReference={latestRunReference}
+          nodeLabelByKey={nodeLabelByKey}
+          onToggleCard={(cardId) => setExpandedResultCard((current) => current === cardId ? null : cardId)}
+        />
+      </div>
+    </div>
+  );
+}

@@ -2,6 +2,8 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 
 import { DdtProcessingService } from "../../modules/ddt-processing/services/DdtProcessingService.js";
 import { QuotationOrchestratorService } from "../../modules/quotation-orchestrator/services/QuotationOrchestratorService.js";
+import { ScheduledWorkflowDeliveryService } from "../../modules/workflows/services/ScheduledWorkflowDeliveryService.js";
+import { TelegramLinkPollingService } from "../../modules/connected-apps/services/TelegramLinkPollingService.js";
 import { WorkflowRunExecutorService } from "../../modules/workflows/services/WorkflowRunExecutorService.js";
 import { WorkerCoordinator } from "../../worker/services/WorkerCoordinator.js";
 
@@ -19,6 +21,10 @@ export class BackendRuntimeService {
     private readonly quotationOrchestratorService: QuotationOrchestratorService,
     @Inject(WorkflowRunExecutorService)
     private readonly workflowRunExecutorService: WorkflowRunExecutorService,
+    @Inject(ScheduledWorkflowDeliveryService)
+    private readonly scheduledWorkflowDeliveryService: ScheduledWorkflowDeliveryService,
+    @Inject(TelegramLinkPollingService)
+    private readonly telegramLinkPollingService: TelegramLinkPollingService,
   ) {}
 
   public async start(): Promise<void> {
@@ -28,6 +34,8 @@ export class BackendRuntimeService {
 
     this.started = true;
     this.workerCoordinator.registerHandlers();
+    this.scheduledWorkflowDeliveryService.start();
+    this.telegramLinkPollingService.start();
 
     const results = await Promise.allSettled([
       this.ddtProcessingService.resumePendingJobs(),

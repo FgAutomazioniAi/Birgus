@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: birgus
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
@@ -58,12 +58,24 @@ services:
       GARAGE_S3_FORCE_PATH_STYLE: "${GARAGE_S3_FORCE_PATH_STYLE:-true}"
       OCR_ENGINE_LANG: "${OCR_ENGINE_LANG:-it}"
       PADDLEOCR_HOME: "/app/storage/paddleocr_cache"
-      SMTP_HOST: "${SMTP_HOST:?SMTP_HOST is required}"
+      MAIL_PROVIDER: "${MAIL_PROVIDER:-smtp}"
+      MAIL_FROM: "${MAIL_FROM:-${SMTP_FROM:-}}"
+      RESEND_API_KEY: "${RESEND_API_KEY:-}"
+      SMTP_HOST: "${SMTP_HOST:-}"
       SMTP_PORT: "${SMTP_PORT:-587}"
       SMTP_SECURE: "${SMTP_SECURE:-false}"
-      SMTP_USER: "${SMTP_USER:?SMTP_USER is required}"
-      SMTP_PASS: "${SMTP_PASS:?SMTP_PASS is required}"
-      SMTP_FROM: "${SMTP_FROM:?SMTP_FROM is required}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASS: "${SMTP_PASS:-}"
+      SMTP_FROM: "${SMTP_FROM:-}"
+      AI_PROVIDER_BASE_URL: "${AI_PROVIDER_BASE_URL:-${ORCH_LM_BASE_URL:-http://vllm:8000/v1}}"
+      AI_PROVIDER_API_KEY: "${AI_PROVIDER_API_KEY:-${VLLM_API_KEY:-}}"
+      AI_PROVIDER_CHAT_MODEL: "${AI_PROVIDER_CHAT_MODEL:-${ORCH_LM_MODEL:-birgus-vl}}"
+      AI_PROVIDER_COMPLETIONS_PATH: "${AI_PROVIDER_COMPLETIONS_PATH:-/v1/chat/completions}"
+      AI_PROVIDER_TIMEOUT_MS: "${AI_PROVIDER_TIMEOUT_MS:-${ORCH_LM_TIMEOUT_MS:-600000}}"
+      AI_PROVIDER_TEMPERATURE: "${AI_PROVIDER_TEMPERATURE:-${ORCH_LM_TEMPERATURE:-0}}"
+      AI_PROVIDER_MAX_OUTPUT_TOKENS: "${AI_PROVIDER_MAX_OUTPUT_TOKENS:-800}"
+      WHATSAPP_ACCESS_TOKEN: "${WHATSAPP_ACCESS_TOKEN:-}"
+      WHATSAPP_PHONE_NUMBER_ID: "${WHATSAPP_PHONE_NUMBER_ID:-}"
       MEASURE_REPORT_ANALYSIS_MODE: "${MEASURE_REPORT_ANALYSIS_MODE:-auto}"
       MEASURE_REPORT_MAX_PAGES: "${MEASURE_REPORT_MAX_PAGES:-}"
       MEASURE_REPORT_RENDER_SCALE: "${MEASURE_REPORT_RENDER_SCALE:-2.0}"
@@ -108,12 +120,15 @@ services:
       AI_PROVIDER_TIMEOUT_MS: "${AI_PROVIDER_TIMEOUT_MS:-${ORCH_LM_TIMEOUT_MS:-600000}}"
       AI_PROVIDER_TEMPERATURE: "${AI_PROVIDER_TEMPERATURE:-${ORCH_LM_TEMPERATURE:-0}}"
       AI_PROVIDER_MAX_OUTPUT_TOKENS: "${AI_PROVIDER_MAX_OUTPUT_TOKENS:-512}"
-      SMTP_HOST: "${SMTP_HOST:?SMTP_HOST is required}"
+      MAIL_PROVIDER: "${MAIL_PROVIDER:-smtp}"
+      MAIL_FROM: "${MAIL_FROM:-${SMTP_FROM:-}}"
+      RESEND_API_KEY: "${RESEND_API_KEY:-}"
+      SMTP_HOST: "${SMTP_HOST:-}"
       SMTP_PORT: "${SMTP_PORT:-587}"
       SMTP_SECURE: "${SMTP_SECURE:-false}"
-      SMTP_USER: "${SMTP_USER:?SMTP_USER is required}"
-      SMTP_PASS: "${SMTP_PASS:?SMTP_PASS is required}"
-      SMTP_FROM: "${SMTP_FROM:?SMTP_FROM is required}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASS: "${SMTP_PASS:-}"
+      SMTP_FROM: "${SMTP_FROM:-}"
       DDT_READER_LM_MODEL: "${DDT_READER_LM_MODEL:-${AI_PROVIDER_CHAT_MODEL:-birgus-vl}}"
       DDT_READER_LM_BASE_URL: "${DDT_READER_LM_BASE_URL:-${AI_PROVIDER_BASE_URL:-http://vllm:8000/v1}}"
       DDT_READER_LM_API_KEY: "${DDT_READER_LM_API_KEY:-${AI_PROVIDER_API_KEY:-${VLLM_API_KEY:-}}}"
@@ -127,6 +142,8 @@ services:
       PYTHON_MODULES_BASE_URL: "${PYTHON_MODULES_BASE_URL:-http://python_modules:8200}"
       PYTHON_MODULES_EXECUTE_PATH: "${PYTHON_MODULES_EXECUTE_PATH:-/v1/modules/execute}"
       PYTHON_MODULES_TIMEOUT_MS: "${PYTHON_MODULES_TIMEOUT_MS:-180000}"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
+      TELEGRAM_BOT_USERNAME: "${TELEGRAM_BOT_USERNAME:-}"
       ORCH_LM_BASE_URL: "${ORCH_LM_BASE_URL:-${AI_PROVIDER_BASE_URL:-http://vllm:8000/v1}}"
       ORCH_LM_COMPLETIONS_PATH: "${ORCH_LM_COMPLETIONS_PATH:-/v1/chat/completions}"
       ORCH_LM_MODELS_PATH: "${ORCH_LM_MODELS_PATH:-/v1/models}"
@@ -166,7 +183,7 @@ services:
     container_name: birgus_frontend
     restart: unless-stopped
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       BIRGUS_API_BASE_URL: http://app:3000
       AUTH_COOKIE_NAME: "${AUTH_COOKIE_NAME:-vl_session}"
     extra_hosts:

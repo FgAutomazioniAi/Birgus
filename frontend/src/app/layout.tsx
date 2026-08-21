@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import "@/app/globals.css";
+import "leaflet/dist/leaflet.css";
+import "@xyflow/react/dist/style.css";
 import { ThemeProvider, ToasterProvider } from "@/components/organisms";
 import { DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/themes";
 

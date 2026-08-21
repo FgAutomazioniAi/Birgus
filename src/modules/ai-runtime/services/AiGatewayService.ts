@@ -9,9 +9,10 @@ export class AiGatewayService {
 
   public async health(): Promise<{ ok: boolean; model: string | null; error: string | null }> {
     try {
+      const result = await this.client.chat("Rispondi solo con OK.");
       return {
         ok: true,
-        model: await this.client.selectModel(),
+        model: result.model,
         error: null,
       };
     } catch (error) {

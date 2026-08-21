@@ -4,11 +4,15 @@ import { Prisma, WorkflowStepStatus } from "@prisma/client";
 
 import { ModuleKey } from "../../../core/module-access/ModuleKey.js";
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
+import { AiProviderSettingsService } from "../../ai-runtime/services/AiProviderSettingsService.js";
 import { FileKind } from "../../document-archive/domain/FileKind.js";
 import { PutProjectFileCommand } from "../../document-archive/dto/PutProjectFileCommand.js";
 import { DocumentArchiveService } from "../../document-archive/services/DocumentArchiveService.js";
+import { DEFAULT_KNOWLEDGE_MODE, normalizeKnowledgeMode, type KnowledgeMode } from "../../document-intelligence/domain/KnowledgeMode.js";
 import { DocumentIntelligenceService } from "../../document-intelligence/services/DocumentIntelligenceService.js";
 import { BackendPythonModulesClient } from "../../document-intelligence/services/BackendPythonModulesClient.js";
+import { MailProviderSettingsService } from "../../mail-runtime/services/MailProviderSettingsService.js";
+import { ConnectedAppsService } from "../../connected-apps/services/ConnectedAppsService.js";
 import { NotificationService } from "../../notifications/services/NotificationService.js";
 import { NextOrchestratorDdtAnalyzer } from "../../ddt-processing/services/NextOrchestratorDdtAnalyzer.js";
 import { DdtAnalysisInput } from "../../ddt-processing/repositories/DdtProcessingRepository.js";
@@ -17,13 +21,17 @@ import { MeasureReportAnalysisInput, MeasureReportAnalyzer } from "../../measure
 import { normalizeMeasureReportDocumentType } from "../../measure-report/services/MeasureReportDocumentTypes.js";
 import { Job } from "../../../worker/queue/Job.js";
 import { JobQueue } from "../../../worker/queue/JobQueue.js";
+import { WorkflowGraphPlanner } from "./WorkflowGraphPlanner.js";
 import { QueueWorkflowRunDispatcher, WorkflowRunJobPayload } from "./QueueWorkflowRunDispatcher.js";
+import { ScheduledWorkflowDeliveryService, type ScheduledDeliveryChannel } from "./ScheduledWorkflowDeliveryService.js";
 
 interface StepExecutionContext {
   workspaceId: string;
+  userId: string | null;
   runId: string;
   workflowKey: string;
   moduleKey: string | null;
+  knowledgeMode: KnowledgeMode;
   projectId: string | null;
   projectVersionLabel: string | null;
   projectVersionId: number | null;
@@ -51,9 +59,18 @@ interface StepExecutionContext {
   } | null;
   inputPayload: Record<string, unknown> | null;
   nodeOutputs: Map<string, unknown>;
+  incomingNodeKeys: Map<string, string[]>;
+  outgoingNodeKeys: Map<string, string[]>;
+  workflowNodesByKey: Map<string, WorkflowNodeRow>;
+  scheduledTargetNodeKeys: Set<string>;
 }
 
 type ConditionPayload = Record<string, unknown>;
+
+interface IncomingNodeOutputs {
+  byNodeKey: Record<string, Record<string, unknown>>;
+  items: Array<Record<string, unknown>>;
+}
 
 interface WorkflowNodeRow {
   id: string;
@@ -61,7 +78,9 @@ interface WorkflowNodeRow {
   node_kind: string;
   is_enabled: boolean;
   is_required: boolean;
+  input_kind: string | null;
   output_kind: string | null;
+  configuration: Prisma.JsonValue | null;
   module_agent: { key: string; active_prompt: string; original_prompt: string } | null;
   module_tool: { key: string; runtime_kind: string; handler_key: string; configuration: Prisma.JsonValue | null } | null;
 }
@@ -73,8 +92,13 @@ export class WorkflowRunExecutorService {
   private readonly ddtAnalyzer: NextOrchestratorDdtAnalyzer;
   private readonly measureReportAnalyzer: MeasureReportAnalyzer;
   private readonly pythonModulesClient: BackendPythonModulesClient;
+  private readonly aiProviderSettingsService: AiProviderSettingsService | null;
+  private readonly mailProviderSettingsService: MailProviderSettingsService | null;
+  private readonly connectedAppsService: ConnectedAppsService | null;
   private readonly notificationService: NotificationService | null;
   private readonly jobQueue: JobQueue | null;
+  private readonly scheduledWorkflowDeliveryService: ScheduledWorkflowDeliveryService | null;
+  private readonly graphPlanner = new WorkflowGraphPlanner();
 
   public constructor(params: {
     documentArchiveService: DocumentArchiveService;
@@ -83,8 +107,12 @@ export class WorkflowRunExecutorService {
     ddtAnalyzer: NextOrchestratorDdtAnalyzer;
     measureReportAnalyzer: MeasureReportAnalyzer;
     pythonModulesClient: BackendPythonModulesClient;
+    aiProviderSettingsService?: AiProviderSettingsService | null;
+    mailProviderSettingsService?: MailProviderSettingsService | null;
+    connectedAppsService?: ConnectedAppsService | null;
     jobQueue?: JobQueue | null;
     notificationService?: NotificationService | null;
+    scheduledWorkflowDeliveryService?: ScheduledWorkflowDeliveryService | null;
   }) {
     this.documentArchiveService = params.documentArchiveService;
     this.documentIntelligenceService = params.documentIntelligenceService;
@@ -92,8 +120,12 @@ export class WorkflowRunExecutorService {
     this.ddtAnalyzer = params.ddtAnalyzer;
     this.measureReportAnalyzer = params.measureReportAnalyzer;
     this.pythonModulesClient = params.pythonModulesClient;
+    this.aiProviderSettingsService = params.aiProviderSettingsService ?? null;
+    this.mailProviderSettingsService = params.mailProviderSettingsService ?? null;
+    this.connectedAppsService = params.connectedAppsService ?? null;
     this.jobQueue = params.jobQueue ?? null;
     this.notificationService = params.notificationService ?? null;
+    this.scheduledWorkflowDeliveryService = params.scheduledWorkflowDeliveryService ?? null;
   }
 
   public async resumeRecoverableRuns(): Promise<void> {
@@ -205,7 +237,12 @@ export class WorkflowRunExecutorService {
     });
 
     const context = await this.buildContext(runId);
-    const orderedNodes = this.buildExecutionOrder(run.workflow.nodes, run.workflow.edges, context);
+    const evaluateCondition = (payload: unknown) => this.evaluateCondition(payload as ConditionPayload | null, context);
+    const orderedNodes = this.graphPlanner.buildExecutionOrder(run.workflow.nodes, run.workflow.edges, evaluateCondition);
+    context.incomingNodeKeys = this.graphPlanner.buildIncomingNodeKeyMap(run.workflow.nodes, run.workflow.edges, evaluateCondition);
+    context.outgoingNodeKeys = this.buildOutgoingNodeKeyMap(run.workflow.nodes, run.workflow.edges, evaluateCondition);
+    context.workflowNodesByKey = new Map(run.workflow.nodes.map((node) => [node.node_key, node]));
+    context.scheduledTargetNodeKeys = this.buildScheduledTargetNodeKeys(run.workflow.nodes, context.outgoingNodeKeys);
 
     let sequenceNo = 1;
     try {
@@ -230,7 +267,9 @@ export class WorkflowRunExecutorService {
         });
 
         try {
-          const output = await this.executeNode(context, node);
+          const output = context.scheduledTargetNodeKeys.has(node.node_key)
+            ? this.buildScheduledTargetSkipOutput(node)
+            : await this.executeNode(context, node);
           context.nodeOutputs.set(node.node_key, output);
           await prisma.moduleWorkflowRunStep.update({
             where: {
@@ -369,13 +408,15 @@ export class WorkflowRunExecutorService {
     }
 
     let quotationSource: StepExecutionContext["quotationSource"] = null;
+    let resolvedProjectVersionLabel = row.project_version?.version_label ?? null;
     if (row.project_id) {
-      const versionLabel = row.project_version?.version_label
+      const versionLabel = resolvedProjectVersionLabel
         ?? (typeof row.input_payload === "object" && row.input_payload && "versionLabel" in row.input_payload
           ? String((row.input_payload as Record<string, unknown>).versionLabel ?? "")
           : "")
         ?? "";
       if (versionLabel) {
+        resolvedProjectVersionLabel = versionLabel;
         const quotation = await this.documentArchiveService.getCurrentProjectVersionFile({
           workspaceId: row.workspace_id,
           projectId: row.project_id,
@@ -412,11 +453,13 @@ export class WorkflowRunExecutorService {
 
     return {
       workspaceId: row.workspace_id,
+      userId: row.requested_by_user_id,
       runId: row.id,
       workflowKey: row.workflow.key,
       moduleKey: row.workflow.module?.key ?? null,
+      knowledgeMode: this.resolveKnowledgeMode(row.input_payload, row.workflow.configuration),
       projectId: row.project_id,
-      projectVersionLabel: row.project_version?.version_label ?? null,
+      projectVersionLabel: resolvedProjectVersionLabel,
       projectVersionId: row.project_version_id,
       clientId: row.project_version?.client?.id ?? row.client_id ?? null,
       clientEmail: row.project_version?.client?.email?.trim() || null,
@@ -430,72 +473,60 @@ export class WorkflowRunExecutorService {
       measureReportSource,
       inputPayload: (row.input_payload ?? null) as Record<string, unknown> | null,
       nodeOutputs: new Map<string, unknown>(),
+      incomingNodeKeys: new Map<string, string[]>(),
+      outgoingNodeKeys: new Map<string, string[]>(),
+      workflowNodesByKey: new Map<string, WorkflowNodeRow>(),
+      scheduledTargetNodeKeys: new Set<string>(),
     };
   }
 
-  private buildExecutionOrder(
+  private buildOutgoingNodeKeyMap(
     nodes: WorkflowNodeRow[],
     edges: Array<{
       source_node_id: string;
       target_node_id: string;
-      is_enabled: boolean;
-      order_no: number;
       condition_payload: Prisma.JsonValue | null;
+      is_enabled: boolean;
     }>,
-    context: StepExecutionContext,
-  ): WorkflowNodeRow[] {
-    const eligibleNodes = nodes.filter((node) => node.is_enabled || node.is_required);
-    const eligibleNodeIds = new Set(eligibleNodes.map((node) => node.id));
-    const incoming = new Map<string, number>();
+    evaluateCondition: (payload: unknown) => boolean,
+  ): Map<string, string[]> {
+    const keyById = new Map(nodes.map((node) => [node.id, node.node_key]));
     const outgoing = new Map<string, string[]>();
-
-    for (const node of eligibleNodes) {
-      incoming.set(node.id, 0);
-      outgoing.set(node.id, []);
-    }
-
     for (const edge of edges) {
-      if (!edge.is_enabled) {
+      if (!edge.is_enabled || !evaluateCondition(edge.condition_payload)) {
         continue;
       }
-      if (!eligibleNodeIds.has(edge.source_node_id) || !eligibleNodeIds.has(edge.target_node_id)) {
+      const sourceKey = keyById.get(edge.source_node_id);
+      const targetKey = keyById.get(edge.target_node_id);
+      if (!sourceKey || !targetKey) {
         continue;
       }
-      if (!this.evaluateCondition(edge.condition_payload as ConditionPayload | null, context)) {
-        continue;
-      }
-
-      outgoing.get(edge.source_node_id)?.push(edge.target_node_id);
-      incoming.set(edge.target_node_id, (incoming.get(edge.target_node_id) ?? 0) + 1);
+      const list = outgoing.get(sourceKey) ?? [];
+      list.push(targetKey);
+      outgoing.set(sourceKey, list);
     }
+    return outgoing;
+  }
 
-    const ordered: WorkflowNodeRow[] = [];
-    const queue = eligibleNodes.filter((node) => (incoming.get(node.id) ?? 0) === 0).map((node) => node.id);
-    const byId = new Map(eligibleNodes.map((node) => [node.id, node]));
-
-    while (queue.length > 0) {
-      const currentId = queue.shift() as string;
-      const current = byId.get(currentId);
-      if (!current) {
+  private buildScheduledTargetNodeKeys(
+    nodes: WorkflowNodeRow[],
+    outgoingNodeKeys: Map<string, string[]>,
+  ): Set<string> {
+    const nodesByKey = new Map(nodes.map((node) => [node.node_key, node]));
+    const claimed = new Set<string>();
+    for (const node of nodes) {
+      if (!this.isScheduleHandler(node.module_tool?.handler_key ?? null)) {
         continue;
       }
-      ordered.push(current);
-      for (const targetId of outgoing.get(currentId) ?? []) {
-        const next = (incoming.get(targetId) ?? 0) - 1;
-        incoming.set(targetId, next);
-        if (next === 0) {
-          queue.push(targetId);
+      const targetKeys = outgoingNodeKeys.get(node.node_key) ?? [];
+      for (const targetKey of targetKeys) {
+        const target = nodesByKey.get(targetKey);
+        if (this.deliveryChannelFromHandler(target?.module_tool?.handler_key ?? null)) {
+          claimed.add(targetKey);
         }
       }
     }
-
-    for (const node of eligibleNodes) {
-      if (!ordered.some((item) => item.id === node.id)) {
-        ordered.push(node);
-      }
-    }
-
-    return ordered;
+    return claimed;
   }
 
   private async executeNode(
@@ -511,6 +542,34 @@ export class WorkflowRunExecutorService {
       }
       if (node.node_key === "measure_report_pdf_input") {
         return context.measureReportSource;
+      }
+      if (node.input_kind === "document" || node.input_kind === "file") {
+        const workflowFiles = this.toRecord(context.inputPayload?.workflow_files);
+        const uploaded = this.toRecord(workflowFiles[node.node_key]);
+        if (Object.keys(uploaded).length > 0) {
+          return {
+            file_name: uploaded.fileName ?? uploaded.file_name ?? null,
+            content_type: uploaded.contentType ?? uploaded.content_type ?? null,
+            file_base64: uploaded.fileBase64 ?? uploaded.file_base64 ?? null,
+            size_bytes: uploaded.sizeBytes ?? uploaded.size_bytes ?? null,
+          };
+        }
+      }
+      const nodeConfig = this.toRecord(node.configuration);
+      const inputText = this.firstString(
+        nodeConfig.input_text,
+        nodeConfig.inputText,
+        nodeConfig.promptText,
+        nodeConfig.text,
+        context.inputPayload?.input_text,
+        context.inputPayload?.text,
+      );
+      if (inputText) {
+        return {
+          ...nodeConfig,
+          ...(context.inputPayload ?? {}),
+          input_text: inputText,
+        };
       }
       return context.inputPayload;
     }
@@ -534,17 +593,17 @@ export class WorkflowRunExecutorService {
     context: StepExecutionContext,
     node: {
       node_key: string;
+      configuration: Prisma.JsonValue | null;
       module_agent: { key: string; active_prompt: string; original_prompt: string } | null;
     },
   ): Promise<unknown> {
-    const agentKey = node.module_agent?.key ?? node.node_key;
-    if (agentKey === "quotation_structuring_prompt" || node.node_key === "quotation_structuring_agent") {
-      if (!context.quotationSource) {
-        throw new Error("Sorgente preventivo mancante.");
+    if (node.node_key === "quotation_structuring_agent") {
+      if (!context.quotationSource || !context.projectId) {
+        throw new Error("Sorgente preventivo mancante per l'agente strutturazione.");
       }
       const analysis = await this.quotationAnalyzer.analyze({
         workspaceId: context.workspaceId,
-        projectId: context.projectId ?? "",
+        projectId: context.projectId,
         storagePath: context.quotationSource.storagePath,
         fileName: context.quotationSource.fileName,
       });
@@ -554,33 +613,60 @@ export class WorkflowRunExecutorService {
       };
     }
 
-    if (agentKey === "ddt_analysis_prompt" || node.node_key === "ddt_analysis_agent") {
+    if (node.node_key === "ddt_analysis_agent") {
       if (!context.ddtDocumentId) {
-        throw new Error("ddtDocumentId mancante nel run.");
+        throw new Error("Documento DDT mancante per l'agente analisi.");
       }
-      const analysis = await this.ddtAnalyzer.analyze(context.ddtDocumentId);
-      return analysis;
+      return this.ddtAnalyzer.analyze(context.ddtDocumentId);
     }
 
-    if (
-      agentKey.startsWith("measure_report_")
-      || node.node_key === "measure_report_analysis_agent"
-      || context.moduleKey === ModuleKey.MEASURE_REPORT
-    ) {
+    if (node.node_key === "measure_report_analysis_agent") {
       if (!context.measureReportSource) {
-        throw new Error("Sorgente measure report mancante.");
+        throw new Error("Documento Measure Report mancante per l'agente analisi.");
       }
-      const analysis = await this.measureReportAnalyzer.analyze({
+      return this.measureReportAnalyzer.analyze({
         workspaceId: context.workspaceId,
         fileName: context.measureReportSource.fileName,
         storagePath: context.measureReportSource.storagePath,
         requestedDocumentType: context.measureReportSource.effectiveDocumentType
           ?? context.measureReportSource.requestedDocumentType,
       });
-      return analysis;
     }
 
-    throw new Error(`Agent node non supportato: ${agentKey}`);
+    const prompt = String(node.module_agent?.active_prompt || node.module_agent?.original_prompt || "").trim();
+    if (!prompt) {
+      throw new Error(`Prompt agente mancante per il nodo ${node.node_key}.`);
+    }
+
+    const previousOutput = this.toRecord(this.findLatestNodeOutput(context));
+    const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
+    const nodeConfig = this.toRecord(node.configuration);
+    const inputPayload = context.inputPayload ?? {};
+    const inputText = this.firstString(
+      nodeConfig.input_text,
+      nodeConfig.inputText,
+      nodeConfig.promptText,
+      nodeConfig.text,
+      inputPayload.input_text,
+      inputPayload.text,
+      previousOutput.extracted_text,
+      previousOutput.reply,
+      previousOutput.text,
+      previousOutput.raw_output,
+      ...this.pickIncomingStrings(incomingOutputs.items, ["extracted_text", "reply", "text", "raw_output"]),
+    );
+
+    if (!inputText) {
+      throw new Error(`Input testuale mancante per il nodo agente ${node.node_key}.`);
+    }
+
+    return this.pythonModulesClient.execute("langchain_orchestrator", "chat", {
+      instructions: prompt,
+      input_text: inputText,
+      previous_output: previousOutput,
+      incoming_outputs: incomingOutputs.byNodeKey,
+      ai_provider: await this.buildPythonAiProviderOverride(),
+    });
   }
 
   private async executeToolNode(
@@ -598,12 +684,12 @@ export class WorkflowRunExecutorService {
         throw new Error(`Handler tool non valido: ${tool.handler_key}`);
       }
 
-      const input = this.buildPythonToolInput(context, node.node_key, moduleName, action);
+      const input = await this.buildPythonToolInput(context, node, moduleName, action);
       return this.pythonModulesClient.execute(moduleName, action, input);
     }
 
     if (tool.runtime_kind === "BACKEND") {
-      return this.executeBackendTool(context, tool.handler_key);
+      return this.executeBackendTool(context, node, tool.handler_key);
     }
 
     if (tool.runtime_kind === "NEXT_ORCHESTRATOR") {
@@ -613,19 +699,49 @@ export class WorkflowRunExecutorService {
     throw new Error(`Runtime tool non supportato: ${tool.runtime_kind}`);
   }
 
-  private buildPythonToolInput(
+  private async buildPythonToolInput(
     context: StepExecutionContext,
-    nodeKey: string,
+    node: WorkflowNodeRow,
     moduleName: string,
     action: string,
-  ): Record<string, unknown> {
+  ): Promise<Record<string, unknown>> {
     if (moduleName === "ocr_engine" && action === "extract_text_from_pdf_storage") {
       const source = context.quotationSource ?? context.ddtSource ?? context.measureReportSource;
-      if (!source) {
+      const previousOutput = this.toRecord(this.findLatestNodeOutput(context));
+      const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
+      const storagePath = this.firstString(
+        source?.storagePath,
+        previousOutput.storage_path,
+        previousOutput.storagePath,
+        ...this.pickIncomingStrings(incomingOutputs.items, ["storage_path", "storagePath"]),
+      );
+      if (storagePath) {
+        return {
+          storage_path: storagePath,
+        };
+      }
+      const fileBase64 = this.firstString(
+        previousOutput.file_base64,
+        previousOutput.fileBase64,
+        previousOutput.pdf_base64,
+        previousOutput.document_base64,
+        ...this.pickIncomingStrings(incomingOutputs.items, ["file_base64", "fileBase64", "pdf_base64", "document_base64"]),
+      );
+      if (!fileBase64) {
         throw new Error("Sorgente PDF mancante per OCR.");
       }
       return {
-        storage_path: source.storagePath,
+        file_base64: fileBase64,
+        file_name: this.firstString(
+          previousOutput.file_name,
+          previousOutput.fileName,
+          ...this.pickIncomingStrings(incomingOutputs.items, ["file_name", "fileName"]),
+        ),
+        content_type: this.firstString(
+          previousOutput.content_type,
+          previousOutput.contentType,
+          ...this.pickIncomingStrings(incomingOutputs.items, ["content_type", "contentType"]),
+        ),
       };
     }
 
@@ -663,14 +779,468 @@ export class WorkflowRunExecutorService {
         version_label: context.projectVersionLabel ?? "v1",
         file_name: "preventivo.docx",
         docx_base64: docxBase64,
+        mail_provider: await this.buildPythonMailProviderOverride(),
       };
     }
 
-    const fromConfig = this.findNodeOutput(context, nodeKey);
-    return typeof fromConfig === "object" && fromConfig ? fromConfig as Record<string, unknown> : {};
+    const nodeConfig = this.toRecord(node.configuration);
+    const previousOutput = this.toRecord(this.findLatestNodeOutput(context));
+    const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
+    const inputPayload = context.inputPayload ?? {};
+
+    if (moduleName === "langchain_orchestrator") {
+      return await this.buildLangchainToolInput(action, nodeConfig, inputPayload, previousOutput, incomingOutputs);
+    }
+
+    if (moduleName === "docx_engine" && action === "generate_document") {
+      return this.buildGenericDocumentInput(nodeConfig, inputPayload, previousOutput, incomingOutputs);
+    }
+
+    if (moduleName === "mail_engine" && action === "send_email") {
+      return await this.buildGenericMailInput(context, nodeConfig, inputPayload, previousOutput, incomingOutputs);
+    }
+
+    if (moduleName === "messaging_engine" && action === "send_telegram") {
+      return await this.buildTelegramInput(context, nodeConfig, inputPayload, previousOutput, incomingOutputs);
+    }
+
+    if (moduleName === "messaging_engine" && action === "send_whatsapp") {
+      return this.buildWhatsappInput(nodeConfig, inputPayload, previousOutput, incomingOutputs);
+    }
+
+    return {
+      ...nodeConfig,
+      ...inputPayload,
+      previous_output: previousOutput,
+      incoming_outputs: incomingOutputs.byNodeKey,
+    };
   }
 
-  private async executeBackendTool(context: StepExecutionContext, handlerKey: string): Promise<unknown> {
+  private async buildLangchainToolInput(
+    action: string,
+    nodeConfig: Record<string, unknown>,
+    inputPayload: Record<string, unknown>,
+    previousOutput: Record<string, unknown>,
+    incomingOutputs: IncomingNodeOutputs,
+  ): Promise<Record<string, unknown>> {
+    const merged = {
+      ...nodeConfig,
+      ...inputPayload,
+      previous_output: previousOutput,
+      incoming_outputs: incomingOutputs.byNodeKey,
+      ai_provider: await this.buildPythonAiProviderOverride(),
+    };
+
+    if (action === "chat") {
+      return {
+        ...merged,
+        input_text: this.firstString(
+          nodeConfig.input_text,
+          inputPayload.input_text,
+          previousOutput.reply,
+          previousOutput.extracted_text,
+          previousOutput.text,
+          previousOutput.raw_output,
+          ...this.pickIncomingStrings(incomingOutputs.items, ["reply", "extracted_text", "text", "raw_output"]),
+        ),
+      };
+    }
+
+    if (action === "structure_text") {
+      return {
+        ...merged,
+        extracted_text: this.firstString(
+          nodeConfig.extracted_text,
+          inputPayload.extracted_text,
+          previousOutput.extracted_text,
+          previousOutput.reply,
+          previousOutput.text,
+          previousOutput.raw_output,
+          ...this.pickIncomingStrings(incomingOutputs.items, ["extracted_text", "reply", "text", "raw_output"]),
+        ),
+      };
+    }
+
+    if (action === "compose_email") {
+      return {
+        ...merged,
+        context: this.firstString(
+          nodeConfig.context,
+          inputPayload.context,
+          previousOutput.reply,
+          previousOutput.raw_output,
+          previousOutput.text,
+          previousOutput.extracted_text,
+          ...this.pickIncomingStrings(incomingOutputs.items, ["reply", "raw_output", "text", "extracted_text"]),
+        ),
+      };
+    }
+
+    return merged;
+  }
+
+  private async buildPythonAiProviderOverride(): Promise<Record<string, unknown> | null> {
+    if (!this.aiProviderSettingsService) {
+      return null;
+    }
+
+    const config = await this.aiProviderSettingsService.getRuntimeConfig();
+    const override: Record<string, unknown> = {};
+    if (typeof config.baseUrl === "string" && config.baseUrl.trim()) {
+      override.base_url = config.baseUrl.trim();
+    }
+    if (typeof config.chatModel === "string" && config.chatModel.trim()) {
+      override.chat_model = config.chatModel.trim();
+    }
+    if (typeof config.temperature === "number" && Number.isFinite(config.temperature)) {
+      override.temperature = config.temperature;
+    }
+    if (typeof config.timeoutMs === "number" && Number.isFinite(config.timeoutMs) && config.timeoutMs > 0) {
+      override.timeout_ms = Math.trunc(config.timeoutMs);
+    }
+
+    return Object.keys(override).length > 0 ? override : null;
+  }
+
+  private async buildPythonMailProviderOverride(): Promise<Record<string, unknown> | null> {
+    if (!this.mailProviderSettingsService) {
+      return null;
+    }
+
+    const config = await this.mailProviderSettingsService.getRuntimeConfig();
+    const override: Record<string, unknown> = {
+      provider: config.provider,
+      from: config.from,
+    };
+
+    if (config.provider === "smtp") {
+      override.smtp_host = config.smtpHost;
+      override.smtp_port = config.smtpPort;
+      override.smtp_secure = config.smtpSecure;
+      override.smtp_user = config.smtpUser;
+      override.smtp_pass = config.smtpPass;
+    }
+    if (config.provider === "resend") {
+      override.resend_api_key = config.resendApiKey;
+    }
+
+    return override;
+  }
+
+  private buildGenericDocumentInput(
+    nodeConfig: Record<string, unknown>,
+    inputPayload: Record<string, unknown>,
+    previousOutput: Record<string, unknown>,
+    incomingOutputs: IncomingNodeOutputs,
+  ): Record<string, unknown> {
+    return {
+      ...nodeConfig,
+      ...inputPayload,
+      previous_output: previousOutput,
+      incoming_outputs: incomingOutputs.byNodeKey,
+      content: this.firstValue(
+        nodeConfig.content,
+        inputPayload.content,
+        previousOutput.reply,
+        previousOutput.text,
+        previousOutput.raw_output,
+        previousOutput.extracted_text,
+        previousOutput.structured_data,
+        ...this.pickIncomingValues(incomingOutputs.items, ["reply", "text", "raw_output", "extracted_text", "structured_data"]),
+      ),
+      title: this.firstString(nodeConfig.title, inputPayload.title),
+      format: this.firstString(nodeConfig.format, inputPayload.format) || "docx",
+      file_name: this.firstString(
+        nodeConfig.file_name,
+        nodeConfig.filename,
+        inputPayload.file_name,
+        inputPayload.filename,
+        previousOutput.file_name,
+      ),
+    };
+  }
+
+  private async buildGenericMailInput(
+    context: StepExecutionContext,
+    nodeConfig: Record<string, unknown>,
+    inputPayload: Record<string, unknown>,
+    previousOutput: Record<string, unknown>,
+    incomingOutputs: IncomingNodeOutputs,
+  ): Promise<Record<string, unknown>> {
+    return {
+      ...nodeConfig,
+      ...inputPayload,
+      previous_output: previousOutput,
+      incoming_outputs: incomingOutputs.byNodeKey,
+      mail_provider: await this.buildPythonMailProviderOverride(),
+      to: this.firstString(nodeConfig.to, inputPayload.to, context.clientEmail),
+      subject: this.firstString(
+        nodeConfig.subject,
+        inputPayload.subject,
+        previousOutput.subject,
+        ...this.pickIncomingStrings(incomingOutputs.items, ["subject"]),
+      ),
+      text: this.firstString(
+        nodeConfig.text,
+        inputPayload.text,
+        previousOutput.text,
+        previousOutput.reply,
+        previousOutput.raw_output,
+        ...this.pickIncomingStrings(incomingOutputs.items, ["text", "reply", "raw_output"]),
+      ),
+      attachments: this.resolveMailAttachments(nodeConfig, inputPayload, previousOutput, incomingOutputs.items),
+    };
+  }
+
+  private async buildTelegramInput(
+    context: StepExecutionContext,
+    nodeConfig: Record<string, unknown>,
+    inputPayload: Record<string, unknown>,
+    previousOutput: Record<string, unknown>,
+    incomingOutputs: IncomingNodeOutputs,
+  ): Promise<Record<string, unknown>> {
+    const fallbackChatId = this.firstString(nodeConfig.chat_id, nodeConfig.chatId, inputPayload.chat_id, inputPayload.chatId);
+    const telegramChannelId = nodeConfig.telegram_channel_id
+      ?? nodeConfig.telegramChannelId
+      ?? inputPayload.telegram_channel_id
+      ?? inputPayload.telegramChannelId;
+    const chatId = this.connectedAppsService
+      ? await this.connectedAppsService.resolveTelegramChatId({
+          workspaceId: context.workspaceId,
+          userId: context.userId,
+          channelId: telegramChannelId,
+          fallbackChatId,
+        })
+      : fallbackChatId;
+
+    return {
+      ...nodeConfig,
+      ...inputPayload,
+      previous_output: previousOutput,
+      incoming_outputs: incomingOutputs.byNodeKey,
+      chat_id: chatId,
+      text: this.firstString(
+        nodeConfig.text,
+        nodeConfig.message,
+        inputPayload.text,
+        inputPayload.message,
+        previousOutput.text,
+        previousOutput.reply,
+        previousOutput.raw_output,
+        ...this.pickIncomingStrings(incomingOutputs.items, ["text", "reply", "raw_output"]),
+      ),
+    };
+  }
+
+  private buildWhatsappInput(
+    nodeConfig: Record<string, unknown>,
+    inputPayload: Record<string, unknown>,
+    previousOutput: Record<string, unknown>,
+    incomingOutputs: IncomingNodeOutputs,
+  ): Record<string, unknown> {
+    return {
+      ...nodeConfig,
+      ...inputPayload,
+      previous_output: previousOutput,
+      incoming_outputs: incomingOutputs.byNodeKey,
+      to: this.firstString(nodeConfig.to, nodeConfig.phone, inputPayload.to, inputPayload.phone),
+      text: this.firstString(
+        nodeConfig.text,
+        nodeConfig.message,
+        inputPayload.text,
+        inputPayload.message,
+        previousOutput.text,
+        previousOutput.reply,
+        previousOutput.raw_output,
+        ...this.pickIncomingStrings(incomingOutputs.items, ["text", "reply", "raw_output"]),
+      ),
+    };
+  }
+
+  private async executeScheduleTool(context: StepExecutionContext, node: WorkflowNodeRow): Promise<unknown> {
+    if (!this.scheduledWorkflowDeliveryService) {
+      throw new Error("Servizio scheduling workflow non configurato.");
+    }
+
+    const nodeConfig = this.toRecord(node.configuration);
+    const runAtText = this.firstString(
+      nodeConfig.scheduleWhen,
+      nodeConfig.schedule_when,
+      nodeConfig.run_at,
+      nodeConfig.runAt,
+      nodeConfig.when,
+    );
+    if (!runAtText) {
+      throw new Error("Data/ora mancante per nodo Schedule.");
+    }
+
+    const runAt = new Date(runAtText);
+    if (Number.isNaN(runAt.getTime())) {
+      throw new Error("Data/ora Schedule non valida.");
+    }
+
+    const targetNodeKeys = context.outgoingNodeKeys.get(node.node_key) ?? [];
+    const targetNodes = targetNodeKeys
+      .map((key) => context.workflowNodesByKey.get(key) ?? null)
+      .filter((target): target is WorkflowNodeRow => Boolean(target))
+      .filter((target) => this.deliveryChannelFromHandler(target.module_tool?.handler_key ?? null) !== null);
+
+    if (targetNodes.length === 0) {
+      return {
+        status: "skipped",
+        reason: "no_delivery_node_connected",
+      };
+    }
+
+    const previousOutput = this.toRecord(this.findLatestNodeOutput(context));
+    const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
+    const inputPayload = context.inputPayload ?? {};
+    const repeatEverySeconds = this.resolveRepeatEverySeconds(nodeConfig);
+    const scheduled = [];
+
+    for (const target of targetNodes) {
+      const handlerKey = target.module_tool?.handler_key ?? "";
+      const channel = this.deliveryChannelFromHandler(handlerKey);
+      if (!channel) {
+        continue;
+      }
+      const targetConfig = this.toRecord(target.configuration);
+      const delivery = await this.buildScheduledDeliveryPayload(
+        context,
+        channel,
+        targetConfig,
+        inputPayload,
+        previousOutput,
+        incomingOutputs,
+      );
+      const row = await this.scheduledWorkflowDeliveryService.schedule({
+        workspaceId: context.workspaceId,
+        workflowRunId: context.runId,
+        workflowNodeId: target.id,
+        channel,
+        recipient: delivery.recipient,
+        subject: delivery.subject,
+        message: delivery.message,
+        attachments: delivery.attachments,
+        providerPayload: delivery.providerPayload,
+        runAt,
+        repeatEverySeconds,
+      });
+      scheduled.push({
+        id: row.id,
+        nodeKey: target.node_key,
+        channel: row.channel,
+        recipient: row.recipient,
+        nextRunAt: row.nextRunAt.toISOString(),
+        repeatEverySeconds,
+      });
+    }
+
+    return {
+      status: scheduled.length > 0 ? "scheduled" : "skipped",
+      scheduled,
+    };
+  }
+
+  private async buildScheduledDeliveryPayload(
+    context: StepExecutionContext,
+    channel: ScheduledDeliveryChannel,
+    nodeConfig: Record<string, unknown>,
+    inputPayload: Record<string, unknown>,
+    previousOutput: Record<string, unknown>,
+    incomingOutputs: IncomingNodeOutputs,
+  ): Promise<{
+    recipient: string;
+    subject?: string | null;
+    message: string;
+    attachments?: unknown;
+    providerPayload?: unknown;
+  }> {
+    if (channel === "email") {
+      const input = await this.buildGenericMailInput(context, nodeConfig, inputPayload, previousOutput, incomingOutputs);
+      return {
+        recipient: String(input.to ?? ""),
+        subject: typeof input.subject === "string" ? input.subject : "Messaggio programmato",
+        message: String(input.text ?? ""),
+        attachments: input.attachments,
+        providerPayload: input.mail_provider,
+      };
+    }
+
+    if (channel === "telegram") {
+      const input = await this.buildTelegramInput(context, nodeConfig, inputPayload, previousOutput, incomingOutputs);
+      return {
+        recipient: String(input.chat_id ?? ""),
+        message: String(input.text ?? ""),
+      };
+    }
+
+    const input = this.buildWhatsappInput(nodeConfig, inputPayload, previousOutput, incomingOutputs);
+    return {
+      recipient: String(input.to ?? ""),
+      message: String(input.text ?? ""),
+    };
+  }
+
+  private resolveRepeatEverySeconds(nodeConfig: Record<string, unknown>): number | null {
+    const explicit = Number(nodeConfig.repeat_every_seconds ?? nodeConfig.repeatEverySeconds);
+    if (Number.isFinite(explicit) && explicit >= 60) {
+      return Math.trunc(explicit);
+    }
+
+    const value = Number(nodeConfig.scheduleRepeatValue ?? nodeConfig.repeat_value ?? nodeConfig.repeatValue);
+    const unit = this.firstString(
+      nodeConfig.scheduleRepeatUnit,
+      nodeConfig.repeat_unit,
+      nodeConfig.repeatUnit,
+    );
+    if (!Number.isFinite(value) || value <= 0) {
+      return null;
+    }
+    if (unit === "days" || unit === "day" || unit === "giorni") {
+      return Math.trunc(value * 86_400);
+    }
+    return Math.trunc(value * 3_600);
+  }
+
+  private deliveryChannelFromHandler(handlerKey: string | null): ScheduledDeliveryChannel | null {
+    if (handlerKey === "mail_engine.send_email") {
+      return "email";
+    }
+    if (handlerKey === "messaging_engine.send_telegram") {
+      return "telegram";
+    }
+    if (handlerKey === "messaging_engine.send_whatsapp") {
+      return "whatsapp";
+    }
+    return null;
+  }
+
+  private isScheduleHandler(handlerKey: string | null): boolean {
+    return handlerKey === "workflow_scheduler.schedule_report_delivery";
+  }
+
+  private buildScheduledTargetSkipOutput(node: WorkflowNodeRow): Record<string, unknown> {
+    return {
+      status: "scheduled_by_previous_schedule_node",
+      nodeKey: node.node_key,
+      message: "Nodo pianificato da uno Schedule precedente: non inviato immediatamente.",
+    };
+  }
+
+  private async executeBackendTool(
+    context: StepExecutionContext,
+    node: WorkflowNodeRow,
+    handlerKey: string,
+  ): Promise<unknown> {
+    if (handlerKey === "workflow_scheduler.schedule_report_delivery") {
+      return this.executeScheduleTool(context, node);
+    }
+
+    if (handlerKey === "document_intelligence.analyze_document_set") {
+      return this.executeDocumentSetAnalysisTool(context, node);
+    }
+
     if (handlerKey === "document_intelligence.refresh_document_knowledge") {
       const documentId = context.documentId
         ?? context.quotationSource?.documentId
@@ -700,6 +1270,53 @@ export class WorkflowRunExecutorService {
     }
 
     throw new Error(`Backend handler non supportato: ${handlerKey}`);
+  }
+
+  private async executeDocumentSetAnalysisTool(
+    context: StepExecutionContext,
+    node: WorkflowNodeRow,
+  ): Promise<unknown> {
+    const nodeConfig = this.toRecord(node.configuration);
+    const previousOutput = this.toRecord(this.findLatestNodeOutput(context));
+    const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
+    const inputPayload = context.inputPayload ?? {};
+    const documentIds = this.firstStringArray(
+      nodeConfig.document_ids,
+      nodeConfig.documentIds,
+      inputPayload.document_ids,
+      inputPayload.documentIds,
+      previousOutput.document_ids,
+      previousOutput.documentIds,
+      ...this.pickIncomingValues(incomingOutputs.items, ["document_ids", "documentIds"]),
+    );
+    const fallbackDocumentId = this.firstString(
+      nodeConfig.document_id,
+      nodeConfig.documentId,
+      inputPayload.document_id,
+      inputPayload.documentId,
+      context.documentId,
+    );
+    const resolvedDocumentIds = documentIds.length > 0 ? documentIds : (fallbackDocumentId ? [fallbackDocumentId] : []);
+    const prompt = this.firstString(
+      nodeConfig.prompt,
+      nodeConfig.question,
+      inputPayload.prompt,
+      inputPayload.question,
+      previousOutput.prompt,
+      previousOutput.question,
+      previousOutput.text,
+      previousOutput.reply,
+      ...this.pickIncomingStrings(incomingOutputs.items, ["prompt", "question", "text", "reply"]),
+    );
+
+    return this.documentIntelligenceService.analyzeDocumentSet({
+      workspaceId: context.workspaceId,
+      documentIds: resolvedDocumentIds,
+      prompt,
+      knowledgeMode: context.knowledgeMode,
+      useDeepReasoning: nodeConfig.use_deep_reasoning === true || nodeConfig.useDeepReasoning === true,
+      aiProvider: await this.buildPythonAiProviderOverride(),
+    });
   }
 
   private async executeOutputNode(
@@ -1049,6 +1666,169 @@ export class WorkflowRunExecutorService {
       return context.nodeOutputs.get(key);
     }
     return null;
+  }
+
+  private findLatestNodeOutput(context: StepExecutionContext): unknown {
+    const values = Array.from(context.nodeOutputs.values());
+    if (values.length === 0) {
+      return {};
+    }
+
+    const latest = values[values.length - 1];
+    const latestRecord = this.toRecord(latest);
+    if (latestRecord.output && typeof latestRecord.output === "object" && !Array.isArray(latestRecord.output)) {
+      return latestRecord.output;
+    }
+    return latest;
+  }
+
+  private findIncomingNodeOutputs(context: StepExecutionContext, nodeKey: string): IncomingNodeOutputs {
+    const sourceKeys = context.incomingNodeKeys.get(nodeKey) ?? [];
+    const byNodeKey: Record<string, Record<string, unknown>> = {};
+    const items: Array<Record<string, unknown>> = [];
+
+    for (const sourceKey of sourceKeys) {
+      const output = this.normalizeNodeOutput(context.nodeOutputs.get(sourceKey));
+      byNodeKey[sourceKey] = output;
+      items.push(output);
+    }
+
+    return { byNodeKey, items };
+  }
+
+  private normalizeNodeOutput(value: unknown): Record<string, unknown> {
+    const record = this.toRecord(value);
+    if (record.output && typeof record.output === "object" && !Array.isArray(record.output)) {
+      return record.output as Record<string, unknown>;
+    }
+    return record;
+  }
+
+  private toRecord(value: unknown): Record<string, unknown> {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+    return {};
+  }
+
+  private firstString(...values: unknown[]): string {
+    for (const value of values) {
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
+    return "";
+  }
+
+  private resolveKnowledgeMode(inputPayloadRaw: unknown, workflowConfigurationRaw: unknown): KnowledgeMode {
+    const inputPayload = this.toRecord(inputPayloadRaw);
+    const workflowConfiguration = this.toRecord(workflowConfigurationRaw);
+    const inputContextPolicy = this.toRecord(inputPayload.contextPolicy);
+    const workflowContextPolicy = this.toRecord(workflowConfiguration.contextPolicy);
+
+    return normalizeKnowledgeMode(
+      inputPayload.knowledgeMode
+        ?? inputPayload.knowledge_mode
+        ?? inputContextPolicy.knowledgeMode
+        ?? inputContextPolicy.knowledge_mode
+        ?? workflowConfiguration.knowledgeMode
+        ?? workflowConfiguration.knowledge_mode
+        ?? workflowContextPolicy.knowledgeMode
+        ?? workflowContextPolicy.knowledge_mode,
+      DEFAULT_KNOWLEDGE_MODE,
+    );
+  }
+
+  private firstValue(...values: unknown[]): unknown {
+    for (const value of values) {
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+      if (value && typeof value === "object") {
+        return value;
+      }
+    }
+    return "";
+  }
+
+  private resolveMailAttachments(
+    nodeConfig: Record<string, unknown>,
+    inputPayload: Record<string, unknown>,
+    previousOutput: Record<string, unknown>,
+    incomingOutputs: Array<Record<string, unknown>>,
+  ): Array<Record<string, unknown>> {
+    const configured = this.firstArray(nodeConfig.attachments, inputPayload.attachments);
+    if (configured.length > 0) {
+      return configured;
+    }
+
+    const documentBase64 = this.firstString(
+      previousOutput.document_base64,
+      previousOutput.docx_base64,
+      ...this.pickIncomingStrings(incomingOutputs, ["document_base64", "docx_base64"]),
+    );
+    if (!documentBase64) {
+      return [];
+    }
+
+    return [{
+      file_name: this.firstString(
+        previousOutput.file_name,
+        ...this.pickIncomingStrings(incomingOutputs, ["file_name"]),
+      ) || "documento.docx",
+      content_base64: documentBase64,
+    }];
+  }
+
+  private firstArray(...values: unknown[]): Array<Record<string, unknown>> {
+    for (const value of values) {
+      if (!Array.isArray(value)) {
+        continue;
+      }
+      return value.filter((item): item is Record<string, unknown> =>
+        Boolean(item) && typeof item === "object" && !Array.isArray(item),
+      );
+    }
+    return [];
+  }
+
+  private firstStringArray(...values: unknown[]): string[] {
+    for (const value of values) {
+      if (Array.isArray(value)) {
+        const items = value
+          .map((item) => typeof item === "string" ? item.trim() : "")
+          .filter((item) => item.length > 0);
+        if (items.length > 0) {
+          return items;
+        }
+      }
+      if (typeof value === "string" && value.trim()) {
+        const items = value
+          .split(/[\n,;]+/)
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0);
+        if (items.length > 0) {
+          return items;
+        }
+      }
+    }
+    return [];
+  }
+
+  private pickIncomingStrings(outputs: Array<Record<string, unknown>>, keys: string[]): string[] {
+    return this.pickIncomingValues(outputs, keys).filter((value): value is string =>
+      typeof value === "string" && value.trim().length > 0,
+    );
+  }
+
+  private pickIncomingValues(outputs: Array<Record<string, unknown>>, keys: string[]): unknown[] {
+    const values: unknown[] = [];
+    for (const output of outputs) {
+      for (const key of keys) {
+        values.push(output[key]);
+      }
+    }
+    return values;
   }
 
   private unwrapPythonOutput(envelope: Record<string, unknown> | null): Record<string, unknown> {

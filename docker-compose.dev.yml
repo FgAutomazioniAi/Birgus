@@ -1,0 +1,23 @@
+services:
+  app:
+    command: sh -c "npm run db:generate && npx tsx watch src/nest/main.ts"
+    environment:
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+      TSC_WATCHFILE: FixedPollingInterval
+    volumes:
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+      - ./scripts:/app/scripts
+
+  frontend:
+    command: npm run dev -- --webpack
+    environment:
+      NODE_ENV: development
+      BIRGUS_API_BASE_URL: http://app:3000
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+      - /app/frontend/.next
