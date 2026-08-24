@@ -14,6 +14,14 @@ const columnConfigSchema = z.object({
 
 const patchPreferencesSchema = z.object({
   paletteId: z.string().min(1).optional(),
+  notificationPosition: z.enum([
+    "top-left",
+    "top-center",
+    "top-right",
+    "bottom-left",
+    "bottom-center",
+    "bottom-right",
+  ]).optional(),
   languageCode: z.string().min(2).optional(),
   righeProgetti: z.number().int().min(1).max(500).optional(),
   righeClienti: z.number().int().min(1).max(500).optional(),
@@ -48,6 +56,7 @@ export class NestPreferencesController {
     if (!preferences) {
       return {
         paletteId: "predefinito",
+        notificationPosition: "bottom-right",
         languageCode: "it",
         righeProgetti: 10,
         righeClienti: 10,
@@ -66,6 +75,7 @@ export class NestPreferencesController {
 
     return {
       paletteId: preferences.paletteId,
+      notificationPosition: preferences.notificationPosition,
       languageCode: preferences.languageCode,
       righeProgetti: preferences.rowsProjects,
       righeClienti: preferences.rowsClients,
@@ -94,6 +104,7 @@ export class NestPreferencesController {
 
     const updated = await this.service.updatePreferences(userId, workspaceId, {
       paletteId: body.paletteId,
+      notificationPosition: body.notificationPosition,
       languageCode: body.languageCode,
       rowsProjects: body.rowsProjects ?? body.righeProgetti,
       rowsClients: body.rowsClients ?? body.righeClienti,
@@ -105,6 +116,7 @@ export class NestPreferencesController {
 
     return {
       paletteId: updated.paletteId,
+      notificationPosition: updated.notificationPosition,
       languageCode: updated.languageCode,
       righeProgetti: updated.rowsProjects,
       righeClienti: updated.rowsClients,

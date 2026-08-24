@@ -2,6 +2,7 @@
 
 import { ChevronRight, Eye, EyeOff, KeyRound, Lock, LogIn, Mail, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -253,18 +254,21 @@ export function LoginForm() {
           {twoFactorSetupSecret && (
             <div className="rounded-[var(--radius-sm)] border border-border-subtle bg-bg-surface p-3">
               <p className="text-xs font-semibold text-text-secondary">Configura l'app (una sola volta)</p>
+              {twoFactorSetupUri && (
+                <div className="mt-3 flex justify-center rounded-[var(--radius-sm)] bg-white p-3">
+                  <QRCodeSVG
+                    value={twoFactorSetupUri}
+                    size={184}
+                    level="M"
+                    marginSize={2}
+                    title="QR code autenticazione a due fattori"
+                  />
+                </div>
+              )}
               <p className="mt-1 text-xs text-text-muted">Secret TOTP</p>
               <p className="mt-1 break-all rounded-[var(--radius-sm)] bg-bg-muted px-2 py-1 font-mono text-xs text-text-primary">
                 {twoFactorSetupSecret}
               </p>
-              {twoFactorSetupUri && (
-                <>
-                  <p className="mt-2 text-xs text-text-muted">URI otpauth</p>
-                  <p className="mt-1 break-all rounded-[var(--radius-sm)] bg-bg-muted px-2 py-1 font-mono text-[11px] text-text-primary">
-                    {twoFactorSetupUri}
-                  </p>
-                </>
-              )}
             </div>
           )}
 

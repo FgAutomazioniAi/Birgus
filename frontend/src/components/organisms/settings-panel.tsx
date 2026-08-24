@@ -1,11 +1,17 @@
 "use client";
 
-import { Bot, CheckCircle2, Loader2, Mail, Palette, PlugZap, RefreshCw, Save } from "lucide-react";
+import { BellRing, Bot, CheckCircle2, Loader2, Mail, Palette, PlugZap, RefreshCw, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button, Card, Input, Label, Text } from "@/components/atoms";
 import { PageHelpHint, SelectDropdown } from "@/components/molecules";
 import { useTheme } from "@/components/organisms/theme-provider";
+import {
+  isToastPosition,
+  TOAST_POSITION_OPTIONS,
+  useToasterPreferences,
+  type ToastPosition,
+} from "@/components/organisms/toaster-provider";
 import { useModuleAccess } from "@/lib/module-access";
 import type { ThemeId } from "@/lib/themes";
 
@@ -74,6 +80,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 export function SettingsPanel() {
   const { options, theme, setTheme } = useTheme();
+  const { position: toastPosition, setPosition: setToastPosition } = useToasterPreferences();
   const { hasModule } = useModuleAccess();
   const canConfigureAiProvider = hasModule("conversational_assistant");
   const canConfigureMailProvider = hasModule("notification_center");
@@ -309,6 +316,26 @@ export function SettingsPanel() {
               />
             ))}
           </div>
+        </div>
+      </Card>
+
+      <Card className="space-y-4 p-4 lg:p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <label className="flex items-center gap-2 text-sm font-bold text-text-primary" htmlFor="toast-position-selector">
+            <BellRing size={16} className="text-brand-primary" />
+            Posizione notifiche
+          </label>
+          <SelectDropdown
+            id="toast-position-selector"
+            className="w-full sm:w-72"
+            value={toastPosition}
+            onChange={(value) => {
+              if (isToastPosition(value)) {
+                setToastPosition(value as ToastPosition);
+              }
+            }}
+            options={TOAST_POSITION_OPTIONS}
+          />
         </div>
       </Card>
 

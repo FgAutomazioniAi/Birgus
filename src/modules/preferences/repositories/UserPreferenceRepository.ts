@@ -2,6 +2,7 @@ import { UserPreferenceEntity } from "../domain/UserPreferenceEntity.js";
 
 export interface UserPreferencePatch {
   paletteId?: string;
+  notificationPosition?: string;
   languageCode?: string;
   rowsProjects?: number;
   rowsClients?: number;

@@ -208,56 +208,56 @@ model Workspace {
   updated_at      DateTime  @updatedAt
   deleted_at      DateTime?
 
-  organization                Organization               @relation(fields: [organization_id], references: [id], onDelete: Restrict)
-  memberships                 WorkspaceMembership[]
-  user_workspace_roles        UserWorkspaceRole[]
-  workspace_modules           WorkspaceModule[]
-  user_module_overrides       UserModuleOverride[]
-    user_preferences            UserPreference[]
-    user_messaging_channels     UserMessagingChannel[]
-    telegram_link_codes         TelegramLinkCode[]
-  nodes                       Node[]
-  documents                   Document[]
-  companies                   Company[]
-  clients                     Client[]
-  operational_customers       OperationalCustomer[]
-  customer_addresses          CustomerAddress[]
-  operational_work_refs       OperationalWorkReference[]
-  service_events              ServiceEvent[]
-  service_event_assignments   ServiceEventAssignment[]
-  commercial_offers           CommercialOffer[]
-  commercial_offer_lines      CommercialOfferLine[]
-  maintenance_proposals       MaintenanceProposal[]
-  maintenance_plan_entries    MaintenancePlanEntry[]
-  project_statuses            ProjectStatus[]
-  project_revisions           ProjectRevision[]
-  project_authors             ProjectAuthor[]
-  projects                    Project[]
-  module_agents               ModuleAgent[]
-  project_clients             ProjectClient[]
-  project_versions            ProjectVersion[]
-  shipment_statuses           ShipmentStatus[]
-  shipments                   Shipment[]
-  shipment_specifications     ShipmentSpecification[]
-  ddt_documents               DdtDocument[]
-  measure_report_documents    MeasureReportDocument[]
-  ddt_processing_jobs         DdtProcessingJob[]
-  quotation_orchestrator_jobs QuotationOrchestratorJob[]
-  notifications               Notification[]
-  audit_logs                  AuditLog[]
-  assistant_sessions          AssistantSession[]
-  assistant_session_documents AssistantSessionDocument[]
-  assistant_messages          AssistantMessage[]
-  assistant_tool_calls        AssistantToolCall[]
-  assistant_memory_snapshots  AssistantMemorySnapshot[]
-  knowledge_documents         KnowledgeDocument[]
-  knowledge_chunks            KnowledgeChunk[]
-  module_tools                ModuleTool[]
-  module_workflows            ModuleWorkflow[]
-  module_workflow_nodes       ModuleWorkflowNode[]
-  module_workflow_edges       ModuleWorkflowEdge[]
-  module_workflow_runs        ModuleWorkflowRun[]
-  module_workflow_run_steps   ModuleWorkflowRunStep[]
+  organization                  Organization                @relation(fields: [organization_id], references: [id], onDelete: Restrict)
+  memberships                   WorkspaceMembership[]
+  user_workspace_roles          UserWorkspaceRole[]
+  workspace_modules             WorkspaceModule[]
+  user_module_overrides         UserModuleOverride[]
+  user_preferences              UserPreference[]
+  user_messaging_channels       UserMessagingChannel[]
+  telegram_link_codes           TelegramLinkCode[]
+  nodes                         Node[]
+  documents                     Document[]
+  companies                     Company[]
+  clients                       Client[]
+  operational_customers         OperationalCustomer[]
+  customer_addresses            CustomerAddress[]
+  operational_work_refs         OperationalWorkReference[]
+  service_events                ServiceEvent[]
+  service_event_assignments     ServiceEventAssignment[]
+  commercial_offers             CommercialOffer[]
+  commercial_offer_lines        CommercialOfferLine[]
+  maintenance_proposals         MaintenanceProposal[]
+  maintenance_plan_entries      MaintenancePlanEntry[]
+  project_statuses              ProjectStatus[]
+  project_revisions             ProjectRevision[]
+  project_authors               ProjectAuthor[]
+  projects                      Project[]
+  module_agents                 ModuleAgent[]
+  project_clients               ProjectClient[]
+  project_versions              ProjectVersion[]
+  shipment_statuses             ShipmentStatus[]
+  shipments                     Shipment[]
+  shipment_specifications       ShipmentSpecification[]
+  ddt_documents                 DdtDocument[]
+  measure_report_documents      MeasureReportDocument[]
+  ddt_processing_jobs           DdtProcessingJob[]
+  quotation_orchestrator_jobs   QuotationOrchestratorJob[]
+  notifications                 Notification[]
+  audit_logs                    AuditLog[]
+  assistant_sessions            AssistantSession[]
+  assistant_session_documents   AssistantSessionDocument[]
+  assistant_messages            AssistantMessage[]
+  assistant_tool_calls          AssistantToolCall[]
+  assistant_memory_snapshots    AssistantMemorySnapshot[]
+  knowledge_documents           KnowledgeDocument[]
+  knowledge_chunks              KnowledgeChunk[]
+  module_tools                  ModuleTool[]
+  module_workflows              ModuleWorkflow[]
+  module_workflow_nodes         ModuleWorkflowNode[]
+  module_workflow_edges         ModuleWorkflowEdge[]
+  module_workflow_runs          ModuleWorkflowRun[]
+  module_workflow_run_steps     ModuleWorkflowRunStep[]
   scheduled_workflow_deliveries ScheduledWorkflowDelivery[]
 
   @@unique([organization_id, code])
@@ -282,36 +282,36 @@ model User {
   updated_at                   DateTime  @updatedAt
   deleted_at                   DateTime?
 
-  memberships                        WorkspaceMembership[]
-  user_workspace_roles               UserWorkspaceRole[]
-  auth_sessions                      AuthSession[]
-  auth_login_challenges              AuthLoginChallenge[]
-  password_reset_codes               PasswordResetCode[]
-    user_preferences                   UserPreference[]
-    messaging_channels                 UserMessagingChannel[]
-    telegram_link_codes                TelegramLinkCode[]
-  workspace_modules_configured       WorkspaceModule[]          @relation("workspace_module_configured_by")
-  user_module_overrides              UserModuleOverride[]       @relation("user_module_override_target")
-  user_module_overrides_configured   UserModuleOverride[]       @relation("user_module_override_configured_by")
-  documents_uploaded                 Document[]                 @relation("document_uploaded_by")
-  projects_owned                     Project[]                  @relation("project_owner")
-  module_agents_created              ModuleAgent[]              @relation("module_agent_created_by")
-  module_agents_updated              ModuleAgent[]              @relation("module_agent_updated_by")
-  module_tools_created               ModuleTool[]               @relation("module_tool_created_by")
-  module_tools_updated               ModuleTool[]               @relation("module_tool_updated_by")
-  module_workflows_created           ModuleWorkflow[]           @relation("module_workflow_created_by")
-  module_workflows_updated           ModuleWorkflow[]           @relation("module_workflow_updated_by")
-  shipments_created                  Shipment[]                 @relation("shipment_created_by")
-  shipment_events                    ShipmentEvent[]            @relation("shipment_event_actor")
-  ddt_documents_requested            DdtDocument[]              @relation("ddt_document_requested_by")
-  measure_report_documents_requested MeasureReportDocument[]    @relation("measure_report_document_requested_by")
-  notifications                      Notification[]
-  audit_logs                         AuditLog[]
-  assistant_sessions_opened          AssistantSession[]         @relation("assistant_session_opened_by")
+  memberships                          WorkspaceMembership[]
+  user_workspace_roles                 UserWorkspaceRole[]
+  auth_sessions                        AuthSession[]
+  auth_login_challenges                AuthLoginChallenge[]
+  password_reset_codes                 PasswordResetCode[]
+  user_preferences                     UserPreference[]
+  messaging_channels                   UserMessagingChannel[]
+  telegram_link_codes                  TelegramLinkCode[]
+  workspace_modules_configured         WorkspaceModule[]          @relation("workspace_module_configured_by")
+  user_module_overrides                UserModuleOverride[]       @relation("user_module_override_target")
+  user_module_overrides_configured     UserModuleOverride[]       @relation("user_module_override_configured_by")
+  documents_uploaded                   Document[]                 @relation("document_uploaded_by")
+  projects_owned                       Project[]                  @relation("project_owner")
+  module_agents_created                ModuleAgent[]              @relation("module_agent_created_by")
+  module_agents_updated                ModuleAgent[]              @relation("module_agent_updated_by")
+  module_tools_created                 ModuleTool[]               @relation("module_tool_created_by")
+  module_tools_updated                 ModuleTool[]               @relation("module_tool_updated_by")
+  module_workflows_created             ModuleWorkflow[]           @relation("module_workflow_created_by")
+  module_workflows_updated             ModuleWorkflow[]           @relation("module_workflow_updated_by")
+  shipments_created                    Shipment[]                 @relation("shipment_created_by")
+  shipment_events                      ShipmentEvent[]            @relation("shipment_event_actor")
+  ddt_documents_requested              DdtDocument[]              @relation("ddt_document_requested_by")
+  measure_report_documents_requested   MeasureReportDocument[]    @relation("measure_report_document_requested_by")
+  notifications                        Notification[]
+  audit_logs                           AuditLog[]
+  assistant_sessions_opened            AssistantSession[]         @relation("assistant_session_opened_by")
   assistant_session_documents_uploaded AssistantSessionDocument[] @relation("assistant_session_document_uploaded_by")
-  assistant_messages_authored        AssistantMessage[]         @relation("assistant_message_author")
-  quotation_jobs_requested           QuotationOrchestratorJob[] @relation("quotation_job_requested_by")
-  workflow_runs_requested            ModuleWorkflowRun[]        @relation("module_workflow_run_requested_by")
+  assistant_messages_authored          AssistantMessage[]         @relation("assistant_message_author")
+  quotation_jobs_requested             QuotationOrchestratorJob[] @relation("quotation_job_requested_by")
+  workflow_runs_requested              ModuleWorkflowRun[]        @relation("module_workflow_run_requested_by")
 
   @@index([deleted_at])
   @@map("users")
@@ -343,13 +343,13 @@ model UserMessagingChannel {
 }
 
 model TelegramLinkCode {
-  id           String   @id @default(uuid()) @db.Uuid
-  workspace_id String   @db.Uuid
-  user_id      String   @db.Uuid
-  code_hash    String   @unique
+  id           String    @id @default(uuid()) @db.Uuid
+  workspace_id String    @db.Uuid
+  user_id      String    @db.Uuid
+  code_hash    String    @unique
   expires_at   DateTime
   consumed_at  DateTime?
-  created_at   DateTime @default(now())
+  created_at   DateTime  @default(now())
 
   workspace Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
@@ -491,19 +491,20 @@ model AuthLoginChallenge {
 }
 
 model UserPreference {
-  id                Int      @id @default(autoincrement())
-  user_id           String   @db.Uuid
-  workspace_id      String?  @db.Uuid
-  palette_id        String   @default("predefinito")
-  language_code     String   @default("it")
-  rows_projects     Int      @default(10)
-  rows_clients      Int      @default(10)
-  rows_shipments    Int      @default(10)
-  columns_projects  Json?
-  columns_clients   Json?
-  columns_shipments Json?
-  created_at        DateTime @default(now())
-  updated_at        DateTime @updatedAt
+  id                    Int      @id @default(autoincrement())
+  user_id               String   @db.Uuid
+  workspace_id          String?  @db.Uuid
+  palette_id            String   @default("predefinito")
+  notification_position String   @default("bottom-right")
+  language_code         String   @default("it")
+  rows_projects         Int      @default(10)
+  rows_clients          Int      @default(10)
+  rows_shipments        Int      @default(10)
+  columns_projects      Json?
+  columns_clients       Json?
+  columns_shipments     Json?
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
 
   user      User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
   workspace Workspace? @relation(fields: [workspace_id], references: [id], onDelete: SetNull)
@@ -667,18 +668,18 @@ model Document {
   updated_at          DateTime      @updatedAt
   deleted_at          DateTime?
 
-  workspace               Workspace              @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
-  node                    Node                   @relation(fields: [node_id], references: [id], onDelete: Restrict)
-  file_type               FileType               @relation(fields: [file_type_id], references: [id], onDelete: Restrict)
-  file_status             FileStatus             @relation(fields: [file_status_id], references: [id], onDelete: Restrict)
-  module                  Module?                @relation(fields: [module_id], references: [id], onDelete: SetNull)
-  uploaded_by_user        User?                  @relation("document_uploaded_by", fields: [uploaded_by_user_id], references: [id], onDelete: SetNull)
-  ddt_document            DdtDocument?
-  measure_report_document MeasureReportDocument?
-  assistant_sessions      AssistantSession[]
+  workspace                   Workspace                  @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  node                        Node                       @relation(fields: [node_id], references: [id], onDelete: Restrict)
+  file_type                   FileType                   @relation(fields: [file_type_id], references: [id], onDelete: Restrict)
+  file_status                 FileStatus                 @relation(fields: [file_status_id], references: [id], onDelete: Restrict)
+  module                      Module?                    @relation(fields: [module_id], references: [id], onDelete: SetNull)
+  uploaded_by_user            User?                      @relation("document_uploaded_by", fields: [uploaded_by_user_id], references: [id], onDelete: SetNull)
+  ddt_document                DdtDocument?
+  measure_report_document     MeasureReportDocument?
+  assistant_sessions          AssistantSession[]
   assistant_session_documents AssistantSessionDocument[]
-  workflow_runs           ModuleWorkflowRun[]
-  knowledge_documents     KnowledgeDocument[]
+  workflow_runs               ModuleWorkflowRun[]
+  knowledge_documents         KnowledgeDocument[]
 
   @@index([workspace_id])
   @@index([node_id])
@@ -1248,13 +1249,13 @@ model ModuleWorkflowNode {
   created_at      DateTime         @default(now())
   updated_at      DateTime         @updatedAt
 
-  workflow           ModuleWorkflow          @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
-  workspace          Workspace               @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
-  module_agent       ModuleAgent?            @relation(fields: [module_agent_id], references: [id], onDelete: SetNull)
-  module_tool        ModuleTool?             @relation(fields: [module_tool_id], references: [id], onDelete: SetNull)
-  source_edges       ModuleWorkflowEdge[]    @relation("module_workflow_edge_source")
-  target_edges       ModuleWorkflowEdge[]    @relation("module_workflow_edge_target")
-  workflow_run_steps ModuleWorkflowRunStep[]
+  workflow             ModuleWorkflow              @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
+  workspace            Workspace                   @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  module_agent         ModuleAgent?                @relation(fields: [module_agent_id], references: [id], onDelete: SetNull)
+  module_tool          ModuleTool?                 @relation(fields: [module_tool_id], references: [id], onDelete: SetNull)
+  source_edges         ModuleWorkflowEdge[]        @relation("module_workflow_edge_source")
+  target_edges         ModuleWorkflowEdge[]        @relation("module_workflow_edge_target")
+  workflow_run_steps   ModuleWorkflowRunStep[]
   scheduled_deliveries ScheduledWorkflowDelivery[]
 
   @@unique([workflow_id, node_key])
@@ -1323,17 +1324,17 @@ model ModuleWorkflowRun {
   created_at                 DateTime          @default(now())
   updated_at                 DateTime          @updatedAt
 
-  workspace               Workspace               @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
-  workflow                ModuleWorkflow          @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
-  module                  Module?                 @relation(fields: [module_id], references: [id], onDelete: SetNull)
-  requested_by_user       User?                   @relation("module_workflow_run_requested_by", fields: [requested_by_user_id], references: [id], onDelete: SetNull)
-  project                 Project?                @relation(fields: [project_id], references: [id], onDelete: SetNull)
-  project_version         ProjectVersion?         @relation(fields: [project_version_id], references: [id], onDelete: SetNull)
-  client                  Client?                 @relation(fields: [client_id], references: [id], onDelete: SetNull)
-  shipment                Shipment?               @relation(fields: [shipment_id], references: [id], onDelete: SetNull)
-  document                Document?               @relation(fields: [document_id], references: [id], onDelete: SetNull)
-  ddt_document            DdtDocument?            @relation(fields: [ddt_document_id], references: [id], onDelete: SetNull)
-  measure_report_document MeasureReportDocument?  @relation(fields: [measure_report_document_id], references: [id], onDelete: SetNull)
+  workspace               Workspace                   @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  workflow                ModuleWorkflow              @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
+  module                  Module?                     @relation(fields: [module_id], references: [id], onDelete: SetNull)
+  requested_by_user       User?                       @relation("module_workflow_run_requested_by", fields: [requested_by_user_id], references: [id], onDelete: SetNull)
+  project                 Project?                    @relation(fields: [project_id], references: [id], onDelete: SetNull)
+  project_version         ProjectVersion?             @relation(fields: [project_version_id], references: [id], onDelete: SetNull)
+  client                  Client?                     @relation(fields: [client_id], references: [id], onDelete: SetNull)
+  shipment                Shipment?                   @relation(fields: [shipment_id], references: [id], onDelete: SetNull)
+  document                Document?                   @relation(fields: [document_id], references: [id], onDelete: SetNull)
+  ddt_document            DdtDocument?                @relation(fields: [ddt_document_id], references: [id], onDelete: SetNull)
+  measure_report_document MeasureReportDocument?      @relation(fields: [measure_report_document_id], references: [id], onDelete: SetNull)
   steps                   ModuleWorkflowRunStep[]
   scheduled_deliveries    ScheduledWorkflowDelivery[]
 
@@ -1815,15 +1816,15 @@ model AssistantSession {
   updated_at          DateTime               @updatedAt
   deleted_at          DateTime?
 
-  workspace        Workspace                 @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
-  opened_by_user   User?                     @relation("assistant_session_opened_by", fields: [opened_by_user_id], references: [id], onDelete: SetNull)
-  module           Module?                   @relation(fields: [module_id], references: [id], onDelete: SetNull)
-  project          Project?                  @relation(fields: [project_id], references: [id], onDelete: SetNull)
-  project_version  ProjectVersion?           @relation(fields: [project_version_id], references: [id], onDelete: SetNull)
-  client           Client?                   @relation(fields: [client_id], references: [id], onDelete: SetNull)
-  shipment         Shipment?                 @relation(fields: [shipment_id], references: [id], onDelete: SetNull)
-  document         Document?                 @relation(fields: [document_id], references: [id], onDelete: SetNull)
-  ddt_document     DdtDocument?              @relation(fields: [ddt_document_id], references: [id], onDelete: SetNull)
+  workspace        Workspace                  @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  opened_by_user   User?                      @relation("assistant_session_opened_by", fields: [opened_by_user_id], references: [id], onDelete: SetNull)
+  module           Module?                    @relation(fields: [module_id], references: [id], onDelete: SetNull)
+  project          Project?                   @relation(fields: [project_id], references: [id], onDelete: SetNull)
+  project_version  ProjectVersion?            @relation(fields: [project_version_id], references: [id], onDelete: SetNull)
+  client           Client?                    @relation(fields: [client_id], references: [id], onDelete: SetNull)
+  shipment         Shipment?                  @relation(fields: [shipment_id], references: [id], onDelete: SetNull)
+  document         Document?                  @relation(fields: [document_id], references: [id], onDelete: SetNull)
+  ddt_document     DdtDocument?               @relation(fields: [ddt_document_id], references: [id], onDelete: SetNull)
   messages         AssistantMessage[]
   documents        AssistantSessionDocument[]
   tool_calls       AssistantToolCall[]
@@ -1845,13 +1846,13 @@ model AssistantSession {
 }
 
 model AssistantSessionDocument {
-  id                  String   @id @default(uuid()) @db.Uuid
-  workspace_id        String   @db.Uuid
-  session_id          String   @db.Uuid
-  document_id         String   @db.Uuid
-  uploaded_by_user_id String?  @db.Uuid
+  id                  String    @id @default(uuid()) @db.Uuid
+  workspace_id        String    @db.Uuid
+  session_id          String    @db.Uuid
+  document_id         String    @db.Uuid
+  uploaded_by_user_id String?   @db.Uuid
   display_name        String?
-  created_at          DateTime @default(now())
+  created_at          DateTime  @default(now())
   deleted_at          DateTime?
 
   workspace        Workspace        @relation(fields: [workspace_id], references: [id], onDelete: Restrict)

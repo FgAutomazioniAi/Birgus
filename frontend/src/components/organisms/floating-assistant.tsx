@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { FileText, Loader2, Maximize2, Minus, Paperclip, Send, X } from "lucide-react";
-import { toast } from "sonner";
 
 import { useTheme } from "@/components/organisms/theme-provider";
 import { cn } from "@/lib/cn";
@@ -47,16 +46,16 @@ type KnowledgeMode = "on_demand" | "saved" | "hybrid";
 
 const knowledgeModeOptions: Array<{ value: KnowledgeMode; label: string }> = [
   { value: "hybrid", label: "Hybrid" },
-  { value: "on_demand", label: "On demand" },
-  { value: "saved", label: "Saved" },
+  { value: "on_demand", label: "Fast" },
+  { value: "saved", label: "Thinking" },
 ];
 
 const assistantLogoByTheme: Record<ThemeId, string> = {
   predefinito: "/birgus-logo/cropped/blue.png",
   grafite: "/birgus-logo/cropped/black.png",
-  lavanda: "/birgus-logo/cropped/violet.png",
+  lavanda: "/birgus-logo/cropped/blue.png",
   oceano: "/birgus-logo/cropped/azure.png",
-  ambra: "/birgus-logo/cropped/orange.png",
+  ambra: "/birgus-logo/cropped/violet.png",
 };
 
 export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
@@ -148,7 +147,6 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
       }
     } catch (error) {
       setKnowledgeMode(previousMode);
-      toast.error(error instanceof Error ? error.message : "Errore modalita knowledge.");
     } finally {
       setIsSavingKnowledgeMode(false);
     }
@@ -174,9 +172,8 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
       }
 
       setDocuments((current) => [...current.filter((item) => item.id !== payload.document?.id), payload.document as AssistantDocument]);
-      toast.success(`${payload.document.fileName} caricato nella chat.`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Errore caricamento documento.");
+    } catch {
+      // Keep chatbot upload failures silent; the user can retry without a popup.
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) {
@@ -218,8 +215,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
         ...(payload.userMessage ? [payload.userMessage] : [optimisticMessage]),
         ...(payload.assistantMessage ? [payload.assistantMessage] : []),
       ]);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Errore chat.");
+    } catch {
       setMessages((current) => current.filter((message) => message.id !== optimisticMessage.id));
       setInput(content);
     } finally {
@@ -306,7 +302,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
             ) : null}
             {messages.length === 0 ? (
               <div className="mt-auto rounded-lg border border-dashed border-border-default bg-bg-surface p-4 text-sm text-text-muted">
-                Chiedimi informazioni su progetti, spedizioni o knowledge documentale indicizzata.
+                Chiedimi informazioni su progetti, documenti o storici. puoi allegarmi documenti per analizzarli.
               </div>
             ) : null}
             {messages.map((message) => {
