@@ -125,7 +125,7 @@ export class SuperadminService {
     return modules;
   }
 
-  public async listUsers(searchText?: string | null): Promise<Array<{
+  public async listUsers(searchText?: string | null, workspaceId?: string | null): Promise<Array<{
     id: string;
     email: string;
     firstName: string;
@@ -147,6 +147,16 @@ export class SuperadminService {
               { first_name: { contains: search, mode: "insensitive" } },
               { last_name: { contains: search, mode: "insensitive" } },
             ],
+          }
+          : {}),
+        ...(workspaceId
+          ? {
+            memberships: {
+              some: {
+                workspace_id: workspaceId,
+                status: "ACTIVE",
+              },
+            },
           }
           : {}),
       },

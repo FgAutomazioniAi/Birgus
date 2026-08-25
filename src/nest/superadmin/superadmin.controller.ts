@@ -10,6 +10,7 @@ import { CurrentRequestContext } from "../common/decorators/request-context.deco
 
 const usersQuerySchema = z.object({
   search: z.string().trim().optional(),
+  workspaceId: z.string().uuid().optional(),
 });
 
 const userParamsSchema = z.object({
@@ -112,7 +113,7 @@ export class NestSuperadminController {
   ): Promise<Record<string, unknown>> {
     await this.ensureSuperadmin(requestContext);
     const query = usersQuerySchema.parse(queryRaw);
-    return { users: await this.service.listUsers(query.search ?? null) };
+    return { users: await this.service.listUsers(query.search ?? null, query.workspaceId ?? null) };
   }
 
   @Post("users")

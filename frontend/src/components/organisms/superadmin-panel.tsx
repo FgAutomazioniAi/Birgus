@@ -117,13 +117,16 @@ export function SuperadminPanel() {
     try {
       const [workspacePayload, userPayload, rolePayload, modulePayload] = await Promise.all([
         fetchJson<{ workspaces: WorkspaceDto[] }>("/api/superadmin/workspaces"),
-        fetchJson<{ users: UserDto[] }>(`/api/superadmin/users?search=${encodeURIComponent(search.trim())}`),
+        fetchJson<{ users: UserDto[] }>(`/api/superadmin/users?search=${encodeURIComponent(search.trim())}${selectedWorkspaceId ? `&workspaceId=${encodeURIComponent(selectedWorkspaceId)}` : ""}`),
         fetchJson<{ roles: RoleDto[] }>("/api/superadmin/roles"),
         fetchJson<{ modules: ModuleDto[] }>("/api/superadmin/modules"),
       ]);
 
       setWorkspaces(workspacePayload.workspaces ?? []);
       setUsers(userPayload.users ?? []);
+      if (selectedUserId && !(userPayload.users ?? []).some((user) => user.id === selectedUserId)) {
+        setSelectedUserId("");
+      }
       setRoles(rolePayload.roles ?? []);
       setModules(modulePayload.modules ?? []);
 
@@ -170,6 +173,13 @@ export function SuperadminPanel() {
     void loadBase();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (selectedWorkspaceId) {
+      void loadBase();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWorkspaceId]);
 
   useEffect(() => {
     void loadUserContext(selectedUserId, selectedWorkspaceId);
