@@ -81,6 +81,7 @@ const messages: Record<string, Record<UiLanguage, string>> = {
   "settings.ocr.description": { it: "Abilita il lettore DDT e l'elaborazione OCR nel workspace corrente.", en: "Enable the DDT reader and OCR processing in the current workspace." },
   "settings.ocr.runtime": { it: "Disattivandolo il container OCR viene arrestato e la sua memoria viene liberata. Riattivandolo, il servizio viene avviato di nuovo.", en: "Disabling it stops the OCR container and releases its memory. Enabling it starts the service again." },
   "settings.ocr.containerStopped": { it: "Servizio OCR arrestato: memoria del container liberata.", en: "OCR service stopped: container memory released." },
+  "settings.ocr.sharedRunning": { it: "OCR resta attivo perche e ancora abilitato in un altro workspace.", en: "OCR remains active because it is still enabled in another workspace." },
   "settings.ocr.containerStarted": { it: "Servizio OCR avviato.", en: "OCR service started." },
   "settings.ocr.starting": { it: "OCR in preparazione: i modelli Paddle vengono caricati in background.", en: "OCR is preparing: Paddle models are loading in the background." },
   "settings.ocr.ready": { it: "OCR pronto all'uso.", en: "OCR is ready to use." },

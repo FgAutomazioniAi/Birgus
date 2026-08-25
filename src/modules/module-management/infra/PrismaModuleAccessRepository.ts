@@ -118,8 +118,9 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
 
     return rows.map((row) => {
       const override = row.module.user_module_overrides[0]?.mode ?? null;
-      const effectiveEnabled =
-        override === "ALLOW"
+      const effectiveEnabled = row.module.key === "ddt_processing" && row.is_enabled === false
+        ? false
+        : override === "ALLOW"
           ? true
           : override === "DENY"
             ? false
@@ -313,6 +314,20 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
     });
 
     return enabledRows.map((item) => item.module.key);
+  }
+
+  public async isModuleEnabledInAnyActiveWorkspace(moduleKey: string): Promise<boolean> {
+    const prisma = PrismaClientManager.getClient();
+    const row = await prisma.workspaceModule.findFirst({
+      where: {
+        is_enabled: true,
+        module: { key: moduleKey, is_active: true },
+        workspace: { is_active: true, deleted_at: null },
+      },
+      select: { id: true },
+    });
+
+    return row !== null;
   }
 
   private async resolveModuleOrThrow(moduleKey: string): Promise<{ id: number }> {

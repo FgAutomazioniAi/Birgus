@@ -84,6 +84,7 @@ interface OcrModuleToggleResponse {
   ocrRuntime?: {
     error: string | null;
     running: boolean;
+    shared?: boolean;
   } | null;
 }
 
@@ -373,6 +374,8 @@ export function SettingsPanel() {
       if (!enabled && response.ocrRuntime) {
         if (response.ocrRuntime.error) {
           setOcrModuleError(t("settings.ocr.stopFailed"));
+        } else if (response.ocrRuntime.shared) {
+          setOcrModuleStatus(t("settings.ocr.sharedRunning"));
         } else {
           setOcrModuleStatus(response.ocrRuntime.running
             ? t("settings.ocr.stopFailed")

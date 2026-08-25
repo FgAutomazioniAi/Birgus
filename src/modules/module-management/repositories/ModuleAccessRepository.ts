@@ -17,4 +17,5 @@ export interface ModuleAccessRepository extends ModuleAccessReader {
   clearUserModuleOverride(workspaceId: string, userId: string, moduleKey: string): Promise<void>;
   listMissingDependenciesForEnable(workspaceId: string, moduleKey: string): Promise<string[]>;
   listEnabledDependents(workspaceId: string, moduleKey: string): Promise<string[]>;
+  isModuleEnabledInAnyActiveWorkspace(moduleKey: string): Promise<boolean>;
 }

@@ -237,13 +237,18 @@ export class NestModuleManagementController {
     }
   }
 
-  private async stopOcrRuntime(): Promise<{ running: boolean; error: string | null }> {
+  private async stopOcrRuntime(): Promise<{ running: boolean; shared: boolean; error: string | null }> {
+    if (await this.moduleManagementService.isModuleEnabledInAnyActiveWorkspace("ddt_processing")) {
+      return { running: true, shared: true, error: null };
+    }
+
     try {
       const result = await this.pythonModulesClient.stopOcrContainer();
-      return { ...result, error: null };
+      return { ...result, shared: false, error: null };
     } catch (error) {
       return {
         running: true,
+        shared: false,
         error: error instanceof Error ? error.message : "OCR container stop failed",
       };
     }

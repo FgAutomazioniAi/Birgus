@@ -44,6 +44,10 @@ export class ModuleManagementService {
     await this.repository.setWorkspaceModule(workspaceId, moduleKey, false, configuredByUserId);
   }
 
+  public async isModuleEnabledInAnyActiveWorkspace(moduleKey: string): Promise<boolean> {
+    return this.repository.isModuleEnabledInAnyActiveWorkspace(moduleKey);
+  }
+
   public async allowModuleForUser(
     workspaceId: string,
     targetUserId: string,
