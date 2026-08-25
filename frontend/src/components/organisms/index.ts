@@ -12,6 +12,7 @@ export * from "./shipping-panel";
 export * from "./shipments-table";
 export * from "./sidebar";
 export * from "./theme-provider";
+export * from "./language-provider";
 export * from "./toaster-provider";
 export * from "./top-nav";
 export * from "./personal-dashboard-panel";

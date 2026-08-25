@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { IconButton } from "@/components/atoms";
 import { UserChip } from "@/components/molecules";
+import { useLanguage } from "@/components/organisms/language-provider";
 import { APP_ROUTES } from "@/lib/routes";
 
 export interface TopNavProps {
@@ -31,8 +32,8 @@ interface NotificationItem {
   type: string;
 }
 
-const formatNotificationDate = (isoDate: string) =>
-  new Date(isoDate).toLocaleString("it-IT", {
+const formatNotificationDate = (isoDate: string, language: "it" | "en") =>
+  new Date(isoDate).toLocaleString(language === "it" ? "it-IT" : "en-GB", {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
@@ -40,6 +41,7 @@ const formatNotificationDate = (isoDate: string) =>
   });
 export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }: TopNavProps) {
   const router = useRouter();
+  const { language, setLanguage, t } = useLanguage();
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
@@ -130,16 +132,16 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
         body: JSON.stringify({ confirmText: "cancella" }),
       });
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({ message: "Cancellazione notifiche non riuscita." }))) as { message?: string };
-        throw new Error(payload.message ?? "Cancellazione notifiche non riuscita.");
+        const payload = (await response.json().catch(() => ({ message: t("notifications.clearFailed") }))) as { message?: string };
+        throw new Error(payload.message ?? t("notifications.clearFailed"));
       }
 
-      toast.success("Notifiche eliminate.");
+      toast.success(t("notifications.cleared"));
     } catch (error) {
       setNotifications(previousNotifications);
       const message = error instanceof Error && error.message.trim().length > 0
         ? error.message
-        : "Cancellazione notifiche non riuscita.";
+        : t("notifications.clearFailed");
       toast.error(message);
     }
   };
@@ -161,7 +163,7 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
 
           <button
             onClick={onToggleCollapse}
-            title={collapsed ? "Espandi menu laterale" : "Comprimi menu laterale"}
+            title={collapsed ? t("nav.expand") : t("nav.collapse")}
             className="group hidden items-center gap-2 rounded-lg px-3 py-2 text-text-muted transition-all hover:bg-status-info-bg hover:text-brand-primary lg:flex"
           >
             {collapsed ? (
@@ -173,6 +175,24 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
         </div>
 
         <div className="flex items-center gap-2 lg:gap-4">
+          <div className="inline-flex overflow-hidden rounded-[var(--radius-md)] border border-border-default" role="group" aria-label={t("language.switch")}>
+            <button
+              type="button"
+              className={`h-8 px-2 text-xs font-bold ${language === "it" ? "bg-brand-primary text-text-inverse" : "text-text-secondary hover:bg-bg-subtle"}`}
+              onClick={() => setLanguage("it")}
+              aria-pressed={language === "it"}
+            >
+              IT
+            </button>
+            <button
+              type="button"
+              className={`h-8 px-2 text-xs font-bold ${language === "en" ? "bg-brand-primary text-text-inverse" : "text-text-secondary hover:bg-bg-subtle"}`}
+              onClick={() => setLanguage("en")}
+              aria-pressed={language === "en"}
+            >
+              EN
+            </button>
+          </div>
           {notificationsEnabled ? (
             <>
               <div className="relative" ref={notificationRef}>
@@ -186,20 +206,20 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
                 {showNotifications && (
                   <div className="absolute right-0 top-12 max-h-[420px] w-[360px] overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-4 shadow-elevated">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">Comunicazioni</p>
+                      <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">{t("notifications.title")}</p>
                       <button
                         type="button"
                         onClick={() => void handleClearNotifications()}
                         className="rounded-md border border-border-default px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted transition-colors hover:bg-bg-subtle hover:text-text-secondary"
                       >
-                        Pulisci
+                        {t("notifications.clear")}
                       </button>
                     </div>
 
                     {isNotificationsLoading ? (
-                      <p className="mt-3 text-sm text-text-muted">Caricamento comunicazioni...</p>
+                      <p className="mt-3 text-sm text-text-muted">{t("notifications.loading")}</p>
                     ) : notifications.length === 0 ? (
-                      <p className="mt-3 text-sm text-text-muted">Hai zero comunicazioni.</p>
+                      <p className="mt-3 text-sm text-text-muted">{t("notifications.empty")}</p>
                     ) : (
                       <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
                         {notifications.map((notification) => (
@@ -207,7 +227,7 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
                             <p className="text-xs font-semibold text-text-primary">{notification.title}</p>
                             <p className="mt-1 text-xs leading-5 text-text-secondary">{notification.message}</p>
                             <p className="mt-1 text-[10px] uppercase tracking-wide text-text-muted">
-                              {formatNotificationDate(notification.createdAt)}
+                              {formatNotificationDate(notification.createdAt, language)}
                             </p>
                           </div>
                         ))}
@@ -221,7 +241,7 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
             </>
           ) : null}
 
-          <button onClick={handleOpenPersonalDashboard} title="Apri dashboard personale">
+          <button onClick={handleOpenPersonalDashboard} title={t("nav.personalDashboard")}>
             <UserChip name={userName} />
           </button>
         </div>

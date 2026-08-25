@@ -50,10 +50,6 @@ services:
       AI_PROVIDER_BASE_URL: "http://vllm:8000/v1"
       AI_PROVIDER_API_KEY: "${AI_PROVIDER_API_KEY:-${VLLM_API_KEY:?VLLM_API_KEY is required}}"
       AI_PROVIDER_CHAT_MODEL: "${AI_PROVIDER_CHAT_MODEL:-${VLLM_SERVED_MODEL_NAME:-birgus-vl}}"
-      ORCH_LM_BASE_URL: "http://vllm:8000/v1"
-      ORCH_LM_MODEL: "${ORCH_LM_MODEL:-${AI_PROVIDER_CHAT_MODEL:-${VLLM_SERVED_MODEL_NAME:-birgus-vl}}}"
-      MEASURE_REPORT_LM_BASE_URL: "${MEASURE_REPORT_LM_BASE_URL:-http://vllm:8000/v1}"
-      MEASURE_REPORT_LM_MODEL: "${MEASURE_REPORT_LM_MODEL:-${AI_PROVIDER_CHAT_MODEL:-${VLLM_SERVED_MODEL_NAME:-birgus-vl}}}"
     depends_on:
       vllm:
         condition: service_healthy

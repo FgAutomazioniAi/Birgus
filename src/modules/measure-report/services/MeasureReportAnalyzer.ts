@@ -85,7 +85,7 @@ export class MeasureReportAnalyzer {
   ) {
     this.moduleAgentService = moduleAgentService;
     this.pythonModulesClient = pythonModulesClient ?? new BackendPythonModulesClient();
-    this.lmClient = lmClient ?? this.buildMeasureReportLmClient();
+    this.lmClient = lmClient ?? new OpenAiCompatibleLmClient();
   }
 
   public async analyze(params: {
@@ -205,19 +205,6 @@ export class MeasureReportAnalyzer {
       },
       rows,
     };
-  }
-
-  private buildMeasureReportLmClient(): OpenAiCompatibleLmClient {
-    const timeoutMs = this.parseOptionalPositiveInt(process.env.MEASURE_REPORT_LM_TIMEOUT_MS);
-    const maxOutputTokens = this.parseOptionalPositiveInt(process.env.MEASURE_REPORT_LM_MAX_OUTPUT_TOKENS);
-    return new OpenAiCompatibleLmClient({
-      baseUrl: this.normalizeLmBaseUrl(process.env.MEASURE_REPORT_LM_BASE_URL ?? process.env.ORCH_LM_BASE_URL),
-      requestedModel: process.env.MEASURE_REPORT_LM_MODEL ?? process.env.ORCH_LM_MODEL,
-      completionsPath: process.env.MEASURE_REPORT_LM_COMPLETIONS_PATH ?? process.env.ORCH_LM_COMPLETIONS_PATH,
-      modelsPath: process.env.MEASURE_REPORT_LM_MODELS_PATH ?? process.env.ORCH_LM_MODELS_PATH,
-      timeoutMs: timeoutMs ?? undefined,
-      maxOutputTokens: maxOutputTokens ?? undefined,
-    });
   }
 
   private normalizePreparedPayload(
@@ -522,24 +509,6 @@ export class MeasureReportAnalyzer {
   private looksLikeAxisToken(value: string): boolean {
     const token = value.trim().toUpperCase();
     return /^[A-Z]{1,3}$/.test(token) && !this.isNumericLike(token);
-  }
-
-  private parseOptionalPositiveInt(value: string | undefined): number | null {
-    const parsed = Number.parseInt(value ?? "", 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-  }
-
-  private normalizeLmBaseUrl(value: string | undefined): string | undefined {
-    const baseUrl = value?.trim();
-    if (!baseUrl) {
-      return undefined;
-    }
-
-    return baseUrl
-      .replace(/\/v1\/chat\/completions\/?$/i, "")
-      .replace(/\/api\/v1\/chat\/?$/i, "")
-      .replace(/\/api\/v1\/models\/?$/i, "")
-      .replace(/\/v1\/?$/i, "");
   }
 
   private toNullableString(value: unknown): string | null {

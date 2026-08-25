@@ -1,6 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 
-import { DdtProcessingService } from "../../modules/ddt-processing/services/DdtProcessingService.js";
 import { QuotationOrchestratorService } from "../../modules/quotation-orchestrator/services/QuotationOrchestratorService.js";
 import { ScheduledWorkflowDeliveryService } from "../../modules/workflows/services/ScheduledWorkflowDeliveryService.js";
 import { TelegramLinkPollingService } from "../../modules/connected-apps/services/TelegramLinkPollingService.js";
@@ -15,8 +14,6 @@ export class BackendRuntimeService {
   public constructor(
     @Inject(WorkerCoordinator)
     private readonly workerCoordinator: WorkerCoordinator,
-    @Inject(DdtProcessingService)
-    private readonly ddtProcessingService: DdtProcessingService,
     @Inject(QuotationOrchestratorService)
     private readonly quotationOrchestratorService: QuotationOrchestratorService,
     @Inject(WorkflowRunExecutorService)
@@ -38,14 +35,12 @@ export class BackendRuntimeService {
     this.telegramLinkPollingService.start();
 
     const results = await Promise.allSettled([
-      this.ddtProcessingService.resumePendingJobs(),
       this.quotationOrchestratorService.resumePendingJobs(),
       this.workflowRunExecutorService.resumeRecoverableRuns(),
     ]);
 
-    this.logResumeOutcome("DDT jobs", results[0]);
-    this.logResumeOutcome("quotation jobs", results[1]);
-    this.logResumeOutcome("workflow runs", results[2]);
+    this.logResumeOutcome("quotation jobs", results[0]);
+    this.logResumeOutcome("workflow runs", results[1]);
   }
 
   private logResumeOutcome(label: string, result: PromiseSettledResult<void>): void {

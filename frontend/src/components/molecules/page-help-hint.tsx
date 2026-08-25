@@ -3,11 +3,14 @@
 import { CircleHelp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { useLanguage } from "@/components/organisms/language-provider";
+
 interface PageHelpHintProps {
   text: string;
 }
 
 export function PageHelpHint({ text }: PageHelpHintProps) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -40,8 +43,8 @@ export function PageHelpHint({ text }: PageHelpHintProps) {
     <div className="relative inline-flex" ref={containerRef}>
       <button
         type="button"
-        aria-label="Aiuto rapido pagina"
-        title="Aiuto rapido"
+        aria-label={t("common.quickHelpPage")}
+        title={t("common.quickHelp")}
         onClick={() => setOpen((prev) => !prev)}
         className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border-default bg-bg-surface text-text-secondary transition-colors hover:bg-bg-muted hover:text-brand-primary"
       >

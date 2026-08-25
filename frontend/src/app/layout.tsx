@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import "@/app/globals.css";
 import "leaflet/dist/leaflet.css";
 import "@xyflow/react/dist/style.css";
-import { ThemeProvider, ToasterProvider } from "@/components/organisms";
+import { LanguageProvider, ThemeProvider, ToasterProvider } from "@/components/organisms";
 import { DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/themes";
 
 export const metadata: Metadata = {
@@ -28,9 +28,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
-        <ThemeProvider>
-          <ToasterProvider>{children}</ToasterProvider>
-        </ThemeProvider>
+        <LanguageProvider>
+          <ThemeProvider>
+            <ToasterProvider>{children}</ToasterProvider>
+          </ThemeProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

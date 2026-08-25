@@ -17,10 +17,10 @@ export class KnowledgeEmbeddingService {
   public constructor() {
     this.provider = (process.env.KNOWLEDGE_EMBEDDING_PROVIDER ?? "local-hash").trim().toLowerCase();
     this.dimensions = this.toPositiveInt(process.env.KNOWLEDGE_EMBEDDING_DIMENSIONS, 256);
-    this.baseUrl = (process.env.AI_PROVIDER_BASE_URL ?? process.env.ORCH_LM_BASE_URL ?? "http://vllm:8000/v1").replace(/\/+$/, "");
+    this.baseUrl = (process.env.AI_PROVIDER_BASE_URL ?? "http://vllm:8000/v1").replace(/\/+$/, "");
     this.embeddingsPath = this.normalizePath(process.env.KNOWLEDGE_LM_EMBEDDINGS_PATH ?? "/v1/embeddings");
     this.model = (process.env.KNOWLEDGE_EMBEDDING_MODEL ?? "").trim() || null;
-    this.timeoutMs = this.toPositiveInt(process.env.AI_PROVIDER_TIMEOUT_MS ?? process.env.ORCH_LM_TIMEOUT_MS, 600000);
+    this.timeoutMs = this.toPositiveInt(process.env.AI_PROVIDER_TIMEOUT_MS, 600000);
   }
 
   public async embed(text: string): Promise<EmbeddingResult> {

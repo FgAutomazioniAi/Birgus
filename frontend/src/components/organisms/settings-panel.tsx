@@ -1,11 +1,15 @@
 "use client";
 
-import { BellRing, Bot, CheckCircle2, Loader2, Mail, Palette, PlugZap, RefreshCw, Save } from "lucide-react";
+import { BellRing, Bot, CheckCircle2, FileSearch, Loader2, Mail, Palette, PlugZap, RefreshCw, Save } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { Button, Card, Input, Label, Text } from "@/components/atoms";
 import { PageHelpHint, SelectDropdown } from "@/components/molecules";
 import { useTheme } from "@/components/organisms/theme-provider";
+import { useLanguage } from "@/components/organisms/language-provider";
+import { aiProviderErrorMessage } from "@/lib/language";
 import {
   isToastPosition,
   TOAST_POSITION_OPTIONS,
@@ -16,6 +20,7 @@ import { useModuleAccess } from "@/lib/module-access";
 import type { ThemeId } from "@/lib/themes";
 
 interface AiProviderSettings {
+  availableProviders: Array<{ id: string; label: string; protocol: string }>;
   baseUrl: string;
   chatModel: string;
   provider: string;
@@ -41,7 +46,13 @@ interface MailProviderSettings {
   resendConfigured: boolean;
 }
 
+interface WorkspaceModuleSettings {
+  moduleKey: string;
+  enabled: boolean;
+}
+
 const defaultAiProviderSettings: AiProviderSettings = {
+  availableProviders: [{ id: "vllm", label: "vLLM", protocol: "openai_compatible" }],
   baseUrl: "http://vllm:8000/v1",
   chatModel: "birgus-vl",
   provider: "openai_compatible",
@@ -62,6 +73,27 @@ const defaultMailProviderSettings: MailProviderSettings = {
   resendConfigured: false,
 };
 
+class ApiRequestError extends Error {
+  public constructor(public readonly code: string | null, message: string) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+
+interface OcrModuleToggleResponse {
+  ocrRuntime?: {
+    error: string | null;
+    running: boolean;
+  } | null;
+}
+
+interface OcrRuntimeStatus {
+  containerRunning: boolean;
+  state: "stopped" | "idle" | "starting" | "ready" | "failed";
+  modelLoaded: boolean;
+  error: string | null;
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     cache: "no-store",
@@ -73,12 +105,18 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(String((payload as { message?: unknown }).message ?? "Richiesta non riuscita."));
+    const body = payload as { code?: unknown; message?: unknown };
+    throw new ApiRequestError(
+      typeof body.code === "string" ? body.code : null,
+      String(body.message ?? "Request failed."),
+    );
   }
   return payload as T;
 }
 
 export function SettingsPanel() {
+  const router = useRouter();
+  const { language, t } = useLanguage();
   const { options, theme, setTheme } = useTheme();
   const { position: toastPosition, setPosition: setToastPosition } = useToasterPreferences();
   const { hasModule } = useModuleAccess();
@@ -100,6 +138,18 @@ export function SettingsPanel() {
   const [validatingMail, setValidatingMail] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingMail, setSavingMail] = useState(false);
+  const [ocrModuleEnabled, setOcrModuleEnabled] = useState<boolean | null>(null);
+  const [loadingOcrModule, setLoadingOcrModule] = useState(true);
+  const [savingOcrModule, setSavingOcrModule] = useState(false);
+  const [ocrModuleError, setOcrModuleError] = useState<string | null>(null);
+  const [ocrModuleStatus, setOcrModuleStatus] = useState<string | null>(null);
+
+  const describeAiProviderError = (error: unknown) => {
+    if (error instanceof ApiRequestError) {
+      return aiProviderErrorMessage(language, error.code);
+    }
+    return t("settings.ai.providerFailed");
+  };
 
   useEffect(() => {
     if (!canConfigureAiProvider) {
@@ -112,7 +162,7 @@ export function SettingsPanel() {
         const payload = await fetchJson<{ settings: AiProviderSettings }>("/api/settings/ai-provider");
         setAiSettings(payload.settings);
       } catch (error) {
-        setAiError(error instanceof Error ? error.message : "Impossibile leggere le impostazioni AI.");
+        setAiError(error instanceof Error ? error.message : t("settings.ai.loadFailed"));
       } finally {
         setLoadingSettings(false);
       }
@@ -141,6 +191,31 @@ export function SettingsPanel() {
     void loadMailSettings();
   }, [canConfigureMailProvider]);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadOcrModule = async () => {
+      try {
+        const payload = await fetchJson<{ modules: WorkspaceModuleSettings[] }>("/api/modules/workspace-settings");
+        const ocrModule = payload.modules.find((item) => item.moduleKey === "ddt_processing");
+        if (active) {
+          setOcrModuleEnabled(ocrModule?.enabled ?? null);
+        }
+      } catch {
+        // The endpoint is intentionally unavailable to users without module configuration permission.
+      } finally {
+        if (active) {
+          setLoadingOcrModule(false);
+        }
+      }
+    };
+
+    void loadOcrModule();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const modelOptions = useMemo(() => {
     const ids = new Set<string>();
     const optionsFromModels = models
@@ -161,6 +236,7 @@ export function SettingsPanel() {
   const buildAiProviderPayload = () => ({
     baseUrl: aiSettings.baseUrl,
     chatModel: aiSettings.chatModel,
+    provider: aiSettings.provider,
     temperature: Number(aiSettings.temperature),
     timeoutMs: Number(aiSettings.timeoutMs),
   });
@@ -189,12 +265,14 @@ export function SettingsPanel() {
       if (payload.models.length === 1) {
         const onlyModel = payload.models[0]?.id ?? "";
         setAiSettings((prev) => ({ ...prev, chatModel: onlyModel }));
-        setAiStatus(`Modello caricato: ${onlyModel}`);
+        setAiStatus(t("settings.ai.modelsOne", { model: onlyModel }));
       } else {
-        setAiStatus(payload.models.length > 0 ? `Trovati ${payload.models.length} modelli.` : "Provider raggiunto, nessun modello elencato.");
+        setAiStatus(payload.models.length > 0
+          ? t("settings.ai.modelsMany", { count: payload.models.length })
+          : t("settings.ai.modelsEmpty"));
       }
     } catch (error) {
-      setAiError(error instanceof Error ? error.message : "Discovery modelli fallita.");
+      setAiError(describeAiProviderError(error));
     } finally {
       setLoadingModels(false);
     }
@@ -210,11 +288,11 @@ export function SettingsPanel() {
         body: JSON.stringify(buildAiProviderPayload()),
       });
       if (!payload.ok) {
-        throw new Error(payload.error ?? "Connessione AI non valida.");
+        throw new ApiRequestError(payload.error, payload.error ?? "AI_PROVIDER_REQUEST_FAILED");
       }
-      setAiStatus(`Connessione valida. Modello: ${payload.model ?? aiSettings.chatModel}`);
+      setAiStatus(t("settings.ai.valid", { model: payload.model ?? aiSettings.chatModel }));
     } catch (error) {
-      setAiError(error instanceof Error ? error.message : "Validazione fallita.");
+      setAiError(describeAiProviderError(error));
     } finally {
       setValidating(false);
     }
@@ -230,9 +308,9 @@ export function SettingsPanel() {
         body: JSON.stringify(buildAiProviderPayload()),
       });
       setAiSettings(payload.settings);
-      setAiStatus("Configurazione AI salvata.");
+      setAiStatus(t("settings.ai.saved"));
     } catch (error) {
-      setAiError(error instanceof Error ? error.message : "Salvataggio fallito.");
+      setAiError(describeAiProviderError(error));
     } finally {
       setSaving(false);
     }
@@ -277,37 +355,105 @@ export function SettingsPanel() {
     }
   };
 
+  const handleToggleOcrModule = async () => {
+    if (ocrModuleEnabled === null) {
+      return;
+    }
+
+    const enabled = !ocrModuleEnabled;
+    setSavingOcrModule(true);
+    setOcrModuleError(null);
+    setOcrModuleStatus(null);
+    try {
+      const response = await fetchJson<OcrModuleToggleResponse>(`/api/modules/ddt_processing/${enabled ? "enable" : "disable"}`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      setOcrModuleEnabled(enabled);
+      if (!enabled && response.ocrRuntime) {
+        if (response.ocrRuntime.error) {
+          setOcrModuleError(t("settings.ocr.stopFailed"));
+        } else {
+          setOcrModuleStatus(response.ocrRuntime.running
+            ? t("settings.ocr.stopFailed")
+            : t("settings.ocr.containerStopped"));
+        }
+      } else if (enabled && response.ocrRuntime?.running) {
+        setOcrModuleStatus(t("settings.ocr.starting"));
+        void waitForOcrReadiness();
+      }
+      router.refresh();
+    } catch (error) {
+      setOcrModuleError(error instanceof Error ? error.message : "Impossibile aggiornare il modulo OCR.");
+    } finally {
+      setSavingOcrModule(false);
+    }
+  };
+
+  const waitForOcrReadiness = async () => {
+    const notificationId = toast.loading(t("settings.ocr.starting"));
+
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      try {
+        const runtime = await fetchJson<OcrRuntimeStatus>("/api/modules/ddt_processing/runtime");
+        if (runtime.state === "ready") {
+          setOcrModuleStatus(t("settings.ocr.ready"));
+          toast.success(t("settings.ocr.ready"), { id: notificationId });
+          return;
+        }
+        if (runtime.state === "failed") {
+          const message = runtime.error
+            ? `${t("settings.ocr.readyFailed")} ${runtime.error}`
+            : t("settings.ocr.readyFailed");
+          setOcrModuleError(message);
+          toast.error(message, { id: notificationId });
+          return;
+        }
+      } catch {
+        // The container is still booting; the following attempt will retry.
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, 2000));
+    }
+
+    const message = t("settings.ocr.readyTimeout");
+    setOcrModuleError(message);
+    toast.error(message, { id: notificationId });
+  };
+
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div>
+    <div className="mx-auto max-w-6xl space-y-4">
+      <div className="flex items-end justify-between gap-4 border-b border-border-subtle pb-3">
         <div className="flex items-center gap-2">
           <Text as="h1" variant="h1">
-            Impostazioni
+            {t("settings.title")}
           </Text>
-          <PageHelpHint text="Modifica le preferenze visive dell'app." />
+          <PageHelpHint text={t("settings.help")} />
         </div>
-        <Text variant="muted">Personalizza le tue preferenze</Text>
+        <Text variant="caption">{t("settings.subtitle")}</Text>
       </div>
 
-      <Card className="space-y-4 p-4 lg:p-5">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <label className="flex items-center gap-2 text-sm font-bold text-text-primary" htmlFor="theme-selector">
+      <div className="grid gap-3 lg:grid-cols-3">
+      <Card className="space-y-2 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <label className="flex items-center gap-2 text-xs font-bold text-text-primary" htmlFor="theme-selector">
             <Palette size={16} className="text-brand-primary" />
-            Palette colore
+            {t("settings.palette")}
           </label>
           <SelectDropdown
             id="theme-selector"
-            className="w-full sm:w-72"
+            className="w-44"
+            size="sm"
             value={theme}
             onChange={(value) => setTheme(value as ThemeId)}
             options={options.map((option) => ({ value: option.id, label: option.label }))}
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] border border-border-subtle bg-bg-muted px-3 py-2">
+        <div className="flex items-center gap-2 text-xs text-text-muted">
           <span className="text-xs font-bold text-text-secondary">{selectedTheme.label}</span>
           <span className="text-xs text-text-muted">{selectedTheme.description}</span>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1">
             {selectedTheme.swatches.map((swatch) => (
               <span
                 key={`${selectedTheme.id}-${swatch}`}
@@ -319,15 +465,16 @@ export function SettingsPanel() {
         </div>
       </Card>
 
-      <Card className="space-y-4 p-4 lg:p-5">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <label className="flex items-center gap-2 text-sm font-bold text-text-primary" htmlFor="toast-position-selector">
+      <Card className="space-y-2 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <label className="flex items-center gap-2 text-xs font-bold text-text-primary" htmlFor="toast-position-selector">
             <BellRing size={16} className="text-brand-primary" />
-            Posizione notifiche
+            {t("settings.notificationsPosition")}
           </label>
           <SelectDropdown
             id="toast-position-selector"
-            className="w-full sm:w-72"
+            className="w-44"
+            size="sm"
             value={toastPosition}
             onChange={(value) => {
               if (isToastPosition(value)) {
@@ -339,58 +486,106 @@ export function SettingsPanel() {
         </div>
       </Card>
 
+      {!loadingOcrModule && ocrModuleEnabled !== null ? (
+        <Card className="space-y-2 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <FileSearch size={18} className="text-brand-primary" />
+              <Text as="h2" variant="h2" className="text-base">{t("settings.ocr.title")}</Text>
+              </div>
+              <Text variant="caption">{t("settings.ocr.description")}</Text>
+            </div>
+            <label className="flex shrink-0 items-center gap-2 text-xs font-semibold text-text-secondary" htmlFor="ocr-module-enabled">
+              <input
+                id="ocr-module-enabled"
+                name="ocr-module-enabled"
+                type="checkbox"
+                role="switch"
+                className="h-4 w-4 accent-[var(--brand-primary)]"
+                checked={ocrModuleEnabled}
+                disabled={savingOcrModule}
+                onChange={() => void handleToggleOcrModule()}
+              />
+              {savingOcrModule ? t("auth.updating") : ocrModuleEnabled ? t("settings.active") : t("settings.inactive")}
+            </label>
+          </div>
+          {ocrModuleError ? (
+            <div className="rounded-[var(--radius-md)] border border-status-danger-border bg-status-danger-bg px-3 py-2 text-sm font-semibold text-status-danger-text">
+              {ocrModuleError}
+            </div>
+          ) : null}
+          {ocrModuleStatus ? (
+            <div className="rounded-[var(--radius-md)] border border-status-success-border bg-status-success-bg px-3 py-2 text-sm font-semibold text-status-success-text">
+              {ocrModuleStatus}
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
+      </div>
+
       {canConfigureAiProvider ? (
-      <Card className="space-y-5 p-4 lg:p-5">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <Card className="space-y-3 p-3 lg:p-4">
+        <div className="flex items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               <Bot size={18} className="text-brand-primary" />
-              <Text as="h2" variant="h2">
-                AI provider
+              <Text as="h2" variant="h2" className="text-base">
+                {t("settings.ai.title")}
               </Text>
             </div>
-            <Text variant="muted">
-              Provider OpenAI-compatible usato da workflow, orchestrazione e LangChain.
+            <Text variant="caption">
+              {t("settings.ai.description")}
             </Text>
           </div>
-          <span className="rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-2 py-1 text-xs font-bold text-text-secondary">
-            {aiSettings.source === "database" ? "database" : ".env"}
-          </span>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="space-y-2 lg:col-span-2">
-            <Label htmlFor="ai-provider-base-url">Base URL</Label>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="ai-provider-kind">Provider</Label>
+            <SelectDropdown
+              id="ai-provider-kind"
+              value={aiSettings.provider}
+              disabled={loadingSettings}
+              size="sm"
+              options={aiSettings.availableProviders.map((provider) => ({ value: provider.id, label: provider.label }))}
+              onChange={(value) => setAiSettings((prev) => ({ ...prev, provider: value }))}
+            />
+          </div>
+          <div className="space-y-1 md:col-span-2">
+            <Label className="text-xs" htmlFor="ai-provider-base-url">Base URL</Label>
             <Input
               id="ai-provider-base-url"
               name="ai-provider-base-url"
               value={aiSettings.baseUrl}
               disabled={loadingSettings}
-              placeholder="http://192.168.1.50:8000/v1"
+              className="h-9 px-3"
+              placeholder="http://127.0.0.1:xxxx/v1"
               onChange={(event) => setAiSettings((prev) => ({ ...prev, baseUrl: event.target.value }))}
             />
           </div>
 
-          <div className="space-y-2 lg:col-span-2">
-            <Label htmlFor="ai-provider-chat-model">VLLM model</Label>
-            <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="space-y-1 md:col-span-2 xl:col-span-2">
+            <Label className="text-xs" htmlFor="ai-provider-chat-model">{t("settings.ai.model")}</Label>
+            <div className="flex gap-2">
               <SelectDropdown
                 id="ai-provider-chat-model"
                 className="min-w-0 flex-1"
+                size="sm"
                 value={aiSettings.chatModel}
-                placeholder="Seleziona modello"
-                options={modelOptions.length > 0 ? modelOptions : [{ value: aiSettings.chatModel, label: aiSettings.chatModel || "birgus-vl" }]}
+                placeholder={t("settings.ai.selectModel")}
+                options={modelOptions.length > 0 ? modelOptions : [{ value: aiSettings.chatModel, label: aiSettings.chatModel || t("settings.ai.noModels") }]}
                 onChange={(value) => setAiSettings((prev) => ({ ...prev, chatModel: value }))}
               />
-              <Button className="shrink-0" variant="outline" onClick={handleLoadModels} disabled={loadingSettings || loadingModels}>
+              <Button className="shrink-0" size="sm" variant="outline" onClick={handleLoadModels} disabled={loadingSettings || loadingModels}>
                 {loadingModels ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                Load models
+                {t("settings.ai.loadModels")}
               </Button>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="ai-provider-timeout-ms">Timeout ms</Label>
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="ai-provider-timeout-ms">Timeout ms</Label>
             <Input
               id="ai-provider-timeout-ms"
               name="ai-provider-timeout-ms"
@@ -399,12 +594,13 @@ export function SettingsPanel() {
               max={900000}
               value={aiSettings.timeoutMs}
               disabled={loadingSettings}
+              className="h-9 px-3"
               onChange={(event) => setAiSettings((prev) => ({ ...prev, timeoutMs: Number(event.target.value) }))}
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="ai-provider-temperature">Temperature</Label>
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="ai-provider-temperature">Temperature</Label>
             <Input
               id="ai-provider-temperature"
               name="ai-provider-temperature"
@@ -414,6 +610,7 @@ export function SettingsPanel() {
               step={0.1}
               value={aiSettings.temperature}
               disabled={loadingSettings}
+              className="h-9 px-3"
               onChange={(event) => setAiSettings((prev) => ({ ...prev, temperature: Number(event.target.value) }))}
             />
           </div>
@@ -432,42 +629,40 @@ export function SettingsPanel() {
         ) : null}
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={handleValidate} disabled={loadingSettings || validating}>
+          <Button size="sm" variant="outline" onClick={handleValidate} disabled={loadingSettings || validating}>
             {validating ? <Loader2 size={16} className="animate-spin" /> : <PlugZap size={16} />}
-            Valida
+            {t("settings.validate")}
           </Button>
-          <Button onClick={handleSave} disabled={loadingSettings || saving}>
+          <Button size="sm" onClick={handleSave} disabled={loadingSettings || saving}>
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            Salva
+            {t("settings.save")}
           </Button>
         </div>
       </Card>
       ) : null}
 
       {canConfigureMailProvider ? (
-      <Card className="space-y-5 p-4 lg:p-5">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <Card className="space-y-3 p-3 lg:p-4">
+        <div className="flex items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               <Mail size={18} className="text-brand-primary" />
-              <Text as="h2" variant="h2">
-                Email provider
+              <Text as="h2" variant="h2" className="text-base">
+                {t("settings.mail.title")}
               </Text>
             </div>
-            <Text variant="muted">Provider usato dai workflow per inviare email e allegati.</Text>
+            <Text variant="caption">{t("settings.mail.description")}</Text>
           </div>
-          <span className="rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-2 py-1 text-xs font-bold text-text-secondary">
-            {mailSettings.source === "database" ? "database" : ".env"}
-          </span>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="mail-provider-kind">Provider</Label>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="mail-provider-kind">Provider</Label>
             <SelectDropdown
               id="mail-provider-kind"
               value={mailSettings.provider}
               disabled={loadingMailSettings}
+              size="sm"
               options={[
                 { value: "smtp", label: "SMTP" },
                 { value: "resend", label: "Resend API" },
@@ -476,13 +671,14 @@ export function SettingsPanel() {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="mail-provider-from">From</Label>
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="mail-provider-from">From</Label>
             <Input
               id="mail-provider-from"
               name="mail-provider-from"
               value={mailSettings.from}
               disabled={loadingMailSettings}
+              className="h-9 px-3"
               placeholder="support@azienda.it"
               onChange={(event) => setMailSettings((prev) => ({ ...prev, from: event.target.value }))}
             />
@@ -490,19 +686,20 @@ export function SettingsPanel() {
 
           {mailSettings.provider === "smtp" ? (
             <>
-              <div className="space-y-2">
-                <Label htmlFor="mail-provider-smtp-host">SMTP host</Label>
+              <div className="space-y-1">
+                <Label className="text-xs" htmlFor="mail-provider-smtp-host">SMTP host</Label>
                 <Input
                   id="mail-provider-smtp-host"
                   name="mail-provider-smtp-host"
                   value={mailSettings.smtpHost}
                   disabled={loadingMailSettings}
+                  className="h-9 px-3"
                   placeholder="smtp.azienda.it"
                   onChange={(event) => setMailSettings((prev) => ({ ...prev, smtpHost: event.target.value }))}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="mail-provider-smtp-port">SMTP port</Label>
+              <div className="space-y-1">
+                <Label className="text-xs" htmlFor="mail-provider-smtp-port">SMTP port</Label>
                 <Input
                   id="mail-provider-smtp-port"
                   name="mail-provider-smtp-port"
@@ -511,28 +708,31 @@ export function SettingsPanel() {
                   max={65535}
                   value={mailSettings.smtpPort}
                   disabled={loadingMailSettings}
+                  className="h-9 px-3"
                   onChange={(event) => setMailSettings((prev) => ({ ...prev, smtpPort: Number(event.target.value) }))}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="mail-provider-smtp-user">SMTP user</Label>
+              <div className="space-y-1">
+                <Label className="text-xs" htmlFor="mail-provider-smtp-user">SMTP user</Label>
                 <Input
                   id="mail-provider-smtp-user"
                   name="mail-provider-smtp-user"
                   value={mailSettings.smtpUser}
                   disabled={loadingMailSettings}
+                  className="h-9 px-3"
                   placeholder="utente"
                   onChange={(event) => setMailSettings((prev) => ({ ...prev, smtpUser: event.target.value }))}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="mail-provider-smtp-pass">SMTP password</Label>
+              <div className="space-y-1">
+                <Label className="text-xs" htmlFor="mail-provider-smtp-pass">SMTP password</Label>
                 <Input
                   id="mail-provider-smtp-pass"
                   name="mail-provider-smtp-pass"
                   type="password"
                   value={mailSecretPatch.smtpPass}
                   disabled={loadingMailSettings}
+                  className="h-9 px-3"
                   placeholder={mailSettings.smtpConfigured ? "Lascia vuoto per non cambiare" : "Password"}
                   onChange={(event) => setMailSecretPatch((prev) => ({ ...prev, smtpPass: event.target.value }))}
                 />
@@ -551,14 +751,15 @@ export function SettingsPanel() {
               </label>
             </>
           ) : (
-            <div className="space-y-2 lg:col-span-2">
-              <Label htmlFor="mail-provider-resend-api-key">Resend API key</Label>
+            <div className="space-y-1 md:col-span-2 xl:col-span-3">
+              <Label className="text-xs" htmlFor="mail-provider-resend-api-key">Resend API key</Label>
               <Input
                 id="mail-provider-resend-api-key"
                 name="mail-provider-resend-api-key"
                 type="password"
                 value={mailSecretPatch.resendApiKey}
                 disabled={loadingMailSettings}
+                className="h-9 px-3"
                 placeholder={mailSettings.resendConfigured ? "Lascia vuoto per non cambiare" : "re_..."}
                 onChange={(event) => setMailSecretPatch((prev) => ({ ...prev, resendApiKey: event.target.value }))}
               />
@@ -579,11 +780,11 @@ export function SettingsPanel() {
         ) : null}
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={handleValidateMail} disabled={loadingMailSettings || validatingMail}>
+          <Button size="sm" variant="outline" onClick={handleValidateMail} disabled={loadingMailSettings || validatingMail}>
             {validatingMail ? <Loader2 size={16} className="animate-spin" /> : <PlugZap size={16} />}
             Valida
           </Button>
-          <Button onClick={handleSaveMail} disabled={loadingMailSettings || savingMail}>
+          <Button size="sm" onClick={handleSaveMail} disabled={loadingMailSettings || savingMail}>
             {savingMail ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             Salva
           </Button>

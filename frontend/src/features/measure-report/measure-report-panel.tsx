@@ -448,7 +448,7 @@ export function MeasureReportPanel() {
           </Text>
         </div>
         <PageHelpHint
-          text={`LM: ${config?.lm_model || "non configurato"} | mode: ${config?.analysis_mode || "auto"}`}
+          text={`Modalita: ${config?.analysis_mode || "auto"}`}
         />
       </div>
 

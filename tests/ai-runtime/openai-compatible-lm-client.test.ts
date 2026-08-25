@@ -122,7 +122,7 @@ test("OpenAiCompatibleLmClient reports provider HTTP failures without response p
     }),
     (error) => {
       assert.ok(error instanceof Error);
-      assert.equal(error.message, "AI provider HTTP 401");
+      assert.equal(error.message, "AI_PROVIDER_UNAUTHORIZED");
       assert.doesNotMatch(error.message, /sensitive provider payload/);
       return true;
     },
@@ -148,8 +148,28 @@ test("OpenAiCompatibleLmClient reports timeout without low-level details", async
     () => client.chat("ciao"),
     (error) => {
       assert.ok(error instanceof Error);
-      assert.equal(error.message, "AI provider request timeout");
+      assert.equal(error.message, "AI_PROVIDER_TIMEOUT");
       assert.doesNotMatch(error.message, /aborted/i);
+      return true;
+    },
+  );
+});
+
+test("OpenAiCompatibleLmClient classifies an unreachable models endpoint", async () => {
+  globalThis.fetch = (async () => {
+    throw new TypeError("fetch failed");
+  }) as typeof fetch;
+
+  const client = new OpenAiCompatibleLmClient({
+    baseUrl: "http://192.0.2.10:8000",
+    requestedModel: "qwen-test",
+  });
+
+  await assert.rejects(
+    () => client.discoverModelsStrict(),
+    (error) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.message, "AI_PROVIDER_NETWORK_UNREACHABLE");
       return true;
     },
   );

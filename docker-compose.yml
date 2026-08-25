@@ -56,8 +56,6 @@ services:
       GARAGE_S3_ACCESS_KEY_ID: "${GARAGE_S3_ACCESS_KEY_ID:?GARAGE_S3_ACCESS_KEY_ID is required}"
       GARAGE_S3_SECRET_ACCESS_KEY: "${GARAGE_S3_SECRET_ACCESS_KEY:?GARAGE_S3_SECRET_ACCESS_KEY is required}"
       GARAGE_S3_FORCE_PATH_STYLE: "${GARAGE_S3_FORCE_PATH_STYLE:-true}"
-      OCR_ENGINE_LANG: "${OCR_ENGINE_LANG:-it}"
-      PADDLEOCR_HOME: "/app/storage/paddleocr_cache"
       MAIL_PROVIDER: "${MAIL_PROVIDER:-smtp}"
       MAIL_FROM: "${MAIL_FROM:-${SMTP_FROM:-}}"
       RESEND_API_KEY: "${RESEND_API_KEY:-}"
@@ -67,12 +65,12 @@ services:
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASS: "${SMTP_PASS:-}"
       SMTP_FROM: "${SMTP_FROM:-}"
-      AI_PROVIDER_BASE_URL: "${AI_PROVIDER_BASE_URL:-${ORCH_LM_BASE_URL:-http://vllm:8000/v1}}"
+      AI_PROVIDER_BASE_URL: "${AI_PROVIDER_BASE_URL:-http://vllm:8000/v1}"
       AI_PROVIDER_API_KEY: "${AI_PROVIDER_API_KEY:-${VLLM_API_KEY:-}}"
-      AI_PROVIDER_CHAT_MODEL: "${AI_PROVIDER_CHAT_MODEL:-${ORCH_LM_MODEL:-birgus-vl}}"
+      AI_PROVIDER_CHAT_MODEL: "${AI_PROVIDER_CHAT_MODEL:-birgus-vl}"
       AI_PROVIDER_COMPLETIONS_PATH: "${AI_PROVIDER_COMPLETIONS_PATH:-/v1/chat/completions}"
-      AI_PROVIDER_TIMEOUT_MS: "${AI_PROVIDER_TIMEOUT_MS:-${ORCH_LM_TIMEOUT_MS:-600000}}"
-      AI_PROVIDER_TEMPERATURE: "${AI_PROVIDER_TEMPERATURE:-${ORCH_LM_TEMPERATURE:-0}}"
+      AI_PROVIDER_TIMEOUT_MS: "${AI_PROVIDER_TIMEOUT_MS:-600000}"
+      AI_PROVIDER_TEMPERATURE: "${AI_PROVIDER_TEMPERATURE:-0}"
       AI_PROVIDER_MAX_OUTPUT_TOKENS: "${AI_PROVIDER_MAX_OUTPUT_TOKENS:-800}"
       WHATSAPP_ACCESS_TOKEN: "${WHATSAPP_ACCESS_TOKEN:-}"
       WHATSAPP_PHONE_NUMBER_ID: "${WHATSAPP_PHONE_NUMBER_ID:-}"
@@ -84,10 +82,45 @@ services:
     depends_on:
       garage:
         condition: service_healthy
-    volumes:
-      - ./python_modules/storage:/app/storage
     expose:
       - "8200"
+
+  ocr_engine:
+    build:
+      context: .
+      dockerfile: ocr_service/Dockerfile
+    container_name: birgus_ocr_engine
+    restart: unless-stopped
+    environment:
+      GARAGE_S3_ENDPOINT: "http://garage:3900"
+      GARAGE_S3_REGION: "${GARAGE_S3_REGION:-garage}"
+      GARAGE_S3_ACCESS_KEY_ID: "${GARAGE_S3_ACCESS_KEY_ID:?GARAGE_S3_ACCESS_KEY_ID is required}"
+      GARAGE_S3_SECRET_ACCESS_KEY: "${GARAGE_S3_SECRET_ACCESS_KEY:?GARAGE_S3_SECRET_ACCESS_KEY is required}"
+      GARAGE_S3_FORCE_PATH_STYLE: "${GARAGE_S3_FORCE_PATH_STYLE:-true}"
+      OCR_ENGINE_LANG: "${OCR_ENGINE_LANG:-it}"
+      PADDLEOCR_HOME: "/app/storage/paddleocr_cache"
+      PADDLE_PDX_CACHE_HOME: "/app/storage/paddleocr_cache/paddlex_cache"
+    depends_on:
+      garage:
+        condition: service_healthy
+    volumes:
+      - ./ocr_service/storage:/app/storage
+    expose:
+      - "8201"
+
+  ocr_lifecycle:
+    build:
+      context: .
+      dockerfile: ocr_lifecycle/Dockerfile
+    container_name: birgus_ocr_lifecycle
+    restart: unless-stopped
+    environment:
+      OCR_LIFECYCLE_TOKEN: "${OCR_LIFECYCLE_TOKEN:?OCR_LIFECYCLE_TOKEN is required}"
+      OCR_TARGET_CONTAINER: "birgus_ocr_engine"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    expose:
+      - "8202"
 
   app:
     build:
@@ -112,14 +145,14 @@ services:
       AUTH_COOKIE_SAME_SITE: "${AUTH_COOKIE_SAME_SITE:-Lax}"
       TRUST_PROXY: "${TRUST_PROXY:-false}"
       AI_PROVIDER: "${AI_PROVIDER:-vllm}"
-      AI_PROVIDER_BASE_URL: "${AI_PROVIDER_BASE_URL:-${ORCH_LM_BASE_URL:-http://vllm:8000/v1}}"
+      AI_PROVIDER_BASE_URL: "${AI_PROVIDER_BASE_URL:-http://vllm:8000/v1}"
       AI_PROVIDER_API_KEY: "${AI_PROVIDER_API_KEY:-${VLLM_API_KEY:-}}"
-      AI_PROVIDER_CHAT_MODEL: "${AI_PROVIDER_CHAT_MODEL:-${ORCH_LM_MODEL:-birgus-vl}}"
+      AI_PROVIDER_CHAT_MODEL: "${AI_PROVIDER_CHAT_MODEL:-birgus-vl}"
       AI_PROVIDER_EMBEDDING_MODEL: "${AI_PROVIDER_EMBEDDING_MODEL:-${KNOWLEDGE_EMBEDDING_MODEL:-}}"
       AI_PROVIDER_COMPLETIONS_PATH: "${AI_PROVIDER_COMPLETIONS_PATH:-/v1/chat/completions}"
       AI_PROVIDER_MODELS_PATH: "${AI_PROVIDER_MODELS_PATH:-/v1/models}"
-      AI_PROVIDER_TIMEOUT_MS: "${AI_PROVIDER_TIMEOUT_MS:-${ORCH_LM_TIMEOUT_MS:-600000}}"
-      AI_PROVIDER_TEMPERATURE: "${AI_PROVIDER_TEMPERATURE:-${ORCH_LM_TEMPERATURE:-0}}"
+      AI_PROVIDER_TIMEOUT_MS: "${AI_PROVIDER_TIMEOUT_MS:-600000}"
+      AI_PROVIDER_TEMPERATURE: "${AI_PROVIDER_TEMPERATURE:-0}"
       AI_PROVIDER_MAX_OUTPUT_TOKENS: "${AI_PROVIDER_MAX_OUTPUT_TOKENS:-512}"
       MAIL_PROVIDER: "${MAIL_PROVIDER:-smtp}"
       MAIL_FROM: "${MAIL_FROM:-${SMTP_FROM:-}}"
@@ -130,27 +163,17 @@ services:
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASS: "${SMTP_PASS:-}"
       SMTP_FROM: "${SMTP_FROM:-}"
-      DDT_READER_LM_MODEL: "${DDT_READER_LM_MODEL:-${AI_PROVIDER_CHAT_MODEL:-birgus-vl}}"
-      DDT_READER_LM_BASE_URL: "${DDT_READER_LM_BASE_URL:-${AI_PROVIDER_BASE_URL:-http://vllm:8000/v1}}"
-      DDT_READER_LM_API_KEY: "${DDT_READER_LM_API_KEY:-${AI_PROVIDER_API_KEY:-${VLLM_API_KEY:-}}}"
-      DDT_READER_LM_COMPLETIONS_PATH: "${DDT_READER_LM_COMPLETIONS_PATH:-/v1/chat/completions}"
-      DDT_READER_LM_MODELS_PATH: "${DDT_READER_LM_MODELS_PATH:-/v1/models}"
-      DDT_READER_LM_TIMEOUT_MS: "${DDT_READER_LM_TIMEOUT_MS:-45000}"
-      DDT_READER_LM_MAX_PDF_TEXT_CHARS: "${DDT_READER_LM_MAX_PDF_TEXT_CHARS:-20000}"
-      MEASURE_REPORT_LM_MODEL: "${MEASURE_REPORT_LM_MODEL:-${AI_PROVIDER_CHAT_MODEL:-birgus-vl}}"
-      MEASURE_REPORT_LM_BASE_URL: "${MEASURE_REPORT_LM_BASE_URL:-${AI_PROVIDER_BASE_URL:-http://vllm:8000/v1}}"
       MEASURE_REPORT_ANALYSIS_MODE: "${MEASURE_REPORT_ANALYSIS_MODE:-auto}"
       PYTHON_MODULES_BASE_URL: "${PYTHON_MODULES_BASE_URL:-http://python_modules:8200}"
       PYTHON_MODULES_EXECUTE_PATH: "${PYTHON_MODULES_EXECUTE_PATH:-/v1/modules/execute}"
       PYTHON_MODULES_TIMEOUT_MS: "${PYTHON_MODULES_TIMEOUT_MS:-180000}"
+      OCR_ENGINE_BASE_URL: "${OCR_ENGINE_BASE_URL:-http://ocr_engine:8201}"
+      OCR_ENGINE_EXECUTE_PATH: "${OCR_ENGINE_EXECUTE_PATH:-/v1/modules/execute}"
+      OCR_ENGINE_TIMEOUT_MS: "${OCR_ENGINE_TIMEOUT_MS:-180000}"
+      OCR_LIFECYCLE_BASE_URL: "${OCR_LIFECYCLE_BASE_URL:-http://ocr_lifecycle:8202}"
+      OCR_LIFECYCLE_TOKEN: "${OCR_LIFECYCLE_TOKEN:?OCR_LIFECYCLE_TOKEN is required}"
       TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
       TELEGRAM_BOT_USERNAME: "${TELEGRAM_BOT_USERNAME:-}"
-      ORCH_LM_BASE_URL: "${ORCH_LM_BASE_URL:-${AI_PROVIDER_BASE_URL:-http://vllm:8000/v1}}"
-      ORCH_LM_COMPLETIONS_PATH: "${ORCH_LM_COMPLETIONS_PATH:-/v1/chat/completions}"
-      ORCH_LM_MODELS_PATH: "${ORCH_LM_MODELS_PATH:-/v1/models}"
-      ORCH_LM_MODEL: "${ORCH_LM_MODEL:-${AI_PROVIDER_CHAT_MODEL:-birgus-vl}}"
-      ORCH_LM_TIMEOUT_MS: "${ORCH_LM_TIMEOUT_MS:-${AI_PROVIDER_TIMEOUT_MS:-600000}}"
-      ORCH_LM_TEMPERATURE: "${ORCH_LM_TEMPERATURE:-${AI_PROVIDER_TEMPERATURE:-0}}"
       ORCH_DDT_LM_MAX_TOKENS: "${ORCH_DDT_LM_MAX_TOKENS:-700}"
       ORCH_DDT_USE_JSON_SCHEMA: "${ORCH_DDT_USE_JSON_SCHEMA:-true}"
       KNOWLEDGE_EMBEDDING_PROVIDER: "${KNOWLEDGE_EMBEDDING_PROVIDER:-local-hash}"
@@ -173,6 +196,10 @@ services:
       garage:
         condition: service_healthy
       python_modules:
+        condition: service_started
+      ocr_engine:
+        condition: service_started
+      ocr_lifecycle:
         condition: service_started
     ports:
       - "13001:3000"

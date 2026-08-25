@@ -11,7 +11,6 @@ export interface DdtReaderArticleItem {
   quantity: number;
   unit: string;
 }
-
 export interface DdtReaderDocument {
   id: string;
   original_filename: string;
@@ -37,10 +36,4 @@ export interface DdtReaderDocument {
   last_error?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
-}
-
-export interface DdtReaderConfig {
-  single_document_mode: boolean;
-  lm_model: string;
-  lm_base_url: string;
 }

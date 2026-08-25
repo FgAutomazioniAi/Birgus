@@ -12,7 +12,7 @@ import { APP_ROUTES } from "@/lib/routes";
 import { scheduleUndoableAction } from "@/lib/undoable-action";
 import { appendWorkspaceId } from "@/lib/workspace";
 
-import type { DdtReaderArticleItem, DdtReaderConfig, DdtReaderDocument } from "./types";
+import type { DdtReaderArticleItem, DdtReaderDocument } from "./types";
 
 const PROCESSING_STATUSES = new Set(["queued", "ocr_processing", "ai_processing"]);
 
@@ -201,7 +201,6 @@ export function DdtReaderPanel() {
   const [documents, setDocuments] = useState<DdtReaderDocument[]>([]);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [lmModel, setLmModel] = useState("non configurato");
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string>("");
 
   const [isUploading, setIsUploading] = useState(false);
@@ -300,21 +299,7 @@ export function DdtReaderPanel() {
     }
   }, [handleRequestError]);
 
-  const loadConfig = useCallback(async () => {
-    try {
-      const config = await requestJson<DdtReaderConfig>(
-        "/api/ddt-reader/config",
-        { method: "GET", cache: "no-store" },
-        "Impossibile leggere la configurazione del servizio DDT Reader.",
-      );
-      setLmModel(config.lm_model || "non configurato");
-    } catch {
-      setLmModel("non configurato");
-    }
-  }, []);
-
   useEffect(() => {
-    void loadConfig();
     void refreshDocuments(true);
 
     const timerId = setInterval(() => {
@@ -324,7 +309,7 @@ export function DdtReaderPanel() {
     return () => {
       clearInterval(timerId);
     };
-  }, [loadConfig, refreshDocuments]);
+  }, [refreshDocuments]);
 
   useEffect(() => {
     let cancelled = false;
@@ -682,9 +667,6 @@ export function DdtReaderPanel() {
           <div className="space-y-1">
             <Text as="h2" variant="h2" className="text-lg">
               Risultato Analisi
-            </Text>
-            <Text variant="caption">
-              Modello IA: <span className="font-semibold text-text-secondary">{lmModel}</span>
             </Text>
           </div>
 

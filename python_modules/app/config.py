@@ -12,8 +12,6 @@ class Settings:
     garage_s3_access_key_id: str
     garage_s3_secret_access_key: str
     garage_s3_force_path_style: bool
-    paddle_ocr_home: str
-    ocr_engine_lang: str
     smtp_host: str
     smtp_port: int
     smtp_secure: bool
@@ -47,8 +45,6 @@ class Settings:
             garage_s3_access_key_id=os.getenv("GARAGE_S3_ACCESS_KEY_ID", ""),
             garage_s3_secret_access_key=os.getenv("GARAGE_S3_SECRET_ACCESS_KEY", ""),
             garage_s3_force_path_style=os.getenv("GARAGE_S3_FORCE_PATH_STYLE", "true").lower() in {"1", "true", "yes", "on"},
-            paddle_ocr_home=os.getenv("PADDLEOCR_HOME", "/app/storage/paddleocr_cache"),
-            ocr_engine_lang=os.getenv("OCR_ENGINE_LANG", "it"),
             smtp_host=os.getenv("SMTP_HOST", ""),
             smtp_port=int(os.getenv("SMTP_PORT", "587")),
             smtp_secure=os.getenv("SMTP_SECURE", "false").lower() in {"1", "true", "yes", "on"},
@@ -62,13 +58,13 @@ class Settings:
             measure_report_max_pages=int(max_pages_raw) if max_pages_raw else None,
             measure_report_render_scale=float(os.getenv("MEASURE_REPORT_RENDER_SCALE", "2.0")),
             measure_report_max_image_size=int(os.getenv("MEASURE_REPORT_MAX_IMAGE_SIZE", "1800")),
-            ai_provider_base_url=os.getenv("AI_PROVIDER_BASE_URL", os.getenv("ORCH_LM_BASE_URL", "http://vllm:8000/v1")),
+            ai_provider_base_url=os.getenv("AI_PROVIDER_BASE_URL", "http://vllm:8000/v1"),
             ai_provider_api_key=os.getenv("AI_PROVIDER_API_KEY", os.getenv("VLLM_API_KEY", "")),
-            ai_provider_chat_model=os.getenv("AI_PROVIDER_CHAT_MODEL", os.getenv("ORCH_LM_MODEL", "birgus-vl")),
-            ai_provider_completions_path=os.getenv("AI_PROVIDER_COMPLETIONS_PATH", os.getenv("ORCH_LM_COMPLETIONS_PATH", "/v1/chat/completions")),
-            ai_provider_timeout_ms=int(os.getenv("AI_PROVIDER_TIMEOUT_MS", os.getenv("ORCH_LM_TIMEOUT_MS", "600000"))),
-            ai_provider_temperature=float(os.getenv("AI_PROVIDER_TEMPERATURE", os.getenv("ORCH_LM_TEMPERATURE", "0"))),
-            ai_provider_max_output_tokens=int(os.getenv("AI_PROVIDER_MAX_OUTPUT_TOKENS", os.getenv("ORCH_LM_MAX_OUTPUT_TOKENS", "800"))),
+            ai_provider_chat_model=os.getenv("AI_PROVIDER_CHAT_MODEL", "birgus-vl"),
+            ai_provider_completions_path=os.getenv("AI_PROVIDER_COMPLETIONS_PATH", "/v1/chat/completions"),
+            ai_provider_timeout_ms=int(os.getenv("AI_PROVIDER_TIMEOUT_MS", "600000")),
+            ai_provider_temperature=float(os.getenv("AI_PROVIDER_TEMPERATURE", "0")),
+            ai_provider_max_output_tokens=int(os.getenv("AI_PROVIDER_MAX_OUTPUT_TOKENS", "800")),
             telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
             whatsapp_access_token=os.getenv("WHATSAPP_ACCESS_TOKEN", ""),
             whatsapp_phone_number_id=os.getenv("WHATSAPP_PHONE_NUMBER_ID", ""),

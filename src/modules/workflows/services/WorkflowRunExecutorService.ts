@@ -15,7 +15,7 @@ import { MailProviderSettingsService } from "../../mail-runtime/services/MailPro
 import { ConnectedAppsService } from "../../connected-apps/services/ConnectedAppsService.js";
 import { NotificationService } from "../../notifications/services/NotificationService.js";
 import { NextOrchestratorDdtAnalyzer } from "../../ddt-processing/services/NextOrchestratorDdtAnalyzer.js";
-import { DdtAnalysisInput } from "../../ddt-processing/repositories/DdtProcessingRepository.js";
+import { DdtAnalysisInput } from "../../ddt-processing/domain/DdtAnalysisInput.js";
 import { NextOrchestratorQuotationAnalyzer } from "../../quotation-orchestrator/services/NextOrchestratorQuotationAnalyzer.js";
 import { MeasureReportAnalysisInput, MeasureReportAnalyzer } from "../../measure-report/services/MeasureReportAnalyzer.js";
 import { normalizeMeasureReportDocumentType } from "../../measure-report/services/MeasureReportDocumentTypes.js";

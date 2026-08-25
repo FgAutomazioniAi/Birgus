@@ -88,7 +88,7 @@ export function TelegramChannelField({
           name={`${idPrefix}-chat-id`}
           value={manualChatId}
           onChange={(event) => onManualChatIdChange(event.target.value)}
-          placeholder="123456789"
+          placeholder="-"
         />
       ) : null}
     </div>

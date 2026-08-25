@@ -29,8 +29,6 @@ export interface MeasureReportDocument {
 
 export interface MeasureReportConfig {
   single_document_mode: boolean;
-  lm_model: string;
-  lm_base_url: string;
   analysis_mode: string;
   document_types: Array<{
     value: string;

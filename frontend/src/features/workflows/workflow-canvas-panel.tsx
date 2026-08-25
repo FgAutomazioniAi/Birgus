@@ -428,6 +428,23 @@ export function WorkflowCanvasPanel() {
   const selectedTool = selectedNode?.moduleToolId ? toolById.get(selectedNode.moduleToolId) ?? null : null;
   const moduleCards = useMemo(() => buildModuleCards(workflows, tools, agents), [agents, tools, workflows]);
   const nodeLabelByKey = useMemo(() => new Map(draftNodes.map((node) => [node.nodeKey, cleanWorkflowLabel(node.label)])), [draftNodes]);
+  const draftNodeStructureKey = useMemo(
+    () => JSON.stringify(draftNodes.map((node) => ({
+      clientId: node.clientId,
+      nodeKey: node.nodeKey,
+      nodeKind: node.nodeKind,
+      label: node.label,
+      positionX: node.positionX,
+      positionY: node.positionY,
+      moduleAgentId: node.moduleAgentId ?? null,
+      moduleToolId: node.moduleToolId ?? null,
+      inputKind: node.inputKind ?? null,
+      outputKind: node.outputKind ?? null,
+      isEnabled: node.isEnabled,
+      isRequired: node.isRequired,
+    }))),
+    [draftNodes],
+  );
   const latestRunReference = latestRun
     ? `${workflow?.label ?? latestRun.workflowKey ?? "Workflow"} - ${formatDateTime(latestRun.startedAt ?? latestRun.queuedAt ?? latestRun.completedAt)}`
     : "";
@@ -525,7 +542,23 @@ export function WorkflowCanvasPanel() {
           : node,
       ),
     );
-  }, []);
+    setNodes((current) =>
+      current.map((node) =>
+        node.id === clientId
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                configuration: {
+                  ...node.data.configuration,
+                  ...patch,
+                },
+              },
+            }
+          : node,
+      ),
+    );
+  }, [setNodes]);
 
   const handleNodeFileChange = useCallback(async (clientId: string, file: File) => {
     if (file.size > MAX_WORKFLOW_UPLOAD_BYTES) {
@@ -562,7 +595,7 @@ export function WorkflowCanvasPanel() {
   useEffect(() => {
     setNodes(draftNodes.map((item) => toFlowNode(item, toolById, agentById, uploadedFiles, patchNodeConfiguration, handleNodeFileChange)));
     setEdges(draftEdges.map(toFlowEdge));
-  }, [agentById, draftEdges, draftNodes, handleNodeFileChange, patchNodeConfiguration, setEdges, setNodes, toolById, uploadedFiles]);
+  }, [agentById, draftEdges, draftNodeStructureKey, handleNodeFileChange, patchNodeConfiguration, setEdges, setNodes, toolById, uploadedFiles]);
 
   useEffect(() => {
     setPromptDraft(selectedAgent?.activePrompt ?? "");
@@ -784,7 +817,7 @@ export function WorkflowCanvasPanel() {
     if (!selectedNode) {
       return;
     }
-    patchSelectedNode({ configuration: { ...selectedNode.configuration, ...patch } });
+    patchNodeConfiguration(selectedNode.clientId, patch);
   };
 
   const savePrompt = async () => {

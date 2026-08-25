@@ -85,14 +85,6 @@ export class DdtReaderService {
     this.notificationService = notificationService ?? null;
   }
 
-  public getConfig(): { single_document_mode: boolean; lm_model: string; lm_base_url: string } {
-    return {
-      single_document_mode: true,
-      lm_model: process.env.DDT_READER_LM_MODEL ?? process.env.AI_PROVIDER_CHAT_MODEL ?? "",
-      lm_base_url: process.env.DDT_READER_LM_BASE_URL ?? process.env.AI_PROVIDER_BASE_URL ?? "",
-    };
-  }
-
   public async listDocuments(workspaceId: string): Promise<DdtReaderDocumentDto[]> {
     const prisma = PrismaClientManager.getClient();
 

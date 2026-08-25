@@ -10,6 +10,20 @@ export interface AiProviderConfig {
   temperature: number;
 }
 
+export const AI_PROVIDER_DEFINITIONS = [
+  {
+    id: "vllm",
+    label: "vLLM",
+    protocol: "openai_compatible",
+  },
+] as const;
+
+export type AiProviderId = (typeof AI_PROVIDER_DEFINITIONS)[number]["id"];
+
+export function normalizeAiProviderId(value: string | undefined): AiProviderId {
+  return value === "vllm" ? "vllm" : "vllm";
+}
+
 function firstNonEmpty(...values: Array<string | undefined>): string {
   for (const value of values) {
     const normalized = value?.trim();
@@ -35,23 +49,20 @@ export function loadAiProviderConfig(overrides: Partial<AiProviderConfig> = {}):
   const baseUrl = firstNonEmpty(
     overrides.baseUrl,
     process.env.AI_PROVIDER_BASE_URL,
-    process.env.ORCH_LM_BASE_URL,
     "http://vllm:8000/v1",
   );
   const apiKey = firstNonEmpty(
     overrides.apiKey,
     process.env.AI_PROVIDER_API_KEY,
-    process.env.ORCH_LM_API_KEY,
     process.env.VLLM_API_KEY,
   );
   const chatModel = firstNonEmpty(
     overrides.chatModel,
     process.env.AI_PROVIDER_CHAT_MODEL,
-    process.env.ORCH_LM_MODEL,
   );
 
   return {
-    provider: firstNonEmpty(overrides.provider, process.env.AI_PROVIDER, "openai_compatible"),
+    provider: normalizeAiProviderId(firstNonEmpty(overrides.provider, process.env.AI_PROVIDER, "vllm")),
     baseUrl,
     apiKey,
     chatModel,
@@ -63,16 +74,14 @@ export function loadAiProviderConfig(overrides: Partial<AiProviderConfig> = {}):
     completionsPath: firstNonEmpty(
       overrides.completionsPath,
       process.env.AI_PROVIDER_COMPLETIONS_PATH,
-      process.env.ORCH_LM_COMPLETIONS_PATH,
       "/v1/chat/completions",
     ),
     modelsPath: firstNonEmpty(
       overrides.modelsPath,
       process.env.AI_PROVIDER_MODELS_PATH,
-      process.env.ORCH_LM_MODELS_PATH,
       "/v1/models",
     ),
-    timeoutMs: overrides.timeoutMs ?? toPositiveInt(process.env.AI_PROVIDER_TIMEOUT_MS ?? process.env.ORCH_LM_TIMEOUT_MS, 60000),
-    temperature: overrides.temperature ?? toFloat(process.env.AI_PROVIDER_TEMPERATURE ?? process.env.ORCH_LM_TEMPERATURE, 0),
+    timeoutMs: overrides.timeoutMs ?? toPositiveInt(process.env.AI_PROVIDER_TIMEOUT_MS, 60000),
+    temperature: overrides.temperature ?? toFloat(process.env.AI_PROVIDER_TEMPERATURE, 0),
   };
 }

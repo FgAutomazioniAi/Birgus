@@ -8,7 +8,6 @@ import { PrismaAuditLogRepository } from "../../modules/audit/infra/PrismaAuditL
 import { PrismaClientRepository } from "../../modules/clients/infra/PrismaClientRepository.js";
 import { PrismaCompanyRepository } from "../../modules/companies/infra/PrismaCompanyRepository.js";
 import { PrismaAssistantSessionRepository } from "../../modules/conversational-assistant/infra/PrismaAssistantSessionRepository.js";
-import { PrismaDdtProcessingRepository } from "../../modules/ddt-processing/infra/PrismaDdtProcessingRepository.js";
 import { PrismaDocumentArchiveRepository } from "../../modules/document-archive/infra/PrismaDocumentArchiveRepository.js";
 import { PrismaAuthLoginChallengeRepository } from "../../modules/identity/infra/PrismaAuthLoginChallengeRepository.js";
 import { PrismaAuthSessionRepository } from "../../modules/identity/infra/PrismaAuthSessionRepository.js";
@@ -33,7 +32,6 @@ const PROVIDERS = [
   PrismaCompanyRepository,
   PrismaAssistantSessionRepository,
   OpenAiCompatibleToolChatClient,
-  PrismaDdtProcessingRepository,
   PrismaDocumentArchiveRepository,
   PrismaAuthLoginChallengeRepository,
   PrismaAuthSessionRepository,

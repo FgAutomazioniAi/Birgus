@@ -5,6 +5,7 @@ import { PermissionKey } from "../../core/authorization/PermissionKey.js";
 import { AppError } from "../../core/errors/AppError.js";
 import { RequestContext } from "../../core/tenancy/RequestContext.js";
 import { ModuleManagementService } from "../../modules/module-management/services/ModuleManagementService.js";
+import { BackendPythonModulesClient } from "../../modules/document-intelligence/services/BackendPythonModulesClient.js";
 import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
 import { AccessPolicyGuard } from "../auth/access-policy.guard.js";
 import { CurrentRequestContext } from "../common/decorators/request-context.decorator.js";
@@ -24,11 +25,27 @@ export class NestModuleManagementController {
   public constructor(
     @Inject(ModuleManagementService)
     private readonly moduleManagementService: ModuleManagementService,
+    @Inject(BackendPythonModulesClient)
+    private readonly pythonModulesClient: BackendPythonModulesClient,
   ) {}
 
   @Get()
   @RequirePermission(PermissionKey.MODULES_READ)
   public async listWorkspaceModules(
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const workspaceId = requestContext.workspace.workspaceId;
+    const modules = await this.moduleManagementService.listWorkspaceModules(workspaceId);
+
+    return {
+      workspaceId,
+      modules: modules.map((item) => ({ moduleKey: item.moduleKey, enabled: item.enabled })),
+    };
+  }
+
+  @Get("workspace-settings")
+  @RequirePermission(PermissionKey.MODULES_CONFIGURE)
+  public async listWorkspaceModulesForConfiguration(
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Record<string, unknown>> {
     const workspaceId = requestContext.workspace.workspaceId;
@@ -51,8 +68,17 @@ export class NestModuleManagementController {
     const configuredByUserId = requestContext.workspace.userId;
     const moduleKey = this.getModuleKey(moduleKeyRaw);
 
+    if (moduleKey === "ddt_processing") {
+      await this.startOcrRuntime();
+    }
     await this.moduleManagementService.enableModule(workspaceId, moduleKey, configuredByUserId);
-    return { ok: true, workspaceId, moduleKey, enabled: true };
+    return {
+      ok: true,
+      workspaceId,
+      moduleKey,
+      enabled: true,
+      ocrRuntime: moduleKey === "ddt_processing" ? { running: true, error: null } : null,
+    };
   }
 
   @Post(":moduleKey/disable")
@@ -67,7 +93,25 @@ export class NestModuleManagementController {
     const moduleKey = this.getModuleKey(moduleKeyRaw);
 
     await this.moduleManagementService.disableModule(workspaceId, moduleKey, configuredByUserId);
-    return { ok: true, workspaceId, moduleKey, enabled: false };
+    const ocrRuntime = moduleKey === "ddt_processing"
+      ? await this.stopOcrRuntime()
+      : null;
+    return { ok: true, workspaceId, moduleKey, enabled: false, ocrRuntime };
+  }
+
+  @Get("ddt_processing/runtime")
+  @RequirePermission(PermissionKey.MODULES_CONFIGURE)
+  public async getOcrRuntimeStatus(): Promise<Record<string, unknown>> {
+    try {
+      return await this.pythonModulesClient.getOcrRuntimeStatus();
+    } catch (error) {
+      return {
+        containerRunning: false,
+        state: "failed",
+        modelLoaded: false,
+        error: error instanceof Error ? error.message : "OCR runtime status unavailable",
+      };
+    }
   }
 
   @Get("users/:userId")
@@ -176,6 +220,33 @@ export class NestModuleManagementController {
     }
 
     return value.trim();
+  }
+
+  private async startOcrRuntime(): Promise<void> {
+    try {
+      const result = await this.pythonModulesClient.startOcrContainer();
+      if (!result.running) {
+        throw new Error("OCR container did not start");
+      }
+    } catch (error) {
+      throw new AppError(
+        "Unable to start OCR container. Check the OCR lifecycle service and Docker.",
+        "OCR_CONTAINER_START_FAILED",
+        503,
+      );
+    }
+  }
+
+  private async stopOcrRuntime(): Promise<{ running: boolean; error: string | null }> {
+    try {
+      const result = await this.pythonModulesClient.stopOcrContainer();
+      return { ...result, error: null };
+    } catch (error) {
+      return {
+        running: true,
+        error: error instanceof Error ? error.message : "OCR container stop failed",
+      };
+    }
   }
 
   private getModuleKey(raw: string): string {

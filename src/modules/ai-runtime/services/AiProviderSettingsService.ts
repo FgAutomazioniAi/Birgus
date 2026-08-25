@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { PrismaService } from "../../../nest/prisma/prisma.service.js";
-import { loadAiProviderConfig, type AiProviderConfig } from "../domain/AiProviderConfig.js";
+import { AI_PROVIDER_DEFINITIONS, loadAiProviderConfig, normalizeAiProviderId, type AiProviderConfig } from "../domain/AiProviderConfig.js";
 import type { AiModelItem } from "../domain/AiChatResponse.js";
 import { OpenAiCompatibleLmClient } from "./OpenAiCompatibleLmClient.js";
 
@@ -10,11 +10,13 @@ const AI_PROVIDER_SETTING_KEY = "ai_provider";
 export interface AiProviderSettingsPatch {
   baseUrl?: string;
   chatModel?: string;
+  provider?: string;
   temperature?: number;
   timeoutMs?: number;
 }
 
 export interface PublicAiProviderSettings {
+  availableProviders: typeof AI_PROVIDER_DEFINITIONS;
   baseUrl: string;
   chatModel: string;
   provider: string;
@@ -42,7 +44,8 @@ export class AiProviderSettingsService {
     return {
       baseUrl: effective.baseUrl,
       chatModel: effective.chatModel,
-      provider: effective.provider || "openai_compatible",
+      availableProviders: AI_PROVIDER_DEFINITIONS,
+      provider: normalizeAiProviderId(effective.provider),
       source: stored ? "database" : "environment",
       temperature: effective.temperature,
       timeoutMs: effective.timeoutMs,
@@ -114,6 +117,7 @@ export class AiProviderSettingsService {
 
   private normalizePatch(patch: AiProviderSettingsPatch): StoredAiProviderSettings {
     return this.compactSettings({
+      provider: patch.provider ? normalizeAiProviderId(patch.provider) : undefined,
       baseUrl: this.trimString(patch.baseUrl),
       chatModel: this.trimString(patch.chatModel),
       temperature: typeof patch.temperature === "number" && Number.isFinite(patch.temperature) ? patch.temperature : undefined,
@@ -128,6 +132,7 @@ export class AiProviderSettingsService {
 
     const row = value as Record<string, unknown>;
     return this.compactSettings({
+      provider: typeof row.provider === "string" ? normalizeAiProviderId(row.provider) : undefined,
       baseUrl: this.trimString(row.baseUrl),
       chatModel: this.trimString(row.chatModel),
       temperature: typeof row.temperature === "number" && Number.isFinite(row.temperature) ? row.temperature : undefined,

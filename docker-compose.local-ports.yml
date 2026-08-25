@@ -11,6 +11,10 @@ services:
     ports: !override
       - "${BIRGUS_HOST_FRONTEND_PORT:-13100}:3100"
 
+  ocr_engine:
+    ports: !override
+      - "${BIRGUS_HOST_OCR_PORT:-18201}:8201"
+
   garage:
     ports: !override
       - "${BIRGUS_HOST_GARAGE_S3_PORT:-13900}:3900"

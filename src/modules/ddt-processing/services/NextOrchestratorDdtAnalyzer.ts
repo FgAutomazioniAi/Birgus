@@ -1,8 +1,7 @@
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { ModuleKey } from "../../../core/module-access/ModuleKey.js";
 import { ModuleAgentService } from "../../agents/services/ModuleAgentService.js";
-import { DdtAnalysisInput } from "../repositories/DdtProcessingRepository.js";
-import { DdtAnalyzer } from "./DdtAnalyzer.js";
+import { DdtAnalysisInput } from "../domain/DdtAnalysisInput.js";
 import { LocalLmOrchestrator } from "../../orchestration/services/LocalLmOrchestrator.js";
 
 interface WorkflowResponseItem {
@@ -24,7 +23,7 @@ interface WorkflowResponsePayload {
   raw_response?: Record<string, unknown>;
 }
 
-export class NextOrchestratorDdtAnalyzer implements DdtAnalyzer {
+export class NextOrchestratorDdtAnalyzer {
   public static readonly DDT_PROMPT_AGENT_KEY = "ddt_analysis_prompt";
 
   private readonly moduleAgentService: ModuleAgentService;

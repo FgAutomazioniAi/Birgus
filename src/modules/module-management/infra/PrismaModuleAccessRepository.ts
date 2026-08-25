@@ -28,14 +28,6 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
       },
     });
 
-    if (override?.mode === "ALLOW") {
-      return true;
-    }
-
-    if (override?.mode === "DENY") {
-      return false;
-    }
-
     const workspaceModule = await prisma.workspaceModule.findFirst({
       where: {
         workspace_id: workspaceId,
@@ -46,7 +38,24 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
       },
     });
 
-    if (!workspaceModule || workspaceModule.is_enabled === false) {
+    if (!workspaceModule) {
+      return false;
+    }
+
+    // OCR is a workspace-wide processing switch: user overrides must not restart it.
+    if (moduleKey === "ddt_processing" && workspaceModule.is_enabled === false) {
+      return false;
+    }
+
+    if (override?.mode === "ALLOW") {
+      return true;
+    }
+
+    if (override?.mode === "DENY") {
+      return false;
+    }
+
+    if (workspaceModule.is_enabled === false) {
       return false;
     }
 

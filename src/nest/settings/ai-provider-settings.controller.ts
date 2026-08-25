@@ -2,8 +2,10 @@ import { Body, Controller, Get, HttpCode, Inject, Patch, Post, UseGuards } from 
 import { z } from "zod";
 
 import { ModuleKey } from "../../core/module-access/ModuleKey.js";
+import { AI_PROVIDER_DEFINITIONS } from "../../modules/ai-runtime/domain/AiProviderConfig.js";
 import { AiProviderSettingsService } from "../../modules/ai-runtime/services/AiProviderSettingsService.js";
-import { BackendPythonModulesClient } from "../../modules/document-intelligence/services/BackendPythonModulesClient.js";
+import { AiProviderError } from "../../modules/ai-runtime/domain/AiProviderError.js";
+import { AppError } from "../../core/errors/AppError.js";
 import { AccessPolicyGuard } from "../auth/access-policy.guard.js";
 import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
 import { RequireModule } from "../common/decorators/require-module.decorator.js";
@@ -11,6 +13,7 @@ import { RequireModule } from "../common/decorators/require-module.decorator.js"
 const aiProviderSettingsSchema = z.object({
   baseUrl: z.string().trim().min(1).max(300).optional(),
   chatModel: z.string().trim().min(1).max(200).optional(),
+  provider: z.enum(AI_PROVIDER_DEFINITIONS.map((item) => item.id) as [string, ...string[]]).optional(),
   temperature: z.number().min(0).max(2).optional(),
   timeoutMs: z.number().int().min(1000).max(900000).optional(),
 }).strict();
@@ -22,8 +25,6 @@ export class AiProviderSettingsController {
   public constructor(
     @Inject(AiProviderSettingsService)
     private readonly settingsService: AiProviderSettingsService,
-    @Inject(BackendPythonModulesClient)
-    private readonly pythonModulesClient: BackendPythonModulesClient,
   ) {}
 
   @Get()
@@ -42,36 +43,31 @@ export class AiProviderSettingsController {
   @HttpCode(200)
   public async loadModels(@Body() bodyRaw: unknown): Promise<Record<string, unknown>> {
     const body = aiProviderSettingsSchema.parse(bodyRaw ?? {});
-    return { models: await this.settingsService.discoverModels(body) };
+    try {
+      return { models: await this.settingsService.discoverModels(body) };
+    } catch (error) {
+      throw this.toRequestError(error);
+    }
   }
 
   @Post("validate")
   @HttpCode(200)
   public async validate(@Body() bodyRaw: unknown): Promise<Record<string, unknown>> {
     const body = aiProviderSettingsSchema.parse(bodyRaw ?? {});
-    const config = await this.settingsService.getRuntimeConfig(body);
-    try {
-      const result = await this.pythonModulesClient.execute("langchain_orchestrator", "chat", {
-        input_text: "Rispondi solo con OK.",
-        ai_provider: {
-          base_url: config.baseUrl,
-          chat_model: config.chatModel,
-          temperature: config.temperature,
-          timeout_ms: config.timeoutMs,
-        },
-      });
-      const output = result.output && typeof result.output === "object" ? result.output as Record<string, unknown> : {};
-      return {
-        ok: true,
-        model: typeof output.model === "string" ? output.model : config.chatModel ?? null,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        ok: false,
-        model: null,
-        error: error instanceof Error ? error.message : "Validazione LangChain fallita.",
-      };
+    const result = await this.settingsService.validateSettings(body);
+    if (result.ok) {
+      return result;
     }
+    throw this.toRequestError(result.error);
+  }
+
+  private toRequestError(error: unknown): AppError {
+    if (error instanceof AiProviderError) {
+      return new AppError(error.code, error.code, error.statusCode && error.statusCode >= 400 && error.statusCode < 500 ? 400 : 502);
+    }
+    if (typeof error === "string" && error.startsWith("AI_PROVIDER_")) {
+      return new AppError(error, error, 502);
+    }
+    return new AppError("AI_PROVIDER_REQUEST_FAILED", "AI_PROVIDER_REQUEST_FAILED", 502);
   }
 }

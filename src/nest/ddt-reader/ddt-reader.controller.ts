@@ -27,12 +27,6 @@ export class NestDdtReaderController {
     private readonly service: DdtReaderService,
   ) {}
 
-  @Get("config")
-  @RequirePermission(PermissionKey.DDT_READ)
-  public getConfig(): { single_document_mode: boolean; lm_model: string; lm_base_url: string } {
-    return this.service.getConfig();
-  }
-
   @Get("documents")
   @RequirePermission(PermissionKey.DDT_READ)
   public async listDocuments(

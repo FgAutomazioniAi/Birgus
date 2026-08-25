@@ -11,7 +11,6 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",
-    "@prisma/client": "^6.19.3",
     "@xyflow/react": "^12.11.2",
     "clsx": "^2.1.1",
     "jspdf": "^4.2.1",
@@ -36,7 +35,6 @@
     "@types/nodemailer": "^8.0.1",
     "@types/react": "18.3.21",
     "@types/react-dom": "18.3.6",
-    "prisma": "^6.19.3",
     "tailwindcss": "^4.1.12",
     "tsx": "^4.23.1",
     "typescript": "^5.8.2"

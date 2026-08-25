@@ -7,6 +7,7 @@ import { useState } from "react";
 import { IconButton } from "@/components/atoms";
 import { BirgusLogo, NavItem } from "@/components/molecules";
 import { APP_ROUTES } from "@/lib/routes";
+import { useLanguage } from "@/components/organisms/language-provider";
 
 const menuItems = [
   { icon: FolderKanban, label: "Progetti", path: APP_ROUTES.projects, moduleKey: "project_management" },
@@ -35,6 +36,7 @@ export interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, enabledModuleKeys, isSuperadmin, onClose, open }: SidebarProps) {
+  const { t } = useLanguage();
   const pathname = usePathname();
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -94,7 +96,16 @@ export function Sidebar({ collapsed, enabledModuleKeys, isSuperadmin, onClose, o
                   href={item.path}
                   icon={item.icon}
                   isActive={isActive}
-                  label={item.label}
+                  label={item.label === "Progetti" ? t("nav.projects")
+                    : item.label === "Clienti" ? t("nav.clients")
+                      : item.label === "Spedizioni" ? t("nav.shipments")
+                        : item.label === "Mappa clienti" ? t("nav.customerMap")
+                          : item.label === "Priorita offerte" ? t("nav.offerPriority")
+                            : item.label === "Proposte manutenzione" ? t("nav.maintenanceProposals")
+                              : item.label === "Calendario manutenzioni" ? t("nav.maintenanceCalendar")
+                                : item.label === "Workflow" ? t("nav.workflows")
+                                  : item.label === "Archivio" ? t("nav.archive")
+                                    : item.label === "Impostazioni" ? t("nav.settings") : item.label}
                   collapsed={collapsed}
                   onClick={onClose}
                 />
@@ -109,12 +120,12 @@ export function Sidebar({ collapsed, enabledModuleKeys, isSuperadmin, onClose, o
                 "text-text-muted hover:bg-status-danger-bg hover:text-status-danger-text",
                 collapsed ? "lg:justify-center lg:px-0" : "",
               ].join(" ")}
-              title={collapsed ? "Esci" : undefined}
+              title={collapsed ? t("nav.exit") : undefined}
               onClick={() => void handleLogout()}
               disabled={isLoggingOut}
             >
               <LogOut size={20} />
-              {!collapsed && <span>Esci</span>}
+              {!collapsed && <span>{t("nav.exit")}</span>}
             </IconButton>
           </div>
         </div>

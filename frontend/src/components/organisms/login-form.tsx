@@ -9,6 +9,7 @@ import { toast } from "sonner";
 
 import { Button, Card, Input, Label } from "@/components/atoms";
 import { BirgusLogo } from "@/components/molecules";
+import { useLanguage } from "@/components/organisms/language-provider";
 import { APP_ROUTES } from "@/lib/routes";
 
 interface LoginFormValues {
@@ -28,6 +29,7 @@ interface LoginApiSuccessPayload {
 }
 
 export function LoginForm() {
+  const { t } = useLanguage();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRecoveryOpen, setIsRecoveryOpen] = useState(false);
@@ -97,21 +99,21 @@ export function LoginForm() {
         setTwoFactorSetupSecret(payload.setupRequired ? payload.setup?.secret ?? null : null);
         setTwoFactorSetupUri(payload.setupRequired ? payload.setup?.otpauthUri ?? null : null);
         setTwoFactorCode("");
-        toast.info("Inserisci il codice dell'app autenticatore per completare il login.");
+        toast.info(t("auth.enterAuthenticatorCode"));
         return;
       }
 
       if (!response.ok) {
         const message = payload && typeof payload === "object" && "message" in payload ? payload.message : undefined;
-        throw new Error(message ?? "Credenziali non valide.");
+        throw new Error(message ?? t("auth.invalidCredentials"));
       }
 
       resetTwoFactorState();
-      toast.success("Accesso effettuato con successo.");
+      toast.success(t("auth.loginSuccess"));
       router.push(APP_ROUTES.dashboard);
       router.refresh();
     } catch (error) {
-      const fallbackMessage = "Accesso non riuscito.";
+      const fallbackMessage = t("auth.loginFailed");
       const message = error instanceof Error ? error.message : fallbackMessage;
       toast.error(message || fallbackMessage);
     } finally {
@@ -121,13 +123,13 @@ export function LoginForm() {
 
   const handleVerifyTwoFactor = async () => {
     if (!twoFactorChallengeToken) {
-      toast.error("Challenge 2FA mancante. Ripeti il login.");
+      toast.error(t("auth.otpMissing"));
       return;
     }
 
     const normalizedCode = twoFactorCode.replace(/\s+/g, "").trim();
     if (!/^\d{6,10}$/.test(normalizedCode)) {
-      toast.error("Inserisci un codice OTP valido.");
+      toast.error(t("auth.otpInvalid"));
       return;
     }
 
@@ -148,7 +150,7 @@ export function LoginForm() {
       }
 
       resetTwoFactorState();
-      toast.success("Autenticazione a due fattori completata.");
+      toast.success(t("auth.twoFactorSuccess"));
       router.push(APP_ROUTES.dashboard);
       router.refresh();
     } catch (error) {
@@ -162,7 +164,7 @@ export function LoginForm() {
   const handleSendRecoveryCode = async () => {
     const email = recoveryEmail.trim().toLowerCase();
     if (!email) {
-      toast.error("Inserisci un indirizzo email valido.");
+      toast.error(t("auth.emailInvalid"));
       return;
     }
 
@@ -186,7 +188,7 @@ export function LoginForm() {
 
       setRecoveryEmail(email);
       setIsCodeSent(true);
-      toast.success("Se l'account esiste, riceverai un codice monouso via email.");
+      toast.success(t("auth.recoverySent"));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Invio codice non riuscito.";
       toast.error(message);
@@ -228,7 +230,7 @@ export function LoginForm() {
         throw new Error(payload?.message ?? "Reset password non riuscito.");
       }
 
-      toast.success("Password aggiornata. Ora puoi accedere.");
+      toast.success(t("auth.passwordUpdated"));
       setIsRecoveryOpen(false);
       setIsCodeSent(false);
       setRecoveryCode("");
@@ -244,16 +246,18 @@ export function LoginForm() {
 
   const renderTwoFactorSection = twoFactorChallengeToken
     ? (
-      <div className="mt-6 rounded-[var(--radius-md)] border border-border-default bg-bg-muted p-4">
+      <div
+        className="mt-6 rounded-[var(--radius-md)] border border-border-default bg-bg-muted p-4"
+      >
         <div className="mb-3 flex items-center gap-2">
           <ShieldCheck size={16} className="text-brand-primary" />
-          <p className="text-sm font-bold text-text-primary">Autenticazione a due fattori</p>
+          <p className="text-sm font-bold text-text-primary">{t("auth.twoFactor")}</p>
         </div>
 
         <div className="space-y-3">
           {twoFactorSetupSecret && (
             <div className="rounded-[var(--radius-sm)] border border-border-subtle bg-bg-surface p-3">
-              <p className="text-xs font-semibold text-text-secondary">Configura l'app (una sola volta)</p>
+              <p className="text-xs font-semibold text-text-secondary">{t("auth.twoFactorSetup")}</p>
               {twoFactorSetupUri && (
                 <div className="mt-3 flex justify-center rounded-[var(--radius-sm)] bg-white p-3">
                   <QRCodeSVG
@@ -261,7 +265,7 @@ export function LoginForm() {
                     size={184}
                     level="M"
                     marginSize={2}
-                    title="QR code autenticazione a due fattori"
+                    title={t("auth.twoFactorQr")}
                   />
                 </div>
               )}
@@ -273,15 +277,23 @@ export function LoginForm() {
           )}
 
           <div>
-            <Label htmlFor="two-factor-code">Codice OTP</Label>
+            <Label htmlFor="two-factor-code">{t("auth.otp")}</Label>
             <Input
               id="two-factor-code"
+              name="two-factor-code"
               value={twoFactorCode}
               onChange={(event) => setTwoFactorCode(event.target.value)}
               disabled={isVerifyingTwoFactor}
               className="mt-1"
               placeholder="123456"
               inputMode="numeric"
+              autoComplete="one-time-code"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void handleVerifyTwoFactor();
+                }
+              }}
             />
           </div>
 
@@ -297,15 +309,15 @@ export function LoginForm() {
                 setRecoveryEmail((prev) => prev || emailValue);
               }}
             >
-              Annulla
+              {t("auth.cancel")}
             </Button>
             <Button
               type="button"
               className="h-10 flex-1"
-              onClick={() => void handleVerifyTwoFactor()}
               disabled={isVerifyingTwoFactor}
+              onClick={() => void handleVerifyTwoFactor()}
             >
-              {isVerifyingTwoFactor ? "Verifica..." : "Verifica 2FA"}
+              {isVerifyingTwoFactor ? t("auth.verifying") : t("auth.verify")}
             </Button>
           </div>
         </div>
@@ -318,7 +330,7 @@ export function LoginForm() {
       <div className="text-center sm:mx-auto sm:w-full sm:max-w-md">
         <BirgusLogo className="mb-10 mx-auto h-14 w-auto" />
         <h2 className="mt-6 text-3xl font-extrabold tracking-tight text-brand-primary">
-          Accedi al project manager di FGautomazioni
+          {t("auth.title")}
         </h2>
       </div>
 
@@ -326,7 +338,7 @@ export function LoginForm() {
         <Card className="border border-border-subtle px-4 py-10 shadow-elevated sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
             <div>
-              <Label htmlFor="email">Indirizzo email</Label>
+              <Label htmlFor="email">{t("auth.email")}</Label>
               <div className="relative mt-1">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                   <Mail className="h-5 w-5 text-slate-400" />
@@ -345,7 +357,7 @@ export function LoginForm() {
             </div>
 
             <div>
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t("auth.password")}</Label>
               <div className="relative mt-1">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                   <Lock className="h-5 w-5 text-slate-400" />
@@ -386,7 +398,7 @@ export function LoginForm() {
                   className="h-4 w-4 cursor-pointer rounded-lg border-slate-300 text-brand-primary transition-colors focus:ring-blue-500"
                 />
                 <label htmlFor="remember-me" className="ml-2 block cursor-pointer text-sm text-text-secondary">
-                  Ricordami
+                  {t("auth.remember")}
                 </label>
               </div>
 
@@ -397,7 +409,7 @@ export function LoginForm() {
                   className="font-semibold text-brand-accent transition-colors hover:text-brand-accent-hover"
                   disabled={!!twoFactorChallengeToken}
                 >
-                  Password dimenticata?
+                  {t("auth.forgot")}
                 </button>
               </div>
             </div>
@@ -409,7 +421,7 @@ export function LoginForm() {
                 disabled={isSubmitting || !!twoFactorChallengeToken || isVerifyingTwoFactor}
               >
                 <LogIn className="h-5 w-5" />
-                {isSubmitting ? "Accesso..." : "Accedi"}
+                {isSubmitting ? t("auth.signingIn") : t("auth.signIn")}
                 <ChevronRight className="ml-1 h-4 w-4 opacity-50" />
               </Button>
             </div>
@@ -421,12 +433,12 @@ export function LoginForm() {
             <div className="mt-6 rounded-[var(--radius-md)] border border-border-default bg-bg-muted p-4">
               <div className="mb-3 flex items-center gap-2">
                 <KeyRound size={16} className="text-brand-primary" />
-                <p className="text-sm font-bold text-text-primary">Recupero password</p>
+                <p className="text-sm font-bold text-text-primary">{t("auth.recovery")}</p>
               </div>
 
               <div className="space-y-3">
                 <div>
-                  <Label htmlFor="recovery-email">Email account</Label>
+                  <Label htmlFor="recovery-email">{t("auth.accountEmail")}</Label>
                   <Input
                     id="recovery-email"
                     type="email"
@@ -445,14 +457,14 @@ export function LoginForm() {
                     onClick={() => void handleSendRecoveryCode()}
                     disabled={isSendingCode}
                   >
-                    {isSendingCode ? "Invio codice..." : "Invia codice via email"}
+                    {isSendingCode ? t("auth.sendingCode") : t("auth.sendCode")}
                   </Button>
                 )}
 
                 {isCodeSent && (
                   <>
                     <div>
-                      <Label htmlFor="recovery-code">Codice monouso</Label>
+                      <Label htmlFor="recovery-code">{t("auth.oneTimeCode")}</Label>
                       <Input
                         id="recovery-code"
                         value={recoveryCode}
@@ -463,7 +475,7 @@ export function LoginForm() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="recovery-password">Nuova password</Label>
+                      <Label htmlFor="recovery-password">{t("auth.newPassword")}</Label>
                       <Input
                         id="recovery-password"
                         type="password"
@@ -475,7 +487,7 @@ export function LoginForm() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="recovery-password-confirm">Conferma password</Label>
+                      <Label htmlFor="recovery-password-confirm">{t("auth.confirmPassword")}</Label>
                       <Input
                         id="recovery-password-confirm"
                         type="password"
@@ -494,7 +506,7 @@ export function LoginForm() {
                         onClick={() => setIsCodeSent(false)}
                         disabled={isResettingPassword}
                       >
-                        Nuovo codice
+                        {t("auth.newCode")}
                       </Button>
                       <Button
                         type="button"
@@ -502,7 +514,7 @@ export function LoginForm() {
                         onClick={() => void handleResetPassword()}
                         disabled={isResettingPassword}
                       >
-                        {isResettingPassword ? "Aggiornamento..." : "Reimposta password"}
+                        {isResettingPassword ? t("auth.updating") : t("auth.resetPassword")}
                       </Button>
                     </div>
                   </>

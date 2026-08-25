@@ -1,4 +1,5 @@
 import { loadAiProviderConfig, type AiProviderConfig } from "../domain/AiProviderConfig.js";
+import { AiProviderError } from "../domain/AiProviderError.js";
 import type { AiChatMessage } from "../domain/AiChatMessage.js";
 import type { AiChatCompletionsResponse, AiModelItem } from "../domain/AiChatResponse.js";
 import type { AiToolDefinition } from "../domain/AiToolDefinition.js";
@@ -56,10 +57,10 @@ export class OpenAiCompatibleLmClient {
       chatModel: options.requestedModel,
       temperature: options.temperature,
     });
-    this.maxOutputTokens = options.maxOutputTokens ?? this.parsePositiveInt(process.env.AI_PROVIDER_MAX_OUTPUT_TOKENS ?? process.env.ORCH_LM_MAX_OUTPUT_TOKENS, 512);
-    this.reasoning = options.reasoning ?? this.parseReasoning(process.env.AI_PROVIDER_REASONING ?? process.env.ORCH_LM_REASONING);
-    this.contextLength = options.contextLength ?? this.parseOptionalPositiveInt(process.env.AI_PROVIDER_CONTEXT_LENGTH ?? process.env.ORCH_LM_CONTEXT_LENGTH);
-    this.store = options.store ?? this.parseBoolean(process.env.AI_PROVIDER_STORE ?? process.env.ORCH_LM_STORE, false);
+    this.maxOutputTokens = options.maxOutputTokens ?? this.parsePositiveInt(process.env.AI_PROVIDER_MAX_OUTPUT_TOKENS, 512);
+    this.reasoning = options.reasoning ?? this.parseReasoning(process.env.AI_PROVIDER_REASONING);
+    this.contextLength = options.contextLength ?? this.parseOptionalPositiveInt(process.env.AI_PROVIDER_CONTEXT_LENGTH);
+    this.store = options.store ?? this.parseBoolean(process.env.AI_PROVIDER_STORE, false);
     this.useRuntimeConfig = options.useRuntimeConfig ?? true;
   }
 
@@ -268,20 +269,20 @@ export class OpenAiCompatibleLmClient {
       cache: "no-store",
     }).catch((error: unknown) => {
       if (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) {
-        throw new Error("AI provider request timeout");
+        throw new AiProviderError("AI_PROVIDER_TIMEOUT");
       }
 
-      throw new Error("AI provider request failed");
+      throw new AiProviderError("AI_PROVIDER_NETWORK_UNREACHABLE");
     });
 
-    const responsePayload = await response.json().catch(() => ({}));
+    const responsePayload = await this.readJsonResponse(response, response.ok);
     this.logAiTraffic("response", endpoint, responsePayload, {
       status: response.status,
       ok: response.ok,
     });
 
     if (!response.ok) {
-      throw new Error(`AI provider HTTP ${response.status}`);
+      throw this.toProviderHttpError(response.status);
     }
 
     return responsePayload as AiChatCompletionsResponse;
@@ -289,7 +290,8 @@ export class OpenAiCompatibleLmClient {
 
   private async listModels(config: AiProviderConfig, strict = false): Promise<AiModelItem[]> {
     const timeout = Math.max(5000, Math.min(config.timeoutMs, 30000));
-    const response = await fetch(this.resolveEndpoint(config, config.modelsPath), {
+    const endpoint = this.resolveEndpoint(config, config.modelsPath);
+    const response = await fetch(endpoint, {
       method: "GET",
       headers: this.buildHeaders(config),
       signal: AbortSignal.timeout(timeout),
@@ -299,19 +301,22 @@ export class OpenAiCompatibleLmClient {
         return null;
       }
       if (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) {
-        throw new Error("AI provider models request timeout");
+        throw new AiProviderError("AI_PROVIDER_TIMEOUT");
       }
-      throw new Error("AI provider models request failed");
+      throw new AiProviderError("AI_PROVIDER_NETWORK_UNREACHABLE");
     });
 
     if (!response || !response.ok) {
       if (strict && response) {
-        throw new Error(`AI provider models HTTP ${response.status}`);
+        throw this.toProviderHttpError(response.status);
       }
       return [];
     }
 
-    const payload = await response.json().catch(() => ({}));
+    const payload = await this.readJsonResponse(response, strict);
+    if (strict && !Array.isArray((payload as { models?: unknown }).models) && !Array.isArray((payload as { data?: unknown }).data)) {
+      throw new AiProviderError("AI_PROVIDER_INVALID_RESPONSE");
+    }
     const items = Array.isArray((payload as { models?: unknown[] }).models)
       ? (payload as { models: unknown[] }).models
       : Array.isArray((payload as { data?: unknown[] }).data)
@@ -346,6 +351,45 @@ export class OpenAiCompatibleLmClient {
     }
 
     return headers;
+  }
+
+  private async readJsonResponse(response: Response, strict = true): Promise<Record<string, unknown>> {
+    const text = await response.text();
+    if (!text.trim()) {
+      if (strict) {
+        throw new AiProviderError("AI_PROVIDER_INVALID_RESPONSE", response.status);
+      }
+      return {};
+    }
+
+    try {
+      const payload = JSON.parse(text) as unknown;
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        throw new AiProviderError("AI_PROVIDER_INVALID_RESPONSE", response.status);
+      }
+      return payload as Record<string, unknown>;
+    } catch (error) {
+      if (error instanceof AiProviderError) {
+        throw error;
+      }
+      if (strict) {
+        throw new AiProviderError("AI_PROVIDER_INVALID_RESPONSE", response.status);
+      }
+      return {};
+    }
+  }
+
+  private toProviderHttpError(statusCode: number): AiProviderError {
+    if (statusCode === 401) {
+      return new AiProviderError("AI_PROVIDER_UNAUTHORIZED", statusCode);
+    }
+    if (statusCode === 403) {
+      return new AiProviderError("AI_PROVIDER_FORBIDDEN", statusCode);
+    }
+    if (statusCode === 404) {
+      return new AiProviderError("AI_PROVIDER_ENDPOINT_NOT_FOUND", statusCode);
+    }
+    return new AiProviderError("AI_PROVIDER_HTTP_ERROR", statusCode);
   }
 
   private resolveEndpoint(config: AiProviderConfig, path: string): string {

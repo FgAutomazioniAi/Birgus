@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { Button, Input } from "@/components/atoms";
+import { useLanguage } from "@/components/organisms/language-provider";
 
 interface ConfirmDeleteDialogProps {
   confirmLabel?: string;
@@ -15,14 +16,15 @@ interface ConfirmDeleteDialogProps {
 }
 
 export function ConfirmDeleteDialog({
-  confirmLabel = "Elimina",
+  confirmLabel,
   expectedText,
   isBusy = false,
   onCancel,
   onConfirm,
   open,
-  title = "Conferma Eliminazione",
+  title,
 }: ConfirmDeleteDialogProps) {
+  const { t } = useLanguage();
   const [typedText, setTypedText] = useState("");
 
   useEffect(() => {
@@ -40,24 +42,24 @@ export function ConfirmDeleteDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-lg rounded-[var(--radius-xl)] border border-border-default bg-bg-surface p-5 shadow-elevated">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">{title}</h3>
-        <p className="mt-1 text-xs text-text-muted">Sei sicuro di voler cancellare questo elemento?</p>
+        <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">{title ?? t("common.confirmDelete")}</h3>
+        <p className="mt-1 text-xs text-text-muted">{t("common.confirmDeletePrompt")}</p>
         <p className="mt-3 text-xs text-text-secondary">
-          Digita esattamente: <span className="font-mono font-semibold">{expectedText}</span>
+          {t("common.typeExactly")} <span className="font-mono font-semibold">{expectedText}</span>
         </p>
 
         <div className="mt-3">
           <Input
             value={typedText}
             onChange={(event) => setTypedText(event.target.value)}
-            placeholder="Inserisci il testo di conferma"
+            placeholder={t("common.confirmationText")}
             disabled={isBusy}
           />
         </div>
 
         <div className="mt-4 flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onCancel} disabled={isBusy}>
-            Annulla
+            {t("auth.cancel")}
           </Button>
           <Button
             type="button"
@@ -65,7 +67,7 @@ export function ConfirmDeleteDialog({
             onClick={() => void onConfirm(typedText.trim())}
             disabled={!canConfirm}
           >
-            {confirmLabel}
+            {confirmLabel ?? t("common.delete")}
           </Button>
         </div>
       </div>

@@ -70,8 +70,6 @@ export class AppConfigService {
       "GARAGE_S3_BUCKET",
       "GARAGE_S3_ACCESS_KEY_ID",
       "GARAGE_S3_SECRET_ACCESS_KEY",
-      "MEASURE_REPORT_LM_BASE_URL",
-      "MEASURE_REPORT_LM_MODEL",
     ];
     const missingKeys = requiredKeys.filter((key) => !this.getString(key).trim());
     const mailProvider = this.getString("MAIL_PROVIDER", "smtp").trim().toLowerCase();
@@ -89,9 +87,8 @@ export class AppConfigService {
       }
     }
     const hasAiProviderConfig = this.getString("AI_PROVIDER_BASE_URL").trim() && this.getString("AI_PROVIDER_CHAT_MODEL").trim();
-    const hasLegacyLmConfig = this.getString("ORCH_LM_BASE_URL").trim() && this.getString("ORCH_LM_MODEL").trim();
-    if (!hasAiProviderConfig && !hasLegacyLmConfig) {
-      missingKeys.push("AI_PROVIDER_BASE_URL/AI_PROVIDER_CHAT_MODEL or ORCH_LM_BASE_URL/ORCH_LM_MODEL");
+    if (!hasAiProviderConfig) {
+      missingKeys.push("AI_PROVIDER_BASE_URL/AI_PROVIDER_CHAT_MODEL");
     }
     if (missingKeys.length > 0) {
       throw new Error(`Missing required production environment variables: ${missingKeys.join(", ")}`);

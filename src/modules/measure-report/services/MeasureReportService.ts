@@ -84,15 +84,11 @@ export class MeasureReportService {
 
   public getConfig(): {
     single_document_mode: boolean;
-    lm_model: string;
-    lm_base_url: string;
     analysis_mode: string;
     document_types: Array<{ value: string; label: string }>;
   } {
     return {
       single_document_mode: true,
-      lm_model: process.env.MEASURE_REPORT_LM_MODEL ?? "",
-      lm_base_url: process.env.MEASURE_REPORT_LM_BASE_URL ?? "",
       analysis_mode: process.env.MEASURE_REPORT_ANALYSIS_MODE ?? "auto",
       document_types: MEASURE_REPORT_DOCUMENT_TYPES.map((value) => ({
         value,
