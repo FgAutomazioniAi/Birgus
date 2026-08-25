@@ -1,5 +1,6 @@
 import { AppError } from "../../../core/errors/AppError.js";
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
+import { AiProviderError } from "../../ai-runtime/domain/AiProviderError.js";
 import { OpenAiCompatibleToolChatClient } from "../../ai-runtime/services/OpenAiCompatibleToolChatClient.js";
 import { DocumentChatContext, DocumentIntelligenceService } from "../../document-intelligence/services/DocumentIntelligenceService.js";
 import { normalizeKnowledgeMode, type KnowledgeMode } from "../../document-intelligence/domain/KnowledgeMode.js";
@@ -684,7 +685,9 @@ export class AssistantConversationService {
   }
 
   private isToolCallingRejected(error: unknown): boolean {
-    return error instanceof Error && /AI provider HTTP 400/i.test(error.message);
+    return error instanceof AiProviderError
+      && error.code === "AI_PROVIDER_HTTP_ERROR"
+      && error.statusCode === 400;
   }
 
   private async resolvePrimaryModuleId(moduleKey: string | null): Promise<number | null> {
