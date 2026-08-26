@@ -505,7 +505,7 @@ export class DocumentIntelligenceService {
 
     if (knowledgeMode === "saved") {
       throw new AppError(
-        "Knowledge non disponibile per uno dei documenti selezionati. Usa on-demand o hybrid per indicizzarlo automaticamente.",
+        "Knowledge non disponibile per uno dei documenti selezionati. Usa Documenti caricati o Knowledge workspace per indicizzarlo automaticamente.",
         "KNOWLEDGE_DOCUMENT_NOT_INDEXED",
         409,
       );

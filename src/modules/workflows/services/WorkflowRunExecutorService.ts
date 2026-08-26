@@ -661,14 +661,14 @@ export class WorkflowRunExecutorService {
       });
     }
 
-    const prompt = String(node.module_agent?.active_prompt || node.module_agent?.original_prompt || "").trim();
+    const nodeConfig = this.toRecord(node.configuration);
+    const prompt = this.resolveNodePrompt(nodeConfig, node.module_agent?.active_prompt, node.module_agent?.original_prompt);
     if (!prompt) {
       throw new Error(`Prompt agente mancante per il nodo ${node.node_key}.`);
     }
 
     const previousOutput = this.toRecord(this.findLatestNodeOutput(context));
     const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
-    const nodeConfig = this.toRecord(node.configuration);
     const inputPayload = context.inputPayload ?? {};
     const inputText = this.firstString(
       nodeConfig.input_text,
@@ -677,11 +677,14 @@ export class WorkflowRunExecutorService {
       nodeConfig.text,
       inputPayload.input_text,
       inputPayload.text,
+      previousOutput.input_text,
+      previousOutput.inputText,
+      previousOutput.promptText,
       previousOutput.extracted_text,
       previousOutput.reply,
       previousOutput.text,
       previousOutput.raw_output,
-      ...this.pickIncomingStrings(incomingOutputs.items, ["extracted_text", "reply", "text", "raw_output"]),
+      ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "extracted_text", "reply", "text", "raw_output"]),
     );
 
     if (!inputText) {
@@ -858,18 +861,23 @@ export class WorkflowRunExecutorService {
       incoming_outputs: incomingOutputs.byNodeKey,
       ai_provider: await this.buildPythonAiProviderOverride(),
     };
+    const prompt = this.resolveNodePrompt(nodeConfig, this.defaultPromptForLangchainAction(action));
 
     if (action === "chat") {
       return {
         ...merged,
+        ...(prompt ? { instructions: prompt } : {}),
         input_text: this.firstString(
           nodeConfig.input_text,
           inputPayload.input_text,
+          previousOutput.input_text,
+          previousOutput.inputText,
+          previousOutput.promptText,
           previousOutput.reply,
           previousOutput.extracted_text,
           previousOutput.text,
           previousOutput.raw_output,
-          ...this.pickIncomingStrings(incomingOutputs.items, ["reply", "extracted_text", "text", "raw_output"]),
+          ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "reply", "extracted_text", "text", "raw_output"]),
         ),
       };
     }
@@ -877,14 +885,18 @@ export class WorkflowRunExecutorService {
     if (action === "structure_text") {
       return {
         ...merged,
+        ...(prompt ? { instructions: prompt } : {}),
         extracted_text: this.firstString(
           nodeConfig.extracted_text,
           inputPayload.extracted_text,
+          previousOutput.input_text,
+          previousOutput.inputText,
+          previousOutput.promptText,
           previousOutput.extracted_text,
           previousOutput.reply,
           previousOutput.text,
           previousOutput.raw_output,
-          ...this.pickIncomingStrings(incomingOutputs.items, ["extracted_text", "reply", "text", "raw_output"]),
+          ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "extracted_text", "reply", "text", "raw_output"]),
         ),
       };
     }
@@ -892,19 +904,54 @@ export class WorkflowRunExecutorService {
     if (action === "compose_email") {
       return {
         ...merged,
+        ...(prompt ? { extra_instructions: prompt, instructions: prompt } : {}),
         context: this.firstString(
           nodeConfig.context,
           inputPayload.context,
+          previousOutput.input_text,
+          previousOutput.inputText,
+          previousOutput.promptText,
           previousOutput.reply,
           previousOutput.raw_output,
           previousOutput.text,
           previousOutput.extracted_text,
-          ...this.pickIncomingStrings(incomingOutputs.items, ["reply", "raw_output", "text", "extracted_text"]),
+          ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "reply", "raw_output", "text", "extracted_text"]),
         ),
       };
     }
 
     return merged;
+  }
+
+  private resolveNodePrompt(
+    nodeConfig: Record<string, unknown>,
+    fallbackActivePrompt?: string | null,
+    fallbackOriginalPrompt?: string | null,
+  ): string {
+    return this.firstString(
+      nodeConfig.currentPrompt,
+      nodeConfig.current_prompt,
+      nodeConfig.instructions,
+      nodeConfig.prompt,
+      nodeConfig.extra_instructions,
+      nodeConfig.defaultPrompt,
+      nodeConfig.default_prompt,
+      fallbackActivePrompt,
+      fallbackOriginalPrompt,
+    );
+  }
+
+  private defaultPromptForLangchainAction(action: string): string {
+    if (action === "structure_text") {
+      return "Estrai dal testo ricevuto solo i dati richiesti, mantenendo una struttura chiara e verificabile.";
+    }
+    if (action === "compose_email") {
+      return "Componi una bozza email professionale, sintetica e coerente con il contesto ricevuto.";
+    }
+    if (action === "chat") {
+      return "Rispondi in modo chiaro, operativo e coerente con l'input ricevuto dal workflow.";
+    }
+    return "";
   }
 
   private async buildPythonAiProviderOverride(): Promise<Record<string, unknown> | null> {
@@ -969,12 +1016,15 @@ export class WorkflowRunExecutorService {
       content: this.firstValue(
         nodeConfig.content,
         inputPayload.content,
+        previousOutput.input_text,
+        previousOutput.inputText,
+        previousOutput.promptText,
         previousOutput.reply,
         previousOutput.text,
         previousOutput.raw_output,
         previousOutput.extracted_text,
         previousOutput.structured_data,
-        ...this.pickIncomingValues(incomingOutputs.items, ["reply", "text", "raw_output", "extracted_text", "structured_data"]),
+        ...this.pickIncomingValues(incomingOutputs.items, ["input_text", "inputText", "promptText", "reply", "text", "raw_output", "extracted_text", "structured_data"]),
       ),
       title: this.firstString(nodeConfig.title, inputPayload.title),
       format: this.firstString(nodeConfig.format, inputPayload.format) || "docx",
@@ -1011,10 +1061,13 @@ export class WorkflowRunExecutorService {
       text: this.firstString(
         nodeConfig.text,
         inputPayload.text,
+        previousOutput.input_text,
+        previousOutput.inputText,
+        previousOutput.promptText,
         previousOutput.text,
         previousOutput.reply,
         previousOutput.raw_output,
-        ...this.pickIncomingStrings(incomingOutputs.items, ["text", "reply", "raw_output"]),
+        ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "text", "reply", "raw_output"]),
       ),
       attachments: this.resolveMailAttachments(nodeConfig, inputPayload, previousOutput, incomingOutputs.items),
     };
@@ -1052,10 +1105,13 @@ export class WorkflowRunExecutorService {
         nodeConfig.message,
         inputPayload.text,
         inputPayload.message,
+        previousOutput.input_text,
+        previousOutput.inputText,
+        previousOutput.promptText,
         previousOutput.text,
         previousOutput.reply,
         previousOutput.raw_output,
-        ...this.pickIncomingStrings(incomingOutputs.items, ["text", "reply", "raw_output"]),
+        ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "text", "reply", "raw_output"]),
       ),
     };
   }
@@ -1077,10 +1133,13 @@ export class WorkflowRunExecutorService {
         nodeConfig.message,
         inputPayload.text,
         inputPayload.message,
+        previousOutput.input_text,
+        previousOutput.inputText,
+        previousOutput.promptText,
         previousOutput.text,
         previousOutput.reply,
         previousOutput.raw_output,
-        ...this.pickIncomingStrings(incomingOutputs.items, ["text", "reply", "raw_output"]),
+        ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "text", "reply", "raw_output"]),
       ),
     };
   }
@@ -1326,15 +1385,24 @@ export class WorkflowRunExecutorService {
     );
     const resolvedDocumentIds = documentIds.length > 0 ? documentIds : (fallbackDocumentId ? [fallbackDocumentId] : []);
     const prompt = this.firstString(
+      nodeConfig.currentPrompt,
+      nodeConfig.current_prompt,
+      nodeConfig.instructions,
       nodeConfig.prompt,
       nodeConfig.question,
       inputPayload.prompt,
       inputPayload.question,
+      previousOutput.input_text,
+      previousOutput.inputText,
+      previousOutput.promptText,
       previousOutput.prompt,
       previousOutput.question,
       previousOutput.text,
       previousOutput.reply,
-      ...this.pickIncomingStrings(incomingOutputs.items, ["prompt", "question", "text", "reply"]),
+      ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "prompt", "question", "text", "reply"]),
+      nodeConfig.defaultPrompt,
+      nodeConfig.default_prompt,
+      "Analizza i documenti collegati e produci una risposta chiara, citando gli elementi rilevanti.",
     );
 
     return this.documentIntelligenceService.analyzeDocumentSet({

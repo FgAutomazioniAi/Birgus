@@ -18,6 +18,7 @@
     "security:check": "tsx scripts/security-check.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:bootstrap": "tsx scripts/bootstrap-database.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:backfill:shipments": "tsx scripts/backfill-project-version-shipments.ts",
     "db:sync:module-agent-prompts": "tsx scripts/sync-module-agent-prompts.ts",

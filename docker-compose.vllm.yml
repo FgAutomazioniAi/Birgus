@@ -7,6 +7,8 @@ services:
     environment:
       HF_HOME: /root/.cache/huggingface
       HUGGING_FACE_HUB_TOKEN: "${HUGGING_FACE_HUB_TOKEN:-}"
+      NVIDIA_VISIBLE_DEVICES: "${NVIDIA_VISIBLE_DEVICES:-all}"
+      NVIDIA_DRIVER_CAPABILITIES: "${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}"
     command:
       - "--host"
       - "0.0.0.0"
@@ -21,7 +23,7 @@ services:
       - "--max-model-len"
       - "${VLLM_MAX_MODEL_LEN:-1024}"
       - "--max-num-seqs"
-      - "${VLLM_MAX_NUM_SEQS:-1}"
+      - "${VLLM_MAX_NUM_SEQS:-4}"
       - "--gpu-memory-utilization"
       - "${VLLM_GPU_MEMORY_UTILIZATION:-0.90}"
       - "--limit-mm-per-prompt"

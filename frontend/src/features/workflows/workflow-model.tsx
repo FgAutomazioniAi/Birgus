@@ -100,6 +100,7 @@ export type CanvasNodeData = {
   subtitle: string;
   paletteKind: PaletteKind | "INPUT" | "OUTPUT";
   configuration: Record<string, unknown>;
+  hasInputSource: boolean;
   uploadedFileName?: string;
   onConfigChange?: (patch: Record<string, unknown>) => void;
   onFileChange?: (file: File) => void;
@@ -165,7 +166,7 @@ export const NODE_KIND_ICONS: Record<FlowNodeType, typeof Type> = {
 export const NODE_KIND_LABELS: Record<FlowNodeType, string> = {
   "input-text": "Inserisci testo",
   "input-file": "Carica file",
-  "input-knowledge": "Knowledge (RAG)",
+  "input-knowledge": "Knowledge workspace",
   "document-set-ai": "Analizza documenti",
   ocr: "OCR PDF",
   llm: "Analizza con AI",
@@ -203,7 +204,7 @@ export const TOOLBAR_GROUPS: Array<{ title: string; items: FlowNodeType[] }> = [
   { title: "Input", items: ["input-text", "input-file"] },
   { title: "Output", items: ["output"] },
   { title: "Agent", items: ["llm", "structure-data", "compose-email"] },
-  { title: "Tool", items: ["ocr", "input-knowledge", "document-set-ai", "generate-document", "quotation-docx"] },
+  { title: "Tool", items: ["ocr", "document-set-ai", "generate-document", "quotation-docx"] },
   { title: "Resoconto", items: ["schedule", "send-email", "send-telegram", "send-whatsapp"] },
 ];
 
@@ -228,15 +229,26 @@ export const NODE_KIND_BORDER: Record<FlowNodeType, string> = {
 
 export const textareaClassName = "min-h-32 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-muted p-3 text-sm text-text-secondary focus-visible:border-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary";
 
-export function buildModuleCards(workflows: WorkflowSummary[], tools: WorkflowTool[], agents: WorkflowAgent[]): ModuleCard[] {
+export function buildModuleCards(
+  workflows: WorkflowSummary[],
+  tools: WorkflowTool[],
+  agents: WorkflowAgent[],
+  enabledModuleKeys?: string[],
+): ModuleCard[] {
+  const visibleModuleKeys = enabledModuleKeys ? new Set(enabledModuleKeys) : null;
   const nonPlaygroundWorkflows = workflows.filter((workflow) => workflow.key !== PLAYGROUND_KEY);
   const moduleKeys = Array.from(new Set([
     ...nonPlaygroundWorkflows.map((workflow) => workflow.moduleKey),
     ...agents.map((agent) => agent.moduleKey),
     ...tools.map((tool) => tool.moduleKey),
-  ])).filter((key) => key !== "document_archive" && key !== "workflow_management").sort();
+  ])).filter((key) =>
+    key !== "document_archive"
+    && key !== "document_intelligence"
+    && key !== "workflow_management"
+    && (!visibleModuleKeys || visibleModuleKeys.has(key)),
+  ).sort();
 
-  const cards = moduleKeys.map((moduleKey) => {
+  return moduleKeys.map((moduleKey) => {
     const workflow = nonPlaygroundWorkflows.find((item) => item.moduleKey === moduleKey && item.isDefault)
       ?? nonPlaygroundWorkflows.find((item) => item.moduleKey === moduleKey)
       ?? null;
@@ -251,20 +263,6 @@ export function buildModuleCards(workflows: WorkflowSummary[], tools: WorkflowTo
       isPlayground: false,
     };
   });
-
-  const playground = workflows.find((workflow) => workflow.key === PLAYGROUND_KEY) ?? null;
-  cards.unshift({
-    cardKey: "playground",
-    moduleKey: "workflow_management",
-    title: "Playground",
-    description: "Area libera per costruire e provare workflow senza aumentare i workflow dei moduli.",
-    workflow: playground,
-    agentsCount: agents.length + tools.filter(isAgentTool).length,
-    toolsCount: tools.filter((tool) => !isAgentTool(tool)).length,
-    isPlayground: true,
-  });
-
-  return cards;
 }
 
 export function isLangChainTool(tool: WorkflowTool): boolean {
@@ -277,6 +275,32 @@ export function isAgentTool(tool: WorkflowTool): boolean {
 
 export function isAdvancedLangChainTool(tool: WorkflowTool): boolean {
   return tool.handlerKey === "langchain_orchestrator.chat" || tool.handlerKey === "langchain_orchestrator.pipeline_execute";
+}
+
+export function isAiRequestFlowNodeType(kind: FlowNodeType): boolean {
+  return kind === "llm" || kind === "structure-data" || kind === "compose-email" || kind === "document-set-ai";
+}
+
+export function currentPromptFromConfiguration(configuration: Record<string, unknown>): string {
+  return firstPreviewString(configuration.currentPrompt, configuration.instructions, configuration.prompt, configuration.extra_instructions);
+}
+
+export function defaultPromptFromConfiguration(configuration: Record<string, unknown>): string {
+  return firstPreviewString(configuration.defaultPrompt, configuration.default_prompt, configuration.originalPrompt);
+}
+
+export function normalizeAiPromptConfiguration(
+  configuration: Record<string, unknown>,
+  fallbackCurrentPrompt = "",
+  fallbackDefaultPrompt = "",
+): Record<string, unknown> {
+  const currentPrompt = currentPromptFromConfiguration(configuration) || fallbackCurrentPrompt;
+  const defaultPrompt = defaultPromptFromConfiguration(configuration) || fallbackDefaultPrompt || currentPrompt;
+  return {
+    ...configuration,
+    ...(currentPrompt ? { instructions: currentPrompt, currentPrompt } : {}),
+    ...(defaultPrompt ? { defaultPrompt } : {}),
+  };
 }
 
 export function findToolForFlowNodeType(kind: FlowNodeType, tools: WorkflowTool[]): WorkflowTool | null {
@@ -498,6 +522,7 @@ export function toFlowNode(
   tools: Map<string, WorkflowTool>,
   agents: Map<string, WorkflowAgent>,
   uploadedFiles: Record<string, UploadedWorkflowFile>,
+  hasInputSource: boolean,
   onConfigChange: (clientId: string, patch: Record<string, unknown>) => void,
   onFileChange: (clientId: string, file: File) => void,
 ): Node<CanvasNodeData> {
@@ -522,6 +547,7 @@ export function toFlowNode(
       subtitle: agent ? "Prompt" : tool ? toolSubtitle(tool) : item.inputKind ?? item.outputKind ?? item.nodeKind,
       paletteKind,
       configuration: item.configuration,
+      hasInputSource,
       uploadedFileName: uploadedFiles[item.clientId]?.fileName,
       onConfigChange: (patch) => onConfigChange(item.clientId, patch),
       onFileChange: (file) => onFileChange(item.clientId, file),

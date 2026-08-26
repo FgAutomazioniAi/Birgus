@@ -1,9 +1,10 @@
 "use client";
 
 import { cloneElement, isValidElement, useEffect, useId, useState, type DragEvent, type ReactElement, type ReactNode } from "react";
-import { ChevronDown, Clock, FileText, Mail, MessageCircle, Plus, Send, Settings, Sparkles } from "lucide-react";
+import { Check, ChevronDown, Clock, FileText, HelpCircle, Mail, MessageCircle, Plus, Send, Settings, Sparkles } from "lucide-react";
 
 import { Badge, Input, Text } from "@/components/atoms";
+import { cn } from "@/lib/cn";
 import type { WorkflowRun, WorkflowTool } from "./types";
 import {
   formatPayload,
@@ -220,6 +221,64 @@ export function RunResultsPanel({
   );
 }
 
+export function WorkflowCheckbox({
+  checked,
+  help,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  help?: string;
+  label: string;
+  onChange: (checked: boolean) => void;
+}) {
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const id = `workflow-checkbox-${useId().replace(/:/g, "")}`;
+
+  return (
+    <div className="relative flex items-center gap-1.5">
+      <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-text-secondary" htmlFor={id}>
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+          className="sr-only"
+        />
+        <span
+          className={cn(
+            "flex h-4 w-4 items-center justify-center rounded border transition",
+            checked
+              ? "border-brand-primary bg-brand-primary text-text-inverse"
+              : "border-border-default bg-bg-page text-transparent",
+          )}
+          aria-hidden="true"
+        >
+          <Check className="h-3 w-3" />
+        </span>
+        <span>{label}</span>
+      </label>
+      {help ? (
+        <>
+          <button
+            type="button"
+            className="rounded-full p-0.5 text-text-muted hover:bg-bg-muted hover:text-text-primary"
+            onClick={() => setIsHelpOpen((current) => !current)}
+            aria-label={`Info ${label}`}
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+          </button>
+          {isHelpOpen ? (
+            <div className="absolute left-0 top-full z-20 mt-2 w-64 rounded-md border border-border-default bg-bg-surface p-3 text-xs leading-relaxed text-text-secondary shadow-elevated">
+              {help}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export function PaletteSection({ title, count, defaultOpen = false, children }: { title: string; count: number; defaultOpen?: boolean; children: ReactNode }) {
   return (
     <details className="palette-group" open={defaultOpen}>
@@ -343,14 +402,12 @@ export function ToolConfigurationForm({
               <textarea className={textareaClassName} value={stringValue(configuration.instructions)} onChange={(event) => onPatch({ instructions: event.target.value })} />
             </Field>
             {action === "chat" ? (
-              <label className="flex items-center gap-2 text-sm text-text-secondary">
-                <input
-                  type="checkbox"
-                  checked={configuration.use_deep_reasoning === true}
-                  onChange={(event) => onPatch({ use_deep_reasoning: event.target.checked })}
-                />
-                Self-Discover
-              </label>
+              <WorkflowCheckbox
+                checked={configuration.use_deep_reasoning === true}
+                label="Self-Discover"
+                help="Aggiunge una fase di ragionamento strutturato prima della risposta. Di solito migliora analisi complesse, ma impiega piu tempo."
+                onChange={(checked) => onPatch({ use_deep_reasoning: checked })}
+              />
             ) : null}
           </>
         )}
@@ -408,14 +465,12 @@ export function ToolConfigurationForm({
             placeholder="Riassumi i documenti"
           />
         </Field>
-        <label className="flex items-center gap-2 text-sm text-text-secondary">
-          <input
-            type="checkbox"
-            checked={configuration.use_deep_reasoning === true}
-            onChange={(event) => onPatch({ use_deep_reasoning: event.target.checked })}
-          />
-          Self-Discover
-        </label>
+        <WorkflowCheckbox
+          checked={configuration.use_deep_reasoning === true}
+          label="Self-Discover"
+          help="Aggiunge una fase di ragionamento strutturato prima della risposta. Di solito migliora analisi complesse, ma impiega piu tempo."
+          onChange={(checked) => onPatch({ use_deep_reasoning: checked })}
+        />
       </div>
     );
   }

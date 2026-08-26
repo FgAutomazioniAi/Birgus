@@ -515,7 +515,7 @@ export class AssistantConversationService {
 
     messages.push({
       role: "system",
-      content: `Policy knowledge della sessione: ${params.knowledgeMode}. on_demand aggiorna i documenti quando serve; saved usa solo knowledge gia salvata; hybrid usa knowledge salvata e aggiorna se manca.`,
+      content: `Policy contesto documentale della sessione: ${params.knowledgeMode}. Documenti caricati legge e indicizza i documenti allegati quando serve; Knowledge workspace usa la knowledge pronta e la crea se manca.`,
     });
 
     if (params.attachedDocumentsContext) {

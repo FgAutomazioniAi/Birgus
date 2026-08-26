@@ -45,9 +45,8 @@ interface AssistantDocumentResponse {
 type KnowledgeMode = "on_demand" | "saved" | "hybrid";
 
 const knowledgeModeOptions: Array<{ value: KnowledgeMode; label: string }> = [
-  { value: "hybrid", label: "Hybrid" },
-  { value: "on_demand", label: "Fast" },
-  { value: "saved", label: "Thinking" },
+  { value: "on_demand", label: "Documenti caricati" },
+  { value: "hybrid", label: "Knowledge workspace" },
 ];
 
 const assistantLogoByTheme: Record<ThemeId, string> = {
@@ -57,6 +56,24 @@ const assistantLogoByTheme: Record<ThemeId, string> = {
   lavanda: "/birgus-logo/cropped/blue.png",
   oceano: "/birgus-logo/cropped/azure.png",
   ambra: "/birgus-logo/cropped/violet.png",
+};
+
+const assistantLogoSurfaceByTheme: Record<ThemeId, string> = {
+  predefinito: "bg-[#9aadd7]",
+  dark: "bg-white",
+  grafite: "bg-white",
+  lavanda: "bg-[#9aadd7]",
+  oceano: "bg-[#23549a]",
+  ambra: "bg-[#e87f24]",
+};
+
+const assistantLogoImageByTheme: Record<ThemeId, string> = {
+  predefinito: "object-cover",
+  dark: "object-contain p-2",
+  grafite: "object-contain p-2",
+  lavanda: "object-cover",
+  oceano: "object-cover",
+  ambra: "object-cover",
 };
 
 export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
@@ -75,6 +92,8 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const assistantLogoSrc = assistantLogoByTheme[theme] ?? assistantLogoByTheme.predefinito;
+  const assistantLogoSurface = assistantLogoSurfaceByTheme[theme] ?? assistantLogoSurfaceByTheme.predefinito;
+  const assistantLogoImage = assistantLogoImageByTheme[theme] ?? assistantLogoImageByTheme.predefinito;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -123,7 +142,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
     const payload = (await response.json()) as AssistantSessionResponse;
     setSessionId(payload.id);
     if (payload.knowledgeMode && ["hybrid", "on_demand", "saved"].includes(payload.knowledgeMode)) {
-      setKnowledgeMode(payload.knowledgeMode);
+      setKnowledgeMode(payload.knowledgeMode === "saved" ? "hybrid" : payload.knowledgeMode);
     }
     return payload.id;
   };
@@ -144,7 +163,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
         throw new Error(typeof payload.message === "string" ? payload.message : "Modalita knowledge non aggiornata.");
       }
       if (payload.knowledgeMode) {
-        setKnowledgeMode(payload.knowledgeMode);
+        setKnowledgeMode(payload.knowledgeMode === "saved" ? "hybrid" : payload.knowledgeMode);
       }
     } catch (error) {
       setKnowledgeMode(previousMode);
@@ -236,16 +255,15 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
         >
           <header className="flex items-center justify-between border-b border-border-default bg-bg-page px-4 py-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-bg-surface ring-1 ring-brand-primary/15">
+              <div className={cn("flex h-9 w-9 items-center justify-center overflow-hidden rounded-md", assistantLogoSurface)}>
                 <img
                   src={assistantLogoSrc}
                   alt="Birgus Assistant"
-                  className="h-full w-full object-cover"
+                  className={cn("h-full w-full", assistantLogoImage)}
                 />
               </div>
               <div>
-                <p className="text-sm font-semibold text-text-primary">Birgus Assistant</p>
-                <p className="text-xs text-text-muted">Chat con memoria della sessione</p>
+                <p className="text-sm font-semibold text-text-primary">Birgus</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -389,25 +407,24 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
         type="button"
         onClick={() => setIsOpen((current) => !current)}
         className={cn(
-          "group relative flex h-14 w-14 items-center justify-center rounded-full border text-text-inverse shadow-2xl transition",
+          "group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border shadow-2xl transition",
+          assistantLogoSurface,
           theme === "dark"
-            ? "border-white bg-white hover:bg-white"
-            : "border-transparent bg-brand-primary hover:bg-brand-primary-hover",
+            ? "border-white/90 hover:border-white"
+            : "border-white/35 hover:brightness-105",
         )}
         aria-label="Apri assistente"
       >
-        <span className="absolute h-12 w-12 rounded-full bg-brand-primary/10 blur-md transition group-hover:bg-brand-primary/20" />
-        <span className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-white/20">
-          <img
-            src={assistantLogoSrc}
-            alt=""
-            className={cn(
-              "h-full w-full object-cover transition-transform duration-300 ease-out",
-              isOpen ? "rotate-[0deg]" : "rotate-[45deg] group-hover:rotate-[0deg]",
-            )}
-            aria-hidden="true"
-          />
-        </span>
+        <img
+          src={assistantLogoSrc}
+          alt=""
+          className={cn(
+            "h-full w-full transition-transform duration-300 ease-out",
+            assistantLogoImage,
+            isOpen ? "rotate-[0deg]" : "rotate-[45deg] group-hover:rotate-[0deg]",
+          )}
+          aria-hidden="true"
+        />
       </button>
     </div>
   );

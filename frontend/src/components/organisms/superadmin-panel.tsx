@@ -607,7 +607,7 @@ export function SuperadminPanel() {
       </div>
 
       <Card className="p-4 lg:p-5">
-        <div className="grid gap-3 lg:grid-cols-[360px_260px_auto]">
+        <div className="grid max-w-[760px] gap-3 sm:grid-cols-[minmax(240px,360px)_minmax(220px,260px)] lg:grid-cols-[minmax(260px,340px)_minmax(220px,260px)_auto] lg:items-end">
           <div>
             <Label htmlFor="superadmin-user-search">Cerca utente</Label>
             <div className="relative mt-1">
@@ -639,8 +639,8 @@ export function SuperadminPanel() {
               className="mt-1"
             />
           </div>
-          <div className="flex items-end">
-            <Button onClick={() => void loadBase({ keepLoading: true })} disabled={loading || isSaving} className="h-11 w-full">
+          <div className="flex items-end sm:col-span-2 lg:col-span-1">
+            <Button onClick={() => void loadBase({ keepLoading: true })} disabled={loading || isSaving} className="h-11 w-full sm:w-auto">
               <RefreshCw size={16} />
               Aggiorna
             </Button>
