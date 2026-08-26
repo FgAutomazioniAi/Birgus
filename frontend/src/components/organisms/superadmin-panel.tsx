@@ -118,6 +118,49 @@ function StatePill({ tone, children }: { tone: "success" | "muted" | "warn" | "d
   );
 }
 
+function RadioChoice({
+  checked,
+  children,
+  disabled,
+  name,
+  onChange,
+}: {
+  checked: boolean;
+  children: React.ReactNode;
+  disabled?: boolean;
+  name: string;
+  onChange: () => void;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex min-h-10 items-center gap-3 rounded-[var(--radius-sm)] border border-border-subtle px-3 py-2 text-sm text-text-secondary transition-colors",
+        checked && "border-brand-primary bg-status-info-bg text-text-primary",
+        disabled && "opacity-60",
+      )}
+    >
+      <input
+        type="radio"
+        name={name}
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+        className="sr-only"
+      />
+      <span
+        className={cn(
+          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-border-default bg-bg-surface",
+          checked && "border-brand-primary",
+        )}
+        aria-hidden="true"
+      >
+        {checked ? <span className="h-2 w-2 rounded-full bg-brand-primary" /> : null}
+      </span>
+      <span className="truncate">{children}</span>
+    </label>
+  );
+}
+
 export function SuperadminPanel() {
   const [loading, setLoading] = useState(true);
   const [workspaces, setWorkspaces] = useState<WorkspaceDto[]>([]);
@@ -132,7 +175,7 @@ export function SuperadminPanel() {
 
   const [memberships, setMemberships] = useState<MembershipDto[]>([]);
   const [userModules, setUserModules] = useState<UserModuleStateDto[]>([]);
-  const [selectedRoleKeys, setSelectedRoleKeys] = useState<string[]>([]);
+  const [selectedRoleKey, setSelectedRoleKey] = useState("operator");
 
   const [passwordResetValue, setPasswordResetValue] = useState("");
   const [createEmail, setCreateEmail] = useState("");
@@ -141,7 +184,9 @@ export function SuperadminPanel() {
   const [createPassword, setCreatePassword] = useState("");
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
-  const [createRoleKeys, setCreateRoleKeys] = useState<string[]>(["operator"]);
+  const [createRoleKey, setCreateRoleKey] = useState("operator");
+  const [addWorkspaceId, setAddWorkspaceId] = useState("");
+  const [addWorkspaceRoleKey, setAddWorkspaceRoleKey] = useState("operator");
   const [isSaving, setIsSaving] = useState(false);
 
   const selectedUser = useMemo(() => users.find((item) => item.id === selectedUserId) ?? null, [users, selectedUserId]);
@@ -153,6 +198,15 @@ export function SuperadminPanel() {
     () => memberships.find((membership) => membership.workspaceId === selectedWorkspaceId) ?? null,
     [memberships, selectedWorkspaceId],
   );
+  const availableWorkspaceOptions = useMemo(() => {
+    const membershipWorkspaceIds = new Set(memberships.map((membership) => membership.workspaceId));
+    return workspaces
+      .filter((workspace) => !membershipWorkspaceIds.has(workspace.id))
+      .map((workspace) => ({
+        value: workspace.id,
+        label: `${workspace.organizationCode}/${workspace.code}`,
+      }));
+  }, [memberships, workspaces]);
 
   const workspaceOptions = useMemo(
     () => workspaces.map((workspace) => ({
@@ -222,7 +276,7 @@ export function SuperadminPanel() {
     if (!userId || !workspaceId) {
       setMemberships([]);
       setUserModules([]);
-      setSelectedRoleKeys([]);
+      setSelectedRoleKey("operator");
       return;
     }
 
@@ -239,7 +293,10 @@ export function SuperadminPanel() {
       setUserModules(modulesPayload.modules ?? []);
 
       const membership = nextMemberships.find((item) => item.workspaceId === workspaceId) ?? null;
-      setSelectedRoleKeys(membership?.roleKeys ?? []);
+      setSelectedRoleKey(membership?.roleKeys[0] ?? "operator");
+      setAddWorkspaceId((current) => (
+        current && nextMemberships.some((item) => item.workspaceId === current) ? "" : current
+      ));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Caricamento contesto utente non riuscito.";
       toast.error(message);
@@ -270,14 +327,6 @@ export function SuperadminPanel() {
     setUserModalOpen(true);
   };
 
-  const handleToggleCreateRole = (roleKey: string) => {
-    setCreateRoleKeys((current) => (
-      current.includes(roleKey)
-        ? current.filter((item) => item !== roleKey)
-        : [...current, roleKey]
-    ));
-  };
-
   const handleCreateUser = async () => {
     if (!selectedWorkspaceId) {
       toast.error("Seleziona un workspace.");
@@ -291,8 +340,8 @@ export function SuperadminPanel() {
       toast.error("La password deve avere almeno 8 caratteri, una maiuscola e un numero.");
       return;
     }
-    if (createRoleKeys.length === 0) {
-      toast.error("Seleziona almeno un ruolo.");
+    if (!createRoleKey) {
+      toast.error("Seleziona un ruolo.");
       return;
     }
 
@@ -306,7 +355,7 @@ export function SuperadminPanel() {
           firstName: createFirstName.trim(),
           lastName: createLastName.trim() || null,
           password: createPassword,
-          roleKeys: createRoleKeys,
+          roleKeys: [createRoleKey],
         }),
       });
       setSearch("");
@@ -315,7 +364,7 @@ export function SuperadminPanel() {
       setCreateFirstName("");
       setCreateLastName("");
       setCreatePassword("");
-      setCreateRoleKeys(["operator"]);
+      setCreateRoleKey("operator");
       openUserManagement(payload.userId);
       toast.success(`Utente creato: ${payload.email}`);
     } catch (error) {
@@ -470,12 +519,33 @@ export function SuperadminPanel() {
     }
   };
 
-  const handleToggleRole = (roleKey: string) => {
-    setSelectedRoleKeys((current) => (
-      current.includes(roleKey)
-        ? current.filter((item) => item !== roleKey)
-        : [...current, roleKey]
-    ));
+  const handleAddWorkspace = async () => {
+    if (!selectedUserId || !addWorkspaceId || !addWorkspaceRoleKey) {
+      toast.error("Seleziona workspace e ruolo.");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await fetchJson(`/api/superadmin/users/${encodeURIComponent(selectedUserId)}/workspaces`, {
+        method: "POST",
+        body: JSON.stringify({
+          workspaceId: addWorkspaceId,
+          roleKey: addWorkspaceRoleKey,
+        }),
+      });
+      setSelectedWorkspaceId(addWorkspaceId);
+      setAddWorkspaceId("");
+      setAddWorkspaceRoleKey("operator");
+      await loadBase({ keepLoading: true });
+      await loadUserContext(selectedUserId, addWorkspaceId);
+      toast.success("Utente associato al workspace.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Associazione workspace non riuscita.";
+      toast.error(message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSaveRoles = async () => {
@@ -483,8 +553,8 @@ export function SuperadminPanel() {
       toast.error("Seleziona workspace e utente.");
       return;
     }
-    if (selectedRoleKeys.length === 0) {
-      toast.error("Seleziona almeno un ruolo.");
+    if (!selectedRoleKey) {
+      toast.error("Seleziona un ruolo.");
       return;
     }
 
@@ -495,7 +565,7 @@ export function SuperadminPanel() {
         body: JSON.stringify({
           workspaceId: selectedWorkspaceId,
           userId: selectedUserId,
-          roleKeys: selectedRoleKeys,
+          roleKeys: [selectedRoleKey],
         }),
       });
       await loadUserContext(selectedUserId, selectedWorkspaceId);
@@ -537,7 +607,7 @@ export function SuperadminPanel() {
       </div>
 
       <Card className="p-4 lg:p-5">
-        <div className="grid gap-3 lg:grid-cols-[1fr_260px_auto]">
+        <div className="grid gap-3 lg:grid-cols-[360px_260px_auto]">
           <div>
             <Label htmlFor="superadmin-user-search">Cerca utente</Label>
             <div className="relative mt-1">
@@ -715,18 +785,18 @@ export function SuperadminPanel() {
             </div>
 
             <div>
-              <Label>Ruoli iniziali</Label>
+              <Label>Ruolo iniziale</Label>
               <div className="mt-2 grid gap-2">
                 {roles.map((role) => (
-                  <label key={`create-${role.key}`} className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-border-subtle px-3 py-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={createRoleKeys.includes(role.key)}
-                      onChange={() => handleToggleCreateRole(role.key)}
-                      disabled={isSaving}
-                    />
-                    <span>{role.label}</span>
-                  </label>
+                  <RadioChoice
+                    key={`create-${role.key}`}
+                    name="create-user-role"
+                    checked={createRoleKey === role.key}
+                    disabled={isSaving}
+                    onChange={() => setCreateRoleKey(role.key)}
+                  >
+                    {role.label}
+                  </RadioChoice>
                 ))}
               </div>
             </div>
@@ -751,15 +821,7 @@ export function SuperadminPanel() {
                 </div>
                 <p className="mt-1 truncate text-sm text-text-muted">{selectedUser.email}</p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <SelectDropdown
-                  value={selectedWorkspaceId}
-                  onChange={(nextValue) => setSelectedWorkspaceId(nextValue)}
-                  options={workspaceOptions}
-                  placeholder="Workspace"
-                  disabled={loading || isSaving}
-                  className="w-64"
-                />
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   className="rounded-[var(--radius-md)] p-2 text-text-muted hover:bg-bg-muted hover:text-text-primary"
@@ -855,6 +917,33 @@ export function SuperadminPanel() {
                         </div>
                       ))}
                     </div>
+                    <div className="mt-4 border-t border-border-subtle pt-4">
+                      <h4 className="text-xs font-semibold uppercase text-text-muted">Associa a workspace</h4>
+                      <div className="mt-3 space-y-3">
+                        <SelectDropdown
+                          value={addWorkspaceId}
+                          onChange={(nextValue) => setAddWorkspaceId(nextValue)}
+                          options={availableWorkspaceOptions}
+                          placeholder="Workspace"
+                          disabled={isSaving || availableWorkspaceOptions.length === 0}
+                        />
+                        <SelectDropdown
+                          value={addWorkspaceRoleKey}
+                          onChange={(nextValue) => setAddWorkspaceRoleKey(nextValue)}
+                          options={roles.map((role) => ({ value: role.key, label: role.label }))}
+                          placeholder="Ruolo"
+                          disabled={isSaving || availableWorkspaceOptions.length === 0}
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => void handleAddWorkspace()}
+                          disabled={isSaving || !addWorkspaceId || !addWorkspaceRoleKey}
+                          className="w-full"
+                        >
+                          Associa workspace
+                        </Button>
+                      </div>
+                    </div>
                   </section>
                 </aside>
 
@@ -862,26 +951,26 @@ export function SuperadminPanel() {
                   <section className="rounded-[var(--radius-md)] border border-border-default p-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <h3 className="text-sm font-semibold text-text-primary">Ruoli nel workspace</h3>
+                        <h3 className="text-sm font-semibold text-text-primary">Ruolo nel workspace</h3>
                         <p className="text-xs text-text-muted">
                           {selectedWorkspaceMembership ? selectedWorkspaceMembership.workspaceName : "L'utente non risulta membro del workspace selezionato."}
                         </p>
                       </div>
-                      <Button size="sm" onClick={() => void handleSaveRoles()} disabled={isSaving || selectedRoleKeys.length === 0}>
-                        Salva ruoli
+                      <Button size="sm" onClick={() => void handleSaveRoles()} disabled={isSaving || !selectedRoleKey}>
+                        Salva ruolo
                       </Button>
                     </div>
                     <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                       {roles.map((role) => (
-                        <label key={role.key} className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-border-subtle px-3 py-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={selectedRoleKeys.includes(role.key)}
-                            onChange={() => handleToggleRole(role.key)}
-                            disabled={!selectedWorkspaceMembership || isSaving}
-                          />
-                          <span>{role.label}</span>
-                        </label>
+                        <RadioChoice
+                          key={role.key}
+                          name="selected-user-role"
+                          checked={selectedRoleKey === role.key}
+                          disabled={!selectedWorkspaceMembership || isSaving}
+                          onChange={() => setSelectedRoleKey(role.key)}
+                        >
+                          {role.label}
+                        </RadioChoice>
                       ))}
                     </div>
                   </section>

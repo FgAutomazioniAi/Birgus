@@ -27,7 +27,7 @@ const createUserSchema = z.object({
   firstName: z.string().trim().min(1),
   lastName: z.string().trim().optional(),
   password: z.string().min(8),
-  roleKeys: z.array(z.string().trim().min(1)).min(1),
+  roleKeys: z.array(z.string().trim().min(1)).length(1),
 });
 
 const setUserStatusSchema = z.object({
@@ -56,7 +56,12 @@ const clearModuleOverrideSchema = z.object({
 const workspaceRolesSchema = z.object({
   workspaceId: z.string().uuid(),
   userId: z.string().uuid(),
-  roleKeys: z.array(z.string().trim().min(1)).min(1),
+  roleKeys: z.array(z.string().trim().min(1)).length(1),
+});
+
+const addUserWorkspaceSchema = z.object({
+  workspaceId: z.string().uuid(),
+  roleKey: z.string().trim().min(1),
 });
 
 const archiveParamsSchema = z.object({
@@ -195,6 +200,28 @@ export class NestSuperadminController {
       userId: params.userId,
       modules,
     };
+  }
+
+  @Post("users/:userId/workspaces")
+  @HttpCode(200)
+  public async addUserToWorkspace(
+    @Param() paramsRaw: unknown,
+    @Body() bodyRaw: unknown,
+    @Req() request: FastifyRequest,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    await this.ensureSuperadmin(requestContext);
+    const params = userParamsSchema.parse(paramsRaw);
+    const body = addUserWorkspaceSchema.parse(bodyRaw);
+
+    await this.service.addUserToWorkspace({
+      workspaceId: body.workspaceId,
+      targetUserId: params.userId,
+      roleKey: body.roleKey,
+      auditContext: this.getAuditContext(requestContext, request),
+    });
+
+    return { ok: true };
   }
 
   @Post("users/:userId/reset-password")

@@ -302,8 +302,8 @@ export class SuperadminService {
     }
 
     const roleKeys = [...new Set(params.roleKeys.map((item) => item.trim()).filter(Boolean))];
-    if (roleKeys.length === 0) {
-      throw new AppError("Seleziona almeno un ruolo.", "SUPERADMIN_ROLE_SET_EMPTY", 400);
+    if (roleKeys.length !== 1) {
+      throw new AppError("Seleziona un solo ruolo.", "SUPERADMIN_SINGLE_ROLE_REQUIRED", 400);
     }
 
     const roles = await prisma.role.findMany({
@@ -531,6 +531,99 @@ export class SuperadminService {
     });
   }
 
+  public async addUserToWorkspace(params: {
+    workspaceId: string;
+    targetUserId: string;
+    roleKey: string;
+    auditContext: AuditContext;
+  }): Promise<void> {
+    const prisma = PrismaClientManager.getClient();
+    await this.ensureWorkspaceExists(params.workspaceId);
+    await this.ensureUserExists(params.targetUserId);
+
+    const roleKey = params.roleKey.trim();
+    const role = await prisma.role.findUnique({
+      where: {
+        key: roleKey,
+      },
+      select: {
+        id: true,
+        key: true,
+      },
+    });
+
+    if (!role) {
+      throw new AppError("Ruolo non trovato.", "SUPERADMIN_ROLE_UNKNOWN", 400);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.workspaceMembership.upsert({
+        where: {
+          workspace_id_user_id: {
+            workspace_id: params.workspaceId,
+            user_id: params.targetUserId,
+          },
+        },
+        update: {
+          status: "ACTIVE",
+          left_at: null,
+        },
+        create: {
+          workspace_id: params.workspaceId,
+          user_id: params.targetUserId,
+          status: "ACTIVE",
+        },
+      });
+
+      await tx.userWorkspaceRole.deleteMany({
+        where: {
+          workspace_id: params.workspaceId,
+          user_id: params.targetUserId,
+        },
+      });
+
+      await tx.userWorkspaceRole.create({
+        data: {
+          workspace_id: params.workspaceId,
+          user_id: params.targetUserId,
+          role_id: role.id,
+        },
+      });
+
+      await tx.userPreference.upsert({
+        where: {
+          user_id_workspace_id: {
+            user_id: params.targetUserId,
+            workspace_id: params.workspaceId,
+          },
+        },
+        update: {},
+        create: {
+          user_id: params.targetUserId,
+          workspace_id: params.workspaceId,
+          palette_id: "predefinito",
+          language_code: "it",
+        },
+      });
+    });
+
+    await this.auditLogService.record({
+      workspaceId: params.auditContext.actorWorkspaceId,
+      userId: params.auditContext.actorUserId,
+      moduleKey: "superadmin_center",
+      action: "superadmin.user.workspace_added",
+      entityType: "WorkspaceMembership",
+      entityId: params.targetUserId,
+      payload: {
+        workspaceId: params.workspaceId,
+        targetUserId: params.targetUserId,
+        roleKey: role.key,
+      },
+      ipAddress: params.auditContext.ipAddress ?? null,
+      userAgent: params.auditContext.userAgent ?? null,
+    });
+  }
+
   public async resetUserPassword(params: {
     targetUserId: string;
     newPassword: string;
@@ -712,8 +805,8 @@ export class SuperadminService {
     await this.ensureActiveMembership(params.workspaceId, params.targetUserId);
 
     const deduplicatedRoleKeys = [...new Set(params.roleKeys.map((item) => item.trim()).filter(Boolean))];
-    if (deduplicatedRoleKeys.length === 0) {
-      throw new AppError("Almeno un ruolo deve rimanere assegnato.", "SUPERADMIN_ROLE_SET_EMPTY", 400);
+    if (deduplicatedRoleKeys.length !== 1) {
+      throw new AppError("Un solo ruolo deve rimanere assegnato.", "SUPERADMIN_SINGLE_ROLE_REQUIRED", 400);
     }
 
     const roles = await prisma.role.findMany({
