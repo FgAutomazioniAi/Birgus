@@ -388,11 +388,16 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className="group relative flex h-14 w-14 items-center justify-center rounded-full border border-transparent bg-brand-primary text-text-inverse shadow-2xl transition hover:bg-brand-primary-hover"
+        className={cn(
+          "group relative flex h-14 w-14 items-center justify-center rounded-full border text-text-inverse shadow-2xl transition",
+          theme === "dark"
+            ? "border-white bg-white hover:bg-white"
+            : "border-transparent bg-brand-primary hover:bg-brand-primary-hover",
+        )}
         aria-label="Apri assistente"
       >
         <span className="absolute h-12 w-12 rounded-full bg-brand-primary/10 blur-md transition group-hover:bg-brand-primary/20" />
-        <span className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-bg-surface ring-1 ring-white/20">
+        <span className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-white/20">
           <img
             src={assistantLogoSrc}
             alt=""

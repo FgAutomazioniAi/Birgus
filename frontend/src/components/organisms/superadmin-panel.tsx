@@ -1,11 +1,26 @@
 "use client";
 
-import { Eye, EyeOff, RefreshCw, ShieldCheck } from "lucide-react";
+import {
+  Ban,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  KeyRound,
+  MoreHorizontal,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  ShieldCheck,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Label, Text } from "@/components/atoms";
 import { SelectDropdown } from "@/components/molecules";
+import { cn } from "@/lib/cn";
 
 type WorkspaceDto = {
   id: string;
@@ -69,6 +84,40 @@ const fetchJson = async <T,>(url: string, init?: RequestInit): Promise<T> => {
   return payload as T;
 };
 
+const passwordMeetsPolicy = (value: string) => value.length >= 8 && /[A-Z]/.test(value) && /\d/.test(value);
+
+const generatePassword = (): string => {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnopqrstuvwxyz";
+  const digits = "23456789";
+  const symbols = "!@#$%";
+  const all = upper + lower + digits + symbols;
+  const take = (source: string) => source[crypto.getRandomValues(new Uint32Array(1))[0] % source.length] ?? "A";
+  const result = [take(upper), take(lower), take(digits), take(symbols)];
+  while (result.length < 16) {
+    result.push(take(all));
+  }
+  return result.sort(() => crypto.getRandomValues(new Uint32Array(1))[0] - 2 ** 31).join("");
+};
+
+const userFullName = (user: UserDto) => `${user.firstName} ${user.lastName ?? ""}`.trim() || user.email;
+
+function StatePill({ tone, children }: { tone: "success" | "muted" | "warn" | "danger"; children: React.ReactNode }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-7 items-center rounded-full px-2.5 text-xs font-semibold",
+        tone === "success" && "bg-status-success-bg text-status-success-text",
+        tone === "muted" && "bg-bg-muted text-text-muted",
+        tone === "warn" && "bg-status-warn-bg text-status-warn-text",
+        tone === "danger" && "bg-status-danger-bg text-status-danger-text",
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
 export function SuperadminPanel() {
   const [loading, setLoading] = useState(true);
   const [workspaces, setWorkspaces] = useState<WorkspaceDto[]>([]);
@@ -79,6 +128,7 @@ export function SuperadminPanel() {
   const [search, setSearch] = useState("");
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [selectedUserId, setSelectedUserId] = useState("");
+  const [userModalOpen, setUserModalOpen] = useState(false);
 
   const [memberships, setMemberships] = useState<MembershipDto[]>([]);
   const [userModules, setUserModules] = useState<UserModuleStateDto[]>([]);
@@ -95,19 +145,15 @@ export function SuperadminPanel() {
   const [isSaving, setIsSaving] = useState(false);
 
   const selectedUser = useMemo(() => users.find((item) => item.id === selectedUserId) ?? null, [users, selectedUserId]);
+  const selectedWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
+    [selectedWorkspaceId, workspaces],
+  );
+  const selectedWorkspaceMembership = useMemo(
+    () => memberships.find((membership) => membership.workspaceId === selectedWorkspaceId) ?? null,
+    [memberships, selectedWorkspaceId],
+  );
 
-  const passwordMeetsPolicy = (value: string) => value.length >= 8 && /[A-Z]/.test(value) && /\d/.test(value);
-  const generatePassword = (): string => {
-    const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-    const lower = "abcdefghijkmnopqrstuvwxyz";
-    const digits = "23456789";
-    const symbols = "!@#$%";
-    const all = upper + lower + digits + symbols;
-    const take = (source: string) => source[crypto.getRandomValues(new Uint32Array(1))[0] % source.length] ?? "A";
-    const result = [take(upper), take(lower), take(digits), take(symbols)];
-    while (result.length < 16) result.push(take(all));
-    return result.sort(() => crypto.getRandomValues(new Uint32Array(1))[0] - 2 ** 31).join("");
-  };
   const workspaceOptions = useMemo(
     () => workspaces.map((workspace) => ({
       value: workspace.id,
@@ -115,39 +161,54 @@ export function SuperadminPanel() {
     })),
     [workspaces],
   );
+
   const overridableModules = useMemo(
     () => modules.filter((module) => module.key !== "superadmin_center"),
     [modules],
   );
+
   const userOptions = useMemo(
     () => users.map((user) => ({
       value: user.id,
-      label: `${user.firstName} ${user.lastName ?? ""} (${user.email})`,
+      label: `${userFullName(user)} (${user.email})`,
     })),
     [users],
   );
 
-  const loadBase = async () => {
-    setLoading(true);
+  const loadBase = async (params?: { keepLoading?: boolean; searchOverride?: string }) => {
+    if (!params?.keepLoading) {
+      setLoading(true);
+    }
     try {
+      const userQuery = new URLSearchParams();
+      const effectiveSearch = params?.searchOverride ?? search;
+      if (effectiveSearch.trim()) {
+        userQuery.set("search", effectiveSearch.trim());
+      }
+      if (selectedWorkspaceId) {
+        userQuery.set("workspaceId", selectedWorkspaceId);
+      }
+
       const [workspacePayload, userPayload, rolePayload, modulePayload] = await Promise.all([
         fetchJson<{ workspaces: WorkspaceDto[] }>("/api/superadmin/workspaces"),
-        fetchJson<{ users: UserDto[] }>(`/api/superadmin/users?search=${encodeURIComponent(search.trim())}${selectedWorkspaceId ? `&workspaceId=${encodeURIComponent(selectedWorkspaceId)}` : ""}`),
+        fetchJson<{ users: UserDto[] }>(`/api/superadmin/users${userQuery.toString() ? `?${userQuery.toString()}` : ""}`),
         fetchJson<{ roles: RoleDto[] }>("/api/superadmin/roles"),
         fetchJson<{ modules: ModuleDto[] }>("/api/superadmin/modules"),
       ]);
 
-      setWorkspaces(workspacePayload.workspaces ?? []);
-      setUsers(userPayload.users ?? []);
-      if (selectedUserId && !(userPayload.users ?? []).some((user) => user.id === selectedUserId)) {
-        setSelectedUserId("");
-      }
+      const nextWorkspaces = workspacePayload.workspaces ?? [];
+      const nextUsers = userPayload.users ?? [];
+      setWorkspaces(nextWorkspaces);
+      setUsers(nextUsers);
       setRoles(rolePayload.roles ?? []);
       setModules(modulePayload.modules ?? []);
 
-      const fallbackWorkspaceId = workspacePayload.workspaces?.[0]?.id ?? "";
-      if (!selectedWorkspaceId && fallbackWorkspaceId) {
-        setSelectedWorkspaceId(fallbackWorkspaceId);
+      if (!selectedWorkspaceId && nextWorkspaces[0]?.id) {
+        setSelectedWorkspaceId(nextWorkspaces[0].id);
+      }
+      if (selectedUserId && !nextUsers.some((user) => user.id === selectedUserId)) {
+        setSelectedUserId("");
+        setUserModalOpen(false);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Caricamento non riuscito.";
@@ -173,10 +234,11 @@ export function SuperadminPanel() {
         ),
       ]);
 
-      setMemberships(membershipPayload.memberships ?? []);
+      const nextMemberships = membershipPayload.memberships ?? [];
+      setMemberships(nextMemberships);
       setUserModules(modulesPayload.modules ?? []);
 
-      const membership = (membershipPayload.memberships ?? []).find((item) => item.workspaceId === workspaceId) ?? null;
+      const membership = nextMemberships.find((item) => item.workspaceId === workspaceId) ?? null;
       setSelectedRoleKeys(membership?.roleKeys ?? []);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Caricamento contesto utente non riuscito.";
@@ -191,7 +253,7 @@ export function SuperadminPanel() {
 
   useEffect(() => {
     if (selectedWorkspaceId) {
-      void loadBase();
+      void loadBase({ keepLoading: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWorkspaceId]);
@@ -201,8 +263,11 @@ export function SuperadminPanel() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUserId, selectedWorkspaceId]);
 
-  const handleRefreshUsers = async () => {
-    await loadBase();
+  const openUserManagement = (userId: string) => {
+    setSelectedUserId(userId);
+    setPasswordResetValue("");
+    setShowResetPassword(false);
+    setUserModalOpen(true);
   };
 
   const handleToggleCreateRole = (roleKey: string) => {
@@ -218,17 +283,14 @@ export function SuperadminPanel() {
       toast.error("Seleziona un workspace.");
       return;
     }
-
     if (!createEmail.trim() || !createFirstName.trim()) {
       toast.error("Inserisci almeno email e nome.");
       return;
     }
-
     if (!passwordMeetsPolicy(createPassword)) {
       toast.error("La password deve avere almeno 8 caratteri, una maiuscola e un numero.");
       return;
     }
-
     if (createRoleKeys.length === 0) {
       toast.error("Seleziona almeno un ruolo.");
       return;
@@ -247,13 +309,14 @@ export function SuperadminPanel() {
           roleKeys: createRoleKeys,
         }),
       });
-      await loadBase();
-      setSelectedUserId(payload.userId);
+      setSearch("");
+      await loadBase({ keepLoading: true, searchOverride: "" });
       setCreateEmail("");
       setCreateFirstName("");
       setCreateLastName("");
       setCreatePassword("");
       setCreateRoleKeys(["operator"]);
+      openUserManagement(payload.userId);
       toast.success(`Utente creato: ${payload.email}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Creazione utente non riuscita.";
@@ -275,7 +338,7 @@ export function SuperadminPanel() {
         method: "PATCH",
         body: JSON.stringify({ isActive }),
       });
-      await loadBase();
+      await loadBase({ keepLoading: true });
       await loadUserContext(selectedUserId, selectedWorkspaceId);
       toast.success(isActive ? "Utente attivato." : "Utente disattivato.");
     } catch (error) {
@@ -291,7 +354,6 @@ export function SuperadminPanel() {
       toast.error("Seleziona un utente.");
       return;
     }
-
     if (!passwordMeetsPolicy(passwordResetValue)) {
       toast.error("La password deve avere almeno 8 caratteri, una maiuscola e un numero.");
       return;
@@ -303,6 +365,7 @@ export function SuperadminPanel() {
         method: "POST",
         body: JSON.stringify({ newPassword: passwordResetValue }),
       });
+      setPasswordResetValue("");
       toast.success("Password utente aggiornata e sessioni revocate.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Reset password non riuscito.";
@@ -420,7 +483,6 @@ export function SuperadminPanel() {
       toast.error("Seleziona workspace e utente.");
       return;
     }
-
     if (selectedRoleKeys.length === 0) {
       toast.error("Seleziona almeno un ruolo.");
       return;
@@ -448,269 +510,437 @@ export function SuperadminPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="rounded-[var(--radius-md)] bg-bg-muted p-2 text-brand-primary">
-          <ShieldCheck size={20} />
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="rounded-[var(--radius-md)] bg-bg-muted p-2 text-brand-primary">
+            <ShieldCheck size={20} />
+          </div>
+          <div>
+            <Text as="h1" variant="h1">Superadmin Center</Text>
+            <Text variant="muted">Utenti, ruoli e accessi sensibili cross-workspace.</Text>
+          </div>
         </div>
-        <div>
-          <Text as="h1" variant="h1">Superadmin Center</Text>
-          <Text variant="muted">Gestione globale utenti, permessi e operazioni sensibili cross-workspace.</Text>
+        <div className="grid grid-cols-3 gap-2 text-right text-sm">
+          <div className="rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 py-2">
+            <div className="font-semibold text-text-primary">{users.length}</div>
+            <div className="text-xs text-text-muted">utenti</div>
+          </div>
+          <div className="rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 py-2">
+            <div className="font-semibold text-text-primary">{workspaces.length}</div>
+            <div className="text-xs text-text-muted">workspace</div>
+          </div>
+          <div className="rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 py-2">
+            <div className="font-semibold text-text-primary">{roles.length}</div>
+            <div className="text-xs text-text-muted">ruoli</div>
+          </div>
         </div>
       </div>
 
       <Card className="p-4 lg:p-5">
-        <div className="grid gap-3 lg:grid-cols-[1fr_220px_220px_auto]">
+        <div className="grid gap-3 lg:grid-cols-[1fr_260px_auto]">
           <div>
             <Label htmlFor="superadmin-user-search">Cerca utente</Label>
-            <Input
-              id="superadmin-user-search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="nome, cognome o email"
-              className="mt-1"
-            />
+            <div className="relative mt-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+              <Input
+                id="superadmin-user-search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    void loadBase({ keepLoading: true });
+                  }
+                }}
+                placeholder="nome, cognome o email"
+                className="pl-9"
+              />
+            </div>
           </div>
           <div>
-            <Label htmlFor="superadmin-workspace">Workspace</Label>
+            <Label htmlFor="superadmin-workspace">Workspace operativo</Label>
             <SelectDropdown
               id="superadmin-workspace"
               value={selectedWorkspaceId}
               onChange={(nextValue) => setSelectedWorkspaceId(nextValue)}
               options={workspaceOptions}
-              placeholder="Seleziona workspace"
-              disabled={loading || isSaving}
-              allowEmpty
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <Label htmlFor="superadmin-user">Utente</Label>
-            <SelectDropdown
-              id="superadmin-user"
-              value={selectedUserId}
-              onChange={(nextValue) => setSelectedUserId(nextValue)}
-              options={userOptions}
-              placeholder="Seleziona utente"
+              placeholder="Tutti i workspace"
               disabled={loading || isSaving}
               allowEmpty
               className="mt-1"
             />
           </div>
           <div className="flex items-end">
-            <Button onClick={() => void handleRefreshUsers()} disabled={loading || isSaving} className="h-11 w-full">
+            <Button onClick={() => void loadBase({ keepLoading: true })} disabled={loading || isSaving} className="h-11 w-full">
+              <RefreshCw size={16} />
               Aggiorna
             </Button>
           </div>
         </div>
-
-        <div className="mt-3 text-xs text-text-muted">
-          {loading ? "Caricamento..." : `${users.length} utenti caricati · ${workspaces.length} workspace`}
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-text-muted">
+          <span>{loading ? "Caricamento..." : "Vista aggiornata"}</span>
+          {selectedWorkspace ? <span>Workspace: {selectedWorkspace.organizationCode}/{selectedWorkspace.code}</span> : <span>Tutti i workspace</span>}
         </div>
       </Card>
 
-      <Card className="p-4 lg:p-5">
-        <Text as="h2" variant="h2">Crea utente</Text>
-        <p className="mt-1 text-sm text-text-muted">Creazione rapida utente nel workspace selezionato.</p>
-
-        <div className="mt-4 grid gap-3 lg:grid-cols-2">
-          <div>
-            <Label htmlFor="create-email">Email</Label>
-            <Input
-              id="create-email"
-              value={createEmail}
-              onChange={(event) => setCreateEmail(event.target.value)}
-              className="mt-1"
-              placeholder="nuovo.utente@azienda.it"
-            />
-          </div>
-          <div>
-            <Label htmlFor="create-password">Password iniziale</Label>
-            <div className="relative mt-1">
-              <Input id="create-password" type={showCreatePassword ? "text" : "password"} value={createPassword} onChange={(event) => setCreatePassword(event.target.value)} className="pr-20" placeholder="8 caratteri, maiuscola e numero" autoComplete="new-password" />
-              <div className="absolute inset-y-0 right-0 flex items-center gap-1 pr-2">
-                <button type="button" className="p-1 text-text-muted hover:text-text-primary" title="Genera password" onClick={() => { setCreatePassword(generatePassword()); setShowCreatePassword(true); }}><RefreshCw size={16} /></button>
-                <button type="button" className="p-1 text-text-muted hover:text-text-primary" title={showCreatePassword ? "Nascondi password" : "Mostra password"} onClick={() => setShowCreatePassword((value) => !value)}>{showCreatePassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
-              </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <Card className="overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border-default px-4 py-4 lg:px-5">
+            <div className="flex items-center gap-2">
+              <Users size={18} className="text-brand-primary" />
+              <Text as="h2" variant="h2">Utenti</Text>
             </div>
-          </div>
-          <div>
-            <Label htmlFor="create-first-name">Nome</Label>
-            <Input
-              id="create-first-name"
-              value={createFirstName}
-              onChange={(event) => setCreateFirstName(event.target.value)}
-              className="mt-1"
-              placeholder="Nome"
+            <SelectDropdown
+              value={selectedUserId}
+              onChange={(nextUserId) => {
+                if (nextUserId) {
+                  openUserManagement(nextUserId);
+                } else {
+                  setSelectedUserId("");
+                }
+              }}
+              options={userOptions}
+              placeholder="Seleziona utente"
+              disabled={loading || isSaving}
+              allowEmpty
+              size="sm"
+              className="w-full max-w-xs"
             />
           </div>
-          <div>
-            <Label htmlFor="create-last-name">Cognome</Label>
-            <Input
-              id="create-last-name"
-              value={createLastName}
-              onChange={(event) => setCreateLastName(event.target.value)}
-              className="mt-1"
-              placeholder="Cognome"
-            />
-          </div>
-        </div>
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {roles.map((role) => (
-            <label key={`create-${role.key}`} className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-border-subtle px-3 py-2 text-sm">
-              <input
-                type="checkbox"
-                checked={createRoleKeys.includes(role.key)}
-                onChange={() => handleToggleCreateRole(role.key)}
-                disabled={isSaving}
-              />
-              <span>{role.label}</span>
-            </label>
-          ))}
-        </div>
-
-        <div className="mt-4">
-          <Button onClick={() => void handleCreateUser()} disabled={isSaving || !selectedWorkspaceId}>
-            Crea utente
-          </Button>
-        </div>
-      </Card>
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card className="p-4 lg:p-5">
-          <Text as="h2" variant="h2">Gestione credenziali/sessioni</Text>
-          {selectedUser ? (
-            <p className="mt-1 text-sm text-text-muted">
-              {selectedUser.firstName} {selectedUser.lastName ?? ""} - {selectedUser.email} · stato: {selectedUser.isActive ? "Attivo" : "Disattivo"}
-            </p>
-          ) : (
-            <p className="mt-1 text-sm text-text-muted">Seleziona un utente per procedere.</p>
-          )}
-
-          <div className="mt-4 space-y-3">
-            <div>
-              <Label htmlFor="superadmin-password-reset">Nuova password forzata</Label>
-              <div className="relative mt-1">
-                <Input id="superadmin-password-reset" type={showResetPassword ? "text" : "password"} value={passwordResetValue} onChange={(event) => setPasswordResetValue(event.target.value)} className="pr-20" placeholder="8 caratteri, maiuscola e numero" autoComplete="new-password" />
-                <div className="absolute inset-y-0 right-0 flex items-center gap-1 pr-2">
-                  <button type="button" className="p-1 text-text-muted hover:text-text-primary" title="Genera password" onClick={() => { setPasswordResetValue(generatePassword()); setShowResetPassword(true); }}><RefreshCw size={16} /></button>
-                  <button type="button" className="p-1 text-text-muted hover:text-text-primary" title={showResetPassword ? "Nascondi password" : "Mostra password"} onClick={() => setShowResetPassword((value) => !value)}>{showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+          <div className="divide-y divide-border-subtle">
+            {users.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-text-muted">
+                Nessun utente trovato con i filtri attuali.
+              </div>
+            ) : users.map((user) => (
+              <div key={user.id} className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:px-5">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-semibold text-text-primary">{userFullName(user)}</p>
+                    <StatePill tone={user.isActive ? "success" : "danger"}>{user.isActive ? "Attivo" : "Disattivo"}</StatePill>
+                    {user.superadmin ? <StatePill tone="warn">Superadmin</StatePill> : null}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
+                    <span className="truncate">{user.email}</span>
+                    <span>{user.workspaceCount} workspace</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 lg:justify-end">
+                  <Button size="sm" onClick={() => openUserManagement(user.id)} disabled={isSaving}>
+                    <MoreHorizontal size={16} />
+                    Gestisci
+                  </Button>
                 </div>
               </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={selectedUser?.isActive ? "outline" : "primary"}
-                onClick={() => void handleSetUserStatus(!(selectedUser?.isActive ?? false))}
-                disabled={isSaving || !selectedUserId}
-              >
-                {selectedUser?.isActive ? "Disattiva utente" : "Attiva utente"}
-              </Button>
-              <Button onClick={() => void handleResetPassword()} disabled={isSaving || !selectedUserId}>Reset credenziali</Button>
-              <Button variant="outline" onClick={() => void handleRevokeSessions()} disabled={isSaving || !selectedUserId}>
-                Reset sessioni
-              </Button>
-              <Button variant="outline" onClick={() => void handleResetTwoFactor()} disabled={isSaving || !selectedUserId}>
-                Reset 2FA
-              </Button>
-            </div>
+            ))}
           </div>
         </Card>
 
         <Card className="p-4 lg:p-5">
-          <Text as="h2" variant="h2">Ruoli per workspace</Text>
-          <p className="mt-1 text-sm text-text-muted">Override permessi via assegnazione ruoli nel workspace selezionato.</p>
-
-          {memberships.length > 0 && (
-            <div className="mt-3 rounded-[var(--radius-sm)] border border-border-subtle bg-bg-muted p-2 text-xs text-text-muted">
-              {memberships.map((item) => (
-                <div key={item.workspaceId}>
-                  {item.workspaceCode}: {item.status} · ruoli [{item.roleKeys.join(", ") || "nessuno"}]
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {roles.map((role) => (
-              <label key={role.key} className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-border-subtle px-3 py-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={selectedRoleKeys.includes(role.key)}
-                  onChange={() => handleToggleRole(role.key)}
-                  disabled={!selectedUserId || !selectedWorkspaceId || isSaving}
-                />
-                <span>{role.label}</span>
-              </label>
-            ))}
+          <div className="flex items-center gap-2">
+            <UserPlus size={18} className="text-brand-primary" />
+            <Text as="h2" variant="h2">Crea utente</Text>
           </div>
+          <p className="mt-1 text-sm text-text-muted">
+            La creazione usa il workspace operativo selezionato.
+          </p>
 
-          <div className="mt-4">
-            <Button onClick={() => void handleSaveRoles()} disabled={isSaving || !selectedUserId || !selectedWorkspaceId}>
-              Salva ruoli workspace
+          <div className="mt-4 space-y-3">
+            <div>
+              <Label htmlFor="create-email">Email</Label>
+              <Input
+                id="create-email"
+                value={createEmail}
+                onChange={(event) => setCreateEmail(event.target.value)}
+                className="mt-1"
+                placeholder="nuovo.utente@azienda.it"
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="create-first-name">Nome</Label>
+                <Input
+                  id="create-first-name"
+                  value={createFirstName}
+                  onChange={(event) => setCreateFirstName(event.target.value)}
+                  className="mt-1"
+                  placeholder="Nome"
+                />
+              </div>
+              <div>
+                <Label htmlFor="create-last-name">Cognome</Label>
+                <Input
+                  id="create-last-name"
+                  value={createLastName}
+                  onChange={(event) => setCreateLastName(event.target.value)}
+                  className="mt-1"
+                  placeholder="Cognome"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="create-password">Password iniziale</Label>
+              <div className="relative mt-1">
+                <Input
+                  id="create-password"
+                  type={showCreatePassword ? "text" : "password"}
+                  value={createPassword}
+                  onChange={(event) => setCreatePassword(event.target.value)}
+                  className="pr-20"
+                  placeholder="8 caratteri, maiuscola e numero"
+                  autoComplete="new-password"
+                />
+                <div className="absolute inset-y-0 right-0 flex items-center gap-1 pr-2">
+                  <button
+                    type="button"
+                    className="p-1 text-text-muted hover:text-text-primary"
+                    title="Genera password"
+                    onClick={() => {
+                      setCreatePassword(generatePassword());
+                      setShowCreatePassword(true);
+                    }}
+                  >
+                    <RefreshCw size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    className="p-1 text-text-muted hover:text-text-primary"
+                    title={showCreatePassword ? "Nascondi password" : "Mostra password"}
+                    onClick={() => setShowCreatePassword((value) => !value)}
+                  >
+                    {showCreatePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <Label>Ruoli iniziali</Label>
+              <div className="mt-2 grid gap-2">
+                {roles.map((role) => (
+                  <label key={`create-${role.key}`} className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-border-subtle px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={createRoleKeys.includes(role.key)}
+                      onChange={() => handleToggleCreateRole(role.key)}
+                      disabled={isSaving}
+                    />
+                    <span>{role.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <Button onClick={() => void handleCreateUser()} disabled={isSaving || !selectedWorkspaceId} className="w-full">
+              <UserPlus size={16} />
+              Crea utente
             </Button>
           </div>
         </Card>
       </div>
 
-      <Card className="p-4 lg:p-5">
-        <Text as="h2" variant="h2">Override moduli</Text>
-        <p className="mt-1 text-sm text-text-muted">ALLOW bypassa lo stato workspace, DENY forza disabilitazione utente.</p>
+      {userModalOpen && selectedUser ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-label="Gestione utente">
+          <section className="flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-bg-surface shadow-elevated">
+            <header className="flex flex-col gap-3 border-b border-border-default px-4 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-5">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Text as="h2" variant="h2">{userFullName(selectedUser)}</Text>
+                  <StatePill tone={selectedUser.isActive ? "success" : "danger"}>{selectedUser.isActive ? "Attivo" : "Disattivo"}</StatePill>
+                  {selectedUser.superadmin ? <StatePill tone="warn">Superadmin</StatePill> : null}
+                </div>
+                <p className="mt-1 truncate text-sm text-text-muted">{selectedUser.email}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <SelectDropdown
+                  value={selectedWorkspaceId}
+                  onChange={(nextValue) => setSelectedWorkspaceId(nextValue)}
+                  options={workspaceOptions}
+                  placeholder="Workspace"
+                  disabled={loading || isSaving}
+                  className="w-64"
+                />
+                <button
+                  type="button"
+                  className="rounded-[var(--radius-md)] p-2 text-text-muted hover:bg-bg-muted hover:text-text-primary"
+                  onClick={() => setUserModalOpen(false)}
+                  aria-label="Chiudi gestione utente"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </header>
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full divide-y divide-border-subtle text-sm">
-            <thead>
-              <tr className="text-left text-text-muted">
-                <th className="px-2 py-2 font-semibold">Modulo</th>
-                <th className="px-2 py-2 font-semibold">Workspace</th>
-                <th className="px-2 py-2 font-semibold">Override</th>
-                <th className="px-2 py-2 font-semibold">Effettivo</th>
-                <th className="px-2 py-2 font-semibold">Azioni</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-subtle">
-              {overridableModules.map((module) => {
-                const state = userModules.find((item) => item.moduleKey === module.key) ?? null;
-                return (
-                  <tr key={module.key}>
-                    <td className="px-2 py-2 font-mono text-xs">{module.key}</td>
-                    <td className="px-2 py-2">{state ? (state.workspaceEnabled ? "ON" : "OFF") : "-"}</td>
-                    <td className="px-2 py-2">{state?.overrideMode ?? "-"}</td>
-                    <td className="px-2 py-2">{state ? (state.effectiveEnabled ? "ON" : "OFF") : "-"}</td>
-                    <td className="px-2 py-2">
-                      <div className="flex flex-wrap gap-1">
-                        <Button
-                          size="sm"
-                          onClick={() => void handleSetModuleOverride(module.key, "ALLOW")}
-                          disabled={isSaving || !selectedUserId || !selectedWorkspaceId}
-                        >
-                          Allow
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => void handleSetModuleOverride(module.key, "DENY")}
-                          disabled={isSaving || !selectedUserId || !selectedWorkspaceId}
-                        >
-                          Deny
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => void handleClearModuleOverride(module.key)}
-                          disabled={isSaving || !selectedUserId || !selectedWorkspaceId}
-                        >
-                          Clear
-                        </Button>
+            <div className="min-h-0 flex-1 overflow-auto p-4 lg:p-5">
+              <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+                <aside className="space-y-4">
+                  <section className="rounded-[var(--radius-md)] border border-border-default p-4">
+                    <div className="flex items-center gap-2">
+                      <KeyRound size={17} className="text-brand-primary" />
+                      <h3 className="text-sm font-semibold text-text-primary">Accesso e sessioni</h3>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      <Button
+                        variant={selectedUser.isActive ? "outline" : "primary"}
+                        onClick={() => void handleSetUserStatus(!selectedUser.isActive)}
+                        disabled={isSaving}
+                        className="w-full"
+                      >
+                        {selectedUser.isActive ? <Ban size={16} /> : <CheckCircle2 size={16} />}
+                        {selectedUser.isActive ? "Disattiva utente" : "Attiva utente"}
+                      </Button>
+                      <Button variant="outline" onClick={() => void handleRevokeSessions()} disabled={isSaving} className="w-full">
+                        <RotateCcw size={16} />
+                        Revoca sessioni
+                      </Button>
+                      <Button variant="outline" onClick={() => void handleResetTwoFactor()} disabled={isSaving} className="w-full">
+                        <ShieldCheck size={16} />
+                        Reset 2FA
+                      </Button>
+                    </div>
+                  </section>
+
+                  <section className="rounded-[var(--radius-md)] border border-border-default p-4">
+                    <h3 className="text-sm font-semibold text-text-primary">Reset password</h3>
+                    <div className="mt-3">
+                      <Label htmlFor="superadmin-password-reset">Nuova password forzata</Label>
+                      <div className="relative mt-1">
+                        <Input
+                          id="superadmin-password-reset"
+                          type={showResetPassword ? "text" : "password"}
+                          value={passwordResetValue}
+                          onChange={(event) => setPasswordResetValue(event.target.value)}
+                          className="pr-20"
+                          placeholder="8 caratteri, maiuscola e numero"
+                          autoComplete="new-password"
+                        />
+                        <div className="absolute inset-y-0 right-0 flex items-center gap-1 pr-2">
+                          <button
+                            type="button"
+                            className="p-1 text-text-muted hover:text-text-primary"
+                            title="Genera password"
+                            onClick={() => {
+                              setPasswordResetValue(generatePassword());
+                              setShowResetPassword(true);
+                            }}
+                          >
+                            <RefreshCw size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            className="p-1 text-text-muted hover:text-text-primary"
+                            title={showResetPassword ? "Nascondi password" : "Mostra password"}
+                            onClick={() => setShowResetPassword((value) => !value)}
+                          >
+                            {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </div>
+                    <Button onClick={() => void handleResetPassword()} disabled={isSaving || !passwordResetValue} className="mt-3 w-full">
+                      <KeyRound size={16} />
+                      Aggiorna password
+                    </Button>
+                  </section>
+
+                  <section className="rounded-[var(--radius-md)] border border-border-default p-4">
+                    <h3 className="text-sm font-semibold text-text-primary">Membership</h3>
+                    <div className="mt-3 space-y-2 text-xs text-text-muted">
+                      {memberships.length === 0 ? (
+                        <p>Nessuna membership trovata.</p>
+                      ) : memberships.map((item) => (
+                        <div key={item.workspaceId} className="rounded-[var(--radius-sm)] bg-bg-muted px-3 py-2">
+                          <div className="font-semibold text-text-secondary">{item.workspaceCode}</div>
+                          <div>{item.status} - {item.roleKeys.join(", ") || "nessun ruolo"}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                </aside>
+
+                <div className="space-y-5">
+                  <section className="rounded-[var(--radius-md)] border border-border-default p-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-text-primary">Ruoli nel workspace</h3>
+                        <p className="text-xs text-text-muted">
+                          {selectedWorkspaceMembership ? selectedWorkspaceMembership.workspaceName : "L'utente non risulta membro del workspace selezionato."}
+                        </p>
+                      </div>
+                      <Button size="sm" onClick={() => void handleSaveRoles()} disabled={isSaving || selectedRoleKeys.length === 0}>
+                        Salva ruoli
+                      </Button>
+                    </div>
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {roles.map((role) => (
+                        <label key={role.key} className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-border-subtle px-3 py-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={selectedRoleKeys.includes(role.key)}
+                            onChange={() => handleToggleRole(role.key)}
+                            disabled={!selectedWorkspaceMembership || isSaving}
+                          />
+                          <span>{role.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="rounded-[var(--radius-md)] border border-border-default p-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-text-primary">Accesso moduli</h3>
+                      <p className="text-xs text-text-muted">ALLOW forza abilitazione utente, DENY forza disabilitazione, Clear torna allo stato workspace.</p>
+                    </div>
+
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="min-w-full divide-y divide-border-subtle text-sm">
+                        <thead>
+                          <tr className="text-left text-text-muted">
+                            <th className="px-2 py-2 font-semibold">Modulo</th>
+                            <th className="px-2 py-2 font-semibold">Workspace</th>
+                            <th className="px-2 py-2 font-semibold">Override</th>
+                            <th className="px-2 py-2 font-semibold">Effettivo</th>
+                            <th className="px-2 py-2 font-semibold">Azioni</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border-subtle">
+                          {overridableModules.map((module) => {
+                            const state = userModules.find((item) => item.moduleKey === module.key) ?? null;
+                            return (
+                              <tr key={module.key}>
+                                <td className="px-2 py-2">
+                                  <div className="font-medium text-text-primary">{module.name}</div>
+                                  <div className="font-mono text-[11px] text-text-muted">{module.key}</div>
+                                </td>
+                                <td className="px-2 py-2">{state ? <StatePill tone={state.workspaceEnabled ? "success" : "muted"}>{state.workspaceEnabled ? "ON" : "OFF"}</StatePill> : "-"}</td>
+                                <td className="px-2 py-2">{state?.overrideMode ? <StatePill tone={state.overrideMode === "ALLOW" ? "success" : "danger"}>{state.overrideMode}</StatePill> : "-"}</td>
+                                <td className="px-2 py-2">{state ? <StatePill tone={state.effectiveEnabled ? "success" : "danger"}>{state.effectiveEnabled ? "ON" : "OFF"}</StatePill> : "-"}</td>
+                                <td className="px-2 py-2">
+                                  <div className="flex flex-wrap gap-1">
+                                    <Button size="sm" onClick={() => void handleSetModuleOverride(module.key, "ALLOW")} disabled={isSaving || !selectedWorkspaceMembership}>
+                                      Allow
+                                    </Button>
+                                    <Button size="sm" variant="outline" onClick={() => void handleSetModuleOverride(module.key, "DENY")} disabled={isSaving || !selectedWorkspaceMembership}>
+                                      Deny
+                                    </Button>
+                                    <Button size="sm" variant="ghost" onClick={() => void handleClearModuleOverride(module.key)} disabled={isSaving || !selectedWorkspaceMembership || !state?.overrideMode}>
+                                      Clear
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
-      </Card>
+      ) : null}
     </div>
   );
 }
