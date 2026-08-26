@@ -8,6 +8,7 @@ import { PasswordHasher } from "./PasswordHasher.js";
 import { SessionTokenService } from "./SessionTokenService.js";
 import { TotpSecretCipherService } from "./TotpSecretCipherService.js";
 import { TotpService } from "./TotpService.js";
+import { PasswordPolicy } from "./PasswordPolicy.js";
 
 export class AuthService {
   private readonly userRepository: UserAccountRepository;
@@ -17,6 +18,7 @@ export class AuthService {
   private readonly tokenService: SessionTokenService;
   private readonly totpService: TotpService;
   private readonly totpSecretCipherService: TotpSecretCipherService;
+  private readonly passwordPolicy: PasswordPolicy;
   private readonly totpIssuer: string;
   private readonly sessionHours: number;
   private readonly rememberDays: number;
@@ -30,6 +32,7 @@ export class AuthService {
     tokenService: SessionTokenService,
     totpService: TotpService,
     totpSecretCipherService: TotpSecretCipherService,
+    passwordPolicy: PasswordPolicy,
     totpIssuer = "Birgus",
     sessionHours = 12,
     rememberDays = 30,
@@ -42,6 +45,7 @@ export class AuthService {
     this.tokenService = tokenService;
     this.totpService = totpService;
     this.totpSecretCipherService = totpSecretCipherService;
+    this.passwordPolicy = passwordPolicy;
     this.totpIssuer = totpIssuer;
     this.sessionHours = sessionHours;
     this.rememberDays = rememberDays;
@@ -104,6 +108,7 @@ export class AuthService {
       userId: user.id,
       email: user.email,
       fullName,
+      mustChangePassword: user.mustChangePassword,
       rememberMe: command.rememberMe,
       ipAddress: command.ipAddress,
       userAgent: command.userAgent,
@@ -166,6 +171,7 @@ export class AuthService {
       userId: user.id,
       email: user.email,
       fullName,
+      mustChangePassword: user.mustChangePassword,
       rememberMe: challenge.rememberMe,
       ipAddress: params.ipAddress ?? challenge.ipAddress,
       userAgent: params.userAgent ?? challenge.userAgent,
@@ -176,6 +182,7 @@ export class AuthService {
     userId: string;
     email: string;
     fullName: string;
+    mustChangePassword: boolean;
     rememberMe: boolean;
     ipAddress?: string | null;
     userAgent?: string | null;
@@ -199,6 +206,7 @@ export class AuthService {
       userId: params.userId,
       email: params.email,
       fullName: params.fullName,
+      mustChangePassword: params.mustChangePassword,
     });
   }
 
@@ -207,6 +215,7 @@ export class AuthService {
     userId: string;
     email: string;
     fullName: string;
+    mustChangePassword: boolean;
     expiresAt: Date;
   } | null> {
     const tokenHash = this.tokenService.hashToken(token);
@@ -226,6 +235,7 @@ export class AuthService {
       userId: session.userId,
       email: user.email,
       fullName: [user.firstName, user.lastName ?? ""].join(" ").trim(),
+      mustChangePassword: user.mustChangePassword,
       expiresAt: session.expiresAt,
     };
   }
@@ -236,7 +246,8 @@ export class AuthService {
   }
 
   public async resetPassword(userId: string, newPassword: string): Promise<void> {
-    const hash = await this.passwordHasher.hashPassword(newPassword);
+    const normalizedPassword = this.passwordPolicy.ensureValid(newPassword);
+    const hash = await this.passwordHasher.hashPassword(normalizedPassword);
     await this.userRepository.updatePassword(userId, hash);
     await this.sessionRepository.revokeAllForUser(userId);
   }
@@ -257,7 +268,8 @@ export class AuthService {
       throw new AppError("Password attuale non corretta.", "AUTH_CURRENT_PASSWORD_INVALID", 401);
     }
 
-    const nextHash = await this.passwordHasher.hashPassword(params.newPassword);
+    const normalizedPassword = this.passwordPolicy.ensureValid(params.newPassword);
+    const nextHash = await this.passwordHasher.hashPassword(normalizedPassword);
     await this.userRepository.updatePassword(user.id, nextHash);
     await this.sessionRepository.revokeAllForUserExceptSession(user.id, params.currentSessionId);
   }

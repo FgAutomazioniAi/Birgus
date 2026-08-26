@@ -30,12 +30,12 @@ const forgotPasswordSchema = z.object({
 const resetPasswordSchema = z.object({
   email: z.string().email(),
   code: z.string().min(1),
-  newPassword: z.string().min(5),
+  newPassword: z.string().min(8),
 });
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
-  newPassword: z.string().min(5),
+  newPassword: z.string().min(8),
 });
 
   @Controller("/api/auth")
@@ -105,6 +105,7 @@ export class NestAuthController {
       sessionId: result.sessionId,
       token: result.token,
       expiresAt: result.expiresAt,
+      mustChangePassword: result.mustChangePassword,
       user: {
         id: result.userId,
         email: result.email,
@@ -144,6 +145,7 @@ export class NestAuthController {
       sessionId: result.sessionId,
       token: result.token,
       expiresAt: result.expiresAt,
+      mustChangePassword: result.mustChangePassword,
       user: {
         id: result.userId,
         email: result.email,
@@ -188,6 +190,7 @@ export class NestAuthController {
         fullName: session.fullName,
         roleKeys,
       },
+      mustChangePassword: session.mustChangePassword,
     };
   }
 

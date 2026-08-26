@@ -5,6 +5,23 @@ import { ModuleAccessRepository } from "../repositories/ModuleAccessRepository.j
 import { WorkspaceModuleState } from "../domain/WorkspaceModuleState.js";
 
 export class PrismaModuleAccessRepository implements ModuleAccessRepository {
+  public async isModuleEnabledForWorkspace(workspaceId: string, moduleKey: string): Promise<boolean> {
+    const prisma = PrismaClientManager.getClient();
+    const workspaceModule = await prisma.workspaceModule.findFirst({
+      where: {
+        workspace_id: workspaceId,
+        is_enabled: true,
+        module: {
+          key: moduleKey,
+          is_active: true,
+        },
+      },
+      select: { id: true },
+    });
+
+    return workspaceModule !== null;
+  }
+
   public async isModuleEnabledForUser(workspaceId: string, userId: string, moduleKey: string): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
 

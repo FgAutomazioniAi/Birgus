@@ -16,6 +16,7 @@ postgres_data/
 garage/meta/
 garage/data/
 garage/garage.local.toml
+backups/
 Caddyfile.https.local
 frontend/.next/
 frontend/node_modules/

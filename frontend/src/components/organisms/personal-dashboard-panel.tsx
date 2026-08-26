@@ -101,8 +101,8 @@ export function PersonalDashboardPanel() {
       return;
     }
 
-    if (newPassword.length < 5) {
-      toast.error("La nuova password deve avere almeno 5 caratteri.");
+    if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      toast.error("La nuova password deve avere almeno 8 caratteri, una maiuscola e un numero.");
       return;
     }
 

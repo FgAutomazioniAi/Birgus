@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer";
 import { Prisma, WorkflowStepStatus } from "@prisma/client";
 
 import { ModuleKey } from "../../../core/module-access/ModuleKey.js";
+import { WorkflowRuntimeAccessPolicy } from "./WorkflowRuntimeAccessPolicy.js";
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { AiProviderSettingsService } from "../../ai-runtime/services/AiProviderSettingsService.js";
 import { FileKind } from "../../document-archive/domain/FileKind.js";
@@ -81,8 +82,8 @@ interface WorkflowNodeRow {
   input_kind: string | null;
   output_kind: string | null;
   configuration: Prisma.JsonValue | null;
-  module_agent: { key: string; active_prompt: string; original_prompt: string } | null;
-  module_tool: { key: string; runtime_kind: string; handler_key: string; configuration: Prisma.JsonValue | null } | null;
+  module_agent: { key: string; active_prompt: string; original_prompt: string; is_enabled: boolean; deleted_at: Date | null; module: { key: string } } | null;
+  module_tool: { key: string; runtime_kind: string; handler_key: string; configuration: Prisma.JsonValue | null; is_enabled: boolean; deleted_at: Date | null; module: { key: string } } | null;
 }
 
 export class WorkflowRunExecutorService {
@@ -98,6 +99,7 @@ export class WorkflowRunExecutorService {
   private readonly notificationService: NotificationService | null;
   private readonly jobQueue: JobQueue | null;
   private readonly scheduledWorkflowDeliveryService: ScheduledWorkflowDeliveryService | null;
+  private readonly runtimeAccessPolicy: WorkflowRuntimeAccessPolicy;
   private readonly graphPlanner = new WorkflowGraphPlanner();
 
   public constructor(params: {
@@ -113,6 +115,7 @@ export class WorkflowRunExecutorService {
     jobQueue?: JobQueue | null;
     notificationService?: NotificationService | null;
     scheduledWorkflowDeliveryService?: ScheduledWorkflowDeliveryService | null;
+    runtimeAccessPolicy: WorkflowRuntimeAccessPolicy;
   }) {
     this.documentArchiveService = params.documentArchiveService;
     this.documentIntelligenceService = params.documentIntelligenceService;
@@ -126,6 +129,7 @@ export class WorkflowRunExecutorService {
     this.jobQueue = params.jobQueue ?? null;
     this.notificationService = params.notificationService ?? null;
     this.scheduledWorkflowDeliveryService = params.scheduledWorkflowDeliveryService ?? null;
+    this.runtimeAccessPolicy = params.runtimeAccessPolicy;
   }
 
   public async resumeRecoverableRuns(): Promise<void> {
@@ -189,6 +193,9 @@ export class WorkflowRunExecutorService {
                     key: true,
                     active_prompt: true,
                     original_prompt: true,
+                    is_enabled: true,
+                    deleted_at: true,
+                    module: { select: { key: true } },
                   },
                 },
                 module_tool: {
@@ -197,6 +204,9 @@ export class WorkflowRunExecutorService {
                     runtime_kind: true,
                     handler_key: true,
                     configuration: true,
+                    is_enabled: true,
+                    deleted_at: true,
+                    module: { select: { key: true } },
                   },
                 },
               },
@@ -239,6 +249,24 @@ export class WorkflowRunExecutorService {
     const context = await this.buildContext(runId);
     const evaluateCondition = (payload: unknown) => this.evaluateCondition(payload as ConditionPayload | null, context);
     const orderedNodes = this.graphPlanner.buildExecutionOrder(run.workflow.nodes, run.workflow.edges, evaluateCondition);
+    await this.runtimeAccessPolicy.ensureRunAllowed({
+      workspaceId: run.workspace_id,
+      requestedByUserId: run.requested_by_user_id,
+      workflowModuleKey: run.workflow.module.key,
+      nodes: orderedNodes.map((node) => ({
+        nodeKey: node.node_key,
+        agent: node.module_agent ? {
+          moduleKey: node.module_agent.module.key,
+          enabled: node.module_agent.is_enabled,
+          deleted: node.module_agent.deleted_at !== null,
+        } : null,
+        tool: node.module_tool ? {
+          moduleKey: node.module_tool.module.key,
+          enabled: node.module_tool.is_enabled,
+          deleted: node.module_tool.deleted_at !== null,
+        } : null,
+      })),
+    });
     context.incomingNodeKeys = this.graphPlanner.buildIncomingNodeKeyMap(run.workflow.nodes, run.workflow.edges, evaluateCondition);
     context.outgoingNodeKeys = this.buildOutgoingNodeKeyMap(run.workflow.nodes, run.workflow.edges, evaluateCondition);
     context.workflowNodesByKey = new Map(run.workflow.nodes.map((node) => [node.node_key, node]));

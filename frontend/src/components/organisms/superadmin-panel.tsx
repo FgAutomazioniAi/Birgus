@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -89,10 +89,25 @@ export function SuperadminPanel() {
   const [createFirstName, setCreateFirstName] = useState("");
   const [createLastName, setCreateLastName] = useState("");
   const [createPassword, setCreatePassword] = useState("");
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const [createRoleKeys, setCreateRoleKeys] = useState<string[]>(["operator"]);
   const [isSaving, setIsSaving] = useState(false);
 
   const selectedUser = useMemo(() => users.find((item) => item.id === selectedUserId) ?? null, [users, selectedUserId]);
+
+  const passwordMeetsPolicy = (value: string) => value.length >= 8 && /[A-Z]/.test(value) && /\d/.test(value);
+  const generatePassword = (): string => {
+    const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const lower = "abcdefghijkmnopqrstuvwxyz";
+    const digits = "23456789";
+    const symbols = "!@#$%";
+    const all = upper + lower + digits + symbols;
+    const take = (source: string) => source[crypto.getRandomValues(new Uint32Array(1))[0] % source.length] ?? "A";
+    const result = [take(upper), take(lower), take(digits), take(symbols)];
+    while (result.length < 16) result.push(take(all));
+    return result.sort(() => crypto.getRandomValues(new Uint32Array(1))[0] - 2 ** 31).join("");
+  };
   const workspaceOptions = useMemo(
     () => workspaces.map((workspace) => ({
       value: workspace.id,
@@ -209,8 +224,8 @@ export function SuperadminPanel() {
       return;
     }
 
-    if (createPassword.trim().length < 5) {
-      toast.error("La password deve avere almeno 5 caratteri.");
+    if (!passwordMeetsPolicy(createPassword)) {
+      toast.error("La password deve avere almeno 8 caratteri, una maiuscola e un numero.");
       return;
     }
 
@@ -277,8 +292,8 @@ export function SuperadminPanel() {
       return;
     }
 
-    if (passwordResetValue.trim().length < 5) {
-      toast.error("La password deve avere almeno 5 caratteri.");
+    if (!passwordMeetsPolicy(passwordResetValue)) {
+      toast.error("La password deve avere almeno 8 caratteri, una maiuscola e un numero.");
       return;
     }
 
@@ -510,13 +525,13 @@ export function SuperadminPanel() {
           </div>
           <div>
             <Label htmlFor="create-password">Password iniziale</Label>
-            <Input
-              id="create-password"
-              value={createPassword}
-              onChange={(event) => setCreatePassword(event.target.value)}
-              className="mt-1"
-              placeholder="almeno 5 caratteri"
-            />
+            <div className="relative mt-1">
+              <Input id="create-password" type={showCreatePassword ? "text" : "password"} value={createPassword} onChange={(event) => setCreatePassword(event.target.value)} className="pr-20" placeholder="8 caratteri, maiuscola e numero" autoComplete="new-password" />
+              <div className="absolute inset-y-0 right-0 flex items-center gap-1 pr-2">
+                <button type="button" className="p-1 text-text-muted hover:text-text-primary" title="Genera password" onClick={() => { setCreatePassword(generatePassword()); setShowCreatePassword(true); }}><RefreshCw size={16} /></button>
+                <button type="button" className="p-1 text-text-muted hover:text-text-primary" title={showCreatePassword ? "Nascondi password" : "Mostra password"} onClick={() => setShowCreatePassword((value) => !value)}>{showCreatePassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+              </div>
+            </div>
           </div>
           <div>
             <Label htmlFor="create-first-name">Nome</Label>
@@ -575,13 +590,13 @@ export function SuperadminPanel() {
           <div className="mt-4 space-y-3">
             <div>
               <Label htmlFor="superadmin-password-reset">Nuova password forzata</Label>
-              <Input
-                id="superadmin-password-reset"
-                value={passwordResetValue}
-                onChange={(event) => setPasswordResetValue(event.target.value)}
-                className="mt-1"
-                placeholder="almeno 5 caratteri"
-              />
+              <div className="relative mt-1">
+                <Input id="superadmin-password-reset" type={showResetPassword ? "text" : "password"} value={passwordResetValue} onChange={(event) => setPasswordResetValue(event.target.value)} className="pr-20" placeholder="8 caratteri, maiuscola e numero" autoComplete="new-password" />
+                <div className="absolute inset-y-0 right-0 flex items-center gap-1 pr-2">
+                  <button type="button" className="p-1 text-text-muted hover:text-text-primary" title="Genera password" onClick={() => { setPasswordResetValue(generatePassword()); setShowResetPassword(true); }}><RefreshCw size={16} /></button>
+                  <button type="button" className="p-1 text-text-muted hover:text-text-primary" title={showResetPassword ? "Nascondi password" : "Mostra password"} onClick={() => setShowResetPassword((value) => !value)}>{showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                </div>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button

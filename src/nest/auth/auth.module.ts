@@ -11,6 +11,7 @@ import { PrismaUserAccountRepository } from "../../modules/identity/infra/Prisma
 import { AuthService } from "../../modules/identity/services/AuthService.js";
 import { PasswordHasher } from "../../modules/identity/services/PasswordHasher.js";
 import { PasswordResetService } from "../../modules/identity/services/PasswordResetService.js";
+import { PasswordPolicy } from "../../modules/identity/services/PasswordPolicy.js";
 import { SessionTokenService } from "../../modules/identity/services/SessionTokenService.js";
 import { SmtpPasswordResetNotifier } from "../../modules/identity/services/SmtpPasswordResetNotifier.js";
 import { MailProviderSettingsService } from "../../modules/mail-runtime/services/MailProviderSettingsService.js";
@@ -37,6 +38,10 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
     {
       provide: SessionTokenService,
       useFactory: () => new SessionTokenService(),
+    },
+    {
+      provide: PasswordPolicy,
+      useFactory: () => new PasswordPolicy(),
     },
     {
       provide: TotpService,
@@ -83,6 +88,7 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
         tokenService: SessionTokenService,
         totpService: TotpService,
         totpSecretCipherService: TotpSecretCipherService,
+        passwordPolicy: PasswordPolicy,
         configService: AppConfigService,
       ) => new AuthService(
         userRepository,
@@ -92,6 +98,7 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
         tokenService,
         totpService,
         totpSecretCipherService,
+        passwordPolicy,
         configService.getString("AUTH_TOTP_ISSUER", "Birgus"),
         configService.getNumber("AUTH_SESSION_HOURS", 12),
         configService.getNumber("AUTH_SESSION_REMEMBER_DAYS", 30),
@@ -105,6 +112,7 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
         SessionTokenService,
         TotpService,
         TotpSecretCipherService,
+        PasswordPolicy,
         AppConfigService,
       ],
     },
@@ -116,6 +124,7 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
         authSessionRepository: PrismaAuthSessionRepository,
         passwordHasher: PasswordHasher,
         notifier: SmtpPasswordResetNotifier,
+        passwordPolicy: PasswordPolicy,
         configService: AppConfigService,
       ) => new PasswordResetService(
         userRepository,
@@ -123,6 +132,7 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
         authSessionRepository,
         passwordHasher,
         notifier,
+        passwordPolicy,
         configService.getNumber("AUTH_PASSWORD_RESET_CODE_TTL_MINUTES", 15),
       ),
       inject: [
@@ -131,6 +141,7 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
         PrismaAuthSessionRepository,
         PasswordHasher,
         SmtpPasswordResetNotifier,
+        PasswordPolicy,
         AppConfigService,
       ],
     },
@@ -153,6 +164,7 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
     AuthService,
     PasswordResetService,
     PasswordHasher,
+    PasswordPolicy,
     SessionCookieFactory,
     RequestContextAuthGuard,
     AccessPolicyGuard,

@@ -8,6 +8,7 @@ import type { WorkflowRun, WorkflowTool } from "./types";
 import {
   formatPayload,
   formatResultPreview,
+  formatDateTime,
   stringValue,
   textareaClassName,
   type PaletteDragPayload,
@@ -97,22 +98,53 @@ export function TelegramChannelField({
 
 export function RunResultsPanel({
   expandedResultCard,
+  isLoadingRuns,
+  isOutputFocused,
   latestRun,
   latestRunReference,
   nodeLabelByKey,
+  runs,
+  onSelectRun,
   onToggleCard,
 }: {
   expandedResultCard: string | null;
+  isLoadingRuns: boolean;
+  isOutputFocused: boolean;
   latestRun: WorkflowRun | null;
   latestRunReference: string;
   nodeLabelByKey: Map<string, string>;
+  runs: WorkflowRun[];
+  onSelectRun: (runId: string) => void;
   onToggleCard: (cardId: string) => void;
 }) {
   return (
-    <aside className="w-80 overflow-y-auto border-l border-border-default bg-bg-surface p-4">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-muted">Risultati esecuzione</h3>
+    <aside className="w-96 shrink-0 overflow-y-auto border-l border-border-default bg-bg-surface p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-text-muted">Esecuzioni</h3>
+        {isLoadingRuns ? <span className="text-xs text-text-muted">Caricamento...</span> : null}
+      </div>
+      {runs.length > 0 ? (
+        <div className="mb-4 flex max-h-36 flex-col gap-1 overflow-y-auto pr-1">
+          {runs.map((run) => {
+            const isSelected = latestRun?.id === run.id;
+            return (
+              <button
+                key={run.id}
+                type="button"
+                onClick={() => onSelectRun(run.id)}
+                className={`flex items-center justify-between gap-2 rounded-md border px-2.5 py-2 text-left transition ${isSelected ? "border-brand-primary bg-bg-subtle" : "border-border-subtle bg-bg-page hover:border-brand-primary/40"}`}
+              >
+                <span className="min-w-0 truncate text-xs font-medium text-text-secondary">
+                  {formatDateTime(run.completedAt ?? run.startedAt ?? run.queuedAt)}
+                </span>
+                <Badge tone={run.status === "COMPLETED" ? "success" : run.status === "FAILED" ? "warn" : "progress"}>{run.status}</Badge>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       {!latestRun ? (
-        <p className="text-sm text-text-muted">Esegui il workflow per vedere qui lo stato e gli output dei passaggi.</p>
+        <p className="text-sm text-text-muted">Esegui il workflow o seleziona un'esecuzione per vedere gli output effettivi.</p>
       ) : (
         <div className="flex flex-col gap-3">
           <div className="rounded-md border border-border-default bg-bg-page p-3">
@@ -126,6 +158,18 @@ export function RunResultsPanel({
             </div>
           </div>
           {latestRun.errorMessage ? <p className="text-sm text-status-danger-text">{latestRun.errorMessage}</p> : null}
+          {isOutputFocused ? (
+            <div className="rounded-md border border-brand-primary bg-bg-subtle p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-primary">Output finale</p>
+              {latestRun.resultPayload !== undefined && latestRun.resultPayload !== null ? (
+                <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border-default bg-bg-surface p-3 text-xs leading-5 text-text-secondary">
+                  {formatPayload(latestRun.resultPayload)}
+                </pre>
+              ) : (
+                <p className="mt-2 text-sm text-text-muted">L'output apparirà al completamento dell'esecuzione.</p>
+              )}
+            </div>
+          ) : null}
           {(latestRun.steps ?? []).map((step) => (
             <button
               key={step.id}
@@ -155,7 +199,7 @@ export function RunResultsPanel({
               ) : null}
             </button>
           ))}
-          {latestRun.resultPayload !== undefined && latestRun.resultPayload !== null ? (
+          {!isOutputFocused && latestRun.resultPayload !== undefined && latestRun.resultPayload !== null ? (
             <button
               type="button"
               onClick={() => onToggleCard("final")}

@@ -17,6 +17,7 @@ export class PrismaUserAccountRepository implements UserAccountRepository {
         first_name: true,
         last_name: true,
         password_hash: true,
+        must_change_password: true,
         two_factor_enabled: true,
         two_factor_secret_ciphertext: true,
         is_active: true,
@@ -33,6 +34,7 @@ export class PrismaUserAccountRepository implements UserAccountRepository {
       firstName: row.first_name,
       lastName: row.last_name,
       passwordHash: row.password_hash,
+      mustChangePassword: row.must_change_password,
       twoFactorEnabled: row.two_factor_enabled,
       twoFactorSecretCiphertext: row.two_factor_secret_ciphertext,
       isActive: row.is_active,
@@ -53,6 +55,7 @@ export class PrismaUserAccountRepository implements UserAccountRepository {
         first_name: true,
         last_name: true,
         password_hash: true,
+        must_change_password: true,
         two_factor_enabled: true,
         two_factor_secret_ciphertext: true,
         is_active: true,
@@ -69,13 +72,14 @@ export class PrismaUserAccountRepository implements UserAccountRepository {
       firstName: row.first_name,
       lastName: row.last_name,
       passwordHash: row.password_hash,
+      mustChangePassword: row.must_change_password,
       twoFactorEnabled: row.two_factor_enabled,
       twoFactorSecretCiphertext: row.two_factor_secret_ciphertext,
       isActive: row.is_active,
     });
   }
 
-  public async updatePassword(userId: string, passwordHash: string): Promise<void> {
+  public async updatePassword(userId: string, passwordHash: string, mustChangePassword = false): Promise<void> {
     const prisma = PrismaClientManager.getClient();
 
     await prisma.user.update({
@@ -85,6 +89,7 @@ export class PrismaUserAccountRepository implements UserAccountRepository {
       data: {
         password_hash: passwordHash,
         password_updated_at: new Date(),
+        must_change_password: mustChangePassword,
       },
     });
   }

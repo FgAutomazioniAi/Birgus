@@ -231,22 +231,34 @@ export class PrismaDocumentArchiveRepository implements DocumentArchiveRepositor
     }
 
     const prisma = PrismaClientManager.getClient();
-    const updated = await prisma.document.update({
-      where: {
-        id: existing.id,
-      },
-      data: {
-        deleted_at: new Date(),
-      },
-      select: {
-        id: true,
-        workspace_id: true,
-        node_id: true,
-        filename: true,
-        size_bytes: true,
-        storage_path: true,
-        created_at: true,
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.knowledgeDocument.deleteMany({
+        where: {
+          workspace_id: params.workspaceId,
+          OR: [
+            { document_id: existing.id },
+            { source_entity_type: "Document", source_entity_id: existing.id },
+          ],
+        },
+      });
+
+      return tx.document.update({
+        where: {
+          id: existing.id,
+        },
+        data: {
+          deleted_at: new Date(),
+        },
+        select: {
+          id: true,
+          workspace_id: true,
+          node_id: true,
+          filename: true,
+          size_bytes: true,
+          storage_path: true,
+          created_at: true,
+        },
+      });
     });
 
     return this.toDocumentEntity(updated);

@@ -273,6 +273,7 @@ model User {
   email                        String    @unique
   password_hash                String?
   password_updated_at          DateTime  @default(now())
+  must_change_password         Boolean   @default(false)
   two_factor_enabled           Boolean   @default(false)
   two_factor_secret_ciphertext String?
   two_factor_enabled_at        DateTime?
@@ -450,13 +451,14 @@ model AuthSession {
 }
 
 model PasswordResetCode {
-  id         Int       @id @default(autoincrement())
-  user_id    String    @db.Uuid
-  code_hash  String
-  expires_at DateTime
-  used_at    DateTime?
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
+  id            Int       @id @default(autoincrement())
+  user_id       String    @db.Uuid
+  code_hash     String
+  attempt_count Int       @default(0)
+  expires_at    DateTime
+  used_at       DateTime?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 

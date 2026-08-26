@@ -6,6 +6,7 @@ import { UserAccountRepository } from "../repositories/UserAccountRepository.js"
 import { AuthSessionRepository } from "../repositories/AuthSessionRepository.js";
 import { PasswordHasher } from "./PasswordHasher.js";
 import { PasswordResetNotifier } from "./PasswordResetNotifier.js";
+import { PasswordPolicy } from "./PasswordPolicy.js";
 
 export class PasswordResetService {
   private readonly userRepository: UserAccountRepository;
@@ -13,6 +14,7 @@ export class PasswordResetService {
   private readonly sessionRepository: AuthSessionRepository;
   private readonly passwordHasher: PasswordHasher;
   private readonly notifier: PasswordResetNotifier;
+  private readonly passwordPolicy: PasswordPolicy;
   private readonly ttlMinutes: number;
 
   public constructor(
@@ -21,6 +23,7 @@ export class PasswordResetService {
     sessionRepository: AuthSessionRepository,
     passwordHasher: PasswordHasher,
     notifier: PasswordResetNotifier,
+    passwordPolicy: PasswordPolicy,
     ttlMinutes: number,
   ) {
     this.userRepository = userRepository;
@@ -28,6 +31,7 @@ export class PasswordResetService {
     this.sessionRepository = sessionRepository;
     this.passwordHasher = passwordHasher;
     this.notifier = notifier;
+    this.passwordPolicy = passwordPolicy;
     this.ttlMinutes = ttlMinutes;
   }
 
@@ -64,15 +68,12 @@ export class PasswordResetService {
       throw new AppError("Invalid reset credentials.", "AUTH_PASSWORD_RESET_INVALID", 400);
     }
 
+    const normalizedPassword = this.passwordPolicy.ensureValid(params.newPassword, "AUTH_PASSWORD_RESET_WEAK");
     const codeHash = this.hashCode(params.code.trim());
     const record = await this.codeRepository.findValidCode(user.id, codeHash, new Date());
     if (!record) {
-      throw new AppError("Reset code invalid or expired.", "AUTH_PASSWORD_RESET_CODE_INVALID", 400);
-    }
-
-    const normalizedPassword = params.newPassword.trim();
-    if (normalizedPassword.length < 5) {
-      throw new AppError("Password must be at least 5 characters.", "AUTH_PASSWORD_RESET_WEAK", 400);
+      await this.codeRepository.recordFailedAttempt(user.id, 4);
+      throw new AppError("Codice non valido, scaduto o tentativi esauriti.", "AUTH_PASSWORD_RESET_CODE_INVALID", 400);
     }
 
     const passwordHash = await this.passwordHasher.hashPassword(normalizedPassword);

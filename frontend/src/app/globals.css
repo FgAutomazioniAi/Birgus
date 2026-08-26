@@ -8,6 +8,26 @@
   overflow: hidden;
 }
 
+.workflow-react-flow .react-flow__pane,
+.workflow-react-flow .react-flow__node {
+  cursor: grab !important;
+}
+
+.workflow-react-flow .react-flow__pane:active,
+.workflow-react-flow .react-flow__node:active {
+  cursor: grabbing !important;
+}
+
+.workflow-react-flow .react-flow__node input,
+.workflow-react-flow .react-flow__node textarea,
+.workflow-react-flow .react-flow__node select {
+  cursor: text !important;
+}
+
+.workflow-react-flow .react-flow__handle {
+  cursor: crosshair !important;
+}
+
 :root,
 [data-theme="predefinito"] {
   --font-size-base: 16px;
@@ -92,6 +112,44 @@
   --token-shadow-elevated: 0 20px 40px rgba(80, 80, 80, 0.2);
   --token-shadow-brand: 0 12px 28px rgba(35, 35, 35, 0.25);
   --token-shadow-accent: 0 12px 28px rgba(101, 101, 101, 0.22);
+}
+
+[data-theme="dark"] {
+  --token-color-brand-primary: #60a5fa;
+  --token-color-brand-primary-hover: #93c5fd;
+  --token-color-brand-accent: #fbbf24;
+  --token-color-brand-accent-hover: #fcd34d;
+
+  --token-color-bg-page: #0f172a;
+  --token-color-bg-surface: #172033;
+  --token-color-bg-muted: #1e293b;
+  --token-color-bg-subtle: #273449;
+  --token-color-bg-overlay: rgba(2, 6, 23, 0.78);
+
+  --token-color-text-primary: #f8fafc;
+  --token-color-text-secondary: #cbd5e1;
+  --token-color-text-muted: #94a3b8;
+  --token-color-text-inverse: #0f172a;
+
+  --token-color-border-default: #334155;
+  --token-color-border-subtle: #243247;
+  --token-color-ring-primary: rgba(96, 165, 250, 0.38);
+
+  --token-color-status-info-bg: #172554;
+  --token-color-status-info-text: #93c5fd;
+  --token-color-status-success-bg: #123126;
+  --token-color-status-success-text: #86efac;
+  --token-color-status-warn-bg: #3a2b11;
+  --token-color-status-warn-text: #fcd34d;
+  --token-color-status-progress-bg: #2e215c;
+  --token-color-status-progress-text: #c4b5fd;
+  --token-color-status-danger-bg: #431d26;
+  --token-color-status-danger-text: #fda4af;
+
+  --token-shadow-card: 0 1px 2px rgba(2, 6, 23, 0.35);
+  --token-shadow-elevated: 0 20px 40px rgba(2, 6, 23, 0.52);
+  --token-shadow-brand: 0 12px 28px rgba(96, 165, 250, 0.16);
+  --token-shadow-accent: 0 12px 28px rgba(251, 191, 36, 0.12);
 }
 
 [data-theme="lavanda"] {

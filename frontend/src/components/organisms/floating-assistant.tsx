@@ -52,6 +52,7 @@ const knowledgeModeOptions: Array<{ value: KnowledgeMode; label: string }> = [
 
 const assistantLogoByTheme: Record<ThemeId, string> = {
   predefinito: "/birgus-logo/cropped/blue.png",
+  dark: "/birgus-logo/cropped/black.png",
   grafite: "/birgus-logo/cropped/black.png",
   lavanda: "/birgus-logo/cropped/blue.png",
   oceano: "/birgus-logo/cropped/azure.png",

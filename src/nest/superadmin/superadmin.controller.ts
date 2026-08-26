@@ -26,7 +26,7 @@ const createUserSchema = z.object({
   email: z.string().email(),
   firstName: z.string().trim().min(1),
   lastName: z.string().trim().optional(),
-  password: z.string().min(5),
+  password: z.string().min(8),
   roleKeys: z.array(z.string().trim().min(1)).min(1),
 });
 
@@ -35,7 +35,7 @@ const setUserStatusSchema = z.object({
 });
 
 const resetPasswordSchema = z.object({
-  newPassword: z.string().min(5),
+  newPassword: z.string().min(8),
 });
 
 const moduleOverrideSchema = z.object({

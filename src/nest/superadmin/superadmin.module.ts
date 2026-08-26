@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 
 import { PrismaAuthSessionRepository } from "../../modules/identity/infra/PrismaAuthSessionRepository.js";
 import { PasswordHasher } from "../../modules/identity/services/PasswordHasher.js";
+import { PasswordPolicy } from "../../modules/identity/services/PasswordPolicy.js";
 import { SuperadminService } from "../../modules/superadmin/services/SuperadminService.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { AuditNestModule } from "../audit/audit.module.js";
@@ -22,12 +23,14 @@ import { NestSuperadminController } from "./superadmin.controller.js";
       useFactory: (
         archivedItemsService: ArchivedItemsService,
         passwordHasher: PasswordHasher,
+        passwordPolicy: PasswordPolicy,
         authSessionRepository: PrismaAuthSessionRepository,
         moduleManagementService: ModuleManagementService,
         auditLogService: AuditLogService,
       ) => new SuperadminService({
         archivedItemsService,
         passwordHasher,
+        passwordPolicy,
         authSessionRepository,
         moduleManagementService,
         auditLogService,
@@ -35,6 +38,7 @@ import { NestSuperadminController } from "./superadmin.controller.js";
       inject: [
         ArchivedItemsService,
         PasswordHasher,
+        PasswordPolicy,
         PrismaAuthSessionRepository,
         ModuleManagementService,
         AuditLogService,

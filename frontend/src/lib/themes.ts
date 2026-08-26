@@ -3,9 +3,15 @@ export const THEME_STORAGE_KEY = "vl_theme";
 export const THEME_OPTIONS = [
   {
     id: "predefinito",
-    label: "Predefinito",
-    description: "Palette predefinita.",
+    label: "Light",
+    description: "Interfaccia chiara predefinita.",
     swatches: ["#1e3a8a", "#f97316", "#f8fafc"],
+  },
+  {
+    id: "dark",
+    label: "Dark",
+    description: "Interfaccia scura ad alto contrasto.",
+    swatches: ["#111827", "#60a5fa", "#e5e7eb"],
   },
   {
     id: "grafite",

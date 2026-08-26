@@ -36,11 +36,15 @@ export class PrismaPasswordResetCodeRepository implements PasswordResetCodeRepos
         expires_at: {
           gt: now,
         },
+        attempt_count: {
+          lt: 4,
+        },
       },
       select: {
         id: true,
         user_id: true,
         expires_at: true,
+        attempt_count: true,
       },
       orderBy: {
         id: "desc",
@@ -55,7 +59,39 @@ export class PrismaPasswordResetCodeRepository implements PasswordResetCodeRepos
       id: row.id,
       userId: row.user_id,
       expiresAt: row.expires_at,
+      attemptCount: row.attempt_count,
     };
+  }
+
+  public async recordFailedAttempt(userId: string, maxAttempts: number): Promise<void> {
+    const prisma = PrismaClientManager.getClient();
+    const now = new Date();
+
+    await prisma.$transaction(async (tx) => {
+      await tx.passwordResetCode.updateMany({
+        where: {
+          user_id: userId,
+          used_at: null,
+          expires_at: { gt: now },
+          attempt_count: { lt: maxAttempts },
+        },
+        data: {
+          attempt_count: { increment: 1 },
+        },
+      });
+
+      await tx.passwordResetCode.updateMany({
+        where: {
+          user_id: userId,
+          used_at: null,
+          expires_at: { gt: now },
+          attempt_count: { gte: maxAttempts },
+        },
+        data: {
+          used_at: now,
+        },
+      });
+    });
   }
 
   public async markCodeUsed(codeId: number): Promise<void> {

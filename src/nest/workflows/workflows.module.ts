@@ -14,6 +14,8 @@ import { PrismaWorkflowRepository } from "../../modules/workflows/infra/PrismaWo
 import { QueueWorkflowRunDispatcher } from "../../modules/workflows/services/QueueWorkflowRunDispatcher.js";
 import { ScheduledWorkflowDeliveryService } from "../../modules/workflows/services/ScheduledWorkflowDeliveryService.js";
 import { WorkflowRunExecutorService } from "../../modules/workflows/services/WorkflowRunExecutorService.js";
+import { WorkflowRuntimeAccessPolicy } from "../../modules/workflows/services/WorkflowRuntimeAccessPolicy.js";
+import { ModuleAccessPolicy } from "../../core/module-access/ModuleAccessPolicy.js";
 import { WorkflowService } from "../../modules/workflows/services/WorkflowService.js";
 import { JobQueue } from "../../worker/queue/JobQueue.js";
 import { AuthModule } from "../auth/auth.module.js";
@@ -36,6 +38,11 @@ import { NestWorkflowsController } from "./workflows.controller.js";
   ],
   controllers: [NestWorkflowsController],
   providers: [
+    {
+      provide: WorkflowRuntimeAccessPolicy,
+      useFactory: (moduleAccessPolicy: ModuleAccessPolicy) => new WorkflowRuntimeAccessPolicy(moduleAccessPolicy),
+      inject: [ModuleAccessPolicy],
+    },
     {
       provide: QueueWorkflowRunDispatcher,
       useFactory: (jobQueue: JobQueue) => new QueueWorkflowRunDispatcher(jobQueue),
@@ -73,6 +80,7 @@ import { NestWorkflowsController } from "./workflows.controller.js";
         jobQueue: JobQueue,
         scheduledWorkflowDeliveryService: ScheduledWorkflowDeliveryService,
         connectedAppsService: ConnectedAppsService,
+        runtimeAccessPolicy: WorkflowRuntimeAccessPolicy,
       ) => new WorkflowRunExecutorService({
         documentArchiveService,
         documentIntelligenceService,
@@ -86,6 +94,7 @@ import { NestWorkflowsController } from "./workflows.controller.js";
         jobQueue,
         scheduledWorkflowDeliveryService,
         connectedAppsService,
+        runtimeAccessPolicy,
       }),
       inject: [
         DocumentArchiveService,
@@ -100,6 +109,7 @@ import { NestWorkflowsController } from "./workflows.controller.js";
         JOB_QUEUE,
         ScheduledWorkflowDeliveryService,
         ConnectedAppsService,
+        WorkflowRuntimeAccessPolicy,
       ],
     },
   ],

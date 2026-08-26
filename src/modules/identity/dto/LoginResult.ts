@@ -5,6 +5,7 @@ export class LoginResult {
   public readonly userId: string;
   public readonly email: string;
   public readonly fullName: string;
+  public readonly mustChangePassword: boolean;
   public readonly requiresTwoFactor: boolean;
   public readonly twoFactorChallengeToken: string | null;
   public readonly twoFactorSetupRequired: boolean;
@@ -18,6 +19,7 @@ export class LoginResult {
     userId: string;
     email: string;
     fullName: string;
+    mustChangePassword?: boolean;
     requiresTwoFactor?: boolean;
     twoFactorChallengeToken?: string | null;
     twoFactorSetupRequired?: boolean;
@@ -30,6 +32,7 @@ export class LoginResult {
     this.userId = params.userId;
     this.email = params.email;
     this.fullName = params.fullName;
+    this.mustChangePassword = params.mustChangePassword ?? false;
     this.requiresTwoFactor = params.requiresTwoFactor ?? false;
     this.twoFactorChallengeToken = params.twoFactorChallengeToken ?? null;
     this.twoFactorSetupRequired = params.twoFactorSetupRequired ?? false;

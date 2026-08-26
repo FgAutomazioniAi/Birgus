@@ -28,6 +28,7 @@ import {
   GitBranch,
   Pencil,
   Play,
+  Plus,
   RotateCcw,
   RotateCw,
   Save,
@@ -35,6 +36,7 @@ import {
   Trash2,
   Upload,
   Wrench,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -406,7 +408,13 @@ export function WorkflowCanvasPanel() {
   const [isCreatingPlayground, setIsCreatingPlayground] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+  const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
+  const [isCreateWorkflowOpen, setIsCreateWorkflowOpen] = useState(false);
+  const [newWorkflowLabel, setNewWorkflowLabel] = useState("Nuovo workflow");
   const [latestRun, setLatestRun] = useState<WorkflowRun | null>(null);
+  const [workflowRuns, setWorkflowRuns] = useState<WorkflowRun[]>([]);
+  const [isLoadingRuns, setIsLoadingRuns] = useState(false);
+  const [isOutputFocused, setIsOutputFocused] = useState(false);
   const [expandedResultCard, setExpandedResultCard] = useState<string | null>(null);
   const [openToolbarGroup, setOpenToolbarGroup] = useState<string | null>(null);
   const [promptDraft, setPromptDraft] = useState("");
@@ -449,7 +457,11 @@ export function WorkflowCanvasPanel() {
     ? `${workflow?.label ?? latestRun.workflowKey ?? "Workflow"} - ${formatDateTime(latestRun.startedAt ?? latestRun.queuedAt ?? latestRun.completedAt)}`
     : "";
 
-  const isPlaygroundWorkflow = workflow?.key === PLAYGROUND_KEY;
+  const isPlaygroundWorkflow = workflow?.moduleKey === "workflow_management";
+  const personalWorkflows = useMemo(
+    () => workflows.filter((item) => item.moduleKey === "workflow_management" && item.key !== PLAYGROUND_KEY),
+    [workflows],
+  );
   const availableAgents: WorkflowAgent[] = [];
   const agentTools = useMemo(() => tools.filter(isAgentTool), [tools]);
   const advancedLangChainTools = useMemo(() => tools.filter(isAdvancedLangChainTool), [tools]);
@@ -489,6 +501,35 @@ export function WorkflowCanvasPanel() {
     }
   }, []);
 
+  const selectWorkflowRun = useCallback(async (runId: string) => {
+    const response = await fetch(`/api/workflow-runs/${runId}`, { cache: "no-store" });
+    if (!response.ok) {
+      toast.error("Impossibile caricare questa esecuzione.");
+      return;
+    }
+    setLatestRun((await response.json()) as WorkflowRun);
+  }, []);
+
+  const loadWorkflowRuns = useCallback(async (workflowId: string) => {
+    if (!workflowId) {
+      setWorkflowRuns([]);
+      return;
+    }
+    setIsLoadingRuns(true);
+    try {
+      const response = await fetch(`/api/workflows/${workflowId}/runs`, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("Impossibile caricare le esecuzioni del workflow.");
+      }
+      const payload = (await response.json()) as { runs?: WorkflowRun[] };
+      setWorkflowRuns(payload.runs ?? []);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Errore caricamento esecuzioni.");
+    } finally {
+      setIsLoadingRuns(false);
+    }
+  }, []);
+
   const loadWorkflow = useCallback(async (workflowId: string) => {
     if (!workflowId) {
       setWorkflow(null);
@@ -515,6 +556,8 @@ export function WorkflowCanvasPanel() {
     setDescription(detail.description ?? "");
     setKnowledgeMode(resolveWorkflowKnowledgeMode(detail.configuration));
     setLatestRun(null);
+    setWorkflowRuns([]);
+    setIsOutputFocused(false);
     setFlowInstance(null);
     setUploadedFiles({});
     setDraftNodes(nextDraftNodes);
@@ -523,7 +566,8 @@ export function WorkflowCanvasPanel() {
     setFuture([]);
     setSelectedNodeId(nextDraftNodes[0]?.clientId ?? null);
     setScreen("canvas");
-  }, [setEdges, setNodes]);
+    void loadWorkflowRuns(detail.id);
+  }, [loadWorkflowRuns, setEdges, setNodes]);
 
   useEffect(() => {
     void loadCatalog();
@@ -666,6 +710,43 @@ export function WorkflowCanvasPanel() {
       toast.error(error instanceof Error ? error.message : "Errore creazione Playground.");
     } finally {
       setIsCreatingPlayground(false);
+    }
+  };
+
+  const createPersonalWorkflow = async () => {
+    const nextLabel = newWorkflowLabel.trim() || "Nuovo workflow";
+    const key = `playground_${Date.now().toString(36)}`;
+    setIsCreatingWorkflow(true);
+    try {
+      const response = await fetch("/api/workflows", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          moduleKey: "workflow_management",
+          key,
+          name: key,
+          label: nextLabel,
+          description: "Workflow libero creato dal playground.",
+          isEnabled: true,
+          isDefault: false,
+          nodes: [baseInputNode(80, 180), baseOutputNode(760, 180)],
+          edges: [{ sourceNodeKey: "input", targetNodeKey: "output", orderNo: 1, isEnabled: true }],
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(typeof payload?.message === "string" ? payload.message : "Creazione workflow non riuscita.");
+      }
+      const created = (await response.json()) as WorkflowDetail;
+      setIsCreateWorkflowOpen(false);
+      setNewWorkflowLabel("Nuovo workflow");
+      await loadCatalog();
+      await loadWorkflow(created.id);
+      toast.success("Nuovo workflow creato.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Errore creazione workflow.");
+    } finally {
+      setIsCreatingWorkflow(false);
     }
   };
 
@@ -963,8 +1044,11 @@ export function WorkflowCanvasPanel() {
       }
       const run = (await response.json()) as WorkflowRun;
       setLatestRun(run);
+      setWorkflowRuns((current) => [run, ...current.filter((item) => item.id !== run.id)]);
+      setIsOutputFocused(false);
       toast.success("Run accodata.");
       await pollRun(run.id);
+      await loadWorkflowRuns(workflow.id);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Errore avvio run.");
     } finally {
@@ -1076,9 +1160,15 @@ export function WorkflowCanvasPanel() {
   if (screen === "modules") {
     return (
       <div className="flex min-h-[calc(100vh-2rem)] flex-col gap-4 p-4">
-        <div>
-          <Text as="h1" variant="h1">Workflow</Text>
-          <Text variant="muted">Scegli il modulo da configurare o apri il Playground.</Text>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <Text as="h1" variant="h1">Workflow</Text>
+            <Text variant="muted">Scegli un modulo o crea un workflow libero da un playground vuoto.</Text>
+          </div>
+          <Button onClick={() => setIsCreateWorkflowOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Nuovo workflow
+          </Button>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {moduleCards.map((card) => (
@@ -1105,6 +1195,68 @@ export function WorkflowCanvasPanel() {
             </button>
           ))}
         </div>
+        {personalWorkflows.length > 0 ? (
+          <section className="border-t border-border-subtle pt-4">
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <Text as="h2" variant="h2" className="text-lg">I tuoi playground</Text>
+              <Text variant="caption">{personalWorkflows.length} workflow</Text>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {personalWorkflows.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => void loadWorkflow(item.id)}
+                  className="min-h-32 rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-4 text-left shadow-card transition hover:border-brand-primary hover:bg-bg-subtle"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <Sparkles className="h-5 w-5 text-brand-primary" />
+                    <Badge tone={item.isEnabled ? "success" : "warn"}>{item.isEnabled ? "Attivo" : "Disattivo"}</Badge>
+                  </div>
+                  <p className="mt-4 truncate text-sm font-semibold text-text-primary">{item.label}</p>
+                  <p className="mt-1 line-clamp-2 text-xs text-text-muted">{item.description || "Workflow libero"}</p>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+        {isCreateWorkflowOpen ? (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-labelledby="create-workflow-title">
+            <Card className="w-full max-w-md p-5 shadow-elevated">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <Text as="h2" variant="h2" className="text-lg" id="create-workflow-title">Nuovo workflow</Text>
+                  <Text variant="muted">Parte vuoto: Input e Output, senza copiare alcun flusso esistente.</Text>
+                </div>
+                <button type="button" onClick={() => setIsCreateWorkflowOpen(false)} className="rounded-md p-1 text-text-muted hover:bg-bg-muted hover:text-text-primary" aria-label="Chiudi">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <label className="mt-5 block space-y-2" htmlFor="new-workflow-name">
+                <span className="text-xs font-bold uppercase tracking-wide text-text-muted">Nome</span>
+                <input
+                  id="new-workflow-name"
+                  value={newWorkflowLabel}
+                  onChange={(event) => setNewWorkflowLabel(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void createPersonalWorkflow();
+                    }
+                  }}
+                  autoFocus
+                  className="h-11 w-full rounded-md border border-border-default bg-bg-page px-3 text-sm text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+                />
+              </label>
+              <div className="mt-5 flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setIsCreateWorkflowOpen(false)}>Annulla</Button>
+                <Button onClick={() => void createPersonalWorkflow()} disabled={isCreatingWorkflow}>
+                  {isCreatingWorkflow ? "Creazione..." : "Crea workflow"}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -1224,9 +1376,17 @@ export function WorkflowCanvasPanel() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeDragStop={onNodeDragStop}
-            onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+            onNodeClick={(_, node) => {
+              setSelectedNodeId(node.id);
+              const isOutputNode = node.data.type === "output";
+              setIsOutputFocused(isOutputNode);
+              if (isOutputNode && latestRun?.resultPayload !== undefined && latestRun.resultPayload !== null) {
+                setExpandedResultCard("final");
+              }
+            }}
             onPaneClick={() => {
               setSelectedNodeId(null);
+              setIsOutputFocused(false);
               setOpenToolbarGroup(null);
             }}
             onNodesDelete={() => setSelectedNodeId(null)}
@@ -1241,9 +1401,13 @@ export function WorkflowCanvasPanel() {
         </div>
         <RunResultsPanel
           expandedResultCard={expandedResultCard}
+          isLoadingRuns={isLoadingRuns}
+          isOutputFocused={isOutputFocused}
           latestRun={latestRun}
           latestRunReference={latestRunReference}
           nodeLabelByKey={nodeLabelByKey}
+          runs={workflowRuns}
+          onSelectRun={(runId) => void selectWorkflowRun(runId)}
           onToggleCard={(cardId) => setExpandedResultCard((current) => current === cardId ? null : cardId)}
         />
       </div>

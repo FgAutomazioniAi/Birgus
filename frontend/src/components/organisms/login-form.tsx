@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Eye, EyeOff, KeyRound, Lock, LogIn, Mail, ShieldCheck } from "lucide-react";
+import { ChevronRight, Eye, EyeOff, KeyRound, Lock, LogIn, Mail, RefreshCw, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";
@@ -20,6 +20,7 @@ interface LoginFormValues {
 
 interface LoginApiSuccessPayload {
   twoFactorRequired?: boolean;
+  mustChangePassword?: boolean;
   challengeToken?: string;
   setupRequired?: boolean;
   setup?: {
@@ -45,6 +46,12 @@ export function LoginForm() {
   const [twoFactorSetupUri, setTwoFactorSetupUri] = useState<string | null>(null);
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [isVerifyingTwoFactor, setIsVerifyingTwoFactor] = useState(false);
+  const [forcePasswordChange, setForcePasswordChange] = useState(false);
+  const [forcedCurrentPassword, setForcedCurrentPassword] = useState("");
+  const [forcedNewPassword, setForcedNewPassword] = useState("");
+  const [forcedConfirmPassword, setForcedConfirmPassword] = useState("");
+  const [showForcedPassword, setShowForcedPassword] = useState(true);
+  const [isChangingForcedPassword, setIsChangingForcedPassword] = useState(false);
 
   const router = useRouter();
   const {
@@ -65,6 +72,32 @@ export function LoginForm() {
     setTwoFactorSetupSecret(null);
     setTwoFactorSetupUri(null);
     setTwoFactorCode("");
+  };
+
+  const passwordMeetsPolicy = (value: string) => value.length >= 8 && /[A-Z]/.test(value) && /\d/.test(value);
+
+  const generatePassword = () => {
+    const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const lower = "abcdefghijkmnopqrstuvwxyz";
+    const digits = "23456789";
+    const symbols = "!@#$%";
+    const alphabet = upper + lower + digits + symbols;
+    const randomIndex = (source: string) => source[crypto.getRandomValues(new Uint32Array(1))[0] % source.length] ?? "A";
+    const generated = [randomIndex(upper), randomIndex(lower), randomIndex(digits), randomIndex(symbols)];
+    while (generated.length < 16) {
+      generated.push(randomIndex(alphabet));
+    }
+    setForcedNewPassword(generated.sort(() => crypto.getRandomValues(new Uint32Array(1))[0] - 2 ** 31).join(""));
+    setForcedConfirmPassword("");
+    setShowForcedPassword(true);
+  };
+
+  const startForcedPasswordChange = (currentPassword: string) => {
+    setForcedCurrentPassword(currentPassword);
+    setForcedNewPassword("");
+    setForcedConfirmPassword("");
+    setForcePasswordChange(true);
+    toast.info("Imposta una password personale per continuare.");
   };
 
   const onSubmit = async (data: LoginFormValues) => {
@@ -109,6 +142,10 @@ export function LoginForm() {
       }
 
       resetTwoFactorState();
+      if (payload && typeof payload === "object" && "mustChangePassword" in payload && payload.mustChangePassword) {
+        startForcedPasswordChange(data.password);
+        return;
+      }
       toast.success(t("auth.loginSuccess"));
       router.push(APP_ROUTES.dashboard);
       router.refresh();
@@ -150,6 +187,11 @@ export function LoginForm() {
       }
 
       resetTwoFactorState();
+      const payload = (await response.json().catch(() => null)) as LoginApiSuccessPayload | null;
+      if (payload?.mustChangePassword) {
+        startForcedPasswordChange(getValues("password"));
+        return;
+      }
       toast.success(t("auth.twoFactorSuccess"));
       router.push(APP_ROUTES.dashboard);
       router.refresh();
@@ -158,6 +200,37 @@ export function LoginForm() {
       toast.error(message);
     } finally {
       setIsVerifyingTwoFactor(false);
+    }
+  };
+
+  const handleForcedPasswordChange = async () => {
+    if (!passwordMeetsPolicy(forcedNewPassword)) {
+      toast.error("La password deve avere almeno 8 caratteri, una maiuscola e un numero.");
+      return;
+    }
+    if (forcedNewPassword !== forcedConfirmPassword) {
+      toast.error("Le password non coincidono.");
+      return;
+    }
+
+    try {
+      setIsChangingForcedPassword(true);
+      const response = await fetch("/api/auth/password/change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: forcedCurrentPassword, newPassword: forcedNewPassword }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(payload?.message ?? "Aggiornamento password non riuscito.");
+      }
+      toast.success("Password personale impostata.");
+      router.push(APP_ROUTES.dashboard);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Aggiornamento password non riuscito.");
+    } finally {
+      setIsChangingForcedPassword(false);
     }
   };
 
@@ -203,8 +276,8 @@ export function LoginForm() {
       return;
     }
 
-    if (recoveryPassword.trim().length < 5) {
-      toast.error("La nuova password deve contenere almeno 5 caratteri.");
+    if (!passwordMeetsPolicy(recoveryPassword)) {
+      toast.error("La nuova password deve avere almeno 8 caratteri, una maiuscola e un numero.");
       return;
     }
 
@@ -336,6 +409,30 @@ export function LoginForm() {
 
       <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-md">
         <Card className="border border-border-subtle px-4 py-10 shadow-elevated sm:px-10">
+          {forcePasswordChange ? (
+            <div className="space-y-5">
+              <div>
+                <h3 className="text-lg font-bold text-text-primary">Imposta la tua password</h3>
+                <p className="mt-1 text-sm text-text-secondary">La password iniziale e temporanea. Scegline una personale per proseguire.</p>
+              </div>
+              <div>
+                <Label htmlFor="forced-new-password">Nuova password</Label>
+                <div className="relative mt-1">
+                  <Input id="forced-new-password" type={showForcedPassword ? "text" : "password"} value={forcedNewPassword} onChange={(event) => setForcedNewPassword(event.target.value)} autoComplete="new-password" className="pr-20" disabled={isChangingForcedPassword} />
+                  <div className="absolute inset-y-0 right-0 flex items-center gap-1 pr-2">
+                    <button type="button" className="p-1 text-text-muted hover:text-text-primary" title="Genera password" onClick={generatePassword} disabled={isChangingForcedPassword}><RefreshCw size={16} /></button>
+                    <button type="button" className="p-1 text-text-muted hover:text-text-primary" title={showForcedPassword ? "Nascondi password" : "Mostra password"} onClick={() => setShowForcedPassword((current) => !current)} disabled={isChangingForcedPassword}>{showForcedPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                  </div>
+                </div>
+                <p className="mt-1 text-xs text-text-muted">Almeno 8 caratteri, una maiuscola e un numero.</p>
+              </div>
+              <div>
+                <Label htmlFor="forced-confirm-password">Conferma password</Label>
+                <Input id="forced-confirm-password" type={showForcedPassword ? "text" : "password"} value={forcedConfirmPassword} onChange={(event) => setForcedConfirmPassword(event.target.value)} autoComplete="new-password" className="mt-1" disabled={isChangingForcedPassword} />
+              </div>
+              <Button type="button" className="h-11 w-full" disabled={isChangingForcedPassword} onClick={() => void handleForcedPasswordChange()}>{isChangingForcedPassword ? "Aggiornamento..." : "Salva e continua"}</Button>
+            </div>
+          ) : <>
           <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
             <div>
               <Label htmlFor="email">{t("auth.email")}</Label>
@@ -522,6 +619,7 @@ export function LoginForm() {
               </div>
             </div>
           )}
+          </>}
         </Card>
       </div>
     </div>

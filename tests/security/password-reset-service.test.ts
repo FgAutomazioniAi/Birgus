@@ -8,6 +8,7 @@ import type { UserAccountRepository } from "../../src/modules/identity/repositor
 import { PasswordHasher } from "../../src/modules/identity/services/PasswordHasher.js";
 import type { PasswordResetNotifier } from "../../src/modules/identity/services/PasswordResetNotifier.js";
 import { PasswordResetService } from "../../src/modules/identity/services/PasswordResetService.js";
+import { PasswordPolicy } from "../../src/modules/identity/services/PasswordPolicy.js";
 
 const originalNodeEnv = process.env.NODE_ENV;
 
@@ -28,6 +29,7 @@ test("PasswordResetService does not expose reset codes in production", async () 
     firstName: "Operator",
     lastName: null,
     passwordHash: "hash",
+    mustChangePassword: false,
     twoFactorEnabled: false,
     twoFactorSecretCiphertext: null,
     isActive: true,
@@ -40,6 +42,7 @@ test("PasswordResetService does not expose reset codes in production", async () 
     new NoopAuthSessionRepository(),
     new PasswordHasher("test-pepper"),
     notifier,
+    new PasswordPolicy(),
     15,
   );
 
@@ -57,10 +60,41 @@ test("PasswordResetService returns null for unknown users", async () => {
     new NoopAuthSessionRepository(),
     new PasswordHasher("test-pepper"),
     new CapturingPasswordResetNotifier(),
+    new PasswordPolicy(),
     15,
   );
 
   assert.equal(await service.requestReset("missing@example.test"), null);
+});
+
+test("PasswordResetService counts failed one-time-code attempts", async () => {
+  const user = new UserAccount({
+    id: "user-1",
+    email: "operator@example.test",
+    firstName: "Operator",
+    lastName: null,
+    passwordHash: "hash",
+    mustChangePassword: false,
+    twoFactorEnabled: false,
+    twoFactorSecretCiphertext: null,
+    isActive: true,
+  });
+  const codeRepository = new InMemoryPasswordResetCodeRepository();
+  const service = new PasswordResetService(
+    new StaticUserAccountRepository(user),
+    codeRepository,
+    new NoopAuthSessionRepository(),
+    new PasswordHasher("test-pepper"),
+    new CapturingPasswordResetNotifier(),
+    new PasswordPolicy(),
+    15,
+  );
+
+  await assert.rejects(
+    service.resetPassword({ email: user.email, code: "000000", newPassword: "ValidPass1" }),
+    { code: "AUTH_PASSWORD_RESET_CODE_INVALID" },
+  );
+  assert.deepEqual(codeRepository.failedAttempts, [{ userId: user.id, maxAttempts: 4 }]);
 });
 
 class StaticUserAccountRepository implements UserAccountRepository {
@@ -89,6 +123,7 @@ class StaticUserAccountRepository implements UserAccountRepository {
 
 class InMemoryPasswordResetCodeRepository implements PasswordResetCodeRepository {
   public readonly createdCodes: Array<{ userId: string; codeHash: string; expiresAt: Date }> = [];
+  public readonly failedAttempts: Array<{ userId: string; maxAttempts: number }> = [];
 
   public async invalidateActiveCodesForUser(): Promise<void> {}
 
@@ -101,6 +136,10 @@ class InMemoryPasswordResetCodeRepository implements PasswordResetCodeRepository
   }
 
   public async markCodeUsed(): Promise<void> {}
+
+  public async recordFailedAttempt(userId: string, maxAttempts: number): Promise<void> {
+    this.failedAttempts.push({ userId, maxAttempts });
+  }
 }
 
 class NoopAuthSessionRepository implements AuthSessionRepository {

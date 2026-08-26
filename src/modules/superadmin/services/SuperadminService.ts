@@ -2,6 +2,7 @@ import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { AppError } from "../../../core/errors/AppError.js";
 import { ArchivedItemsService, ArchivedItemDto } from "../../document-archive/services/ArchivedItemsService.js";
 import { PasswordHasher } from "../../identity/services/PasswordHasher.js";
+import { PasswordPolicy } from "../../identity/services/PasswordPolicy.js";
 import { AuthSessionRepository } from "../../identity/repositories/AuthSessionRepository.js";
 import { ModuleManagementService } from "../../module-management/services/ModuleManagementService.js";
 import { AuditLogService } from "../../audit/services/AuditLogService.js";
@@ -17,6 +18,7 @@ interface AuditContext {
 export class SuperadminService {
   private readonly archivedItemsService: ArchivedItemsService;
   private readonly passwordHasher: PasswordHasher;
+  private readonly passwordPolicy: PasswordPolicy;
   private readonly authSessionRepository: AuthSessionRepository;
   private readonly moduleManagementService: ModuleManagementService;
   private readonly auditLogService: AuditLogService;
@@ -24,12 +26,14 @@ export class SuperadminService {
   public constructor(params: {
     archivedItemsService: ArchivedItemsService;
     passwordHasher: PasswordHasher;
+    passwordPolicy: PasswordPolicy;
     authSessionRepository: AuthSessionRepository;
     moduleManagementService: ModuleManagementService;
     auditLogService: AuditLogService;
   }) {
     this.archivedItemsService = params.archivedItemsService;
     this.passwordHasher = params.passwordHasher;
+    this.passwordPolicy = params.passwordPolicy;
     this.authSessionRepository = params.authSessionRepository;
     this.moduleManagementService = params.moduleManagementService;
     this.auditLogService = params.auditLogService;
@@ -318,7 +322,7 @@ export class SuperadminService {
       throw new AppError("Uno o piu ruoli non esistono.", "SUPERADMIN_ROLE_UNKNOWN", 400);
     }
 
-    const passwordHash = await this.passwordHasher.hashPassword(params.password);
+    const passwordHash = await this.passwordHasher.hashPassword(this.passwordPolicy.ensureValid(params.password));
 
     const created = await prisma.$transaction(async (tx) => {
       const user = existingUser
@@ -329,6 +333,7 @@ export class SuperadminService {
             last_name: params.lastName?.trim() || null,
             password_hash: passwordHash,
             password_updated_at: new Date(),
+            must_change_password: true,
             is_active: true,
             deleted_at: null,
           },
@@ -343,6 +348,7 @@ export class SuperadminService {
             last_name: params.lastName?.trim() || null,
             email: normalizedEmail,
             password_hash: passwordHash,
+            must_change_password: true,
             is_active: true,
           },
           select: {
@@ -533,7 +539,7 @@ export class SuperadminService {
     const prisma = PrismaClientManager.getClient();
     await this.ensureUserExists(params.targetUserId);
 
-    const passwordHash = await this.passwordHasher.hashPassword(params.newPassword);
+    const passwordHash = await this.passwordHasher.hashPassword(this.passwordPolicy.ensureValid(params.newPassword));
     await prisma.user.update({
       where: {
         id: params.targetUserId,
@@ -541,6 +547,7 @@ export class SuperadminService {
       data: {
         password_hash: passwordHash,
         password_updated_at: new Date(),
+        must_change_password: true,
       },
     });
 

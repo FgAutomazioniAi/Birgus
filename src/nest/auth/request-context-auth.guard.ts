@@ -31,6 +31,14 @@ export class RequestContextAuthGuard implements CanActivate {
       throw new AppError("Invalid or expired session.", "AUTH_SESSION_INVALID", 401);
     }
 
+    if (session.mustChangePassword && !this.isPasswordChangeRoute(request)) {
+      throw new AppError(
+        "Devi impostare una nuova password prima di continuare.",
+        "AUTH_PASSWORD_CHANGE_REQUIRED",
+        403,
+      );
+    }
+
     const workspaceId = await this.tenancyGuard.resolveWorkspaceIdForUser(session.userId, preferredWorkspaceId);
     request.requestContext = new RequestContext({
       workspace: new WorkspaceContext(workspaceId, session.userId),
@@ -58,6 +66,15 @@ export class RequestContextAuthGuard implements CanActivate {
     }
 
     return cookieToken;
+  }
+
+  private isPasswordChangeRoute(request: FastifyRequest): boolean {
+    const path = request.url.split("?", 1)[0] ?? "";
+    return path === "/api/auth/password/change"
+      || path === "/api/auth/password/forgot"
+      || path === "/api/auth/password/reset"
+      || path === "/api/auth/logout"
+      || path === "/api/auth/session";
   }
 
   private extractCookieToken(cookieHeader: string | null): string | null {

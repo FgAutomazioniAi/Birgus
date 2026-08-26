@@ -19,4 +19,15 @@ export class ModuleAccessPolicy {
       );
     }
   }
+
+  public async ensureEnabledForWorkspace(workspaceId: string, moduleKey: string): Promise<void> {
+    const enabled = await this.moduleAccessReader.isModuleEnabledForWorkspace(workspaceId, moduleKey);
+    if (!enabled) {
+      throw new AppError(
+        `Module '${moduleKey}' is disabled for this workspace.`,
+        "MODULE_DISABLED",
+        403,
+      );
+    }
+  }
 }
