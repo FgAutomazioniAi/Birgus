@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
-import { Button, Card, Input, Label } from "@/components/atoms";
+import { Button, Card, Checkbox, Input, Label } from "@/components/atoms";
 import { BirgusLogo } from "@/components/molecules";
 import { useLanguage } from "@/components/organisms/language-provider";
 import { APP_ROUTES } from "@/lib/routes";
@@ -486,18 +486,12 @@ export function LoginForm() {
             </div>
 
             <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  type="checkbox"
-                  disabled={isSubmitting || !!twoFactorChallengeToken || isVerifyingTwoFactor}
-                  {...register("rememberMe")}
-                  className="h-4 w-4 cursor-pointer rounded-lg border-slate-300 text-brand-primary transition-colors focus:ring-blue-500"
-                />
-                <label htmlFor="remember-me" className="ml-2 block cursor-pointer text-sm text-text-secondary">
-                  {t("auth.remember")}
-                </label>
-              </div>
+              <Checkbox
+                id="remember-me"
+                disabled={isSubmitting || !!twoFactorChallengeToken || isVerifyingTwoFactor}
+                label={t("auth.remember")}
+                {...register("rememberMe")}
+              />
 
               <div className="text-sm">
                 <button

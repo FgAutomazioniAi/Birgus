@@ -49,9 +49,10 @@ class OpenAiCompatibleLmService:
             ),
             "stream": False,
         }
-        token_budget = max_tokens or self._settings.ai_provider_max_output_tokens
+        token_budget = max_tokens or self._optional_int(provider.get("max_output_tokens") or provider.get("maxOutputTokens")) or self._settings.ai_provider_max_output_tokens
         if token_budget > 0:
             payload["max_tokens"] = int(token_budget)
+        self._apply_generation_options(payload, provider)
         if response_format:
             payload["response_format"] = response_format
 
@@ -121,3 +122,37 @@ class OpenAiCompatibleLmService:
         if value is None or str(value).strip() == "":
             return None
         return float(value)
+
+    def _optional_non_negative_int(self, value: Any) -> int | None:
+        if value is None or str(value).strip() == "":
+            return None
+        parsed = int(value)
+        return parsed if parsed >= 0 else None
+
+    def _apply_generation_options(self, payload: dict[str, Any], provider: dict[str, Any]) -> None:
+        payload["top_p"] = self._optional_float(provider.get("top_p") or provider.get("topP"))
+        if payload["top_p"] is None:
+            payload["top_p"] = self._settings.ai_provider_top_p
+
+        top_k = self._optional_int(provider.get("top_k") or provider.get("topK"))
+        payload["top_k"] = self._settings.ai_provider_top_k if top_k is None else top_k
+
+        payload["min_p"] = self._optional_float(provider.get("min_p") or provider.get("minP"))
+        if payload["min_p"] is None:
+            payload["min_p"] = self._settings.ai_provider_min_p
+
+        payload["repetition_penalty"] = self._optional_float(provider.get("repetition_penalty") or provider.get("repetitionPenalty"))
+        if payload["repetition_penalty"] is None:
+            payload["repetition_penalty"] = self._settings.ai_provider_repetition_penalty
+
+        seed = self._optional_non_negative_int(provider.get("seed"))
+        if seed is None:
+            seed = self._settings.ai_provider_seed
+        if seed is not None:
+            payload["seed"] = seed
+
+        context_limit = self._optional_int(provider.get("context_token_limit") or provider.get("contextTokenLimit"))
+        if context_limit is None:
+            context_limit = self._settings.ai_provider_context_token_limit
+        if context_limit is not None:
+            payload["truncate_prompt_tokens"] = context_limit

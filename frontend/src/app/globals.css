@@ -1,5 +1,32 @@
 @import "tailwindcss";
 
+* {
+  scrollbar-color: var(--color-border-default) var(--color-bg-page);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--color-bg-page);
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 3px solid var(--color-bg-page);
+  border-radius: 999px;
+  background: var(--color-border-default);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-brand-primary);
+}
+
+*::-webkit-scrollbar-corner {
+  background: var(--color-bg-page);
+}
 
 .workflow-react-flow.react-flow {
   position: relative;
@@ -26,6 +53,38 @@
 
 .workflow-react-flow .react-flow__handle {
   cursor: crosshair !important;
+}
+
+.workflow-react-flow .react-flow__controls {
+  overflow: hidden;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.workflow-react-flow .react-flow__controls-button {
+  display: flex;
+  height: 32px;
+  width: 32px;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+}
+
+.workflow-react-flow .react-flow__controls-button:last-child {
+  border-bottom: 0;
+}
+
+.workflow-react-flow .react-flow__controls-button:hover {
+  background: var(--color-bg-muted);
+  color: var(--color-brand-primary);
+}
+
+.workflow-react-flow .react-flow__controls-button svg {
+  fill: currentColor;
 }
 
 :root,
@@ -56,12 +115,12 @@
   --token-color-status-info-text: #1d4ed8;
   --token-color-status-success-bg: #dcfce7;
   --token-color-status-success-text: #15803d;
-  --token-color-status-warn-bg: #ffedd5;
-  --token-color-status-warn-text: #c2410c;
+  --token-color-status-warn-bg: #fef3c7;
+  --token-color-status-warn-text: #b45309;
   --token-color-status-progress-bg: #e0e7ff;
   --token-color-status-progress-text: #4338ca;
   --token-color-status-danger-bg: #fee2e2;
-  --token-color-status-danger-text: #dc2626;
+  --token-color-status-danger-text: #b91c1c;
 
   --token-radius-sm: 0.5rem;
   --token-radius-md: 0.75rem;
@@ -101,12 +160,12 @@
   --token-color-status-info-text: #232323;
   --token-color-status-success-bg: #e7f3ea;
   --token-color-status-success-text: #21663a;
-  --token-color-status-warn-bg: #f5ede3;
-  --token-color-status-warn-text: #7a4d1a;
+  --token-color-status-warn-bg: #fef3c7;
+  --token-color-status-warn-text: #b45309;
   --token-color-status-progress-bg: #efefef;
   --token-color-status-progress-text: #3e3e3e;
-  --token-color-status-danger-bg: #fde8e8;
-  --token-color-status-danger-text: #b62828;
+  --token-color-status-danger-bg: #fee2e2;
+  --token-color-status-danger-text: #b91c1c;
 
   --token-shadow-card: 0 1px 2px rgba(35, 35, 35, 0.1);
   --token-shadow-elevated: 0 20px 40px rgba(80, 80, 80, 0.2);
@@ -139,12 +198,12 @@
   --token-color-status-info-text: #93c5fd;
   --token-color-status-success-bg: #123126;
   --token-color-status-success-text: #86efac;
-  --token-color-status-warn-bg: #3a2b11;
+  --token-color-status-warn-bg: #451a03;
   --token-color-status-warn-text: #fcd34d;
   --token-color-status-progress-bg: #2e215c;
   --token-color-status-progress-text: #c4b5fd;
-  --token-color-status-danger-bg: #431d26;
-  --token-color-status-danger-text: #fda4af;
+  --token-color-status-danger-bg: #450a0a;
+  --token-color-status-danger-text: #fca5a5;
 
   --token-shadow-card: 0 1px 2px rgba(2, 6, 23, 0.35);
   --token-shadow-elevated: 0 20px 40px rgba(2, 6, 23, 0.52);
@@ -177,12 +236,12 @@
   --token-color-status-info-text: #2f3f79;
   --token-color-status-success-bg: #e2f5ec;
   --token-color-status-success-text: #1d7249;
-  --token-color-status-warn-bg: #fff1dc;
-  --token-color-status-warn-text: #ad5e00;
+  --token-color-status-warn-bg: #fef3c7;
+  --token-color-status-warn-text: #b45309;
   --token-color-status-progress-bg: #e4e6ff;
   --token-color-status-progress-text: #393c86;
-  --token-color-status-danger-bg: #fde6ec;
-  --token-color-status-danger-text: #b83f5a;
+  --token-color-status-danger-bg: #fee2e2;
+  --token-color-status-danger-text: #b91c1c;
 
   --token-shadow-card: 0 1px 2px rgba(22, 20, 67, 0.1);
   --token-shadow-elevated: 0 20px 40px rgba(129, 143, 186, 0.24);
@@ -215,12 +274,12 @@
   --token-color-status-info-text: #1f4c88;
   --token-color-status-success-bg: #def5e9;
   --token-color-status-success-text: #1b7647;
-  --token-color-status-warn-bg: #fff2de;
-  --token-color-status-warn-text: #ad6107;
+  --token-color-status-warn-bg: #fef3c7;
+  --token-color-status-warn-text: #b45309;
   --token-color-status-progress-bg: #e0e7ff;
   --token-color-status-progress-text: #314e9d;
-  --token-color-status-danger-bg: #fde7ea;
-  --token-color-status-danger-text: #b13d48;
+  --token-color-status-danger-bg: #fee2e2;
+  --token-color-status-danger-text: #b91c1c;
 
   --token-shadow-card: 0 1px 2px rgba(35, 84, 154, 0.1);
   --token-shadow-elevated: 0 20px 40px rgba(122, 148, 198, 0.22);
@@ -253,12 +312,12 @@
   --token-color-status-info-text: #353991;
   --token-color-status-success-bg: #e8f7e6;
   --token-color-status-success-text: #2c7a2c;
-  --token-color-status-warn-bg: #ffe5cb;
-  --token-color-status-warn-text: #a05206;
+  --token-color-status-warn-bg: #fef3c7;
+  --token-color-status-warn-text: #b45309;
   --token-color-status-progress-bg: #efe6ff;
   --token-color-status-progress-text: #5b3b93;
-  --token-color-status-danger-bg: #fee6df;
-  --token-color-status-danger-text: #b43d24;
+  --token-color-status-danger-bg: #fee2e2;
+  --token-color-status-danger-text: #b91c1c;
 
   --token-shadow-card: 0 1px 2px rgba(22, 20, 67, 0.08);
   --token-shadow-elevated: 0 20px 40px rgba(124, 72, 53, 0.2);

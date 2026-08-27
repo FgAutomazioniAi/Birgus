@@ -32,6 +32,12 @@ class Settings:
     ai_provider_timeout_ms: int
     ai_provider_temperature: float
     ai_provider_max_output_tokens: int
+    ai_provider_top_p: float
+    ai_provider_top_k: int
+    ai_provider_min_p: float
+    ai_provider_repetition_penalty: float
+    ai_provider_seed: Optional[int]
+    ai_provider_context_token_limit: Optional[int]
     telegram_bot_token: str
     whatsapp_access_token: str
     whatsapp_phone_number_id: str
@@ -39,6 +45,8 @@ class Settings:
     @staticmethod
     def from_env() -> "Settings":
         max_pages_raw = os.getenv("MEASURE_REPORT_MAX_PAGES", "").strip()
+        seed_raw = os.getenv("AI_PROVIDER_SEED", "").strip()
+        context_limit_raw = os.getenv("AI_PROVIDER_CONTEXT_TOKEN_LIMIT", "").strip()
         return Settings(
             garage_s3_endpoint=os.getenv("GARAGE_S3_ENDPOINT", "http://garage:3900"),
             garage_s3_region=os.getenv("GARAGE_S3_REGION", "garage"),
@@ -65,6 +73,12 @@ class Settings:
             ai_provider_timeout_ms=int(os.getenv("AI_PROVIDER_TIMEOUT_MS", "600000")),
             ai_provider_temperature=float(os.getenv("AI_PROVIDER_TEMPERATURE", "0")),
             ai_provider_max_output_tokens=int(os.getenv("AI_PROVIDER_MAX_OUTPUT_TOKENS", "800")),
+            ai_provider_top_p=float(os.getenv("AI_PROVIDER_TOP_P", "1")),
+            ai_provider_top_k=int(os.getenv("AI_PROVIDER_TOP_K", "-1")),
+            ai_provider_min_p=float(os.getenv("AI_PROVIDER_MIN_P", "0")),
+            ai_provider_repetition_penalty=float(os.getenv("AI_PROVIDER_REPETITION_PENALTY", "1")),
+            ai_provider_seed=int(seed_raw) if seed_raw else None,
+            ai_provider_context_token_limit=int(context_limit_raw) if context_limit_raw else None,
             telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
             whatsapp_access_token=os.getenv("WHATSAPP_ACCESS_TOKEN", ""),
             whatsapp_phone_number_id=os.getenv("WHATSAPP_PHONE_NUMBER_ID", ""),

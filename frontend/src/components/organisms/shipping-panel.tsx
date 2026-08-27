@@ -23,7 +23,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { Button, Card, Input, Text } from "@/components/atoms";
+import { Button, Card, Checkbox, Input, Text } from "@/components/atoms";
 import { PageHelpHint, SelectDropdown } from "@/components/molecules";
 import { APP_ROUTES } from "@/lib/routes";
 import {
@@ -821,14 +821,9 @@ export function ShippingPanel({ shipmentId }: { shipmentId: string }) {
               </div>
               <div className="space-y-1">
                 <Text variant="caption">Prodotto cartonata</Text>
-                <label className="flex h-11 items-center gap-2 rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 text-sm text-text-secondary">
-                  <input
-                    type="checkbox"
-                    checked={form.d51Cartonato}
-                    onChange={(event) => setForm((prev) => ({ ...prev, d51Cartonato: event.target.checked }))}
-                  />
-                  Cartonato (deseleziona per brossura)
-                </label>
+                <div className="flex h-11 items-center rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3">
+                  <Checkbox checked={form.d51Cartonato} onChange={(event) => setForm((prev) => ({ ...prev, d51Cartonato: event.target.checked }))} label="Cartonato (deseleziona per brossura)" />
+                </div>
               </div>
               <div className="space-y-1">
                 <Text variant="caption">Max altezza bancale (cm)</Text>

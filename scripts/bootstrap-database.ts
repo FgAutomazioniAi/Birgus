@@ -13,6 +13,7 @@ const MODULE_KEYS = [
   "document_archive",
   "document_intelligence",
   "conversational_assistant",
+  "ai_runtime_control",
   "workflow_management",
   "customer_map",
   "offer_priority",

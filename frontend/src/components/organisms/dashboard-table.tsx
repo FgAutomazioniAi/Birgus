@@ -14,8 +14,9 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { Button, Card, Text } from "@/components/atoms";
+import { Button, Card, CheckboxControl, Text } from "@/components/atoms";
 import { PageHelpHint, SearchField, SelectDropdown } from "@/components/molecules";
+import { useLanguage } from "@/components/organisms/language-provider";
 import { cn } from "@/lib/cn";
 import { downloadTablePdf } from "@/lib/pdf-export";
 import { APP_ROUTES } from "@/lib/routes";
@@ -78,6 +79,7 @@ const isProjectColumnKey = (value: string): value is ProjectColumnKey =>
   DEFAULT_PROJECT_COLUMN_ORDER.includes(value as ProjectColumnKey);
 
 export function DashboardTable() {
+  const { t } = useLanguage();
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -359,9 +361,9 @@ export function DashboardTable() {
             <Text as="h1" variant="h1">
               Progetti
             </Text>
-            <PageHelpHint text="Cerca un progetto, aprilo o crea una nuova commessa." />
+            <PageHelpHint text={t("projects.help")} />
           </div>
-          <Text variant="muted">Seleziona un progetto per vedere i suoi versionamenti</Text>
+          <Text variant="muted">{t("projects.subtitle")}</Text>
         </div>
 
         <Button
@@ -371,7 +373,7 @@ export function DashboardTable() {
           onClick={() => router.push(APP_ROUTES.projectNew)}
         >
           <Plus size={20} />
-          Nuovo progetto
+          {t("projects.new")}
         </Button>
       </div>
 
@@ -379,7 +381,7 @@ export function DashboardTable() {
         <div className="flex flex-col justify-between gap-4 border-b border-border-subtle p-4 md:flex-row md:items-center">
           <SearchField
             className="max-w-md flex-1"
-            placeholder="Ricerca progetto..."
+            placeholder={t("projects.search")}
             value={searchTerm}
             onChange={setSearchTerm}
           />
@@ -415,12 +417,11 @@ export function DashboardTable() {
                           className="flex items-center justify-between gap-2 rounded-lg border border-border-subtle bg-bg-muted px-2.5 py-2"
                         >
                           <label className="flex items-center gap-2 text-sm text-text-secondary">
-                            <input
+                            <CheckboxControl
                               type="checkbox"
                               checked={!hidden}
                               disabled={column.required}
                               onChange={() => toggleColumnVisibility(column.key)}
-                              className="h-4 w-4 accent-[var(--brand-primary)] disabled:cursor-not-allowed disabled:opacity-60"
                             />
                             <span className={cn("font-medium", column.required ? "text-text-primary" : "text-text-secondary")}>
                               {column.label}

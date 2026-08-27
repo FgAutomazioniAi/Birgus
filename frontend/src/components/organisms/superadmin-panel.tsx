@@ -19,7 +19,8 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Label, Text } from "@/components/atoms";
-import { SelectDropdown } from "@/components/molecules";
+import { PageHelpHint, SelectDropdown } from "@/components/molecules";
+import { useLanguage } from "@/components/organisms/language-provider";
 import { cn } from "@/lib/cn";
 
 type WorkspaceDto = {
@@ -162,6 +163,7 @@ function RadioChoice({
 }
 
 export function SuperadminPanel() {
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [workspaces, setWorkspaces] = useState<WorkspaceDto[]>([]);
   const [users, setUsers] = useState<UserDto[]>([]);
@@ -581,27 +583,25 @@ export function SuperadminPanel() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="rounded-[var(--radius-md)] bg-bg-muted p-2 text-brand-primary">
-            <ShieldCheck size={20} />
-          </div>
-          <div>
+        <div>
+          <div className="flex items-center gap-2">
             <Text as="h1" variant="h1">Superadmin Center</Text>
-            <Text variant="muted">Utenti, ruoli e accessi sensibili cross-workspace.</Text>
+            <PageHelpHint text={t("superadmin.help")} />
           </div>
+            <Text variant="muted">{t("superadmin.subtitle")}</Text>
         </div>
         <div className="grid grid-cols-3 gap-2 text-right text-sm">
           <div className="rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 py-2">
             <div className="font-semibold text-text-primary">{users.length}</div>
-            <div className="text-xs text-text-muted">utenti</div>
+            <div className="text-xs text-text-muted">{t("superadmin.users")}</div>
           </div>
           <div className="rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 py-2">
             <div className="font-semibold text-text-primary">{workspaces.length}</div>
-            <div className="text-xs text-text-muted">workspace</div>
+            <div className="text-xs text-text-muted">{t("superadmin.workspace")}</div>
           </div>
           <div className="rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 py-2">
             <div className="font-semibold text-text-primary">{roles.length}</div>
-            <div className="text-xs text-text-muted">ruoli</div>
+            <div className="text-xs text-text-muted">{t("superadmin.roles")}</div>
           </div>
         </div>
       </div>
@@ -609,7 +609,7 @@ export function SuperadminPanel() {
       <Card className="p-4 lg:p-5">
         <div className="grid max-w-[760px] gap-3 sm:grid-cols-[minmax(240px,360px)_minmax(220px,260px)] lg:grid-cols-[minmax(260px,340px)_minmax(220px,260px)_auto] lg:items-end">
           <div>
-            <Label htmlFor="superadmin-user-search">Cerca utente</Label>
+            <Label htmlFor="superadmin-user-search">{t("superadmin.searchUser")}</Label>
             <div className="relative mt-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
               <Input
@@ -621,19 +621,19 @@ export function SuperadminPanel() {
                     void loadBase({ keepLoading: true });
                   }
                 }}
-                placeholder="nome, cognome o email"
+                placeholder={t("superadmin.searchPlaceholder")}
                 className="pl-9"
               />
             </div>
           </div>
           <div>
-            <Label htmlFor="superadmin-workspace">Workspace operativo</Label>
+            <Label htmlFor="superadmin-workspace">{t("superadmin.operatingWorkspace")}</Label>
             <SelectDropdown
               id="superadmin-workspace"
               value={selectedWorkspaceId}
               onChange={(nextValue) => setSelectedWorkspaceId(nextValue)}
               options={workspaceOptions}
-              placeholder="Tutti i workspace"
+              placeholder={t("superadmin.allWorkspaces")}
               disabled={loading || isSaving}
               allowEmpty
               className="mt-1"
@@ -642,13 +642,13 @@ export function SuperadminPanel() {
           <div className="flex items-end sm:col-span-2 lg:col-span-1">
             <Button onClick={() => void loadBase({ keepLoading: true })} disabled={loading || isSaving} className="h-11 w-full sm:w-auto">
               <RefreshCw size={16} />
-              Aggiorna
+              {t("superadmin.refresh")}
             </Button>
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-text-muted">
-          <span>{loading ? "Caricamento..." : "Vista aggiornata"}</span>
-          {selectedWorkspace ? <span>Workspace: {selectedWorkspace.organizationCode}/{selectedWorkspace.code}</span> : <span>Tutti i workspace</span>}
+          <span>{loading ? t("common.loading") : t("superadmin.updated")}</span>
+          {selectedWorkspace ? <span>Workspace: {selectedWorkspace.organizationCode}/{selectedWorkspace.code}</span> : <span>{t("superadmin.allWorkspaces")}</span>}
         </div>
       </Card>
 
@@ -657,7 +657,7 @@ export function SuperadminPanel() {
           <div className="flex items-center justify-between border-b border-border-default px-4 py-4 lg:px-5">
             <div className="flex items-center gap-2">
               <Users size={18} className="text-brand-primary" />
-              <Text as="h2" variant="h2">Utenti</Text>
+              <Text as="h2" variant="h2">{t("superadmin.usersTitle")}</Text>
             </div>
             <SelectDropdown
               value={selectedUserId}
@@ -669,7 +669,7 @@ export function SuperadminPanel() {
                 }
               }}
               options={userOptions}
-              placeholder="Seleziona utente"
+              placeholder={t("superadmin.selectUser")}
               disabled={loading || isSaving}
               allowEmpty
               size="sm"
@@ -680,25 +680,25 @@ export function SuperadminPanel() {
           <div className="divide-y divide-border-subtle">
             {users.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-text-muted">
-                Nessun utente trovato con i filtri attuali.
+                {t("superadmin.noUsers")}
               </div>
             ) : users.map((user) => (
               <div key={user.id} className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:px-5">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate text-sm font-semibold text-text-primary">{userFullName(user)}</p>
-                    <StatePill tone={user.isActive ? "success" : "danger"}>{user.isActive ? "Attivo" : "Disattivo"}</StatePill>
+                    <StatePill tone={user.isActive ? "success" : "danger"}>{user.isActive ? t("superadmin.active") : t("superadmin.inactive")}</StatePill>
                     {user.superadmin ? <StatePill tone="warn">Superadmin</StatePill> : null}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
                     <span className="truncate">{user.email}</span>
-                    <span>{user.workspaceCount} workspace</span>
+                    <span>{user.workspaceCount} {t("superadmin.workspace")}</span>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 lg:justify-end">
                   <Button size="sm" onClick={() => openUserManagement(user.id)} disabled={isSaving}>
                     <MoreHorizontal size={16} />
-                    Gestisci
+                    {t("superadmin.manage")}
                   </Button>
                 </div>
               </div>
@@ -709,10 +709,10 @@ export function SuperadminPanel() {
         <Card className="p-4 lg:p-5">
           <div className="flex items-center gap-2">
             <UserPlus size={18} className="text-brand-primary" />
-            <Text as="h2" variant="h2">Crea utente</Text>
+            <Text as="h2" variant="h2">{t("superadmin.createUser")}</Text>
           </div>
           <p className="mt-1 text-sm text-text-muted">
-            La creazione usa il workspace operativo selezionato.
+            {t("superadmin.createHint")}
           </p>
 
           <div className="mt-4 space-y-3">
@@ -728,28 +728,28 @@ export function SuperadminPanel() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <Label htmlFor="create-first-name">Nome</Label>
+                <Label htmlFor="create-first-name">{t("superadmin.firstName")}</Label>
                 <Input
                   id="create-first-name"
                   value={createFirstName}
                   onChange={(event) => setCreateFirstName(event.target.value)}
                   className="mt-1"
-                  placeholder="Nome"
+                  placeholder={t("superadmin.firstName")}
                 />
               </div>
               <div>
-                <Label htmlFor="create-last-name">Cognome</Label>
+                <Label htmlFor="create-last-name">{t("superadmin.lastName")}</Label>
                 <Input
                   id="create-last-name"
                   value={createLastName}
                   onChange={(event) => setCreateLastName(event.target.value)}
                   className="mt-1"
-                  placeholder="Cognome"
+                  placeholder={t("superadmin.lastName")}
                 />
               </div>
             </div>
             <div>
-              <Label htmlFor="create-password">Password iniziale</Label>
+              <Label htmlFor="create-password">{t("superadmin.initialPassword")}</Label>
               <div className="relative mt-1">
                 <Input
                   id="create-password"
@@ -757,14 +757,14 @@ export function SuperadminPanel() {
                   value={createPassword}
                   onChange={(event) => setCreatePassword(event.target.value)}
                   className="pr-20"
-                  placeholder="8 caratteri, maiuscola e numero"
+                  placeholder={t("superadmin.passwordHint")}
                   autoComplete="new-password"
                 />
                 <div className="absolute inset-y-0 right-0 flex items-center gap-1 pr-2">
                   <button
                     type="button"
                     className="p-1 text-text-muted hover:text-text-primary"
-                    title="Genera password"
+                    title={t("superadmin.generatePassword")}
                     onClick={() => {
                       setCreatePassword(generatePassword());
                       setShowCreatePassword(true);
@@ -775,7 +775,7 @@ export function SuperadminPanel() {
                   <button
                     type="button"
                     className="p-1 text-text-muted hover:text-text-primary"
-                    title={showCreatePassword ? "Nascondi password" : "Mostra password"}
+                    title={showCreatePassword ? t("superadmin.hidePassword") : t("superadmin.showPassword")}
                     onClick={() => setShowCreatePassword((value) => !value)}
                   >
                     {showCreatePassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -785,7 +785,7 @@ export function SuperadminPanel() {
             </div>
 
             <div>
-              <Label>Ruolo iniziale</Label>
+              <Label>{t("superadmin.initialRole")}</Label>
               <div className="mt-2 grid gap-2">
                 {roles.map((role) => (
                   <RadioChoice
@@ -803,20 +803,20 @@ export function SuperadminPanel() {
 
             <Button onClick={() => void handleCreateUser()} disabled={isSaving || !selectedWorkspaceId} className="w-full">
               <UserPlus size={16} />
-              Crea utente
+              {t("superadmin.createUser")}
             </Button>
           </div>
         </Card>
       </div>
 
       {userModalOpen && selectedUser ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-label="Gestione utente">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-label={t("superadmin.userManagement")}>
           <section className="flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-bg-surface shadow-elevated">
             <header className="flex flex-col gap-3 border-b border-border-default px-4 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-5">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <Text as="h2" variant="h2">{userFullName(selectedUser)}</Text>
-                  <StatePill tone={selectedUser.isActive ? "success" : "danger"}>{selectedUser.isActive ? "Attivo" : "Disattivo"}</StatePill>
+                  <StatePill tone={selectedUser.isActive ? "success" : "danger"}>{selectedUser.isActive ? t("superadmin.active") : t("superadmin.inactive")}</StatePill>
                   {selectedUser.superadmin ? <StatePill tone="warn">Superadmin</StatePill> : null}
                 </div>
                 <p className="mt-1 truncate text-sm text-text-muted">{selectedUser.email}</p>
@@ -826,7 +826,7 @@ export function SuperadminPanel() {
                   type="button"
                   className="rounded-[var(--radius-md)] p-2 text-text-muted hover:bg-bg-muted hover:text-text-primary"
                   onClick={() => setUserModalOpen(false)}
-                  aria-label="Chiudi gestione utente"
+                  aria-label={t("superadmin.closeUserManagement")}
                 >
                   <X size={20} />
                 </button>
@@ -839,7 +839,7 @@ export function SuperadminPanel() {
                   <section className="rounded-[var(--radius-md)] border border-border-default p-4">
                     <div className="flex items-center gap-2">
                       <KeyRound size={17} className="text-brand-primary" />
-                      <h3 className="text-sm font-semibold text-text-primary">Accesso e sessioni</h3>
+                      <h3 className="text-sm font-semibold text-text-primary">{t("superadmin.accessSessions")}</h3>
                     </div>
                     <div className="mt-4 space-y-3">
                       <Button
@@ -849,11 +849,11 @@ export function SuperadminPanel() {
                         className="w-full"
                       >
                         {selectedUser.isActive ? <Ban size={16} /> : <CheckCircle2 size={16} />}
-                        {selectedUser.isActive ? "Disattiva utente" : "Attiva utente"}
+                        {selectedUser.isActive ? t("superadmin.disableUser") : t("superadmin.enableUser")}
                       </Button>
                       <Button variant="outline" onClick={() => void handleRevokeSessions()} disabled={isSaving} className="w-full">
                         <RotateCcw size={16} />
-                        Revoca sessioni
+                        {t("superadmin.revokeSessions")}
                       </Button>
                       <Button variant="outline" onClick={() => void handleResetTwoFactor()} disabled={isSaving} className="w-full">
                         <ShieldCheck size={16} />
@@ -863,9 +863,9 @@ export function SuperadminPanel() {
                   </section>
 
                   <section className="rounded-[var(--radius-md)] border border-border-default p-4">
-                    <h3 className="text-sm font-semibold text-text-primary">Reset password</h3>
+                    <h3 className="text-sm font-semibold text-text-primary">{t("superadmin.resetPassword")}</h3>
                     <div className="mt-3">
-                      <Label htmlFor="superadmin-password-reset">Nuova password forzata</Label>
+                      <Label htmlFor="superadmin-password-reset">{t("superadmin.forcedPassword")}</Label>
                       <div className="relative mt-1">
                         <Input
                           id="superadmin-password-reset"
@@ -873,14 +873,14 @@ export function SuperadminPanel() {
                           value={passwordResetValue}
                           onChange={(event) => setPasswordResetValue(event.target.value)}
                           className="pr-20"
-                          placeholder="8 caratteri, maiuscola e numero"
+                          placeholder={t("superadmin.passwordHint")}
                           autoComplete="new-password"
                         />
                         <div className="absolute inset-y-0 right-0 flex items-center gap-1 pr-2">
                           <button
                             type="button"
                             className="p-1 text-text-muted hover:text-text-primary"
-                            title="Genera password"
+                            title={t("superadmin.generatePassword")}
                             onClick={() => {
                               setPasswordResetValue(generatePassword());
                               setShowResetPassword(true);
@@ -891,7 +891,7 @@ export function SuperadminPanel() {
                           <button
                             type="button"
                             className="p-1 text-text-muted hover:text-text-primary"
-                            title={showResetPassword ? "Nascondi password" : "Mostra password"}
+                            title={showResetPassword ? t("superadmin.hidePassword") : t("superadmin.showPassword")}
                             onClick={() => setShowResetPassword((value) => !value)}
                           >
                             {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -901,37 +901,37 @@ export function SuperadminPanel() {
                     </div>
                     <Button onClick={() => void handleResetPassword()} disabled={isSaving || !passwordResetValue} className="mt-3 w-full">
                       <KeyRound size={16} />
-                      Aggiorna password
+                      {t("superadmin.updatePassword")}
                     </Button>
                   </section>
 
                   <section className="rounded-[var(--radius-md)] border border-border-default p-4">
-                    <h3 className="text-sm font-semibold text-text-primary">Membership</h3>
+                    <h3 className="text-sm font-semibold text-text-primary">{t("superadmin.memberships")}</h3>
                     <div className="mt-3 space-y-2 text-xs text-text-muted">
                       {memberships.length === 0 ? (
-                        <p>Nessuna membership trovata.</p>
+                        <p>{t("superadmin.noMembership")}</p>
                       ) : memberships.map((item) => (
                         <div key={item.workspaceId} className="rounded-[var(--radius-sm)] bg-bg-muted px-3 py-2">
                           <div className="font-semibold text-text-secondary">{item.workspaceCode}</div>
-                          <div>{item.status} - {item.roleKeys.join(", ") || "nessun ruolo"}</div>
+                          <div>{item.status} - {item.roleKeys.join(", ") || t("superadmin.noRole")}</div>
                         </div>
                       ))}
                     </div>
                     <div className="mt-4 border-t border-border-subtle pt-4">
-                      <h4 className="text-xs font-semibold uppercase text-text-muted">Associa a workspace</h4>
+                      <h4 className="text-xs font-semibold uppercase text-text-muted">{t("superadmin.assignWorkspace")}</h4>
                       <div className="mt-3 space-y-3">
                         <SelectDropdown
                           value={addWorkspaceId}
                           onChange={(nextValue) => setAddWorkspaceId(nextValue)}
                           options={availableWorkspaceOptions}
-                          placeholder="Workspace"
+                          placeholder={t("superadmin.workspace")}
                           disabled={isSaving || availableWorkspaceOptions.length === 0}
                         />
                         <SelectDropdown
                           value={addWorkspaceRoleKey}
                           onChange={(nextValue) => setAddWorkspaceRoleKey(nextValue)}
                           options={roles.map((role) => ({ value: role.key, label: role.label }))}
-                          placeholder="Ruolo"
+                          placeholder={t("superadmin.role")}
                           disabled={isSaving || availableWorkspaceOptions.length === 0}
                         />
                         <Button
@@ -940,7 +940,7 @@ export function SuperadminPanel() {
                           disabled={isSaving || !addWorkspaceId || !addWorkspaceRoleKey}
                           className="w-full"
                         >
-                          Associa workspace
+                          {t("superadmin.assign")}
                         </Button>
                       </div>
                     </div>
@@ -951,13 +951,13 @@ export function SuperadminPanel() {
                   <section className="rounded-[var(--radius-md)] border border-border-default p-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <h3 className="text-sm font-semibold text-text-primary">Ruolo nel workspace</h3>
+                        <h3 className="text-sm font-semibold text-text-primary">{t("superadmin.workspaceRole")}</h3>
                         <p className="text-xs text-text-muted">
-                          {selectedWorkspaceMembership ? selectedWorkspaceMembership.workspaceName : "L'utente non risulta membro del workspace selezionato."}
+                          {selectedWorkspaceMembership ? selectedWorkspaceMembership.workspaceName : t("superadmin.notMember")}
                         </p>
                       </div>
                       <Button size="sm" onClick={() => void handleSaveRoles()} disabled={isSaving || !selectedRoleKey}>
-                        Salva ruolo
+                        {t("superadmin.saveRole")}
                       </Button>
                     </div>
                     <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -977,19 +977,19 @@ export function SuperadminPanel() {
 
                   <section className="rounded-[var(--radius-md)] border border-border-default p-4">
                     <div>
-                      <h3 className="text-sm font-semibold text-text-primary">Accesso moduli</h3>
-                      <p className="text-xs text-text-muted">ALLOW forza abilitazione utente, DENY forza disabilitazione, Clear torna allo stato workspace.</p>
+                      <h3 className="text-sm font-semibold text-text-primary">{t("superadmin.moduleAccess")}</h3>
+                      <p className="text-xs text-text-muted">{t("superadmin.moduleAccessHint")}</p>
                     </div>
 
                     <div className="mt-4 overflow-x-auto">
                       <table className="min-w-full divide-y divide-border-subtle text-sm">
                         <thead>
                           <tr className="text-left text-text-muted">
-                            <th className="px-2 py-2 font-semibold">Modulo</th>
-                            <th className="px-2 py-2 font-semibold">Workspace</th>
-                            <th className="px-2 py-2 font-semibold">Override</th>
-                            <th className="px-2 py-2 font-semibold">Effettivo</th>
-                            <th className="px-2 py-2 font-semibold">Azioni</th>
+                            <th className="px-2 py-2 font-semibold">{t("superadmin.module")}</th>
+                            <th className="px-2 py-2 font-semibold">{t("superadmin.workspace")}</th>
+                            <th className="px-2 py-2 font-semibold">{t("superadmin.override")}</th>
+                            <th className="px-2 py-2 font-semibold">{t("superadmin.effective")}</th>
+                            <th className="px-2 py-2 font-semibold">{t("archive.actions")}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border-subtle">

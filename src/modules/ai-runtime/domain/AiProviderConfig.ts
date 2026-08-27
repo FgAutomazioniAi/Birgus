@@ -8,6 +8,13 @@ export interface AiProviderConfig {
   modelsPath: string;
   timeoutMs: number;
   temperature: number;
+  maxOutputTokens: number;
+  topP: number;
+  topK: number;
+  minP: number;
+  repetitionPenalty: number;
+  seed: number | null;
+  contextTokenLimit: number | null;
 }
 
 export const AI_PROVIDER_DEFINITIONS = [
@@ -42,6 +49,11 @@ function toPositiveInt(value: string | undefined, fallback: number): number {
 
 function toFloat(value: string | undefined, fallback: number): number {
   const parsed = Number.parseFloat(value ?? "");
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
@@ -83,5 +95,12 @@ export function loadAiProviderConfig(overrides: Partial<AiProviderConfig> = {}):
     ),
     timeoutMs: overrides.timeoutMs ?? toPositiveInt(process.env.AI_PROVIDER_TIMEOUT_MS, 60000),
     temperature: overrides.temperature ?? toFloat(process.env.AI_PROVIDER_TEMPERATURE, 0),
+    maxOutputTokens: overrides.maxOutputTokens ?? toPositiveInt(process.env.AI_PROVIDER_MAX_OUTPUT_TOKENS, 512),
+    topP: overrides.topP ?? toFloat(process.env.AI_PROVIDER_TOP_P, 1),
+    topK: overrides.topK ?? toInteger(process.env.AI_PROVIDER_TOP_K, -1),
+    minP: overrides.minP ?? toFloat(process.env.AI_PROVIDER_MIN_P, 0),
+    repetitionPenalty: overrides.repetitionPenalty ?? toFloat(process.env.AI_PROVIDER_REPETITION_PENALTY, 1),
+    seed: overrides.seed ?? null,
+    contextTokenLimit: overrides.contextTokenLimit ?? null,
   };
 }

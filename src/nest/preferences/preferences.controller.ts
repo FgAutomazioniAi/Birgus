@@ -22,6 +22,7 @@ const patchPreferencesSchema = z.object({
     "bottom-center",
     "bottom-right",
   ]).optional(),
+  notificationPopups: z.boolean().optional(),
   languageCode: z.string().min(2).optional(),
   righeProgetti: z.number().int().min(1).max(500).optional(),
   righeClienti: z.number().int().min(1).max(500).optional(),
@@ -57,6 +58,7 @@ export class NestPreferencesController {
       return {
         paletteId: "predefinito",
         notificationPosition: "bottom-right",
+        notificationPopups: true,
         languageCode: "it",
         righeProgetti: 10,
         righeClienti: 10,
@@ -76,6 +78,7 @@ export class NestPreferencesController {
     return {
       paletteId: preferences.paletteId,
       notificationPosition: preferences.notificationPosition,
+      notificationPopups: preferences.notificationPopups,
       languageCode: preferences.languageCode,
       righeProgetti: preferences.rowsProjects,
       righeClienti: preferences.rowsClients,
@@ -105,6 +108,7 @@ export class NestPreferencesController {
     const updated = await this.service.updatePreferences(userId, workspaceId, {
       paletteId: body.paletteId,
       notificationPosition: body.notificationPosition,
+      notificationPopups: body.notificationPopups,
       languageCode: body.languageCode,
       rowsProjects: body.rowsProjects ?? body.righeProgetti,
       rowsClients: body.rowsClients ?? body.righeClienti,
@@ -117,6 +121,7 @@ export class NestPreferencesController {
     return {
       paletteId: updated.paletteId,
       notificationPosition: updated.notificationPosition,
+      notificationPopups: updated.notificationPopups,
       languageCode: updated.languageCode,
       righeProgetti: updated.rowsProjects,
       righeClienti: updated.rowsClients,

@@ -1,9 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { FileText, Loader2, Maximize2, Minus, Paperclip, Send, X } from "lucide-react";
+import { FileText, Loader2, Maximize2, MessageSquarePlus, Minus, Paperclip, Send, X } from "lucide-react";
 
 import { useTheme } from "@/components/organisms/theme-provider";
+import { useLanguage } from "@/components/organisms/language-provider";
 import { cn } from "@/lib/cn";
 import type { ThemeId } from "@/lib/themes";
 
@@ -44,11 +45,6 @@ interface AssistantDocumentResponse {
 
 type KnowledgeMode = "on_demand" | "saved" | "hybrid";
 
-const knowledgeModeOptions: Array<{ value: KnowledgeMode; label: string }> = [
-  { value: "on_demand", label: "Documenti caricati" },
-  { value: "hybrid", label: "Knowledge workspace" },
-];
-
 const assistantLogoByTheme: Record<ThemeId, string> = {
   predefinito: "/birgus-logo/cropped/blue.png",
   dark: "/birgus-logo/cropped/black.png",
@@ -78,6 +74,7 @@ const assistantLogoImageByTheme: Record<ThemeId, string> = {
 
 export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
   const { theme } = useTheme();
+  const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -94,6 +91,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
   const assistantLogoSrc = assistantLogoByTheme[theme] ?? assistantLogoByTheme.predefinito;
   const assistantLogoSurface = assistantLogoSurfaceByTheme[theme] ?? assistantLogoSurfaceByTheme.predefinito;
   const assistantLogoImage = assistantLogoImageByTheme[theme] ?? assistantLogoImageByTheme.predefinito;
+  const isWorkspaceKnowledgeEnabled = knowledgeMode === "hybrid";
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -202,6 +200,17 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
     }
   };
 
+  const startNewChat = () => {
+    if (isSending || isUploading) {
+      return;
+    }
+
+    setSessionId(null);
+    setMessages([]);
+    setDocuments([]);
+    setInput("");
+  };
+
   const sendMessage = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
     const content = input.trim();
@@ -251,14 +260,14 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
             "flex flex-col overflow-hidden rounded-lg border border-border-default bg-bg-surface shadow-2xl",
             isExpanded ? "h-[min(760px,calc(100vh-4rem))] w-[min(760px,calc(100vw-2rem))]" : "h-[560px] w-[380px] max-w-[calc(100vw-2rem)]",
           )}
-          aria-label="Assistente Birgus"
+          aria-label={t("chat.assistant")}
         >
           <header className="flex items-center justify-between border-b border-border-default bg-bg-page px-4 py-3">
             <div className="flex items-center gap-3">
               <div className={cn("flex h-9 w-9 items-center justify-center overflow-hidden rounded-md", assistantLogoSurface)}>
                 <img
                   src={assistantLogoSrc}
-                  alt="Birgus Assistant"
+                  alt={t("chat.assistant")}
                   className={cn("h-full w-full", assistantLogoImage)}
                 />
               </div>
@@ -267,24 +276,21 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <label className="sr-only" htmlFor="floating-assistant-knowledge-mode">Knowledge mode</label>
-              <select
-                id="floating-assistant-knowledge-mode"
-                name="floating-assistant-knowledge-mode"
-                value={knowledgeMode}
-                disabled={isSavingKnowledgeMode}
-                className="h-8 rounded-md border border-border-default bg-bg-surface px-2 text-xs font-medium text-text-secondary outline-none focus:ring-2 focus:ring-ring-primary disabled:opacity-60"
-                onChange={(event) => void updateKnowledgeMode(event.target.value as KnowledgeMode)}
+              <button
+                type="button"
+                className="rounded-md p-2 text-text-muted hover:bg-bg-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={startNewChat}
+                disabled={isSending || isUploading}
+                aria-label={t("chat.new")}
+                title={t("chat.new")}
               >
-                {knowledgeModeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
+                <MessageSquarePlus className="h-4 w-4" />
+              </button>
               <button
                 type="button"
                 className="rounded-md p-2 text-text-muted hover:bg-bg-muted hover:text-text-primary"
                 onClick={() => setIsExpanded((current) => !current)}
-                aria-label={isExpanded ? "Riduci chat" : "Espandi chat"}
+                aria-label={isExpanded ? t("chat.reduce") : t("chat.expand")}
               >
                 {isExpanded ? <Minus className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </button>
@@ -292,7 +298,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
                 type="button"
                 className="rounded-md p-2 text-text-muted hover:bg-bg-muted hover:text-text-primary"
                 onClick={() => setIsOpen(false)}
-                aria-label="Chiudi chat"
+                aria-label={t("chat.close")}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -321,7 +327,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
             ) : null}
             {messages.length === 0 ? (
               <div className="mt-auto rounded-lg border border-dashed border-border-default bg-bg-surface p-4 text-sm text-text-muted">
-                Chiedimi informazioni su progetti, documenti o storici. puoi allegarmi documenti per analizzarli.
+                {t("chat.empty")}
               </div>
             ) : null}
             {messages.map((message) => {
@@ -345,7 +351,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
               <div className="flex justify-start">
                 <div className="flex items-center gap-2 rounded-lg border border-border-default bg-bg-surface px-3 py-2 text-sm text-text-muted">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Elaborazione
+                  {t("chat.processing")}
                 </div>
               </div>
             ) : null}
@@ -353,7 +359,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
           </div>
 
           <form className="shrink-0 space-y-2 border-t border-border-default bg-bg-surface p-3" onSubmit={sendMessage}>
-            <label className="sr-only" htmlFor="floating-assistant-message">Messaggio</label>
+            <label className="sr-only" htmlFor="floating-assistant-message">{t("chat.message")}</label>
             <input
               ref={fileInputRef}
               id="floating-assistant-document"
@@ -376,27 +382,64 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
               }}
               rows={3}
               className="max-h-28 min-h-20 w-full resize-none rounded-md border border-border-default bg-bg-page px-3 py-2 text-sm leading-relaxed text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
-              placeholder="Scrivi una domanda..."
+              placeholder={t("chat.write")}
             />
             <div className="flex items-center justify-between gap-2">
-              <button
-                type="button"
-                disabled={isUploading}
-                className="flex h-9 items-center gap-2 rounded-md border border-border-default bg-bg-page px-3 text-xs font-medium text-text-secondary hover:bg-bg-muted hover:text-text-primary disabled:opacity-50"
-                aria-label="Allega documento"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
-                <span>Allega</span>
-              </button>
+              <div className="flex min-w-0 items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isUploading}
+                  className="flex h-9 shrink-0 items-center gap-2 rounded-md border border-border-default bg-bg-page px-3 text-xs font-medium text-text-secondary hover:bg-bg-muted hover:text-text-primary disabled:opacity-50"
+                  aria-label={t("chat.attachDocument")}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                  <span>{t("chat.attach")}</span>
+                </button>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isWorkspaceKnowledgeEnabled}
+                  disabled={isSavingKnowledgeMode}
+                  title={isWorkspaceKnowledgeEnabled ? t("chat.knowledgeOn") : t("chat.knowledgeOff")}
+                  className="group flex h-9 shrink-0 items-center gap-2 rounded-md border border-transparent px-2 text-xs font-semibold text-text-secondary transition-colors hover:border-border-default hover:bg-bg-muted focus-visible:border-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => void updateKnowledgeMode(isWorkspaceKnowledgeEnabled ? "on_demand" : "hybrid")}
+                >
+                  <span>{t("chat.knowledge")}</span>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "relative inline-flex h-6 w-[3.25rem] items-center rounded-full border p-0.5 shadow-inner transition-colors",
+                      isWorkspaceKnowledgeEnabled
+                        ? "border-brand-primary bg-brand-primary"
+                        : "border-border-default bg-bg-page group-hover:bg-bg-surface",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "absolute text-[9px] font-bold leading-none transition-opacity",
+                        isWorkspaceKnowledgeEnabled ? "left-2 text-text-inverse" : "right-1.5 text-text-muted",
+                      )}
+                    >
+                      {isWorkspaceKnowledgeEnabled ? "ON" : "OFF"}
+                    </span>
+                    <span
+                      className={cn(
+                        "relative z-10 h-5 w-5 rounded-full border border-black/10 bg-white shadow-sm transition-transform",
+                        isWorkspaceKnowledgeEnabled ? "translate-x-6" : "translate-x-0",
+                      )}
+                    />
+                  </span>
+                </button>
+              </div>
               <button
                 type="submit"
                 disabled={isSending || !input.trim()}
                 className="flex h-9 items-center gap-2 rounded-md bg-brand-primary px-3 text-xs font-semibold text-text-inverse hover:bg-brand-primary-hover disabled:opacity-50"
-                aria-label="Invia"
+                aria-label={t("chat.send")}
               >
                 {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                <span>Invia</span>
+                <span>{t("chat.send")}</span>
               </button>
             </div>
           </form>
@@ -413,7 +456,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
             ? "border-white/90 hover:border-white"
             : "border-white/35 hover:brightness-105",
         )}
-        aria-label="Apri assistente"
+        aria-label={t("chat.open")}
       >
         <img
           src={assistantLogoSrc}

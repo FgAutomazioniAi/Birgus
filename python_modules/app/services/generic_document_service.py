@@ -32,8 +32,36 @@ class GenericDocumentService:
             return self._generate_docx(title, blocks), "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         if normalized_format == "pdf":
             return self._generate_pdf(title, blocks), "application/pdf"
+        if normalized_format in {"md", "markdown"}:
+            return self._generate_markdown(title, blocks).encode("utf-8"), "text/markdown; charset=utf-8"
 
         raise ValueError(f"Formato non supportato: {output_format}")
+
+    def _generate_markdown(self, title: str | None, blocks: list[ContentBlock]) -> str:
+        lines: list[str] = []
+        if title:
+            lines.extend([f"# {title}", ""])
+
+        for block in blocks:
+            if block.type == "heading":
+                lines.extend([f"{'#' * max(1, min(block.level, 6))} {block.text or ''}".rstrip(), ""])
+            elif block.type == "list" and block.items:
+                lines.extend([f"- {item}" for item in block.items])
+                lines.append("")
+            elif block.type == "table" and block.rows:
+                rows = [[str(cell) for cell in row] for row in block.rows if isinstance(row, list)]
+                if rows:
+                    header = rows[0]
+                    lines.extend([
+                        f"| {' | '.join(header)} |",
+                        f"| {' | '.join(['---'] * len(header))} |",
+                        *[f"| {' | '.join(row)} |" for row in rows[1:]],
+                        "",
+                    ])
+            elif block.text:
+                lines.extend([block.text, ""])
+
+        return "\n".join(lines).rstrip() + "\n"
 
     def _normalize_content(self, content: Any) -> list[ContentBlock]:
         if isinstance(content, str):

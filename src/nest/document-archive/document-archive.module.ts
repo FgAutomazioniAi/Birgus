@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 
 import { PrismaDocumentArchiveRepository } from "../../modules/document-archive/infra/PrismaDocumentArchiveRepository.js";
 import { ArchivedItemsService } from "../../modules/document-archive/services/ArchivedItemsService.js";
+import { ActiveDocumentsService } from "../../modules/document-archive/services/ActiveDocumentsService.js";
 import { DocumentArchiveService } from "../../modules/document-archive/services/DocumentArchiveService.js";
 import { ProjectBinaryStorage } from "../../storage/ProjectBinaryStorage.js";
 import { AuthModule } from "../auth/auth.module.js";
@@ -25,7 +26,8 @@ import { NestDocumentArchiveController } from "./document-archive.controller.js"
       useFactory: (storage: ProjectBinaryStorage) => new ArchivedItemsService(storage),
       inject: [PROJECT_BINARY_STORAGE],
     },
+    ActiveDocumentsService,
   ],
-  exports: [DocumentArchiveService, ArchivedItemsService],
+  exports: [DocumentArchiveService, ArchivedItemsService, ActiveDocumentsService],
 })
 export class DocumentArchiveNestModule {}

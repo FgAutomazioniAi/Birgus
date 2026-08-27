@@ -20,6 +20,8 @@ import {
   Wrench,
 } from "lucide-react";
 
+import type { UiLanguage } from "@/lib/language";
+
 import type { WorkflowAgent, WorkflowDetail, WorkflowEdgeDto, WorkflowNodeKind, WorkflowSummary, WorkflowTool } from "./types";
 
 export type WorkflowScreen = "modules" | "canvas";
@@ -98,12 +100,13 @@ export type CanvasNodeData = {
   required: boolean;
   enabled: boolean;
   subtitle: string;
-  paletteKind: PaletteKind | "INPUT" | "OUTPUT";
+  paletteKind: PaletteKind | "INPUT" | "OUTPUT" | "REPORT";
   configuration: Record<string, unknown>;
-  hasInputSource: boolean;
+  incomingTargetHandles: string[];
   uploadedFileName?: string;
   onConfigChange?: (patch: Record<string, unknown>) => void;
   onFileChange?: (file: File) => void;
+  onOutputPreview?: () => void;
 };
 
 export type ModuleCard = {
@@ -137,6 +140,22 @@ export const moduleDescriptions: Record<string, string> = {
   document_intelligence: "OCR, knowledge refresh e ricerca sui documenti indicizzati.",
 };
 
+const moduleLabelsEn: Record<string, string> = {
+  project_management: "Quotations",
+  ddt_processing: "DDT",
+  measure_report: "Measure report",
+  workflow_management: "Workflows",
+  document_intelligence: "Document intelligence",
+};
+
+const moduleDescriptionsEn: Record<string, string> = {
+  project_management: "OCR, quotation structuring, document generation, and delivery.",
+  ddt_processing: "OCR, DDT analysis, and result indexing.",
+  measure_report: "AI analysis of measurement reports and persistence of out-of-tolerance rows.",
+  workflow_management: "A free area to test agent and tool combinations.",
+  document_intelligence: "OCR, knowledge refresh, and search across indexed documents.",
+};
+
 export const nodeKindIcon: Record<WorkflowNodeKind, typeof Square> = {
   INPUT: Database,
   AGENT: Bot,
@@ -153,8 +172,8 @@ export const NODE_KIND_ICONS: Record<FlowNodeType, typeof Type> = {
   llm: Sparkles,
   "structure-data": Braces,
   "generate-document": FileOutput,
-  "check-mailbox": Inbox,
   "quotation-docx": FileSignature,
+  "check-mailbox": Inbox,
   "send-email": Mail,
   "send-telegram": Send,
   "send-whatsapp": MessageCircle,
@@ -168,12 +187,12 @@ export const NODE_KIND_LABELS: Record<FlowNodeType, string> = {
   "input-file": "Carica file",
   "input-knowledge": "Knowledge workspace",
   "document-set-ai": "Analizza documenti",
-  ocr: "OCR PDF",
+  ocr: "Text Recognition",
   llm: "Analizza con AI",
   "structure-data": "Struttura testo",
   "generate-document": "Genera documento",
-  "check-mailbox": "Check Mailbox",
   "quotation-docx": "Genera preventivo",
+  "check-mailbox": "Controlla casella email",
   "send-email": "Invia email",
   "send-telegram": "Invia Telegram",
   "send-whatsapp": "Invia WhatsApp",
@@ -181,6 +200,52 @@ export const NODE_KIND_LABELS: Record<FlowNodeType, string> = {
   "compose-email": "Componi email",
   output: "Risultato",
 };
+
+const NODE_KIND_LABELS_EN: Record<FlowNodeType, string> = {
+  "input-text": "Enter text",
+  "input-file": "Upload file",
+  "input-knowledge": "Workspace knowledge",
+  "document-set-ai": "Analyze documents",
+  ocr: "Text recognition",
+  llm: "Analyze with AI",
+  "structure-data": "Structure text",
+  "generate-document": "Generate document",
+  "quotation-docx": "Generate quotation",
+  "check-mailbox": "Check mailbox",
+  "send-email": "Send email",
+  "send-telegram": "Send Telegram",
+  "send-whatsapp": "Send WhatsApp",
+  schedule: "Schedule",
+  "compose-email": "Compose email",
+  output: "Result",
+};
+
+const NODE_KIND_DESCRIPTIONS: Record<FlowNodeType, Record<UiLanguage, string>> = {
+  "input-text": { it: "Inserisce testo manuale nel flusso.", en: "Adds manual text to the flow." },
+  "input-file": { it: "Carica un file da usare nel flusso.", en: "Uploads a file for the flow." },
+  "input-knowledge": { it: "Cerca nella knowledge del workspace.", en: "Searches workspace knowledge." },
+  "document-set-ai": { it: "Analizza uno o più documenti selezionati.", en: "Analyzes one or more selected documents." },
+  ocr: { it: "Estrae testo da documenti e immagini.", en: "Extracts text from documents and images." },
+  llm: { it: "Genera una risposta con l'agente AI.", en: "Generates an answer with the AI agent." },
+  "structure-data": { it: "Trasforma il testo in dati strutturati.", en: "Transforms text into structured data." },
+  "generate-document": { it: "Crea un documento scaricabile.", en: "Creates a downloadable document." },
+  "quotation-docx": { it: "Genera un preventivo in formato documento.", en: "Generates a quotation document." },
+  "check-mailbox": { it: "Legge nuovi messaggi dalla casella email.", en: "Reads new messages from the mailbox." },
+  "send-email": { it: "Invia un messaggio email.", en: "Sends an email message." },
+  "send-telegram": { it: "Invia un messaggio Telegram.", en: "Sends a Telegram message." },
+  "send-whatsapp": { it: "Invia un messaggio WhatsApp.", en: "Sends a WhatsApp message." },
+  schedule: { it: "Avvia un invio programmato.", en: "Starts a scheduled delivery." },
+  "compose-email": { it: "Prepara una bozza email con AI.", en: "Prepares an AI email draft." },
+  output: { it: "Mostra il risultato ricevuto.", en: "Shows the received result." },
+};
+
+export function flowNodeLabel(kind: FlowNodeType, language: UiLanguage): string {
+  return language === "en" ? NODE_KIND_LABELS_EN[kind] : NODE_KIND_LABELS[kind];
+}
+
+export function localizedFlowNodeLabel(label: string, kind: FlowNodeType, language: UiLanguage): string {
+  return label === NODE_KIND_LABELS[kind] || label === NODE_KIND_LABELS_EN[kind] ? flowNodeLabel(kind, language) : label;
+}
 
 export const TOOLBAR_ORDER: FlowNodeType[] = [
   "input-text",
@@ -191,7 +256,6 @@ export const TOOLBAR_ORDER: FlowNodeType[] = [
   "llm",
   "structure-data",
   "generate-document",
-  "quotation-docx",
   "send-email",
   "send-telegram",
   "send-whatsapp",
@@ -200,31 +264,36 @@ export const TOOLBAR_ORDER: FlowNodeType[] = [
   "output",
 ];
 
-export const TOOLBAR_GROUPS: Array<{ title: string; items: FlowNodeType[] }> = [
-  { title: "Input", items: ["input-text", "input-file"] },
-  { title: "Output", items: ["output"] },
-  { title: "Agent", items: ["llm", "structure-data", "compose-email"] },
-  { title: "Tool", items: ["ocr", "document-set-ai", "generate-document", "quotation-docx"] },
-  { title: "Resoconto", items: ["schedule", "send-email", "send-telegram", "send-whatsapp"] },
+export const TOOLBAR_GROUPS: Array<{ id: string; title: string; titleEn: string; category: CanvasNodeData["paletteKind"]; items: FlowNodeType[] }> = [
+  { id: "input", title: "Input", titleEn: "Input", category: "INPUT", items: ["input-text", "input-file"] },
+  { id: "output", title: "Output", titleEn: "Output", category: "OUTPUT", items: ["output"] },
+  { id: "agents", title: "Agenti", titleEn: "Agents", category: "AGENT", items: ["llm", "structure-data", "compose-email"] },
+  { id: "tools", title: "Strumenti", titleEn: "Tools", category: "TOOL", items: ["ocr", "document-set-ai", "generate-document"] },
+  { id: "report", title: "Resoconto", titleEn: "Report", category: "REPORT", items: ["schedule", "send-email", "send-telegram", "send-whatsapp"] },
 ];
 
-export const NODE_KIND_BORDER: Record<FlowNodeType, string> = {
-  "input-text": "border-status-info-text",
-  "input-file": "border-status-warn-text",
-  "input-knowledge": "border-brand-accent",
-  "document-set-ai": "border-brand-accent",
-  ocr: "border-status-warn-text",
-  llm: "border-status-success-text",
-  "structure-data": "border-status-warn-text",
-  "generate-document": "border-status-warn-text",
-  "check-mailbox": "border-status-danger-text",
-  "quotation-docx": "border-status-warn-text",
-  "send-email": "border-status-danger-text",
-  "send-telegram": "border-status-info-text",
-  "send-whatsapp": "border-status-success-text",
-  schedule: "border-status-info-text",
-  "compose-email": "border-status-info-text",
-  output: "border-brand-primary",
+export const NODE_CATEGORY_BORDER: Record<CanvasNodeData["paletteKind"], string> = {
+  INPUT: "border-status-info-text",
+  AGENT: "border-status-progress-text",
+  TOOL: "border-status-warn-text",
+  OUTPUT: "border-status-success-text",
+  REPORT: "border-status-danger-text",
+};
+
+export const NODE_CATEGORY_TAB_ACTIVE: Record<CanvasNodeData["paletteKind"], string> = {
+  INPUT: "border-status-info-text bg-status-info-bg text-status-info-text",
+  OUTPUT: "border-status-success-text bg-status-success-bg text-status-success-text",
+  AGENT: "border-status-progress-text bg-status-progress-bg text-status-progress-text",
+  TOOL: "border-status-warn-text bg-status-warn-bg text-status-warn-text",
+  REPORT: "border-status-danger-text bg-status-danger-bg text-status-danger-text",
+};
+
+export const NODE_CATEGORY_BADGE_TONE: Record<CanvasNodeData["paletteKind"], "info" | "success" | "warn" | "progress" | "danger"> = {
+  INPUT: "info",
+  OUTPUT: "success",
+  AGENT: "progress",
+  TOOL: "warn",
+  REPORT: "danger",
 };
 
 export const textareaClassName = "min-h-32 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-muted p-3 text-sm text-text-secondary focus-visible:border-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary";
@@ -234,6 +303,7 @@ export function buildModuleCards(
   tools: WorkflowTool[],
   agents: WorkflowAgent[],
   enabledModuleKeys?: string[],
+  language: UiLanguage = "it",
 ): ModuleCard[] {
   const visibleModuleKeys = enabledModuleKeys ? new Set(enabledModuleKeys) : null;
   const nonPlaygroundWorkflows = workflows.filter((workflow) => workflow.key !== PLAYGROUND_KEY);
@@ -255,8 +325,9 @@ export function buildModuleCards(
     return {
       cardKey: `module:${moduleKey}`,
       moduleKey,
-      title: moduleLabels[moduleKey] ?? moduleKey.replace(/_/g, " "),
-      description: moduleDescriptions[moduleKey] ?? "Workflow modulare configurabile.",
+      title: (language === "en" ? moduleLabelsEn : moduleLabels)[moduleKey] ?? moduleKey.replace(/_/g, " "),
+      description: (language === "en" ? moduleDescriptionsEn : moduleDescriptions)[moduleKey]
+        ?? (language === "en" ? "Configurable modular workflow." : "Workflow modulare configurabile."),
       workflow,
       agentsCount: agents.filter((agent) => agent.moduleKey === moduleKey).length,
       toolsCount: tools.filter((tool) => tool.moduleKey === moduleKey).length,
@@ -282,11 +353,20 @@ export function isAiRequestFlowNodeType(kind: FlowNodeType): boolean {
 }
 
 export function currentPromptFromConfiguration(configuration: Record<string, unknown>): string {
-  return firstPreviewString(configuration.currentPrompt, configuration.instructions, configuration.prompt, configuration.extra_instructions);
+  return firstConfiguredString(configuration.currentPrompt, configuration.instructions, configuration.prompt, configuration.extra_instructions);
 }
 
 export function defaultPromptFromConfiguration(configuration: Record<string, unknown>): string {
-  return firstPreviewString(configuration.defaultPrompt, configuration.default_prompt, configuration.originalPrompt);
+  return firstConfiguredString(configuration.defaultPrompt, configuration.default_prompt, configuration.originalPrompt);
+}
+
+function firstConfiguredString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+  return "";
 }
 
 export function normalizeAiPromptConfiguration(
@@ -522,14 +602,18 @@ export function toFlowNode(
   tools: Map<string, WorkflowTool>,
   agents: Map<string, WorkflowAgent>,
   uploadedFiles: Record<string, UploadedWorkflowFile>,
-  hasInputSource: boolean,
+  incomingTargetHandles: string[],
   onConfigChange: (clientId: string, patch: Record<string, unknown>) => void,
   onFileChange: (clientId: string, file: File) => void,
+  onOutputPreview: (clientId: string) => void,
 ): Node<CanvasNodeData> {
   const tool = item.moduleToolId ? tools.get(item.moduleToolId) ?? null : null;
   const agent = item.moduleAgentId ? agents.get(item.moduleAgentId) ?? null : null;
-  const paletteKind = item.nodeKind === "AGENT" || (tool && isLangChainTool(tool)) ? "AGENT" : item.nodeKind === "TOOL" ? "TOOL" : item.nodeKind;
   const flowType = inferFlowNodeType(item, tool);
+  const isReportNode = flowType === "schedule" || flowType === "send-email" || flowType === "send-telegram" || flowType === "send-whatsapp";
+  const paletteKind = isReportNode
+    ? "REPORT"
+    : item.nodeKind === "AGENT" || (tool && isLangChainTool(tool)) ? "AGENT" : item.nodeKind === "TOOL" ? "TOOL" : item.nodeKind;
 
   return {
     id: item.clientId,
@@ -547,10 +631,11 @@ export function toFlowNode(
       subtitle: agent ? "Prompt" : tool ? toolSubtitle(tool) : item.inputKind ?? item.outputKind ?? item.nodeKind,
       paletteKind,
       configuration: item.configuration,
-      hasInputSource,
+      incomingTargetHandles,
       uploadedFileName: uploadedFiles[item.clientId]?.fileName,
       onConfigChange: (patch) => onConfigChange(item.clientId, patch),
       onFileChange: (file) => onFileChange(item.clientId, file),
+      onOutputPreview: () => onOutputPreview(item.clientId),
     },
   };
 }
@@ -614,53 +699,8 @@ export function parsePaletteDragPayload(value: string): PaletteDragPayload | nul
   return null;
 }
 
-export function flowNodeDescription(kind: FlowNodeType): string {
-  if (kind === "input-text") {
-    return "Testo o istruzioni iniziali per il workflow.";
-  }
-  if (kind === "input-file") {
-    return "Documento PDF o immagine da elaborare.";
-  }
-  if (kind === "input-knowledge") {
-    return "Ricerca contenuti indicizzati nel workspace.";
-  }
-  if (kind === "document-set-ai") {
-    return "Riassume o interroga documenti gia' caricati.";
-  }
-  if (kind === "ocr") {
-    return "Estrae testo da documenti caricati.";
-  }
-  if (kind === "llm") {
-    return "Esegue una richiesta tramite modello locale.";
-  }
-  if (kind === "structure-data") {
-    return "Trasforma testo in dati strutturati.";
-  }
-  if (kind === "compose-email") {
-    return "Prepara una bozza email professionale.";
-  }
-  if (kind === "generate-document") {
-    return "Crea un documento dalla configurazione.";
-  }
-  if (kind === "quotation-docx") {
-    return "Genera un DOCX offerta.";
-  }
-  if (kind === "check-mailbox") {
-    return "Legge una casella email configurata.";
-  }
-  if (kind === "send-email") {
-    return "Invia email e allegati.";
-  }
-  if (kind === "send-telegram") {
-    return "Invia un messaggio Telegram.";
-  }
-  if (kind === "send-whatsapp") {
-    return "Invia un messaggio WhatsApp Business.";
-  }
-  if (kind === "schedule") {
-    return "Pianifica l'invio dei nodi Resoconto collegati.";
-  }
-  return "Raccoglie il risultato finale.";
+export function flowNodeDescription(kind: FlowNodeType, language: UiLanguage = "it"): string {
+  return NODE_KIND_DESCRIPTIONS[kind][language];
 }
 
 export function parseRunInput(value: string): Record<string, unknown> {
@@ -724,6 +764,16 @@ export function formatResultPreview(value: unknown): string {
   }
 
   const record = value as Record<string, unknown>;
+  const publishedOutputs = Array.isArray(record.published_outputs) ? record.published_outputs : [];
+  const firstPublished = publishedOutputs[0] && typeof publishedOutputs[0] === "object" && publishedOutputs[0] !== null
+    ? publishedOutputs[0] as Record<string, unknown>
+    : null;
+  if (firstPublished) {
+    const publishedValue = firstPublished.value;
+    const publishedText = typeof publishedValue === "string" ? publishedValue.trim() : "";
+    if (publishedText) return publishedText;
+    if (typeof firstPublished.label === "string" && firstPublished.label.trim()) return firstPublished.label.trim();
+  }
   const output = toRecord(record.output);
   const candidate = firstPreviewString(
     record.reply,

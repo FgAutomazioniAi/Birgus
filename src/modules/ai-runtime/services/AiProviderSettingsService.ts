@@ -13,6 +13,13 @@ export interface AiProviderSettingsPatch {
   provider?: string;
   temperature?: number;
   timeoutMs?: number;
+  maxOutputTokens?: number;
+  topP?: number;
+  topK?: number;
+  minP?: number;
+  repetitionPenalty?: number;
+  seed?: number | null;
+  contextTokenLimit?: number | null;
 }
 
 export interface PublicAiProviderSettings {
@@ -23,6 +30,13 @@ export interface PublicAiProviderSettings {
   source: "database" | "environment";
   temperature: number;
   timeoutMs: number;
+  maxOutputTokens: number;
+  topP: number;
+  topK: number;
+  minP: number;
+  repetitionPenalty: number;
+  seed: number | null;
+  contextTokenLimit: number | null;
 }
 
 type StoredAiProviderSettings = Partial<AiProviderConfig>;
@@ -49,6 +63,13 @@ export class AiProviderSettingsService {
       source: stored ? "database" : "environment",
       temperature: effective.temperature,
       timeoutMs: effective.timeoutMs,
+      maxOutputTokens: effective.maxOutputTokens,
+      topP: effective.topP,
+      topK: effective.topK,
+      minP: effective.minP,
+      repetitionPenalty: effective.repetitionPenalty,
+      seed: effective.seed,
+      contextTokenLimit: effective.contextTokenLimit,
     };
   }
 
@@ -122,6 +143,13 @@ export class AiProviderSettingsService {
       chatModel: this.trimString(patch.chatModel),
       temperature: typeof patch.temperature === "number" && Number.isFinite(patch.temperature) ? patch.temperature : undefined,
       timeoutMs: typeof patch.timeoutMs === "number" && Number.isFinite(patch.timeoutMs) && patch.timeoutMs > 0 ? Math.trunc(patch.timeoutMs) : undefined,
+      maxOutputTokens: this.toBoundedInteger(patch.maxOutputTokens, 1, 8192),
+      topP: this.toBoundedNumber(patch.topP, 0, 1),
+      topK: this.toBoundedInteger(patch.topK, -1, 1000),
+      minP: this.toBoundedNumber(patch.minP, 0, 1),
+      repetitionPenalty: this.toBoundedNumber(patch.repetitionPenalty, 0.1, 2),
+      seed: patch.seed === null ? null : this.toBoundedInteger(patch.seed, 0, 2_147_483_647),
+      contextTokenLimit: patch.contextTokenLimit === null ? null : this.toBoundedInteger(patch.contextTokenLimit, 256, 8192),
     });
   }
 
@@ -137,6 +165,13 @@ export class AiProviderSettingsService {
       chatModel: this.trimString(row.chatModel),
       temperature: typeof row.temperature === "number" && Number.isFinite(row.temperature) ? row.temperature : undefined,
       timeoutMs: typeof row.timeoutMs === "number" && Number.isFinite(row.timeoutMs) && row.timeoutMs > 0 ? Math.trunc(row.timeoutMs) : undefined,
+      maxOutputTokens: this.toBoundedInteger(row.maxOutputTokens, 1, 8192),
+      topP: this.toBoundedNumber(row.topP, 0, 1),
+      topK: this.toBoundedInteger(row.topK, -1, 1000),
+      minP: this.toBoundedNumber(row.minP, 0, 1),
+      repetitionPenalty: this.toBoundedNumber(row.repetitionPenalty, 0.1, 2),
+      seed: row.seed === null ? null : this.toBoundedInteger(row.seed, 0, 2_147_483_647),
+      contextTokenLimit: row.contextTokenLimit === null ? null : this.toBoundedInteger(row.contextTokenLimit, 256, 8192),
     });
   }
 
@@ -150,6 +185,14 @@ export class AiProviderSettingsService {
 
   private trimString(value: unknown): string | undefined {
     return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+  }
+
+  private toBoundedNumber(value: unknown, min: number, max: number): number | undefined {
+    return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max ? value : undefined;
+  }
+
+  private toBoundedInteger(value: unknown, min: number, max: number): number | undefined {
+    return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max ? value : undefined;
   }
 
   private compactSettings(settings: StoredAiProviderSettings): StoredAiProviderSettings {

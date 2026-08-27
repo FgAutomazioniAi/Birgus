@@ -498,6 +498,7 @@ model UserPreference {
   workspace_id          String?  @db.Uuid
   palette_id            String   @default("predefinito")
   notification_position String   @default("bottom-right")
+  notification_popups   Boolean  @default(true)
   language_code         String   @default("it")
   rows_projects         Int      @default(10)
   rows_clients          Int      @default(10)

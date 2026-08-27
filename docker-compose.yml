@@ -122,6 +122,47 @@ services:
     expose:
       - "8202"
 
+  vllm_lifecycle:
+    build:
+      context: .
+      dockerfile: vllm_lifecycle/Dockerfile
+    container_name: birgus_vllm_lifecycle
+    restart: unless-stopped
+    environment:
+      VLLM_LIFECYCLE_TOKEN: "${VLLM_LIFECYCLE_TOKEN:?VLLM_LIFECYCLE_TOKEN is required}"
+      VLLM_TARGET_CONTAINER: "birgus_vllm"
+      VLLM_COMPOSE_FILE: "/workspace/docker-compose.yml"
+      VLLM_RUNTIME_ENV_FILE: "/workspace/vllm/runtime.env"
+      VLLM_COMPOSE_PROJECT: "birgus"
+      VLLM_COMPOSE_PROFILE: "ai-runtime"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/workspace:ro
+      - ./vllm:/workspace/vllm
+    expose:
+      - "8203"
+
+  vllm:
+    build:
+      context: .
+      dockerfile: vllm/Dockerfile
+    container_name: birgus_vllm
+    profiles: ["ai-runtime"]
+    restart: unless-stopped
+    env_file:
+      - ./vllm/runtime.env
+    volumes:
+      - ./vllm/model-cache:/root/.cache/huggingface
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
   app:
     build:
       context: .
@@ -172,6 +213,8 @@ services:
       OCR_ENGINE_TIMEOUT_MS: "${OCR_ENGINE_TIMEOUT_MS:-180000}"
       OCR_LIFECYCLE_BASE_URL: "${OCR_LIFECYCLE_BASE_URL:-http://ocr_lifecycle:8202}"
       OCR_LIFECYCLE_TOKEN: "${OCR_LIFECYCLE_TOKEN:?OCR_LIFECYCLE_TOKEN is required}"
+      VLLM_LIFECYCLE_BASE_URL: "${VLLM_LIFECYCLE_BASE_URL:-http://vllm_lifecycle:8203}"
+      VLLM_LIFECYCLE_TOKEN: "${VLLM_LIFECYCLE_TOKEN:?VLLM_LIFECYCLE_TOKEN is required}"
       TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
       TELEGRAM_BOT_USERNAME: "${TELEGRAM_BOT_USERNAME:-}"
       ORCH_DDT_LM_MAX_TOKENS: "${ORCH_DDT_LM_MAX_TOKENS:-700}"

@@ -3,6 +3,7 @@ import { Global, Module } from "@nestjs/common";
 import { AiProviderSettingsService } from "../../modules/ai-runtime/services/AiProviderSettingsService.js";
 import { AiGatewayService } from "../../modules/ai-runtime/services/AiGatewayService.js";
 import { OpenAiCompatibleLmClient } from "../../modules/ai-runtime/services/OpenAiCompatibleLmClient.js";
+import { VllmLifecycleService } from "../../modules/ai-runtime/services/VllmLifecycleService.js";
 import { BackendPythonModulesClient } from "../../modules/document-intelligence/services/BackendPythonModulesClient.js";
 import { MailProviderSettingsService } from "../../modules/mail-runtime/services/MailProviderSettingsService.js";
 import { LocalLmOrchestrator } from "../../modules/orchestration/services/LocalLmOrchestrator.js";
@@ -30,6 +31,10 @@ import { PrismaService } from "../prisma/prisma.service.js";
       provide: AiProviderSettingsService,
       useFactory: (prisma: PrismaService) => new AiProviderSettingsService(prisma),
       inject: [PrismaService],
+    },
+    {
+      provide: VllmLifecycleService,
+      useFactory: () => new VllmLifecycleService(),
     },
     {
       provide: MailProviderSettingsService,
@@ -62,6 +67,7 @@ import { PrismaService } from "../prisma/prisma.service.js";
     PROJECT_BINARY_STORAGE,
     JOB_QUEUE,
     AiProviderSettingsService,
+    VllmLifecycleService,
     MailProviderSettingsService,
     BackendPythonModulesClient,
     AiGatewayService,

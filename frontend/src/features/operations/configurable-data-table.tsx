@@ -3,7 +3,7 @@
 import { ChevronDown, ChevronUp, Columns3, RotateCcw } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
-import { Button } from "@/components/atoms";
+import { Button, CheckboxControl } from "@/components/atoms";
 import { cn } from "@/lib/cn";
 
 type SortDirection = "asc" | "desc";
@@ -210,14 +210,13 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
                   return (
                     <div key={key} className="flex items-center justify-between gap-2 rounded-lg border border-border-subtle bg-bg-muted px-2.5 py-2">
                       <label className="flex min-w-0 items-center gap-2 text-sm text-text-secondary">
-                        <input
+                        <CheckboxControl
                           id={`${storageKey}-${key}`}
                           name={`${storageKey}-${key}`}
                           type="checkbox"
                           checked={!hidden}
                           disabled={column.required}
                           onChange={() => toggleColumn(key)}
-                          className="h-4 w-4 accent-[var(--brand-primary)]"
                         />
                         <span className="truncate">{column.label}</span>
                       </label>

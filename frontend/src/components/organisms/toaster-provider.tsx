@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Toaster } from "sonner";
 
+import { translate, type UiLanguage } from "@/lib/language";
+
 export type ToastPosition =
   | "top-left"
   | "top-center"
@@ -13,16 +15,20 @@ export type ToastPosition =
   | "bottom-right";
 
 interface ToasterContextValue {
+  enabled: boolean;
   position: ToastPosition;
+  setEnabled: (enabled: boolean) => void;
   setPosition: (position: ToastPosition) => void;
 }
 
 interface UserPreferenceApiResponse {
+  notificationPopups?: boolean;
   notificationPosition?: string;
 }
 
 const DEFAULT_TOAST_POSITION: ToastPosition = "bottom-right";
 const TOAST_POSITION_STORAGE_KEY = "birgus:toast-position";
+const TOAST_ENABLED_STORAGE_KEY = "birgus:toast-enabled";
 const TOAST_POSITIONS: readonly ToastPosition[] = [
   "top-left",
   "top-center",
@@ -34,13 +40,13 @@ const TOAST_POSITIONS: readonly ToastPosition[] = [
 
 const ToasterContext = createContext<ToasterContextValue | null>(null);
 
-export const TOAST_POSITION_OPTIONS: Array<{ label: string; value: ToastPosition }> = [
-  { value: "top-left", label: "Alto sinistra" },
-  { value: "top-center", label: "Alto centro" },
-  { value: "top-right", label: "Alto destra" },
-  { value: "bottom-left", label: "Basso sinistra" },
-  { value: "bottom-center", label: "Basso centro" },
-  { value: "bottom-right", label: "Basso destra" },
+export const toastPositionOptions = (language: UiLanguage): Array<{ label: string; value: ToastPosition }> => [
+  { value: "top-left", label: translate(language, "notifications.position.topLeft") },
+  { value: "top-center", label: translate(language, "notifications.position.topCenter") },
+  { value: "top-right", label: translate(language, "notifications.position.topRight") },
+  { value: "bottom-left", label: translate(language, "notifications.position.bottomLeft") },
+  { value: "bottom-center", label: translate(language, "notifications.position.bottomCenter") },
+  { value: "bottom-right", label: translate(language, "notifications.position.bottomRight") },
 ];
 
 export function isToastPosition(value: string): value is ToastPosition {
@@ -52,12 +58,17 @@ const readStoredPosition = (): ToastPosition => {
   return stored && isToastPosition(stored) ? stored : DEFAULT_TOAST_POSITION;
 };
 
+const readStoredEnabled = (): boolean => localStorage.getItem(TOAST_ENABLED_STORAGE_KEY) !== "false";
+
 export function ToasterProvider({ children }: { children: ReactNode }) {
   const [position, setPositionState] = useState<ToastPosition>(DEFAULT_TOAST_POSITION);
+  const [enabled, setEnabledState] = useState(true);
 
   useEffect(() => {
     const storedPosition = readStoredPosition();
+    const storedEnabled = readStoredEnabled();
     setPositionState(storedPosition);
+    setEnabledState(storedEnabled);
 
     const syncPositionFromDatabase = async () => {
       try {
@@ -68,11 +79,19 @@ export function ToasterProvider({ children }: { children: ReactNode }) {
 
         const data = (await response.json()) as UserPreferenceApiResponse;
         if (!data.notificationPosition || !isToastPosition(data.notificationPosition)) {
+          if (typeof data.notificationPopups === "boolean") {
+            setEnabledState(data.notificationPopups);
+            localStorage.setItem(TOAST_ENABLED_STORAGE_KEY, String(data.notificationPopups));
+          }
           return;
         }
 
         setPositionState(data.notificationPosition);
         localStorage.setItem(TOAST_POSITION_STORAGE_KEY, data.notificationPosition);
+        if (typeof data.notificationPopups === "boolean") {
+          setEnabledState(data.notificationPopups);
+          localStorage.setItem(TOAST_ENABLED_STORAGE_KEY, String(data.notificationPopups));
+        }
       } catch {
         // fallback su preferenza locale in caso di errore rete/non autenticato.
       }
@@ -100,23 +119,32 @@ export function ToasterProvider({ children }: { children: ReactNode }) {
     void persistPosition();
   };
 
+  const setEnabled = (nextEnabled: boolean) => {
+    setEnabledState(nextEnabled);
+    localStorage.setItem(TOAST_ENABLED_STORAGE_KEY, String(nextEnabled));
+    void fetch("/api/user/preferences", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notificationPopups: nextEnabled }),
+    }).catch(() => {
+      // The local preference remains available if persistence fails.
+    });
+  };
+
   const value = useMemo<ToasterContextValue>(
     () => ({
+      enabled,
       position,
+      setEnabled,
       setPosition,
     }),
-    [position],
+    [enabled, position],
   );
 
   return (
     <ToasterContext.Provider value={value}>
       {children}
-      <Toaster
-        position={position}
-        richColors
-        duration={4000}
-        swipeDirections={["top", "right", "bottom", "left"]}
-      />
+      {enabled ? <Toaster position={position} richColors duration={4000} swipeDirections={["top", "right", "bottom", "left"]} /> : null}
     </ToasterContext.Provider>
   );
 }

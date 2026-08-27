@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { Button, Card, Input, Text } from "@/components/atoms";
 import { PageHelpHint } from "@/components/molecules";
+import { useLanguage } from "@/components/organisms/language-provider";
 import { cn } from "@/lib/cn";
 import { APP_ROUTES } from "@/lib/routes";
 import { scheduleUndoableAction } from "@/lib/undoable-action";
@@ -197,6 +198,7 @@ const isPdfFile = (file: File): boolean => {
 };
 
 export function DdtReaderPanel() {
+  const { t } = useLanguage();
   const router = useRouter();
   const [documents, setDocuments] = useState<DdtReaderDocument[]>([]);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
@@ -538,16 +540,16 @@ export function DdtReaderPanel() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6">
+    <div className="w-full space-y-6">
       <header className="space-y-1">
         <div className="flex items-center gap-2">
           <Text as="h1" variant="h1">
             DDT Reader
           </Text>
-          <PageHelpHint text="Carica un PDF DDT, avvia l'analisi e controlla i dati estratti." />
+          <PageHelpHint text={t("ddt.help")} />
         </div>
         <Text variant="muted">
-          Analizzatore di Documenti di Trasporto
+          {t("ddt.subtitle")}
         </Text>
       </header>
 
@@ -555,16 +557,16 @@ export function DdtReaderPanel() {
         <Card className="space-y-5 p-4 lg:p-5">
           <div className="space-y-2">
             <Text as="h2" variant="h2" className="text-lg">
-              Workflow DDT
+              {t("ddt.workflow")}
             </Text>
             <Text variant="caption">
-              Seleziona un PDF: il modulo lo salva e avvia il workflow OCR + analisi AI.
+              {t("ddt.workflowHint")}
             </Text>
           </div>
 
           <div className="space-y-3 rounded-[var(--radius-lg)] border border-border-subtle bg-bg-muted/60 p-3">
             <label className="text-xs font-bold uppercase tracking-wide text-text-muted" htmlFor="ddt-reader-upload">
-              File PDF
+              {t("ddt.pdf")}
             </label>
             <Input
               id="ddt-reader-upload"

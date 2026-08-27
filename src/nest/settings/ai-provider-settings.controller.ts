@@ -16,6 +16,13 @@ const aiProviderSettingsSchema = z.object({
   provider: z.enum(AI_PROVIDER_DEFINITIONS.map((item) => item.id) as [string, ...string[]]).optional(),
   temperature: z.number().min(0).max(2).optional(),
   timeoutMs: z.number().int().min(1000).max(900000).optional(),
+  maxOutputTokens: z.number().int().min(1).max(8192).optional(),
+  topP: z.number().min(0).max(1).optional(),
+  topK: z.number().int().min(-1).max(1000).optional(),
+  minP: z.number().min(0).max(1).optional(),
+  repetitionPenalty: z.number().min(0.1).max(2).optional(),
+  seed: z.number().int().min(0).max(2147483647).nullable().optional(),
+  contextTokenLimit: z.number().int().min(256).max(8192).nullable().optional(),
 }).strict();
 
 @Controller("/api/settings/ai-provider")

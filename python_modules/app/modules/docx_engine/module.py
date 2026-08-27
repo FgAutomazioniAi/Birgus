@@ -59,8 +59,8 @@ class DocxEngineModule(PythonModule):
         if not file_name:
             file_name = self._default_file_name(title, output_format)
 
-        if "." not in file_name:
-            file_name = f"{file_name}.{output_format}"
+        extension = "md" if output_format == "markdown" else output_format
+        file_name = self._with_output_extension(file_name, extension)
 
         document_bytes, content_type = self._generic_document_service.generate(
             content=content,
@@ -79,6 +79,13 @@ class DocxEngineModule(PythonModule):
         base = (title or "documento").strip().lower()
         safe = "".join(character if character.isalnum() else "-" for character in base).strip("-") or "documento"
         return f"{safe}.{output_format}"
+
+    def _with_output_extension(self, file_name: str, extension: str) -> str:
+        normalized = file_name.strip().rstrip(".")
+        stem, separator, current_extension = normalized.rpartition(".")
+        if separator and stem and current_extension:
+            normalized = stem
+        return f"{normalized or 'documento'}.{extension}"
 
     def _to_optional_string(self, value: Any) -> str | None:
         if not isinstance(value, str):

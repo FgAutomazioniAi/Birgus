@@ -12,9 +12,6 @@ interface OpenAiCompatibleClientOptions {
   timeoutMs?: number;
   requestedModel?: string;
   maxOutputTokens?: number;
-  reasoning?: string | null;
-  contextLength?: number | null;
-  store?: boolean;
   temperature?: number;
   useRuntimeConfig?: boolean;
 }
@@ -41,10 +38,7 @@ export class OpenAiCompatibleLmClient {
   private static runtimeConfigResolver: AiProviderRuntimeConfigResolver | null = null;
 
   private readonly config: AiProviderConfig;
-  private readonly maxOutputTokens: number;
-  private readonly reasoning: string | null;
-  private readonly contextLength: number | null;
-  private readonly store: boolean;
+  private readonly maxOutputTokens: number | null;
   private readonly useRuntimeConfig: boolean;
 
   public constructor(options: OpenAiCompatibleClientOptions = {}) {
@@ -57,10 +51,7 @@ export class OpenAiCompatibleLmClient {
       chatModel: options.requestedModel,
       temperature: options.temperature,
     });
-    this.maxOutputTokens = options.maxOutputTokens ?? this.parsePositiveInt(process.env.AI_PROVIDER_MAX_OUTPUT_TOKENS, 512);
-    this.reasoning = options.reasoning ?? this.parseReasoning(process.env.AI_PROVIDER_REASONING);
-    this.contextLength = options.contextLength ?? this.parseOptionalPositiveInt(process.env.AI_PROVIDER_CONTEXT_LENGTH);
-    this.store = options.store ?? this.parseBoolean(process.env.AI_PROVIDER_STORE, false);
+    this.maxOutputTokens = options.maxOutputTokens ?? null;
     this.useRuntimeConfig = options.useRuntimeConfig ?? true;
   }
 
@@ -201,6 +192,7 @@ export class OpenAiCompatibleLmClient {
       stream: false,
       messages: options.messages,
     };
+    this.applyGenerationOptions(requestPayload, config, null);
 
     if (options.tools.length > 0) {
       requestPayload.tools = options.tools;
@@ -231,23 +223,11 @@ export class OpenAiCompatibleLmClient {
       stream: false,
       messages: options.messages,
     };
+    this.applyGenerationOptions(requestPayload, config, options.maxTokens ?? this.maxOutputTokens);
 
     if (options.responseFormat) {
       requestPayload.response_format = options.responseFormat;
     }
-    if (options.maxTokens && Number.isFinite(options.maxTokens) && options.maxTokens > 0) {
-      requestPayload.max_tokens = Math.trunc(options.maxTokens);
-    }
-    if (this.contextLength) {
-      requestPayload.context_length = this.contextLength;
-    }
-    if (this.reasoning) {
-      requestPayload.reasoning = this.reasoning;
-    }
-    if (this.store) {
-      requestPayload.store = true;
-    }
-
     const payload = await this.postChatCompletions(requestPayload, config);
     const content = String(payload?.choices?.[0]?.message?.content ?? "").trim();
     if (!content) {
@@ -353,6 +333,23 @@ export class OpenAiCompatibleLmClient {
     return headers;
   }
 
+  private applyGenerationOptions(requestPayload: Record<string, unknown>, config: AiProviderConfig, maxTokens: number | null): void {
+    const outputLimit = maxTokens ?? config.maxOutputTokens;
+    if (Number.isFinite(outputLimit) && outputLimit > 0) {
+      requestPayload.max_tokens = Math.trunc(outputLimit);
+    }
+    requestPayload.top_p = config.topP;
+    requestPayload.top_k = config.topK;
+    requestPayload.min_p = config.minP;
+    requestPayload.repetition_penalty = config.repetitionPenalty;
+    if (config.seed !== null) {
+      requestPayload.seed = config.seed;
+    }
+    if (config.contextTokenLimit !== null) {
+      requestPayload.truncate_prompt_tokens = config.contextTokenLimit;
+    }
+  }
+
   private async readJsonResponse(response: Response, strict = true): Promise<Record<string, unknown>> {
     const text = await response.text();
     if (!text.trim()) {
@@ -413,19 +410,6 @@ export class OpenAiCompatibleLmClient {
     };
   }
 
-  private parsePositiveInt(value: string | undefined, fallback: number): number {
-    const parsed = Number.parseInt(value ?? "", 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-  }
-
-  private parseOptionalPositiveInt(value: string | undefined): number | null {
-    const parsed = Number.parseInt(value ?? "", 10);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      return null;
-    }
-    return parsed;
-  }
-
   private parseBoolean(value: string | undefined, fallback: boolean): boolean {
     if (!value) {
       return fallback;
@@ -440,19 +424,6 @@ export class OpenAiCompatibleLmClient {
     }
 
     return fallback;
-  }
-
-  private parseReasoning(value: string | undefined): string | null {
-    const normalized = (value ?? "").trim().toLowerCase();
-    if (!normalized) {
-      return null;
-    }
-
-    if (["on", "low", "medium", "high"].includes(normalized)) {
-      return normalized;
-    }
-
-    return null;
   }
 
   private logAiTraffic(

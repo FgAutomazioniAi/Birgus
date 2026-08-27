@@ -28,6 +28,10 @@ export class ScheduledWorkflowDeliveryService {
   private readonly logger = new Logger(ScheduledWorkflowDeliveryService.name);
   private readonly pollIntervalMs: number;
   private readonly maxAttempts: number;
+  private readonly maxPendingPerWorkspace: number;
+  private readonly pastScheduleGraceMs: number;
+  private readonly processingLeaseMs: number;
+  private readonly minRepeatSeconds: number;
   private timer: NodeJS.Timeout | null = null;
   private isProcessing = false;
 
@@ -37,6 +41,10 @@ export class ScheduledWorkflowDeliveryService {
   ) {
     this.pollIntervalMs = options.pollIntervalMs ?? this.readPositiveInt("SCHEDULED_WORKFLOW_DELIVERY_POLL_MS", 15_000);
     this.maxAttempts = options.maxAttempts ?? this.readPositiveInt("SCHEDULED_WORKFLOW_DELIVERY_MAX_ATTEMPTS", 5);
+    this.maxPendingPerWorkspace = this.readPositiveInt("SCHEDULED_WORKFLOW_DELIVERY_MAX_PENDING", 200);
+    this.pastScheduleGraceMs = this.readPositiveInt("SCHEDULED_WORKFLOW_DELIVERY_PAST_GRACE_MS", 90_000);
+    this.processingLeaseMs = this.readPositiveInt("SCHEDULED_WORKFLOW_DELIVERY_PROCESSING_LEASE_MS", 5 * 60_000);
+    this.minRepeatSeconds = this.readPositiveInt("SCHEDULED_WORKFLOW_DELIVERY_MIN_REPEAT_SECONDS", 60);
   }
 
   public start(): void {
@@ -67,8 +75,18 @@ export class ScheduledWorkflowDeliveryService {
     if (Number.isNaN(command.runAt.getTime())) {
       throw new Error("Data pianificazione non valida.");
     }
+    this.validateScheduleTiming(command.runAt, command.repeatEverySeconds ?? null);
 
     const prisma = PrismaClientManager.getClient();
+    const pendingCount = await prisma.scheduledWorkflowDelivery.count({
+      where: {
+        workspace_id: command.workspaceId,
+        status: ScheduledWorkflowDeliveryStatus.ACTIVE,
+      },
+    });
+    if (pendingCount >= this.maxPendingPerWorkspace) {
+      throw new Error(`Limite di ${this.maxPendingPerWorkspace} invii pianificati attivi raggiunto nel workspace.`);
+    }
     const row = await prisma.scheduledWorkflowDelivery.create({
       data: {
         workspace_id: command.workspaceId,
@@ -103,6 +121,7 @@ export class ScheduledWorkflowDeliveryService {
     this.isProcessing = true;
     try {
       const prisma = PrismaClientManager.getClient();
+      await this.recoverAbandonedDeliveries();
       const dueRows = await prisma.scheduledWorkflowDelivery.findMany({
         where: {
           status: ScheduledWorkflowDeliveryStatus.ACTIVE,
@@ -192,6 +211,24 @@ export class ScheduledWorkflowDeliveryService {
     }
   }
 
+  private async recoverAbandonedDeliveries(): Promise<void> {
+    const prisma = PrismaClientManager.getClient();
+    const staleBefore = new Date(Date.now() - this.processingLeaseMs);
+    const recovered = await prisma.scheduledWorkflowDelivery.updateMany({
+      where: {
+        status: ScheduledWorkflowDeliveryStatus.PROCESSING,
+        updated_at: { lte: staleBefore },
+      },
+      data: {
+        status: ScheduledWorkflowDeliveryStatus.ACTIVE,
+        last_error: "Invio ripreso automaticamente dopo un'interruzione del worker.",
+      },
+    });
+    if (recovered.count > 0) {
+      this.logger.warn(`Recovered ${recovered.count} abandoned scheduled workflow deliveries.`);
+    }
+  }
+
   private async dispatch(row: {
     channel: ScheduledWorkflowDeliveryChannel;
     recipient: string;
@@ -261,6 +298,15 @@ export class ScheduledWorkflowDeliveryService {
   private sanitizeError(error: unknown): string {
     const message = error instanceof Error ? error.message : String(error);
     return message.slice(0, 500);
+  }
+
+  private validateScheduleTiming(runAt: Date, repeatEverySeconds: number | null): void {
+    if (runAt.getTime() < Date.now() - this.pastScheduleGraceMs) {
+      throw new Error("L'orario pianificato e' gia' trascorso. Scegli un orario futuro.");
+    }
+    if (repeatEverySeconds !== null && (!Number.isInteger(repeatEverySeconds) || repeatEverySeconds < this.minRepeatSeconds)) {
+      throw new Error(`La ripetizione minima consentita e' di ${this.minRepeatSeconds} secondi.`);
+    }
   }
 
   private readPositiveInt(name: string, fallback: number): number {

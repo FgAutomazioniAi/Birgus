@@ -323,6 +323,31 @@ export class ArchivedItemsService {
     }
   }
 
+  public async emptyTrash(workspaceId: string): Promise<void> {
+    const archived = await this.listArchivedItems({ workspaceId, packageKey: "complete" });
+    const priority: Record<ArchivedItemDto["entityType"], number> = {
+      project: 0,
+      project_version: 1,
+      shipment: 2,
+      document: 3,
+    };
+    const items = [...archived.items].sort((left, right) => priority[left.entityType] - priority[right.entityType]);
+
+    for (const item of items) {
+      try {
+        await this.permanentlyDeleteArchivedItem({
+          workspaceId,
+          entityType: item.entityType,
+          entityId: item.entityId,
+        });
+      } catch (error) {
+        if (!(error instanceof AppError) || error.code !== "ARCHIVE_ITEM_NOT_FOUND") {
+          throw error;
+        }
+      }
+    }
+  }
+
   private extractProjectReference(
     domainEntityType: string | null,
     domainEntityId: string | null,
@@ -698,6 +723,7 @@ export class ArchivedItemsService {
 
     await prisma.$transaction(async (tx) => {
       if (documentIds.length > 0) {
+        await this.deleteAssistantSessionDocuments(tx, workspaceId, documentIds);
         await this.deleteKnowledgeForDocuments(tx, workspaceId, documentIds);
         await this.deleteDdtRelationsByDocumentIds(tx, workspaceId, documentIds);
         await tx.document.deleteMany({
@@ -801,6 +827,7 @@ export class ArchivedItemsService {
 
     await prisma.$transaction(async (tx) => {
       if (documentIds.length > 0) {
+        await this.deleteAssistantSessionDocuments(tx, workspaceId, documentIds);
         await this.deleteKnowledgeForDocuments(tx, workspaceId, documentIds);
         await this.deleteDdtRelationsByDocumentIds(tx, workspaceId, documentIds);
         await tx.document.deleteMany({
@@ -881,6 +908,7 @@ export class ArchivedItemsService {
     }
 
     await prisma.$transaction(async (tx) => {
+      await this.deleteAssistantSessionDocuments(tx, workspaceId, [document.id]);
       await this.deleteKnowledgeForDocuments(tx, workspaceId, [document.id]);
       await this.deleteDdtRelationsByDocumentIds(tx, workspaceId, [document.id]);
       await tx.document.delete({
@@ -944,6 +972,25 @@ export class ArchivedItemsService {
         workspace_id: workspaceId,
         id: {
           in: ddtIds,
+        },
+      },
+    });
+  }
+
+  private async deleteAssistantSessionDocuments(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    documentIds: string[],
+  ): Promise<void> {
+    if (documentIds.length === 0) {
+      return;
+    }
+
+    await tx.assistantSessionDocument.deleteMany({
+      where: {
+        workspace_id: workspaceId,
+        document_id: {
+          in: documentIds,
         },
       },
     });

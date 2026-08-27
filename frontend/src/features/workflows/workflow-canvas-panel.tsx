@@ -27,6 +27,7 @@ import {
   Check,
   ChevronDown,
   GitBranch,
+  LayoutGrid,
   Pencil,
   Play,
   Plus,
@@ -42,6 +43,8 @@ import {
 import { toast } from "sonner";
 
 import { Badge, Button, Card, Text } from "@/components/atoms";
+import { PageHelpHint } from "@/components/molecules";
+import { useLanguage } from "@/components/organisms/language-provider";
 import { useModuleAccess } from "@/lib/module-access";
 import { cn } from "@/lib/cn";
 import type {
@@ -61,6 +64,7 @@ import {
   defaultPromptFromConfiguration,
   findToolForFlowNodeType,
   flowNodeDescription,
+  flowNodeLabel,
   formatDateTime,
   isAiRequestFlowNodeType,
   isAdvancedLangChainTool,
@@ -68,9 +72,11 @@ import {
   isLangChainTool,
   inferFlowNodeType,
   MAX_WORKFLOW_UPLOAD_BYTES,
-  NODE_KIND_BORDER,
+  NODE_CATEGORY_BORDER,
+  NODE_CATEGORY_BADGE_TONE,
+  NODE_CATEGORY_TAB_ACTIVE,
   NODE_KIND_ICONS,
-  NODE_KIND_LABELS,
+  localizedFlowNodeLabel,
   normalizeAiPromptConfiguration,
   nodeKindIcon,
   parsePaletteDragPayload,
@@ -96,7 +102,7 @@ import {
   type UploadedWorkflowFile,
   type WorkflowScreen,
 } from "./workflow-model";
-import { PaletteButton, PaletteSection, RunResultsPanel, TelegramChannelField, ToolbarDropdown, ToolConfigurationForm, WorkflowCheckbox } from "./workflow-components";
+import { PaletteButton, PaletteSection, RunResultsPanel, TelegramChannelField, ToolConfigurationForm, WorkflowCheckbox, WorkflowOutputDialog } from "./workflow-components";
 
 function resolveWorkflowKnowledgeMode(configuration: unknown): WorkflowKnowledgeMode {
   const config = toRecord(configuration);
@@ -147,17 +153,39 @@ function defaultPromptForTool(tool: WorkflowTool | null): string {
 }
 
 function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
+  const { language, t } = useLanguage();
   const [isDefaultPromptOpen, setIsDefaultPromptOpen] = useState(false);
   const [defaultPromptDraft, setDefaultPromptDraft] = useState("");
   const [isConfirmingDefaultPrompt, setIsConfirmingDefaultPrompt] = useState(false);
   const Icon = NODE_KIND_ICONS[data.type] ?? (data.paletteKind === "AGENT" ? Bot : data.paletteKind === "TOOL" ? Wrench : nodeKindIcon[data.kind]);
-  const hasTarget = data.type !== "input-text";
+  const hasFieldTargets = data.type === "llm" || data.type === "generate-document" || ["send-email", "send-telegram", "send-whatsapp"].includes(data.type);
+  const hasTarget = data.type !== "input-text" && data.type !== "schedule" && !hasFieldTargets;
   const hasSource = data.type !== "output";
   const config = data.configuration;
   const isAiRequestNode = isAiRequestFlowNodeType(data.type);
   const currentPrompt = currentPromptFromConfiguration(config);
   const defaultPrompt = defaultPromptFromConfiguration(config);
-  const manualInputDisabled = data.hasInputSource;
+  const manualInputDisabled = data.incomingTargetHandles.length > 0;
+  const scheduleRepeatEnabled = config.scheduleRepeatEnabled === undefined
+    ? typeof config.scheduleRepeatValue === "string" && config.scheduleRepeatValue.trim().length > 0
+    : config.scheduleRepeatEnabled === true;
+  const isFieldConnected = (field: string) => data.incomingTargetHandles.includes(`field:${field}`) || data.incomingTargetHandles.includes("__default__");
+  const fieldInputClassName = (field: string) => cn(
+    "w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary",
+    isFieldConnected(field) ? "cursor-not-allowed bg-bg-muted text-text-muted" : "",
+  );
+  const dataHandleClassName = "!left-0 !h-3 !w-3 !border-2 !border-status-info-text !bg-status-info-text";
+  // I connettori dei campi vivono nel contenuto imbottito del nodo: -12px li riallinea al bordo esterno.
+  const textHandleClassName = "!left-[-12px] !h-3 !w-3 !border-2 !border-status-info-text !bg-status-info-text";
+  const scheduleHandleClassName = "!left-[-12px] !h-3 !w-3 !border-2 !border-status-danger-text !bg-status-danger-text";
+  const fileHandleClassName = "!left-[-12px] !h-3 !w-3 !border-2 !border-status-success-text !bg-status-success-text";
+  const sourceHandleClassName = data.type === "schedule"
+    ? scheduleHandleClassName.replace("!left-[-12px] ", "")
+    : data.type === "generate-document" || data.type === "input-file"
+      ? fileHandleClassName.replace("!left-[-12px] ", "")
+      : ["send-email", "send-telegram", "send-whatsapp"].includes(data.type)
+        ? dataHandleClassName.replace("!left-0 ", "")
+        : textHandleClassName.replace("!left-[-12px] ", "");
   const fieldId = (name: string) => `workflow-${data.nodeId}-${name}`;
   const stringConfig = (key: string) => typeof config[key] === "string" ? String(config[key]) : "";
   const boolConfig = (key: string) => config[key] === true;
@@ -172,9 +200,6 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
     "w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary",
     manualInputDisabled ? "cursor-not-allowed bg-bg-muted text-text-muted" : "",
   );
-  const manualInputHint = manualInputDisabled ? (
-    <p className="text-[11px] leading-snug text-text-muted">Input ricevuto dal nodo collegato.</p>
-  ) : null;
 
   useEffect(() => {
     setDefaultPromptDraft(defaultPrompt);
@@ -185,14 +210,15 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
     <div
       className={cn(
         "w-64 rounded-lg border-2 bg-bg-surface p-3 shadow-card",
-        NODE_KIND_BORDER[data.type],
+        NODE_CATEGORY_BORDER[data.paletteKind],
         selected ? "ring-2 ring-ring-primary" : "",
       )}
     >
-      {hasTarget ? <Handle type="target" position={Position.Left} /> : null}
-      <div className="mb-2 flex items-center gap-2">
+      {hasTarget ? <Handle type="target" position={Position.Left} className={dataHandleClassName} /> : null}
+      <div className="relative mb-2 flex items-center gap-2">
+        {["send-email", "send-telegram", "send-whatsapp"].includes(data.type) ? <Handle type="target" id="control:schedule" position={Position.Left} className={scheduleHandleClassName} title="Collega Pianifica" /> : null}
         <Icon className="h-4 w-4 text-text-primary" />
-        <span className="text-sm font-medium text-text-primary">{data.label}</span>
+        <span className="text-sm font-medium text-text-primary">{localizedFlowNodeLabel(data.label, data.type, language)}</span>
       </div>
 
       {data.type === "input-text" ? (
@@ -201,7 +227,7 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
           name={fieldId("promptText")}
           value={stringConfig("promptText")}
           onChange={(event) => patchConfig("promptText", event.target.value)}
-          placeholder="Enter the prompt text..."
+          placeholder={t("workflow.inputText")}
           rows={3}
           className="nodrag w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
         />
@@ -240,7 +266,7 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
             type="text"
             value={stringConfig("query")}
             onChange={(event) => patchConfig("query", event.target.value)}
-            placeholder="What should this look up?"
+            placeholder={t("workflow.searchKnowledge")}
             className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
           />
           <select
@@ -250,10 +276,10 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
             onChange={(event) => patchConfig("category", event.target.value)}
             className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
           >
-            <option value="">All categories</option>
-            <option value="contract">Contract</option>
-            <option value="quotation">Quotation</option>
-            <option value="other">Other</option>
+            <option value="">{t("workflow.allCategories")}</option>
+            <option value="contract">{t("workflow.contract")}</option>
+            <option value="quotation">{t("workflow.quotation")}</option>
+            <option value="other">{t("workflow.other")}</option>
           </select>
         </div>
       ) : null}
@@ -265,7 +291,7 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
             name={fieldId("documentIds")}
             value={stringConfig("documentIds")}
             onChange={(event) => patchConfig("documentIds", event.target.value)}
-            placeholder="Document IDs, uno per riga"
+            placeholder={t("workflow.documentIds")}
             rows={3}
             disabled={manualInputDisabled}
             className={inputClassName}
@@ -275,11 +301,10 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
             name={fieldId("prompt")}
             value={currentPrompt}
             onChange={(event) => patchCurrentPrompt(event.target.value)}
-            placeholder="Richiesta, es. riassumi i documenti"
+            placeholder={t("workflow.request")}
             rows={2}
             className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
           />
-          {manualInputHint}
           <WorkflowCheckbox
             checked={boolConfig("use_deep_reasoning")}
             label="Self-Discover"
@@ -291,26 +316,28 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
 
       {data.type === "llm" ? (
         <div className="nodrag flex flex-col gap-2">
-          <textarea
-            id={fieldId("input_text")}
-            name={fieldId("input_text")}
-            value={stringConfig("input_text")}
-            onChange={(event) => patchConfig("input_text", event.target.value)}
-            placeholder={manualInputDisabled ? "Input dal nodo collegato" : "Leave blank to use the previous step's output"}
-            rows={2}
-            disabled={manualInputDisabled}
-            className={inputClassName}
-          />
+          <div className="relative">
+            <Handle type="target" id="field:input_text" position={Position.Left} className={textHandleClassName} title="Collega contenuto" />
+            <textarea
+              id={fieldId("input_text")}
+              name={fieldId("input_text")}
+              value={stringConfig("input_text")}
+              onChange={(event) => patchConfig("input_text", event.target.value)}
+              placeholder={isFieldConnected("input_text") ? t("workflow.connectedInput") : t("workflow.previousOutput")}
+              rows={2}
+              disabled={isFieldConnected("input_text")}
+              className={fieldInputClassName("input_text")}
+            />
+          </div>
           <textarea
             id={fieldId("instructions")}
             name={fieldId("instructions")}
             value={currentPrompt}
             onChange={(event) => patchCurrentPrompt(event.target.value)}
-            placeholder="Instructions"
+            placeholder={t("workflow.instructions")}
             rows={3}
             className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
           />
-          {manualInputHint}
           <WorkflowCheckbox
             checked={boolConfig("use_deep_reasoning")}
             label="Self-Discover"
@@ -327,7 +354,7 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
             name={fieldId("structure-input")}
             value={stringConfig("input_text")}
             onChange={(event) => patchConfig("input_text", event.target.value)}
-            placeholder={manualInputDisabled ? "Input dal nodo collegato" : "Leave blank to use the previous step's output"}
+            placeholder={manualInputDisabled ? t("workflow.connectedInput") : t("workflow.previousOutput")}
             rows={2}
             disabled={manualInputDisabled}
             className={inputClassName}
@@ -337,45 +364,59 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
             name={fieldId("structure-instructions")}
             value={currentPrompt}
             onChange={(event) => patchCurrentPrompt(event.target.value)}
-            placeholder="Instructions (required)"
+            placeholder={t("workflow.requiredInstructions")}
             rows={3}
             className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
           />
-          {manualInputHint}
         </div>
       ) : null}
 
       {data.type === "generate-document" || data.type === "quotation-docx" ? (
-        <div className="nodrag flex flex-col gap-1">
-          <textarea
-            id={fieldId(data.type === "quotation-docx" ? "quotationDataJson" : "content")}
-            name={fieldId(data.type === "quotation-docx" ? "quotationDataJson" : "content")}
-            value={stringConfig(data.type === "quotation-docx" ? "quotationDataJson" : "content")}
-            onChange={(event) => patchConfig(data.type === "quotation-docx" ? "quotationDataJson" : "content", event.target.value)}
-            placeholder={manualInputDisabled ? "Input dal nodo collegato" : data.type === "quotation-docx" ? "Quotation data JSON" : "Document content"}
-            rows={3}
-            disabled={manualInputDisabled}
-            className={inputClassName}
-          />
-          {manualInputHint}
-          <input
-            id={fieldId("file_name")}
-            name={fieldId("file_name")}
-            type="text"
-            value={stringConfig("file_name")}
-            onChange={(event) => patchConfig("file_name", event.target.value)}
-            placeholder="File name"
-            className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
-          />
+        <div className="nodrag flex flex-col gap-2">
+          <div className="relative">
+            {data.type === "generate-document" ? <Handle type="target" id="field:content" position={Position.Left} className={textHandleClassName} title="Collega contenuto" /> : null}
+            <textarea
+              id={fieldId(data.type === "quotation-docx" ? "quotationDataJson" : "content")}
+              name={fieldId(data.type === "quotation-docx" ? "quotationDataJson" : "content")}
+              value={stringConfig(data.type === "quotation-docx" ? "quotationDataJson" : "content")}
+              onChange={(event) => patchConfig(data.type === "quotation-docx" ? "quotationDataJson" : "content", event.target.value)}
+              placeholder={data.type === "generate-document" && isFieldConnected("content") ? t("workflow.connectedContent") : data.type === "quotation-docx" ? "Quotation JSON data" : t("workflow.documentContent")}
+              rows={3}
+              disabled={data.type === "generate-document" ? isFieldConnected("content") : manualInputDisabled}
+              className={data.type === "generate-document" ? fieldInputClassName("content") : inputClassName}
+            />
+          </div>
+          <div className="relative">
+            {data.type === "generate-document" ? <Handle type="target" id="field:file_name" position={Position.Left} className={textHandleClassName} title="Collega nome file" /> : null}
+          <input id={fieldId("file_name")} name={fieldId("file_name")} type="text" value={stringConfig("file_name")} onChange={(event) => patchConfig("file_name", event.target.value)} placeholder={data.type === "generate-document" && isFieldConnected("file_name") ? t("workflow.connectedFileName") : t("workflow.fileName")} disabled={data.type === "generate-document" && isFieldConnected("file_name")} className={data.type === "generate-document" ? fieldInputClassName("file_name") : "w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"} />
+          </div>
+          {data.type === "generate-document" ? <>
+            <select
+              id={fieldId("format")}
+              name={fieldId("format")}
+              value={stringConfig("format") || "docx"}
+              onChange={(event) => patchConfig("format", event.target.value)}
+              className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+            >
+              <option value="docx">Word (.docx)</option>
+              <option value="pdf">PDF (.pdf)</option>
+              <option value="md">Markdown (.md)</option>
+            </select>
+            <WorkflowCheckbox
+              checked={boolConfig("save_to_archive")}
+              label="Salva nell'archivio e knowledge"
+              help="Il file viene archiviato nel workspace, indicizzato e resta disponibile alla ricerca AI. Se disattivato, resta comunque scaricabile dal risultato dell'esecuzione."
+              onChange={(checked) => data.onConfigChange?.({ save_to_archive: checked })}
+            />
+          </> : null}
         </div>
       ) : null}
 
       {data.type === "send-email" ? (
         <div className="nodrag flex flex-col gap-1">
-          <input id={fieldId("to")} name={fieldId("to")} type="email" value={stringConfig("to")} onChange={(event) => patchConfig("to", event.target.value)} placeholder="Recipient email" className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
-          <input id={fieldId("subject")} name={fieldId("subject")} type="text" value={stringConfig("subject")} onChange={(event) => patchConfig("subject", event.target.value)} placeholder="Subject" className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
-          <textarea id={fieldId("text")} name={fieldId("text")} value={stringConfig("text")} onChange={(event) => patchConfig("text", event.target.value)} placeholder={manualInputDisabled ? "Input dal nodo collegato" : "Body (leave blank to use previous output)"} rows={3} disabled={manualInputDisabled} className={inputClassName} />
-          {manualInputHint}
+          <input id={fieldId("to")} name={fieldId("to")} type="email" value={stringConfig("to")} onChange={(event) => patchConfig("to", event.target.value)} placeholder={t("workflow.emailRecipient")} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+          <input id={fieldId("subject")} name={fieldId("subject")} type="text" value={stringConfig("subject")} onChange={(event) => patchConfig("subject", event.target.value)} placeholder={t("workflow.subject")} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+          <div className="relative"><Handle type="target" id="field:text" position={Position.Left} className={textHandleClassName} title={t("workflow.connectContent")} /><textarea id={fieldId("text")} name={fieldId("text")} value={stringConfig("text")} onChange={(event) => patchConfig("text", event.target.value)} placeholder={isFieldConnected("text") ? t("workflow.connectedContent") : t("workflow.emailBody")} rows={3} disabled={isFieldConnected("text")} className={fieldInputClassName("text")} /></div>
         </div>
       ) : null}
 
@@ -388,16 +429,14 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
             onChange={(channelId) => data.onConfigChange?.({ telegram_channel_id: channelId, chat_id: channelId ? "" : stringConfig("chat_id") })}
             onManualChatIdChange={(chatId) => patchConfig("chat_id", chatId)}
           />
-          <textarea id={fieldId("text")} name={fieldId("text")} value={stringConfig("text")} onChange={(event) => patchConfig("text", event.target.value)} placeholder={manualInputDisabled ? "Input dal nodo collegato" : "Message (leave blank to use previous output)"} rows={3} disabled={manualInputDisabled} className={inputClassName} />
-          {manualInputHint}
+          <div className="relative"><Handle type="target" id="field:text" position={Position.Left} className={textHandleClassName} title="Collega contenuto" /><textarea id={fieldId("text")} name={fieldId("text")} value={stringConfig("text")} onChange={(event) => patchConfig("text", event.target.value)} placeholder={isFieldConnected("text") ? "Contenuto dal nodo collegato" : "Messaggio"} rows={3} disabled={isFieldConnected("text")} className={fieldInputClassName("text")} /></div>
         </div>
       ) : null}
 
       {data.type === "send-whatsapp" ? (
         <div className="nodrag flex flex-col gap-1">
-          <input id={fieldId("to")} name={fieldId("to")} type="tel" value={stringConfig("to")} onChange={(event) => patchConfig("to", event.target.value)} placeholder="WhatsApp number, es. 393..." className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
-          <textarea id={fieldId("text")} name={fieldId("text")} value={stringConfig("text")} onChange={(event) => patchConfig("text", event.target.value)} placeholder={manualInputDisabled ? "Input dal nodo collegato" : "Message (leave blank to use previous output)"} rows={3} disabled={manualInputDisabled} className={inputClassName} />
-          {manualInputHint}
+          <input id={fieldId("to")} name={fieldId("to")} type="tel" value={stringConfig("to")} onChange={(event) => patchConfig("to", event.target.value)} placeholder="Numero WhatsApp, es. 393..." className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+          <div className="relative"><Handle type="target" id="field:text" position={Position.Left} className={textHandleClassName} title="Collega contenuto" /><textarea id={fieldId("text")} name={fieldId("text")} value={stringConfig("text")} onChange={(event) => patchConfig("text", event.target.value)} placeholder={isFieldConnected("text") ? "Contenuto dal nodo collegato" : "Messaggio"} rows={3} disabled={isFieldConnected("text")} className={fieldInputClassName("text")} /></div>
         </div>
       ) : null}
 
@@ -414,9 +453,10 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
               className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs normal-case tracking-normal text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
             />
           </label>
-          <label className="flex flex-col gap-0.5 text-[10px] font-medium uppercase tracking-wide text-text-muted">
-            Ripeti ogni
-            <div className="flex gap-1">
+          <div className="flex items-end gap-2">
+            <label className="flex min-w-0 flex-1 flex-col gap-0.5 text-[10px] font-medium uppercase tracking-wide text-text-muted">
+              Ripeti ogni
+              <div className="flex gap-1">
               <input
                 id={fieldId("scheduleRepeatValue")}
                 name={fieldId("scheduleRepeatValue")}
@@ -425,6 +465,7 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
                 value={stringConfig("scheduleRepeatValue")}
                 onChange={(event) => patchConfig("scheduleRepeatValue", event.target.value)}
                 placeholder="7"
+                disabled={!scheduleRepeatEnabled}
                 className="w-1/2 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs normal-case tracking-normal text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
               />
               <select
@@ -432,30 +473,42 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
                 name={fieldId("scheduleRepeatUnit")}
                 value={stringConfig("scheduleRepeatUnit") || "days"}
                 onChange={(event) => patchConfig("scheduleRepeatUnit", event.target.value)}
+                disabled={!scheduleRepeatEnabled}
                 className="w-1/2 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs normal-case tracking-normal text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
               >
                 <option value="hours">ore</option>
                 <option value="days">giorni</option>
               </select>
-            </div>
-          </label>
-          <p className="text-xs text-text-muted">
-            Collegalo direttamente a Email, Telegram o WhatsApp: il nodo collegato verra' pianificato e non inviato subito.
-          </p>
+              </div>
+            </label>
+            <WorkflowCheckbox checked={scheduleRepeatEnabled} label="Ripeti" onChange={(checked) => data.onConfigChange?.({ scheduleRepeatEnabled: checked })} />
+          </div>
         </div>
       ) : null}
 
       {data.type === "compose-email" ? (
         <div className="nodrag flex flex-col gap-1">
-          <textarea id={fieldId("context")} name={fieldId("context")} value={stringConfig("context")} onChange={(event) => patchConfig("context", event.target.value)} placeholder={manualInputDisabled ? "Input dal nodo collegato" : "What's the email about?"} rows={2} disabled={manualInputDisabled} className={inputClassName} />
-          <input id={fieldId("tone")} name={fieldId("tone")} type="text" value={stringConfig("tone")} onChange={(event) => patchConfig("tone", event.target.value)} placeholder="Tone (professionale)" className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
-          <textarea id={fieldId("extra_instructions")} name={fieldId("extra_instructions")} value={currentPrompt} onChange={(event) => patchCurrentPrompt(event.target.value)} placeholder="Extra instructions" rows={2} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
-          {manualInputHint}
+          <textarea id={fieldId("context")} name={fieldId("context")} value={stringConfig("context")} onChange={(event) => patchConfig("context", event.target.value)} placeholder={manualInputDisabled ? "Input dal nodo collegato" : "Di cosa deve parlare l'email?"} rows={2} disabled={manualInputDisabled} className={inputClassName} />
+          <input id={fieldId("tone")} name={fieldId("tone")} type="text" value={stringConfig("tone")} onChange={(event) => patchConfig("tone", event.target.value)} placeholder="Tono (professionale)" className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+          <textarea id={fieldId("extra_instructions")} name={fieldId("extra_instructions")} value={currentPrompt} onChange={(event) => patchCurrentPrompt(event.target.value)} placeholder="Istruzioni aggiuntive" rows={2} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
         </div>
       ) : null}
 
       {data.type === "check-mailbox" ? (
-        <p className="text-xs text-text-muted">Checks the inbox and processes attachments when this workflow runs.</p>
+        <p className="text-xs text-text-muted">{t("workflow.mailboxHint")}</p>
+      ) : null}
+
+      {data.type === "output" ? (
+        <button
+          type="button"
+          className="nodrag mt-1 flex w-full items-center justify-center rounded-md border border-brand-primary bg-bg-page px-3 py-2 text-sm font-semibold text-brand-primary transition-colors hover:bg-bg-subtle"
+          onClick={(event) => {
+            event.stopPropagation();
+            data.onOutputPreview?.();
+          }}
+        >
+          Visualizza
+        </button>
       ) : null}
 
       {isAiRequestNode ? (
@@ -466,7 +519,7 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
             onClick={() => setIsDefaultPromptOpen((current) => !current)}
             aria-expanded={isDefaultPromptOpen}
           >
-            <span>Prompt default</span>
+            <span>{t("workflow.defaultPrompt")}</span>
             <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isDefaultPromptOpen ? "rotate-180" : "")} />
           </button>
           {isDefaultPromptOpen ? (
@@ -493,8 +546,8 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
           ) : null}
           {isConfirmingDefaultPrompt ? (
             <div className="absolute bottom-full left-0 z-20 mb-2 w-64 rounded-md border border-border-default bg-bg-surface p-3 shadow-elevated">
-              <p className="text-xs font-semibold text-text-primary">Aggiornare il prompt default?</p>
-              <p className="mt-1 text-xs text-text-muted">Cambiera' il template salvato per questo nodo.</p>
+              <p className="text-xs font-semibold text-text-primary">{t("workflow.updateDefaultPrompt")}</p>
+              <p className="mt-1 text-xs text-text-muted">{t("workflow.updateDefaultPromptHint")}</p>
               <div className="mt-3 flex justify-end gap-2">
                 <button type="button" className="rounded-md px-2 py-1 text-xs font-medium text-text-muted hover:bg-bg-muted" onClick={() => setIsConfirmingDefaultPrompt(false)}>
                   Annulla
@@ -508,7 +561,7 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
         </div>
       ) : null}
 
-      {hasSource ? <Handle type="source" position={Position.Right} /> : null}
+      {hasSource ? <Handle type="source" position={Position.Right} className={sourceHandleClassName} /> : null}
     </div>
   );
 }
@@ -517,6 +570,7 @@ const nodeTypes = { workflowNode: FlowNodeCard };
 
 export function WorkflowCanvasPanel() {
   const { enabledModuleKeys } = useModuleAccess();
+  const { language, t } = useLanguage();
   const [screen, setScreen] = useState<WorkflowScreen>("modules");
   const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
   const [tools, setTools] = useState<WorkflowTool[]>([]);
@@ -541,8 +595,12 @@ export function WorkflowCanvasPanel() {
   const [workflowRuns, setWorkflowRuns] = useState<WorkflowRun[]>([]);
   const [isLoadingRuns, setIsLoadingRuns] = useState(false);
   const [isOutputFocused, setIsOutputFocused] = useState(false);
+  const [isRunsPanelCollapsed, setIsRunsPanelCollapsed] = useState(false);
+  const [outputPreviewNodeId, setOutputPreviewNodeId] = useState<string | null>(null);
   const [expandedResultCard, setExpandedResultCard] = useState<string | null>(null);
-  const [openToolbarGroup, setOpenToolbarGroup] = useState<string | null>(null);
+  const [openToolbarGroup, setOpenToolbarGroup] = useState<string>(TOOLBAR_GROUPS[0].id);
+  const [nodePickerGroupId, setNodePickerGroupId] = useState<string | null>(null);
+  const [nodePickerQuery, setNodePickerQuery] = useState("");
   const [promptDraft, setPromptDraft] = useState("");
   const [runInputText, setRunInputText] = useState("{}");
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, UploadedWorkflowFile>>({});
@@ -560,29 +618,45 @@ export function WorkflowCanvasPanel() {
   const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents]);
   const selectedAgent = selectedNode?.moduleAgentId ? agentById.get(selectedNode.moduleAgentId) ?? null : null;
   const selectedTool = selectedNode?.moduleToolId ? toolById.get(selectedNode.moduleToolId) ?? null : null;
-  const moduleCards = useMemo(() => buildModuleCards(workflows, tools, agents, enabledModuleKeys), [agents, enabledModuleKeys, tools, workflows]);
+  const activeToolbarGroup = TOOLBAR_GROUPS.find((group) => group.id === openToolbarGroup) ?? TOOLBAR_GROUPS[0];
+  const nodePickerGroup = TOOLBAR_GROUPS.find((group) => group.id === nodePickerGroupId) ?? null;
+  const featuredToolbarItems = activeToolbarGroup.items.slice(0, 4);
+  const hasMoreToolbarItems = activeToolbarGroup.items.length > featuredToolbarItems.length;
+  const nodePickerItems = (nodePickerGroup?.items ?? []).filter((kind) => {
+    const query = nodePickerQuery.trim().toLowerCase();
+    return !query || flowNodeLabel(kind, language).toLowerCase().includes(query) || flowNodeDescription(kind, language).toLowerCase().includes(query);
+  });
+  const moduleCards = useMemo(
+    () => buildModuleCards(workflows, tools, agents, enabledModuleKeys, language),
+    [agents, enabledModuleKeys, language, tools, workflows],
+  );
   const playgroundCard = useMemo<ModuleCard>(() => {
     const playground = workflows.find((item) => item.key === PLAYGROUND_KEY) ?? null;
     return {
       cardKey: "playground",
       moduleKey: "workflow_management",
-      title: "Playground",
-      description: "Area libera per costruire e provare workflow senza aumentare i workflow dei moduli.",
+      title: language === "en" ? "Playground" : "Playground",
+      description: language === "en"
+        ? "A free area to build and test workflows without adding workflows to modules."
+        : "Area libera per costruire e provare workflow senza aumentare i workflow dei moduli.",
       workflow: playground,
       agentsCount: agents.length + tools.filter(isAgentTool).length,
       toolsCount: tools.filter((tool) => !isAgentTool(tool)).length,
       isPlayground: true,
     };
-  }, [agents.length, tools, workflows]);
+  }, [agents.length, language, tools, workflows]);
   const nodeLabelByKey = useMemo(() => new Map(draftNodes.map((node) => [node.nodeKey, cleanWorkflowLabel(node.label)])), [draftNodes]);
-  const inputSourceTargetIds = useMemo(() => {
-    const inputNodeIds = new Set(draftNodes.filter((node) => node.nodeKind === "INPUT").map((node) => node.clientId));
-    return new Set(
-      draftEdges
-        .filter((edge) => edge.isEnabled && inputNodeIds.has(edge.sourceClientId))
-        .map((edge) => edge.targetClientId),
-    );
-  }, [draftEdges, draftNodes]);
+  const incomingHandlesByTargetId = useMemo(() => {
+    const handles = new Map<string, string[]>();
+    for (const edge of draftEdges.filter((item) => item.isEnabled)) {
+      const current = handles.get(edge.targetClientId) ?? [];
+      current.push(edge.targetHandle ?? "__default__");
+      handles.set(edge.targetClientId, current);
+    }
+    return handles;
+  // Configurazioni testuali non cambiano i collegamenti: mantenere stabile questa mappa evita di ricreare
+  // i nodi React Flow a ogni battuta e preserva correttamente la posizione del cursore.
+  }, [draftEdges]);
   const draftNodeStructureKey = useMemo(
     () => JSON.stringify(draftNodes.map((node) => ({
       clientId: node.clientId,
@@ -725,6 +799,7 @@ export function WorkflowCanvasPanel() {
     setLatestRun(null);
     setWorkflowRuns([]);
     setIsOutputFocused(false);
+    setOutputPreviewNodeId(null);
     setFlowInstance(null);
     setUploadedFiles({});
     setDraftNodes(nextDraftNodes);
@@ -809,12 +884,13 @@ export function WorkflowCanvasPanel() {
       toolById,
       agentById,
       uploadedFiles,
-      inputSourceTargetIds.has(item.clientId),
+      incomingHandlesByTargetId.get(item.clientId) ?? [],
       patchNodeConfiguration,
       handleNodeFileChange,
+      (clientId) => setOutputPreviewNodeId(clientId),
     )));
     setEdges(draftEdges.map(toFlowEdge));
-  }, [agentById, draftEdges, draftNodeStructureKey, handleNodeFileChange, inputSourceTargetIds, patchNodeConfiguration, setEdges, setNodes, toolById, uploadedFiles]);
+  }, [agentById, draftEdges, draftNodeStructureKey, handleNodeFileChange, incomingHandlesByTargetId, patchNodeConfiguration, setEdges, setNodes, toolById, uploadedFiles]);
 
   useEffect(() => {
     setPromptDraft(selectedAgent?.activePrompt ?? "");
@@ -970,7 +1046,6 @@ export function WorkflowCanvasPanel() {
   };
 
   const addFlowNode = (kind: FlowNodeType, dropPosition?: { x: number; y: number }) => {
-    setOpenToolbarGroup(null);
     const nextIndex = draftNodes.length + 1;
     const position = dropPosition ?? { x: 100 + nextIndex * 40, y: 100 + nextIndex * 40 };
 
@@ -981,7 +1056,7 @@ export function WorkflowCanvasPanel() {
         clientId: `node_${Date.now()}_${nextIndex}`,
         nodeKey,
         nodeKind: "INPUT",
-        label: NODE_KIND_LABELS[kind],
+        label: flowNodeLabel(kind, language),
         positionX: position.x,
         positionY: position.y,
         inputKind: kind === "input-file" ? "document" : "text",
@@ -1001,7 +1076,7 @@ export function WorkflowCanvasPanel() {
         clientId: `node_${Date.now()}_${nextIndex}`,
         nodeKey,
         nodeKind: "OUTPUT",
-        label: NODE_KIND_LABELS[kind],
+        label: flowNodeLabel(kind, language),
         positionX: position.x,
         positionY: position.y,
         outputKind: "generic_result",
@@ -1016,7 +1091,7 @@ export function WorkflowCanvasPanel() {
 
     const tool = findToolForFlowNodeType(kind, tools);
     if (!tool) {
-      toast.info(`Tool backend non configurato per ${NODE_KIND_LABELS[kind]}.`);
+      toast.info(language === "en" ? `Backend tool is not configured for ${flowNodeLabel(kind, language)}.` : `Tool backend non configurato per ${flowNodeLabel(kind, language)}.`);
       return;
     }
     addToolNode(tool, position);
@@ -1289,6 +1364,14 @@ export function WorkflowCanvasPanel() {
     if (!connection.source || !connection.target) {
       return;
     }
+    const source = draftNodes.find((node) => node.clientId === connection.source);
+    const target = draftNodes.find((node) => node.clientId === connection.target);
+    const sourceType = source ? inferFlowNodeType(source, source.moduleToolId ? toolById.get(source.moduleToolId) ?? null : null) : null;
+    const targetType = target ? inferFlowNodeType(target, target.moduleToolId ? toolById.get(target.moduleToolId) ?? null : null) : null;
+    if (sourceType === "schedule" && (!["send-email", "send-telegram", "send-whatsapp"].includes(targetType ?? "") || connection.targetHandle !== "control:schedule")) {
+      toast.error("Pianifica va collegato al connettore di pianificazione dei nodi Resoconto.");
+      return;
+    }
     commitHistory();
     const edge: DraftEdge = {
       clientId: `edge_${Date.now()}`,
@@ -1301,7 +1384,21 @@ export function WorkflowCanvasPanel() {
     };
     setDraftEdges((current) => [...current, edge]);
     setEdges((current) => addEdge({ ...connection, id: edge.clientId, animated: true }, current));
-  }, [commitHistory, draftEdges.length, setEdges]);
+  }, [commitHistory, draftEdges.length, setEdges, toolById]);
+
+  const isValidConnection = useCallback((connection: Connection | Edge) => {
+    if (!connection.source || !connection.target) return false;
+    const source = draftNodes.find((node) => node.clientId === connection.source);
+    const target = draftNodes.find((node) => node.clientId === connection.target);
+    if (!source || !target || source.clientId === target.clientId) return false;
+    const sourceType = inferFlowNodeType(source, source.moduleToolId ? toolById.get(source.moduleToolId) ?? null : null);
+    const targetType = inferFlowNodeType(target, target.moduleToolId ? toolById.get(target.moduleToolId) ?? null : null);
+    if (["send-email", "send-telegram", "send-whatsapp"].includes(targetType ?? "") && connection.targetHandle === "control:schedule") {
+      return sourceType === "schedule";
+    }
+    if (sourceType !== "schedule") return true;
+    return ["send-email", "send-telegram", "send-whatsapp"].includes(targetType) && connection.targetHandle === "control:schedule";
+  }, [draftNodes, toolById]);
 
   const onEdgesChange = useCallback((changes: EdgeChange<Edge>[]) => {
     onEdgesChangeBase(changes);
@@ -1348,15 +1445,15 @@ export function WorkflowCanvasPanel() {
       <div className="flex min-h-[calc(100vh-2rem)] flex-col gap-4 p-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <Text as="h1" variant="h1">Workflow</Text>
-            <Text variant="muted">Scegli un modulo o crea un workflow libero da un playground vuoto.</Text>
+            <div className="flex items-center gap-2"><Text as="h1" variant="h1">Workflow</Text><PageHelpHint text={t("workflow.help")} /></div>
+            <Text variant="muted">{t("workflow.subtitle")}</Text>
           </div>
         </div>
 
         <section>
           <div className="mb-3 flex items-baseline justify-between gap-3">
-            <Text as="h2" variant="h2" className="text-lg">Workflow moduli</Text>
-            <Text variant="caption">{moduleCards.length} moduli attivi</Text>
+            <Text as="h2" variant="h2" className="text-lg">{t("workflow.modules")}</Text>
+            <Text variant="caption">{t("workflow.activeModules", { count: moduleCards.length })}</Text>
           </div>
           {moduleCards.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -1371,20 +1468,20 @@ export function WorkflowCanvasPanel() {
                     <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-bg-muted text-brand-primary">
                       <Boxes className="h-5 w-5" />
                     </div>
-                    <Badge tone={card.workflow ? "success" : "info"}>{card.workflow ? `v${card.workflow.versionNo}` : "Non configurato"}</Badge>
+                    <Badge tone={card.workflow ? "success" : "info"}>{card.workflow ? `v${card.workflow.versionNo}` : t("workflow.notConfigured")}</Badge>
                   </div>
                   <p className="mt-4 text-base font-bold text-text-primary">{card.title}</p>
                   <p className="mt-2 min-h-10 text-sm text-text-muted">{card.description}</p>
                   <div className="mt-4 flex gap-2 text-xs text-text-muted">
-                    <span>{card.agentsCount} agent</span>
-                    <span>{card.toolsCount} tool</span>
+                    <span>{t("workflow.agentCount", { count: card.agentsCount })}</span>
+                    <span>{t("workflow.toolCount", { count: card.toolsCount })}</span>
                   </div>
                 </button>
               ))}
             </div>
           ) : (
             <div className="rounded-[var(--radius-md)] border border-dashed border-border-default bg-bg-surface p-6 text-sm text-text-muted">
-              Nessun workflow modulo disponibile per i moduli attivi.
+              {t("workflow.noModuleWorkflows")}
             </div>
           )}
         </section>
@@ -1393,11 +1490,11 @@ export function WorkflowCanvasPanel() {
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div>
               <Text as="h2" variant="h2" className="text-lg">Playground</Text>
-              <Text variant="caption">{personalWorkflows.length + (playgroundCard.workflow ? 1 : 0)} workflow liberi</Text>
+              <Text variant="caption">{t("workflow.freeWorkflows", { count: personalWorkflows.length + (playgroundCard.workflow ? 1 : 0) })}</Text>
             </div>
             <Button onClick={() => setIsCreateWorkflowOpen(true)}>
               <Plus className="h-4 w-4" />
-              Nuovo workflow
+              {t("workflow.new")}
             </Button>
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -1436,15 +1533,15 @@ export function WorkflowCanvasPanel() {
             <Card className="w-full max-w-md p-5 shadow-elevated">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <Text as="h2" variant="h2" className="text-lg" id="create-workflow-title">Nuovo workflow</Text>
-                  <Text variant="muted">Parte vuoto: Input e Output, senza copiare alcun flusso esistente.</Text>
+                  <Text as="h2" variant="h2" className="text-lg" id="create-workflow-title">{t("workflow.new")}</Text>
+                  <Text variant="muted">{t("workflow.createHint")}</Text>
                 </div>
-                <button type="button" onClick={() => setIsCreateWorkflowOpen(false)} className="rounded-md p-1 text-text-muted hover:bg-bg-muted hover:text-text-primary" aria-label="Chiudi">
+                <button type="button" onClick={() => setIsCreateWorkflowOpen(false)} className="rounded-md p-1 text-text-muted hover:bg-bg-muted hover:text-text-primary" aria-label={t("common.close")}>
                   <X className="h-5 w-5" />
                 </button>
               </div>
               <label className="mt-5 block space-y-2" htmlFor="new-workflow-name">
-                <span className="text-xs font-bold uppercase tracking-wide text-text-muted">Nome</span>
+                <span className="text-xs font-bold uppercase tracking-wide text-text-muted">{t("workflow.name")}</span>
                 <input
                   id="new-workflow-name"
                   value={newWorkflowLabel}
@@ -1460,9 +1557,9 @@ export function WorkflowCanvasPanel() {
                 />
               </label>
               <div className="mt-5 flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsCreateWorkflowOpen(false)}>Annulla</Button>
+                <Button variant="outline" onClick={() => setIsCreateWorkflowOpen(false)}>{t("common.cancel")}</Button>
                 <Button onClick={() => void createPersonalWorkflow()} disabled={isCreatingWorkflow}>
-                  {isCreatingWorkflow ? "Creazione..." : "Crea workflow"}
+                  {isCreatingWorkflow ? t("workflow.creating") : t("workflow.create")}
                 </Button>
               </div>
             </Card>
@@ -1482,9 +1579,9 @@ export function WorkflowCanvasPanel() {
             className="flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-border-default bg-bg-page px-3 text-sm font-medium text-text-secondary hover:bg-bg-muted"
           >
             <ArrowLeft className="h-4 w-4" />
-            Indietro
+            {t("workflow.back")}
           </button>
-          <label className="sr-only" htmlFor="workflow-name">Nome workflow</label>
+          <label className="sr-only" htmlFor="workflow-name">{t("workflow.name")}</label>
           <input
             id="workflow-name"
             name="workflow-name"
@@ -1495,7 +1592,7 @@ export function WorkflowCanvasPanel() {
         </div>
         <div className="flex flex-wrap gap-2">
           <label className="flex items-center gap-2 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs font-medium text-text-secondary">
-            Contesto
+            {t("workflow.context")}
             <select
               id="workflow-knowledge-mode"
               name="workflow-knowledge-mode"
@@ -1503,40 +1600,17 @@ export function WorkflowCanvasPanel() {
               onChange={(event) => setKnowledgeMode(event.target.value as WorkflowKnowledgeMode)}
               className="rounded border border-border-default bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
             >
-              <option value="on_demand">Documenti caricati</option>
-              <option value="hybrid">Knowledge workspace</option>
+              <option value="on_demand">{t("workflow.uploadedDocuments")}</option>
+              <option value="hybrid">{t("workflow.workspaceKnowledge")}</option>
             </select>
           </label>
-          {TOOLBAR_GROUPS.map((group) => (
-            <ToolbarDropdown
-              key={group.title}
-              count={group.items.length}
-              isOpen={openToolbarGroup === group.title}
-              onOpenChange={(isOpen) => setOpenToolbarGroup(isOpen ? group.title : null)}
-              title={group.title}
-            >
-              {group.items.map((kind) => {
-                const Icon = NODE_KIND_ICONS[kind];
-                return (
-                  <PaletteButton
-                    key={kind}
-                    icon={<Icon className="h-4 w-4" />}
-                    title={NODE_KIND_LABELS[kind]}
-                    subtitle={flowNodeDescription(kind)}
-                    dragPayload={{ kind: "FLOW", id: kind }}
-                    onClick={() => addFlowNode(kind)}
-                  />
-                );
-              })}
-            </ToolbarDropdown>
-          ))}
           <button
             type="button"
             onClick={handleDeleteSelected}
             className="flex items-center gap-1.5 rounded-md border border-border-default bg-bg-page px-3 py-1.5 text-sm font-medium text-status-danger-text hover:bg-bg-muted"
           >
             <Trash2 className="h-4 w-4" />
-            Elimina selezionati
+            {t("workflow.deleteSelected")}
           </button>
           <button
             type="button"
@@ -1545,7 +1619,7 @@ export function WorkflowCanvasPanel() {
             className="flex items-center gap-1.5 rounded-md border border-border-default bg-bg-page px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-muted disabled:opacity-40"
           >
             <RotateCcw className="h-4 w-4" />
-            Annulla
+            {t("workflow.undo")}
           </button>
           <button
             type="button"
@@ -1554,7 +1628,7 @@ export function WorkflowCanvasPanel() {
             className="flex items-center gap-1.5 rounded-md border border-border-default bg-bg-page px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-muted disabled:opacity-40"
           >
             <RotateCw className="h-4 w-4" />
-            Ripristina
+            {t("workflow.redo")}
           </button>
           <button
             type="button"
@@ -1563,7 +1637,7 @@ export function WorkflowCanvasPanel() {
             className="flex items-center gap-1.5 rounded-md border border-status-success-text bg-status-success-bg px-3 py-1.5 text-sm font-medium text-status-success-text hover:opacity-80 disabled:opacity-60"
           >
             <Play className="h-4 w-4" />
-            {isRunning ? "Esecuzione..." : "Salva ed esegui"}
+            {isRunning ? t("workflow.running") : t("workflow.saveAndRun")}
           </button>
           <button
             type="button"
@@ -1572,8 +1646,66 @@ export function WorkflowCanvasPanel() {
             className="flex items-center gap-1.5 rounded-md border border-brand-primary bg-brand-primary px-3 py-1.5 text-sm font-medium text-text-inverse shadow-brand hover:bg-brand-primary-hover disabled:opacity-60"
           >
             <Save className="h-4 w-4" />
-            {isSaving ? "Salvataggio..." : "Salva"}
+            {isSaving ? t("workflow.saving") : t("common.save")}
           </button>
+        </div>
+      </div>
+
+      <div className="border-b border-border-default bg-bg-page px-6 pt-2">
+        <div className="flex min-w-max items-end gap-1" role="tablist" aria-label={t("workflow.nodeCategories")}>
+          {TOOLBAR_GROUPS.map((group) => {
+            const isActive = activeToolbarGroup.id === group.id;
+            const groupLabel = language === "en" ? group.titleEn : group.title;
+            return (
+              <button
+                key={group.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setOpenToolbarGroup(group.id)}
+                className={cn(
+                  "flex h-9 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors",
+                  isActive ? NODE_CATEGORY_TAB_ACTIVE[group.category] : "border-transparent text-text-muted hover:bg-bg-muted hover:text-text-primary",
+                )}
+              >
+                <span>{groupLabel}</span>
+                <Badge tone={NODE_CATEGORY_BADGE_TONE[group.category]}>{group.items.length}</Badge>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="border-b border-border-default bg-bg-surface px-6 py-3" role="tabpanel">
+        <div className="flex h-[66px] items-stretch gap-2 overflow-hidden">
+          {featuredToolbarItems.map((kind) => {
+            const Icon = NODE_KIND_ICONS[kind];
+            return (
+              <PaletteButton
+                key={kind}
+                className="min-w-0 flex-1"
+                icon={<Icon className="h-4 w-4" />}
+                title={flowNodeLabel(kind, language)}
+                subtitle={flowNodeDescription(kind, language)}
+                dragPayload={{ kind: "FLOW", id: kind }}
+                onClick={() => addFlowNode(kind)}
+              />
+            );
+          })}
+          {hasMoreToolbarItems ? (
+            <button
+              type="button"
+              title={t("workflow.openAllNodes")}
+              aria-label={t("workflow.openAllNodes")}
+              onClick={() => {
+                setNodePickerQuery("");
+                setNodePickerGroupId(activeToolbarGroup.id);
+              }}
+              className="flex w-12 shrink-0 items-center justify-center rounded-md border border-dashed border-border-default bg-bg-page text-text-muted transition hover:border-brand-primary hover:bg-bg-subtle hover:text-brand-primary"
+            >
+              <LayoutGrid className="h-5 w-5" />
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -1588,19 +1720,17 @@ export function WorkflowCanvasPanel() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            isValidConnection={isValidConnection}
             onNodeDragStop={onNodeDragStop}
             onNodeClick={(_, node) => {
               setSelectedNodeId(node.id);
-              const isOutputNode = node.data.type === "output";
-              setIsOutputFocused(isOutputNode);
-              if (isOutputNode && latestRun?.resultPayload !== undefined && latestRun.resultPayload !== null) {
-                setExpandedResultCard("final");
-              }
+              setIsOutputFocused(false);
+              setOutputPreviewNodeId(null);
             }}
             onPaneClick={() => {
               setSelectedNodeId(null);
               setIsOutputFocused(false);
-              setOpenToolbarGroup(null);
+              setOutputPreviewNodeId(null);
             }}
             onNodesDelete={() => setSelectedNodeId(null)}
             onInit={setFlowInstance}
@@ -1614,6 +1744,7 @@ export function WorkflowCanvasPanel() {
         </div>
         <RunResultsPanel
           expandedResultCard={expandedResultCard}
+          isCollapsed={isRunsPanelCollapsed}
           isLoadingRuns={isLoadingRuns}
           isOutputFocused={isOutputFocused}
           latestRun={latestRun}
@@ -1621,9 +1752,46 @@ export function WorkflowCanvasPanel() {
           nodeLabelByKey={nodeLabelByKey}
           runs={workflowRuns}
           onSelectRun={(runId) => void selectWorkflowRun(runId)}
+          onToggleCollapsed={() => setIsRunsPanelCollapsed((current) => !current)}
           onToggleCard={(cardId) => setExpandedResultCard((current) => current === cardId ? null : cardId)}
         />
       </div>
+      <WorkflowOutputDialog
+        isOpen={outputPreviewNodeId !== null}
+        latestRun={latestRun}
+        nodeKey={draftNodes.find((node) => node.clientId === outputPreviewNodeId)?.nodeKey ?? null}
+        nodeLabel={draftNodes.find((node) => node.clientId === outputPreviewNodeId)?.label ?? flowNodeLabel("output", language)}
+        onClose={() => setOutputPreviewNodeId(null)}
+      />
+      {nodePickerGroup ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-labelledby="workflow-node-picker-title">
+          <Card className="flex max-h-[80vh] w-full max-w-5xl flex-col p-5 shadow-elevated">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Text as="h2" variant="h2" className="text-lg" id="workflow-node-picker-title">{language === "en" ? nodePickerGroup.titleEn : nodePickerGroup.title}</Text>
+                <Text variant="muted">{t("workflow.nodesAvailable", { count: nodePickerGroup.items.length })}</Text>
+              </div>
+              <button type="button" onClick={() => setNodePickerGroupId(null)} className="rounded-md p-1 text-text-muted hover:bg-bg-muted hover:text-text-primary" aria-label={t("workflow.closeNodePicker")}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <input
+              value={nodePickerQuery}
+              onChange={(event) => setNodePickerQuery(event.target.value)}
+              placeholder={t("workflow.searchNode")}
+              autoFocus
+              className="mt-4 h-10 w-full rounded-md border border-border-default bg-bg-page px-3 text-sm text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+            />
+            <div className="mt-3 grid min-h-0 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+              {nodePickerItems.map((kind) => {
+                const Icon = NODE_KIND_ICONS[kind];
+                return <PaletteButton key={kind} icon={<Icon className="h-4 w-4" />} title={flowNodeLabel(kind, language)} subtitle={flowNodeDescription(kind, language)} dragPayload={{ kind: "FLOW", id: kind }} onClick={() => { addFlowNode(kind); setNodePickerGroupId(null); }} />;
+              })}
+              {nodePickerItems.length === 0 ? <p className="col-span-full py-8 text-center text-sm text-text-muted">{t("workflow.noNodesFound")}</p> : null}
+            </div>
+          </Card>
+        </div>
+      ) : null}
     </div>
   );
 }

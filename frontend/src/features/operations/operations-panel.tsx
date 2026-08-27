@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge, Button, Card, Text } from "@/components/atoms";
+import { PageHelpHint } from "@/components/molecules";
 import { ConfigurableDataTable, type ConfigurableColumn } from "./configurable-data-table";
 import type { CustomerGeoPoint } from "./customer-geo-map";
 import { OptionSelect, SegmentedControl } from "./operation-controls";
@@ -146,7 +147,6 @@ const formatPercent = (value?: number | null): string => {
 
 export function OperationsPanel({ kind }: OperationsPanelProps) {
   const config = PANEL_CONFIG[kind];
-  const Icon = config.icon;
   const [data, setData] = useState<unknown>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -181,16 +181,14 @@ export function OperationsPanel({ kind }: OperationsPanelProps) {
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-border-default bg-bg-surface text-brand-primary">
-            <Icon size={20} />
-          </span>
-          <div>
+        <div>
+          <div className="flex items-center gap-2">
             <Text as="h1" variant="h1">
               {config.title}
             </Text>
-            <Text variant="muted">{config.subtitle}</Text>
+            <PageHelpHint text={config.subtitle} />
           </div>
+            <Text variant="muted">{config.subtitle}</Text>
         </div>
 
         <Button variant="outline" className="h-10 rounded-lg px-3" onClick={() => void load()} disabled={isLoading}>

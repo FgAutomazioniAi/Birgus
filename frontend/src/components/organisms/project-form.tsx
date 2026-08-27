@@ -6,7 +6,7 @@ import { type ChangeEvent, useCallback, useEffect, useRef, useState } from "reac
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
-import { Button, Card, Input, Text } from "@/components/atoms";
+import { Button, Card, Input, Switch, Text } from "@/components/atoms";
 import { FormField, PageHelpHint, SelectDropdown } from "@/components/molecules";
 import { PROJECT_STATUS_OPTIONS } from "@/lib/project-status";
 import { APP_ROUTES } from "@/lib/routes";
@@ -850,7 +850,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="w-full space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
@@ -1291,10 +1291,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
                   </div>
                 </div>
 
-                <label className="relative inline-flex cursor-pointer items-center">
-                  <input type="checkbox" {...register("enableAi")} className="peer sr-only" />
-                  <div className="peer h-7 w-14 rounded-full bg-slate-300 after:absolute after:left-[2px] after:top-[2px] after:h-6 after:w-6 after:rounded-full after:border after:border-gray-300 after:bg-bg-surface after:transition-all after:content-[''] peer-checked:bg-brand-primary peer-checked:after:translate-x-full peer-checked:after:border-bg-surface peer-focus:ring-4 peer-focus:ring-blue-300" />
-                </label>
+                <Switch label="Attivo" {...register("enableAi")} />
               </div>
             </>
           )}

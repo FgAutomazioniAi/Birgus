@@ -1,10 +1,13 @@
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 
 import { Prisma, WorkflowStepStatus } from "@prisma/client";
 
 import { ModuleKey } from "../../../core/module-access/ModuleKey.js";
 import { WorkflowRuntimeAccessPolicy } from "./WorkflowRuntimeAccessPolicy.js";
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
+import { GaragePath } from "../../../storage/GaragePath.js";
+import { StorageSelector } from "../../../storage/StorageSelector.js";
 import { AiProviderSettingsService } from "../../ai-runtime/services/AiProviderSettingsService.js";
 import { FileKind } from "../../document-archive/domain/FileKind.js";
 import { PutProjectFileCommand } from "../../document-archive/dto/PutProjectFileCommand.js";
@@ -31,6 +34,7 @@ interface StepExecutionContext {
   userId: string | null;
   runId: string;
   workflowKey: string;
+  workflowLabel: string;
   moduleKey: string | null;
   knowledgeMode: KnowledgeMode;
   projectId: string | null;
@@ -61,6 +65,7 @@ interface StepExecutionContext {
   inputPayload: Record<string, unknown> | null;
   nodeOutputs: Map<string, unknown>;
   incomingNodeKeys: Map<string, string[]>;
+  incomingFieldSourceKeys: Map<string, Map<string, string[]>>;
   outgoingNodeKeys: Map<string, string[]>;
   workflowNodesByKey: Map<string, WorkflowNodeRow>;
   scheduledTargetNodeKeys: Set<string>;
@@ -70,7 +75,18 @@ type ConditionPayload = Record<string, unknown>;
 
 interface IncomingNodeOutputs {
   byNodeKey: Record<string, Record<string, unknown>>;
+  byTargetHandle: Record<string, Record<string, unknown>>;
   items: Array<Record<string, unknown>>;
+}
+
+type PublishedOutputKind = "text" | "file" | "image" | "delivery_status" | "data";
+
+interface PublishedNodeOutput {
+  key: string;
+  label: string;
+  kind: PublishedOutputKind;
+  value: unknown;
+  mimeType?: string | null;
 }
 
 interface WorkflowNodeRow {
@@ -248,7 +264,11 @@ export class WorkflowRunExecutorService {
 
     const context = await this.buildContext(runId);
     const evaluateCondition = (payload: unknown) => this.evaluateCondition(payload as ConditionPayload | null, context);
-    const orderedNodes = this.graphPlanner.buildExecutionOrder(run.workflow.nodes, run.workflow.edges, evaluateCondition);
+    const orderedNodes = this.orderScheduleNodesAfterDeliveryInputs(
+      this.graphPlanner.buildExecutionOrder(run.workflow.nodes, run.workflow.edges, evaluateCondition),
+      run.workflow.edges,
+      evaluateCondition,
+    );
     await this.runtimeAccessPolicy.ensureRunAllowed({
       workspaceId: run.workspace_id,
       requestedByUserId: run.requested_by_user_id,
@@ -268,8 +288,10 @@ export class WorkflowRunExecutorService {
       })),
     });
     context.incomingNodeKeys = this.graphPlanner.buildIncomingNodeKeyMap(run.workflow.nodes, run.workflow.edges, evaluateCondition);
+    context.incomingFieldSourceKeys = this.buildIncomingFieldSourceKeyMap(run.workflow.nodes, run.workflow.edges, evaluateCondition);
     context.outgoingNodeKeys = this.buildOutgoingNodeKeyMap(run.workflow.nodes, run.workflow.edges, evaluateCondition);
     context.workflowNodesByKey = new Map(run.workflow.nodes.map((node) => [node.node_key, node]));
+    this.ensureScheduleConnectionsAreSupported(context);
     context.scheduledTargetNodeKeys = this.buildScheduledTargetNodeKeys(run.workflow.nodes, context.outgoingNodeKeys);
 
     let sequenceNo = 1;
@@ -295,9 +317,10 @@ export class WorkflowRunExecutorService {
         });
 
         try {
-          const output = context.scheduledTargetNodeKeys.has(node.node_key)
+          const rawOutput = context.scheduledTargetNodeKeys.has(node.node_key)
             ? this.buildScheduledTargetSkipOutput(node)
             : await this.executeNode(context, node);
+          const output = this.publishNodeOutput(node, rawOutput);
           context.nodeOutputs.set(node.node_key, output);
           await prisma.moduleWorkflowRunStep.update({
             where: {
@@ -337,10 +360,7 @@ export class WorkflowRunExecutorService {
         data: {
           status: "COMPLETED",
           completed_at: new Date(),
-          result_payload: this.toInputJson({
-            workflowKey: context.workflowKey,
-            outputs: Object.fromEntries(context.nodeOutputs.entries()),
-          }),
+          result_payload: this.toInputJson(this.buildRunResultPayload(context)),
           error_message: null,
         },
       });
@@ -356,10 +376,7 @@ export class WorkflowRunExecutorService {
           status: "FAILED",
           completed_at: new Date(),
           error_message: message,
-          result_payload: this.toInputJson({
-            workflowKey: context.workflowKey,
-            outputs: Object.fromEntries(context.nodeOutputs.entries()),
-          }),
+          result_payload: this.toInputJson(this.buildRunResultPayload(context)),
         },
       });
       await this.notifyRunStatus(context, "failed", message);
@@ -484,6 +501,7 @@ export class WorkflowRunExecutorService {
       userId: row.requested_by_user_id,
       runId: row.id,
       workflowKey: row.workflow.key,
+      workflowLabel: row.workflow.label,
       moduleKey: row.workflow.module?.key ?? null,
       knowledgeMode: this.resolveKnowledgeMode(row.input_payload, row.workflow.configuration),
       projectId: row.project_id,
@@ -502,6 +520,7 @@ export class WorkflowRunExecutorService {
       inputPayload: (row.input_payload ?? null) as Record<string, unknown> | null,
       nodeOutputs: new Map<string, unknown>(),
       incomingNodeKeys: new Map<string, string[]>(),
+      incomingFieldSourceKeys: new Map<string, Map<string, string[]>>(),
       outgoingNodeKeys: new Map<string, string[]>(),
       workflowNodesByKey: new Map<string, WorkflowNodeRow>(),
       scheduledTargetNodeKeys: new Set<string>(),
@@ -536,6 +555,35 @@ export class WorkflowRunExecutorService {
     return outgoing;
   }
 
+  private buildIncomingFieldSourceKeyMap(
+    nodes: WorkflowNodeRow[],
+    edges: Array<{
+      source_node_id: string;
+      target_node_id: string;
+      target_handle: string | null;
+      condition_payload: Prisma.JsonValue | null;
+      is_enabled: boolean;
+    }>,
+    evaluateCondition: (payload: unknown) => boolean,
+  ): Map<string, Map<string, string[]>> {
+    const keyById = new Map(nodes.map((node) => [node.id, node.node_key]));
+    const incoming = new Map<string, Map<string, string[]>>();
+    for (const edge of edges) {
+      if (!edge.is_enabled || !evaluateCondition(edge.condition_payload)) continue;
+      const sourceKey = keyById.get(edge.source_node_id);
+      const targetKey = keyById.get(edge.target_node_id);
+      if (!sourceKey || !targetKey || !edge.target_handle?.startsWith("field:")) continue;
+      const field = edge.target_handle.slice("field:".length);
+      if (!field) continue;
+      const byField = incoming.get(targetKey) ?? new Map<string, string[]>();
+      const sources = byField.get(field) ?? [];
+      sources.push(sourceKey);
+      byField.set(field, sources);
+      incoming.set(targetKey, byField);
+    }
+    return incoming;
+  }
+
   private buildScheduledTargetNodeKeys(
     nodes: WorkflowNodeRow[],
     outgoingNodeKeys: Map<string, string[]>,
@@ -555,6 +603,50 @@ export class WorkflowRunExecutorService {
       }
     }
     return claimed;
+  }
+
+  private orderScheduleNodesAfterDeliveryInputs(
+    nodes: WorkflowNodeRow[],
+    edges: Array<{
+      source_node_id: string;
+      target_node_id: string;
+      condition_payload: Prisma.JsonValue | null;
+      is_enabled: boolean;
+    }>,
+    evaluateCondition: (payload: unknown) => boolean,
+  ): WorkflowNodeRow[] {
+    const ordered = [...nodes];
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    for (const schedule of nodes) {
+      if (!this.isScheduleHandler(schedule.module_tool?.handler_key ?? null)) continue;
+      const deliveryTargetIds = edges
+        .filter((edge) => edge.is_enabled && evaluateCondition(edge.condition_payload) && edge.source_node_id === schedule.id)
+        .map((edge) => edge.target_node_id)
+        .filter((targetId) => this.deliveryChannelFromHandler(byId.get(targetId)?.module_tool?.handler_key ?? null) !== null);
+      const inputSourceIds = edges
+        .filter((edge) => edge.is_enabled && evaluateCondition(edge.condition_payload) && deliveryTargetIds.includes(edge.target_node_id) && edge.source_node_id !== schedule.id)
+        .map((edge) => edge.source_node_id);
+      const latestInputIndex = Math.max(-1, ...inputSourceIds.map((sourceId) => ordered.findIndex((node) => node.id === sourceId)));
+      const scheduleIndex = ordered.findIndex((node) => node.id === schedule.id);
+      if (latestInputIndex <= scheduleIndex) continue;
+      const [scheduledNode] = ordered.splice(scheduleIndex, 1);
+      ordered.splice(latestInputIndex, 0, scheduledNode);
+    }
+    return ordered;
+  }
+
+  private ensureScheduleConnectionsAreSupported(context: StepExecutionContext): void {
+    for (const node of context.workflowNodesByKey.values()) {
+      if (!this.isScheduleHandler(node.module_tool?.handler_key ?? null)) {
+        continue;
+      }
+      const invalidTarget = (context.outgoingNodeKeys.get(node.node_key) ?? [])
+        .map((key) => context.workflowNodesByKey.get(key))
+        .find((target) => !this.deliveryChannelFromHandler(target?.module_tool?.handler_key ?? null));
+      if (invalidTarget) {
+        throw new Error(`Il nodo Pianifica puo' collegarsi solo a nodi di Resoconto: ${invalidTarget.node_key}.`);
+      }
+    }
   }
 
   private async executeNode(
@@ -669,8 +761,16 @@ export class WorkflowRunExecutorService {
 
     const previousOutput = this.toRecord(this.findLatestNodeOutput(context));
     const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
+    const fieldInput = this.toRecord(incomingOutputs.byTargetHandle.input_text);
     const inputPayload = context.inputPayload ?? {};
     const inputText = this.firstString(
+      fieldInput.input_text,
+      fieldInput.inputText,
+      fieldInput.promptText,
+      fieldInput.text,
+      fieldInput.reply,
+      fieldInput.raw_output,
+      fieldInput.extracted_text,
       nodeConfig.input_text,
       nodeConfig.inputText,
       nodeConfig.promptText,
@@ -716,7 +816,12 @@ export class WorkflowRunExecutorService {
       }
 
       const input = await this.buildPythonToolInput(context, node, moduleName, action);
-      return this.pythonModulesClient.execute(moduleName, action, input);
+      const result = await this.pythonModulesClient.execute(moduleName, action, input);
+      if (moduleName === "docx_engine" && action === "generate_document" && this.toRecord(node.configuration).save_to_archive === true) {
+        const archived = await this.archiveGeneratedDocument(context, result);
+        return { ...result, output: { ...this.unwrapPythonOutput(result), ...archived } };
+      }
+      return result;
     }
 
     if (tool.runtime_kind === "BACKEND") {
@@ -759,7 +864,7 @@ export class WorkflowRunExecutorService {
         ...this.pickIncomingStrings(incomingOutputs.items, ["file_base64", "fileBase64", "pdf_base64", "document_base64"]),
       );
       if (!fileBase64) {
-        throw new Error("Sorgente PDF mancante per OCR.");
+        throw new Error("Sorgente file mancante per Text Recognition.");
       }
       return {
         file_base64: fileBase64,
@@ -970,6 +1075,27 @@ export class WorkflowRunExecutorService {
     if (typeof config.temperature === "number" && Number.isFinite(config.temperature)) {
       override.temperature = config.temperature;
     }
+    if (typeof config.maxOutputTokens === "number" && Number.isFinite(config.maxOutputTokens) && config.maxOutputTokens > 0) {
+      override.max_output_tokens = Math.trunc(config.maxOutputTokens);
+    }
+    if (typeof config.topP === "number" && Number.isFinite(config.topP)) {
+      override.top_p = config.topP;
+    }
+    if (typeof config.topK === "number" && Number.isFinite(config.topK)) {
+      override.top_k = Math.trunc(config.topK);
+    }
+    if (typeof config.minP === "number" && Number.isFinite(config.minP)) {
+      override.min_p = config.minP;
+    }
+    if (typeof config.repetitionPenalty === "number" && Number.isFinite(config.repetitionPenalty)) {
+      override.repetition_penalty = config.repetitionPenalty;
+    }
+    if (typeof config.seed === "number" && Number.isFinite(config.seed)) {
+      override.seed = Math.trunc(config.seed);
+    }
+    if (typeof config.contextTokenLimit === "number" && Number.isFinite(config.contextTokenLimit) && config.contextTokenLimit > 0) {
+      override.context_token_limit = Math.trunc(config.contextTokenLimit);
+    }
     if (typeof config.timeoutMs === "number" && Number.isFinite(config.timeoutMs) && config.timeoutMs > 0) {
       override.timeout_ms = Math.trunc(config.timeoutMs);
     }
@@ -1008,12 +1134,22 @@ export class WorkflowRunExecutorService {
     previousOutput: Record<string, unknown>,
     incomingOutputs: IncomingNodeOutputs,
   ): Record<string, unknown> {
+    const contentField = this.toRecord(incomingOutputs.byTargetHandle.content);
+    const fileNameField = this.toRecord(incomingOutputs.byTargetHandle.file_name);
     return {
       ...nodeConfig,
       ...inputPayload,
       previous_output: previousOutput,
       incoming_outputs: incomingOutputs.byNodeKey,
       content: this.firstValue(
+        contentField.input_text,
+        contentField.inputText,
+        contentField.promptText,
+        contentField.reply,
+        contentField.text,
+        contentField.raw_output,
+        contentField.extracted_text,
+        contentField.structured_data,
         nodeConfig.content,
         inputPayload.content,
         previousOutput.input_text,
@@ -1029,6 +1165,14 @@ export class WorkflowRunExecutorService {
       title: this.firstString(nodeConfig.title, inputPayload.title),
       format: this.firstString(nodeConfig.format, inputPayload.format) || "docx",
       file_name: this.firstString(
+        fileNameField.file_name,
+        fileNameField.fileName,
+        fileNameField.input_text,
+        fileNameField.inputText,
+        fileNameField.promptText,
+        fileNameField.reply,
+        fileNameField.text,
+        fileNameField.raw_output,
         nodeConfig.file_name,
         nodeConfig.filename,
         inputPayload.file_name,
@@ -1038,6 +1182,79 @@ export class WorkflowRunExecutorService {
     };
   }
 
+  private async archiveGeneratedDocument(
+    context: StepExecutionContext,
+    result: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const output = this.unwrapPythonOutput(result);
+    const base64 = this.firstString(output.document_base64);
+    const fileName = this.firstString(output.file_name) || "documento";
+    const contentType = this.firstString(output.content_type) || "application/octet-stream";
+    if (!base64) {
+      throw new Error("Il generatore non ha prodotto un file archiviabile.");
+    }
+
+    const bytes = Buffer.from(base64, "base64");
+    const checksum = createHash("sha256").update(bytes).digest("hex");
+    const extension = this.fileExtension(fileName);
+    const storage = StorageSelector.create();
+    const objectKey = GaragePath.buildObjectKey(
+      storage.storagePrefix(), context.workspaceId, "workflows", context.workflowKey,
+      "generated-document", checksum, fileName,
+    );
+    const stored = await storage.putObject({
+      objectKey,
+      bytes,
+      contentType,
+      metadata: { workspaceid: context.workspaceId, workflowkey: context.workflowKey, runid: context.runId, sha256: checksum },
+    });
+
+    const prisma = PrismaClientManager.getClient();
+    const [fileType, fileStatus, node, moduleRecord] = await Promise.all([
+      prisma.fileType.upsert({
+        where: { key: extension },
+        update: { mime_type: contentType },
+        create: { key: extension, mime_type: contentType },
+      }),
+      prisma.fileStatus.upsert({
+        where: { key: "uploaded" },
+        update: {},
+        create: { key: "uploaded" },
+      }),
+      prisma.node.upsert({
+        where: { workspace_id_path_cache: { workspace_id: context.workspaceId, path_cache: "/documents/workflows/generated" } },
+        update: { deleted_at: null },
+        create: { workspace_id: context.workspaceId, name: "generated", path_cache: "/documents/workflows/generated", depth: 3 },
+      }),
+      prisma.module.findUnique({ where: { key: "workflow_management" }, select: { id: true } }),
+    ]);
+    const document = await prisma.document.create({
+      data: {
+        workspace_id: context.workspaceId,
+        node_id: node.id,
+        file_type_id: fileType.id,
+        file_status_id: fileStatus.id,
+        module_id: moduleRecord?.id ?? null,
+        scope: "WORKSPACE",
+        domain_entity_type: "WorkflowRun",
+        domain_entity_id: context.runId,
+        filename: fileName,
+        size_bytes: BigInt(bytes.length),
+        storage_path: GaragePath.toStoragePath(stored.bucket, stored.objectKey),
+        checksum_sha256: checksum,
+        uploaded_by_user_id: context.userId,
+      },
+      select: { id: true, storage_path: true },
+    });
+    const knowledge = await this.documentIntelligenceService.refreshDocumentKnowledge(context.workspaceId, document.id);
+    return { archived: true, document_id: document.id, storage_path: document.storage_path, knowledge_document_id: knowledge.id };
+  }
+
+  private fileExtension(fileName: string): string {
+    const extension = fileName.split(".").pop()?.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    return extension || "bin";
+  }
+
   private async buildGenericMailInput(
     context: StepExecutionContext,
     nodeConfig: Record<string, unknown>,
@@ -1045,6 +1262,7 @@ export class WorkflowRunExecutorService {
     previousOutput: Record<string, unknown>,
     incomingOutputs: IncomingNodeOutputs,
   ): Promise<Record<string, unknown>> {
+    const textField = this.toRecord(incomingOutputs.byTargetHandle.text);
     return {
       ...nodeConfig,
       ...inputPayload,
@@ -1059,6 +1277,12 @@ export class WorkflowRunExecutorService {
         ...this.pickIncomingStrings(incomingOutputs.items, ["subject"]),
       ),
       text: this.firstString(
+        textField.input_text,
+        textField.inputText,
+        textField.promptText,
+        textField.text,
+        textField.reply,
+        textField.raw_output,
         nodeConfig.text,
         inputPayload.text,
         previousOutput.input_text,
@@ -1080,6 +1304,7 @@ export class WorkflowRunExecutorService {
     previousOutput: Record<string, unknown>,
     incomingOutputs: IncomingNodeOutputs,
   ): Promise<Record<string, unknown>> {
+    const textField = this.toRecord(incomingOutputs.byTargetHandle.text);
     const fallbackChatId = this.firstString(nodeConfig.chat_id, nodeConfig.chatId, inputPayload.chat_id, inputPayload.chatId);
     const telegramChannelId = nodeConfig.telegram_channel_id
       ?? nodeConfig.telegramChannelId
@@ -1101,6 +1326,12 @@ export class WorkflowRunExecutorService {
       incoming_outputs: incomingOutputs.byNodeKey,
       chat_id: chatId,
       text: this.firstString(
+        textField.input_text,
+        textField.inputText,
+        textField.promptText,
+        textField.text,
+        textField.reply,
+        textField.raw_output,
         nodeConfig.text,
         nodeConfig.message,
         inputPayload.text,
@@ -1122,6 +1353,7 @@ export class WorkflowRunExecutorService {
     previousOutput: Record<string, unknown>,
     incomingOutputs: IncomingNodeOutputs,
   ): Record<string, unknown> {
+    const textField = this.toRecord(incomingOutputs.byTargetHandle.text);
     return {
       ...nodeConfig,
       ...inputPayload,
@@ -1129,6 +1361,12 @@ export class WorkflowRunExecutorService {
       incoming_outputs: incomingOutputs.byNodeKey,
       to: this.firstString(nodeConfig.to, nodeConfig.phone, inputPayload.to, inputPayload.phone),
       text: this.firstString(
+        textField.input_text,
+        textField.inputText,
+        textField.promptText,
+        textField.text,
+        textField.reply,
+        textField.raw_output,
         nodeConfig.text,
         nodeConfig.message,
         inputPayload.text,
@@ -1161,8 +1399,8 @@ export class WorkflowRunExecutorService {
       throw new Error("Data/ora mancante per nodo Schedule.");
     }
 
-    const runAt = new Date(runAtText);
-    if (Number.isNaN(runAt.getTime())) {
+    const runAt = this.parseScheduleDateTime(runAtText);
+    if (!runAt) {
       throw new Error("Data/ora Schedule non valida.");
     }
 
@@ -1192,13 +1430,14 @@ export class WorkflowRunExecutorService {
         continue;
       }
       const targetConfig = this.toRecord(target.configuration);
+      const targetIncomingOutputs = this.findIncomingNodeOutputs(context, target.node_key);
       const delivery = await this.buildScheduledDeliveryPayload(
         context,
         channel,
         targetConfig,
         inputPayload,
         previousOutput,
-        incomingOutputs,
+        targetIncomingOutputs,
       );
       const row = await this.scheduledWorkflowDeliveryService.schedule({
         workspaceId: context.workspaceId,
@@ -1227,6 +1466,44 @@ export class WorkflowRunExecutorService {
       status: scheduled.length > 0 ? "scheduled" : "skipped",
       scheduled,
     };
+  }
+
+  private parseScheduleDateTime(value: string): Date | null {
+    const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    if (!match) return null;
+    const [, yearText, monthText, dayText, hourText, minuteText, secondText = "0"] = match;
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const day = Number(dayText);
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
+    const second = Number(secondText);
+    const localAsUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+    if (
+      localAsUtc.getUTCFullYear() !== year
+      || localAsUtc.getUTCMonth() !== month - 1
+      || localAsUtc.getUTCDate() !== day
+      || localAsUtc.getUTCHours() !== hour
+      || localAsUtc.getUTCMinutes() !== minute
+      || localAsUtc.getUTCSeconds() !== second
+    ) {
+      return null;
+    }
+
+    const timeZone = process.env.WORKFLOW_SCHEDULE_TIME_ZONE?.trim() || "Europe/Rome";
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(localAsUtc);
+    const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((item) => item.type === type)?.value ?? "");
+    const offsetMs = Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second")) - localAsUtc.getTime();
+    return new Date(localAsUtc.getTime() - offsetMs);
   }
 
   private async buildScheduledDeliveryPayload(
@@ -1270,6 +1547,9 @@ export class WorkflowRunExecutorService {
   }
 
   private resolveRepeatEverySeconds(nodeConfig: Record<string, unknown>): number | null {
+    if (nodeConfig.scheduleRepeatEnabled === false || nodeConfig.repeat_enabled === false) {
+      return null;
+    }
     const explicit = Number(nodeConfig.repeat_every_seconds ?? nodeConfig.repeatEverySeconds);
     if (Number.isFinite(explicit) && explicit >= 60) {
       return Math.trunc(explicit);
@@ -1483,11 +1763,147 @@ export class WorkflowRunExecutorService {
       };
     }
 
+    const nodeConfig = this.toRecord(node.configuration);
+    const requestedKey = this.firstString(nodeConfig.output_key, nodeConfig.outputKey, nodeConfig.selected_output_key);
+    const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
+    const availableOutputs = this.collectPublishedOutputs(incomingOutputs.items);
+    const selectedOutput = availableOutputs.find((item) => item.key === requestedKey) ?? availableOutputs[0] ?? null;
+
     return {
       nodeKey: node.node_key,
       outputKind: node.output_kind,
-      persisted: false,
+      selected_output: selectedOutput,
+      published_outputs: selectedOutput ? [selectedOutput] : [],
+      outcome: selectedOutput?.value ?? null,
     };
+  }
+
+  private publishNodeOutput(node: WorkflowNodeRow, value: unknown): Record<string, unknown> {
+    const output = this.toRecord(value);
+    const published = this.collectPublishedOutputs([output]);
+    if (published.length > 0) {
+      return { ...output, published_outputs: published };
+    }
+
+    return { ...output, published_outputs: this.inferPublishedOutputs(node, output, value) };
+  }
+
+  private inferPublishedOutputs(
+    node: Pick<WorkflowNodeRow, "node_key" | "node_kind" | "output_kind">,
+    output: Record<string, unknown>,
+    rawValue: unknown,
+  ): PublishedNodeOutput[] {
+    if (typeof rawValue === "string" && rawValue.trim()) {
+      return [{ key: "text", label: this.textOutputLabel(node), kind: "text", value: rawValue.trim() }];
+    }
+    if (Array.isArray(rawValue)) {
+      return [{ key: "data", label: "Dati prodotti", kind: "data", value: rawValue }];
+    }
+
+    const unwrapped = this.unwrapPythonOutput(output);
+    const imageUrl = this.firstString(output.image_url, output.imageUrl, unwrapped.image_url, unwrapped.imageUrl);
+    if (imageUrl) {
+      return [{ key: "image", label: "Immagine prodotta", kind: "image", value: imageUrl }];
+    }
+
+    const text = this.firstString(
+      output.reply, output.text, output.raw_output, output.extracted_text, output.summary,
+      unwrapped.reply, unwrapped.text, unwrapped.raw_output, unwrapped.extracted_text, unwrapped.summary,
+    );
+    if (text) {
+      return [{ key: "text", label: this.textOutputLabel(node), kind: "text", value: text }];
+    }
+
+    const fileName = this.firstString(output.file_name, output.fileName, unwrapped.file_name, unwrapped.fileName);
+    const storagePath = this.firstString(output.storage_path, output.storagePath, unwrapped.storage_path, unwrapped.storagePath);
+    const encodedDocument = this.firstString(output.document_base64, output.docx_base64, unwrapped.document_base64, unwrapped.docx_base64);
+    if (fileName || storagePath || encodedDocument || output.persisted === true && node.output_kind === "quotation_delivery") {
+      return [{
+        key: "file",
+        label: "Documento generato",
+        kind: "file",
+        value: {
+          fileName: fileName ?? (output.docx_base64 || unwrapped.docx_base64 ? "documento.docx" : "Documento generato"),
+          storagePath: storagePath ?? null,
+          documentId: this.firstString(output.document_id, output.documentId, unwrapped.document_id, unwrapped.documentId) || null,
+          sizeBytes: output.size_bytes ?? output.sizeBytes ?? null,
+          downloadBase64: encodedDocument ?? null,
+        },
+        mimeType: this.firstString(output.content_type, output.contentType, unwrapped.content_type, unwrapped.contentType) || null,
+      }];
+    }
+
+    if (this.isDeliveryOutput(node, output)) {
+      const deliveryStatus = this.firstString(output.status, unwrapped.status);
+      const normalizedStatus = deliveryStatus.toLowerCase();
+      const sent = output.sent === true
+        || output.delivered === true
+        || output.persisted === true
+        || unwrapped.sent === true
+        || unwrapped.delivered === true
+        || ["sent", "delivered", "completed", "success"].includes(normalizedStatus);
+      return [{
+        key: "delivery_status",
+        label: "Esito invio",
+        kind: "delivery_status",
+        value: {
+          sent,
+          status: deliveryStatus || (sent ? "completed" : "not_sent"),
+          recipient: this.firstString(output.recipient, output.to, output.chat_id, unwrapped.recipient, unwrapped.to, unwrapped.chat_id) || null,
+          message: this.firstString(output.message, output.reason, output.error, unwrapped.message, unwrapped.reason, unwrapped.error) || null,
+        },
+      }];
+    }
+
+    if (rawValue !== null && rawValue !== undefined && Object.keys(output).length > 0) {
+      return [{ key: "data", label: "Dati prodotti", kind: "data", value: rawValue }];
+    }
+    return [];
+  }
+
+  private collectPublishedOutputs(items: Array<Record<string, unknown>>): PublishedNodeOutput[] {
+    return items.flatMap((item) => {
+      const candidates = Array.isArray(item.published_outputs) ? item.published_outputs : [];
+      return candidates.flatMap((candidate): PublishedNodeOutput[] => {
+        const record = this.toRecord(candidate);
+        const key = this.firstString(record.key);
+        const label = this.firstString(record.label);
+        const kind = this.firstString(record.kind);
+        if (!key || !label || !["text", "file", "image", "delivery_status", "data"].includes(kind)) {
+          return [];
+        }
+        return [{ key, label, kind: kind as PublishedOutputKind, value: record.value, mimeType: this.firstString(record.mimeType, record.mime_type) || null }];
+      });
+    });
+  }
+
+  private buildRunResultPayload(context: StepExecutionContext): Record<string, unknown> {
+    const finalOutputs = Array.from(context.nodeOutputs.entries()).flatMap(([nodeKey, value]) => {
+      const node = context.workflowNodesByKey.get(nodeKey);
+      if (node?.node_kind !== "OUTPUT") {
+        return [];
+      }
+      return this.collectPublishedOutputs([this.toRecord(value)]).map((output) => ({ ...output, nodeKey }));
+    });
+    return { workflowKey: context.workflowKey, final_outputs: finalOutputs, outputs: Object.fromEntries(context.nodeOutputs.entries()) };
+  }
+
+  private textOutputLabel(node: Pick<WorkflowNodeRow, "node_key" | "node_kind" | "output_kind">): string {
+    if (node.node_kind === "AGENT") return "Risposta IA";
+    if (node.node_key.includes("ocr")) return "Testo estratto";
+    if (node.node_key.includes("analysis")) return "Analisi";
+    return "Testo";
+  }
+
+  private isDeliveryOutput(node: Pick<WorkflowNodeRow, "node_key" | "node_kind" | "output_kind">, output: Record<string, unknown>): boolean {
+    const unwrapped = this.unwrapPythonOutput(output);
+    return node.output_kind?.includes("delivery") === true
+      || /mail|telegram|whatsapp|send/i.test(node.node_key)
+      || "sent" in output
+      || "delivered" in output
+      || "sent" in unwrapped
+      || "delivered" in unwrapped
+      || "status" in unwrapped;
   }
 
   private async persistDdtAnalysis(workspaceId: string, ddtDocumentId: string, analysis: DdtAnalysisInput): Promise<void> {
@@ -1781,6 +2197,7 @@ export class WorkflowRunExecutorService {
   private findIncomingNodeOutputs(context: StepExecutionContext, nodeKey: string): IncomingNodeOutputs {
     const sourceKeys = context.incomingNodeKeys.get(nodeKey) ?? [];
     const byNodeKey: Record<string, Record<string, unknown>> = {};
+    const byTargetHandle: Record<string, Record<string, unknown>> = {};
     const items: Array<Record<string, unknown>> = [];
 
     for (const sourceKey of sourceKeys) {
@@ -1789,13 +2206,24 @@ export class WorkflowRunExecutorService {
       items.push(output);
     }
 
-    return { byNodeKey, items };
+    const fields = context.incomingFieldSourceKeys.get(nodeKey);
+    for (const [field, sourceKeysForField] of fields ?? []) {
+      const sourceKey = sourceKeysForField[sourceKeysForField.length - 1];
+      if (sourceKey) {
+        byTargetHandle[field] = this.normalizeNodeOutput(context.nodeOutputs.get(sourceKey));
+      }
+    }
+
+    return { byNodeKey, byTargetHandle, items };
   }
 
   private normalizeNodeOutput(value: unknown): Record<string, unknown> {
     const record = this.toRecord(value);
     if (record.output && typeof record.output === "object" && !Array.isArray(record.output)) {
-      return record.output as Record<string, unknown>;
+      return {
+        ...(record.output as Record<string, unknown>),
+        published_outputs: record.published_outputs ?? (record.output as Record<string, unknown>).published_outputs,
+      };
     }
     return record;
   }
@@ -1987,37 +2415,38 @@ export class WorkflowRunExecutorService {
     status: "completed" | "failed",
     error?: string,
   ): { title: string; message: string } {
+    const workflowName = context.workflowLabel.trim() || context.workflowKey || "Workflow";
     if (context.moduleKey === ModuleKey.DDT_PROCESSING) {
       const documentName = context.ddtSource?.fileName ?? "document.pdf";
       return status === "completed"
-        ? { title: "DDT", message: `Analizzato "${documentName}".` }
-        : { title: "DDT", message: `Analisi fallita su "${documentName}": ${error ?? "errore sconosciuto"}` };
+        ? { title: workflowName, message: `DDT analizzato: "${documentName}".` }
+        : { title: workflowName, message: `Analisi DDT fallita su "${documentName}": ${error ?? "errore sconosciuto"}` };
     }
 
     if (context.moduleKey === ModuleKey.MEASURE_REPORT) {
       const documentName = context.measureReportSource?.fileName ?? "document.pdf";
       return status === "completed"
-        ? { title: "Measure Report", message: `Analizzato "${documentName}".` }
-        : { title: "Measure Report", message: `Analisi fallita su "${documentName}": ${error ?? "errore sconosciuto"}` };
+        ? { title: workflowName, message: `Measure Report analizzato: "${documentName}".` }
+        : { title: workflowName, message: `Analisi Measure Report fallita su "${documentName}": ${error ?? "errore sconosciuto"}` };
     }
 
     if (context.projectName) {
       const versionLabel = context.projectVersionLabel ? ` ${context.projectVersionLabel.toUpperCase()}` : "";
       if (status === "completed") {
         return {
-          title: context.projectName,
-          message: `Workflow${versionLabel} completato.`,
+          title: workflowName,
+          message: `${context.projectName}${versionLabel}: esecuzione completata.`,
         };
       }
 
       return {
-        title: context.projectName,
-        message: `Workflow${versionLabel} fallito: ${error ?? "errore sconosciuto"}`,
+        title: workflowName,
+        message: `${context.projectName}${versionLabel}: esecuzione fallita: ${error ?? "errore sconosciuto"}`,
       };
     }
 
     return status === "completed"
-      ? { title: "Workflow", message: "Esecuzione completata." }
-      : { title: "Workflow", message: `Esecuzione fallita: ${error ?? "errore sconosciuto"}` };
+      ? { title: workflowName, message: "Esecuzione completata." }
+      : { title: workflowName, message: `Esecuzione fallita: ${error ?? "errore sconosciuto"}` };
   }
 }

@@ -17,7 +17,7 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { Button, Card, Input, Text } from "@/components/atoms";
+import { Button, Card, CheckboxControl, Input, Text } from "@/components/atoms";
 import { PageHelpHint, SearchField, SelectDropdown } from "@/components/molecules";
 import { cn } from "@/lib/cn";
 import { downloadTablePdf } from "@/lib/pdf-export";
@@ -636,12 +636,11 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
                             className="flex items-center justify-between gap-2 rounded-lg border border-border-subtle bg-bg-muted px-2.5 py-2"
                           >
                             <label className="flex items-center gap-2 text-sm text-text-secondary">
-                              <input
+                              <CheckboxControl
                                 type="checkbox"
                                 checked={!hidden}
                                 disabled={column.required}
                                 onChange={() => toggleColumnVisibility(column.key)}
-                                className="h-4 w-4 accent-[var(--brand-primary)] disabled:cursor-not-allowed disabled:opacity-60"
                               />
                               <span className={cn("font-medium", column.required ? "text-text-primary" : "text-text-secondary")}>
                                 {column.label}

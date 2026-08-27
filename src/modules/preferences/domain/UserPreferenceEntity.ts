@@ -3,6 +3,7 @@ export class UserPreferenceEntity {
   public readonly workspaceId: string | null;
   public readonly paletteId: string;
   public readonly notificationPosition: string;
+  public readonly notificationPopups: boolean;
   public readonly languageCode: string;
   public readonly rowsProjects: number;
   public readonly rowsClients: number;
@@ -16,6 +17,7 @@ export class UserPreferenceEntity {
     workspaceId: string | null;
     paletteId: string;
     notificationPosition: string;
+    notificationPopups: boolean;
     languageCode: string;
     rowsProjects: number;
     rowsClients: number;
@@ -28,6 +30,7 @@ export class UserPreferenceEntity {
     this.workspaceId = params.workspaceId;
     this.paletteId = params.paletteId;
     this.notificationPosition = params.notificationPosition;
+    this.notificationPopups = params.notificationPopups;
     this.languageCode = params.languageCode;
     this.rowsProjects = params.rowsProjects;
     this.rowsClients = params.rowsClients;

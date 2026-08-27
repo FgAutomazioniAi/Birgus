@@ -83,6 +83,13 @@ export class AssistantConversationService {
     const knowledgeMode = this.resolveSessionKnowledgeMode(session.configuration);
     const documentContext = await this.resolveLinkedDocumentContext(params.workspaceId, session, knowledgeMode);
     const attachedDocumentsContext = await this.resolveAttachedDocumentsContext(params.workspaceId, session.id, knowledgeMode);
+    const workspaceKnowledgeContext = await this.resolveWorkspaceKnowledgeContext({
+      workspaceId: params.workspaceId,
+      userId: params.userId,
+      sessionId: session.id,
+      query: contentText,
+      knowledgeMode,
+    });
     const history = await this.repository.listMessages(params.workspaceId, session.id);
     const memorySnapshot = await this.sessionService.findLatestMemorySnapshot(params.workspaceId, params.userId, session.id);
     const initialMessages = this.buildModelMessages({
@@ -91,6 +98,7 @@ export class AssistantConversationService {
       memorySummary: memorySnapshot?.summaryText ?? null,
       documentContext,
       attachedDocumentsContext,
+      workspaceKnowledgeContext,
       knowledgeMode,
     });
 
@@ -451,6 +459,7 @@ export class AssistantConversationService {
     memorySummary: string | null;
     documentContext: DocumentChatContext | null;
     attachedDocumentsContext: string | null;
+    workspaceKnowledgeContext: string | null;
     knowledgeMode: KnowledgeMode;
   }): ModelMessage[] {
     const messages: ModelMessage[] = [
@@ -522,6 +531,17 @@ export class AssistantConversationService {
       messages.push({
         role: "system",
         content: `Documenti allegati alla sessione:\n${params.attachedDocumentsContext}`,
+      });
+    }
+
+    if (params.workspaceKnowledgeContext) {
+      messages.push({
+        role: "system",
+        content: [
+          "Passaggi recuperati automaticamente dalla knowledge del workspace.",
+          "Usali come fonte per rispondere alla richiesta corrente; se non contengono una risposta, dichiaralo senza inventare dati.",
+          params.workspaceKnowledgeContext,
+        ].join("\n\n"),
       });
     }
 
@@ -634,6 +654,92 @@ export class AssistantConversationService {
     }
 
     return parts.join("\n\n---\n\n");
+  }
+
+  private async resolveWorkspaceKnowledgeContext(params: {
+    workspaceId: string;
+    userId: string;
+    sessionId: string;
+    query: string;
+    knowledgeMode: KnowledgeMode;
+  }): Promise<string | null> {
+    if (params.knowledgeMode !== "hybrid") {
+      return null;
+    }
+
+    const knowledgeTool = this.toolRegistry.getTool("search_workspace_knowledge");
+    if (!knowledgeTool) {
+      return null;
+    }
+
+    try {
+      await this.toolAccessService.ensureAllowed({
+        workspaceId: params.workspaceId,
+        userId: params.userId,
+        sessionId: params.sessionId,
+      }, knowledgeTool);
+    } catch {
+      return null;
+    }
+
+    const searchTerms = this.buildKnowledgeSearchTerms(params.query);
+    if (searchTerms.length === 0) {
+      return null;
+    }
+
+    const [semanticResult, ...keywordResults] = await Promise.all([
+      this.documentIntelligenceService.searchWorkspaceKnowledge({
+        workspaceId: params.workspaceId,
+        query: params.query,
+        topK: 3,
+      }).catch(() => []),
+      ...searchTerms.map((query) => this.documentIntelligenceService.searchWorkspaceKnowledgeByKeyword({
+        workspaceId: params.workspaceId,
+        query,
+        topK: 3,
+      }).catch(() => [])),
+    ]);
+
+    const seenChunkIds = new Set<string>();
+    const hits = [...keywordResults.flat(), ...semanticResult]
+      .filter((hit) => {
+        if (seenChunkIds.has(hit.chunkId)) {
+          return false;
+        }
+        seenChunkIds.add(hit.chunkId);
+        return Boolean(hit.contentText.trim());
+      })
+      .slice(0, 4);
+
+    if (hits.length === 0) {
+      return null;
+    }
+
+    return hits.map((hit, index) => [
+      `Fonte ${index + 1}: ${hit.title ?? "Documento senza titolo"}`,
+      hit.sourceLabel ? `Archivio: ${hit.sourceLabel}` : null,
+      hit.contentText.slice(0, 1800),
+    ].filter((value): value is string => Boolean(value)).join("\n")).join("\n\n---\n\n");
+  }
+
+  private buildKnowledgeSearchTerms(query: string): string[] {
+    const normalized = query.trim();
+    if (!normalized) {
+      return [];
+    }
+
+    const ignoredTerms = new Set([
+      "a", "ad", "al", "alla", "alle", "che", "chi", "con", "come", "cosa", "dei", "del", "della", "delle",
+      "di", "e", "è", "gli", "ha", "hai", "il", "in", "io", "la", "le", "lo", "mi", "nel", "nella", "per",
+      "puoi", "puo", "quale", "quali", "questa", "questo", "sa", "sono", "su", "un", "una",
+    ]);
+    const keywords = normalized
+      .toLocaleLowerCase("it-IT")
+      .split(/[^a-z0-9à-ÿ]+/i)
+      .map((term) => term.trim())
+      .filter((term) => term.length >= 3 && !ignoredTerms.has(term));
+
+    return Array.from(new Set([...keywords, normalized])).slice(0, 4);
   }
 
   private resolveSessionKnowledgeMode(configuration: Record<string, unknown> | null): KnowledgeMode {

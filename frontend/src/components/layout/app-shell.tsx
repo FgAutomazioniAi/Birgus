@@ -49,7 +49,9 @@ export function AppShell({ children, currentUser }: AppShellProps) {
           onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
         />
         <ModuleAccessProvider enabledModuleKeys={currentUser.enabledModuleKeys}>
-          <div className="min-h-0 flex-1 overflow-auto p-4 lg:p-8">{children}</div>
+          <div className="min-h-0 flex-1 overflow-auto p-4 lg:p-8">
+            <div className="mx-auto w-full max-w-[1600px]">{children}</div>
+          </div>
           <FloatingAssistant enabled={currentUser.enabledModuleKeys.includes("conversational_assistant")} />
         </ModuleAccessProvider>
       </main>

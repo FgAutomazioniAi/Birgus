@@ -1,9 +1,10 @@
 "use client";
 
 import { cloneElement, isValidElement, useEffect, useId, useState, type DragEvent, type ReactElement, type ReactNode } from "react";
-import { Check, ChevronDown, Clock, FileText, HelpCircle, Mail, MessageCircle, Plus, Send, Settings, Sparkles } from "lucide-react";
+import { Check, ChevronDown, Clock, Download, FileText, HelpCircle, Mail, MessageCircle, PanelRightClose, PanelRightOpen, Plus, Send, Settings, Sparkles, X } from "lucide-react";
 
 import { Badge, Input, Text } from "@/components/atoms";
+import { useLanguage } from "@/components/organisms/language-provider";
 import { cn } from "@/lib/cn";
 import type { WorkflowRun, WorkflowTool } from "./types";
 import {
@@ -21,6 +22,103 @@ interface ConnectedTelegramChannel {
   label: string;
 }
 
+interface PublishedOutput {
+  key: string;
+  label: string;
+  kind: "text" | "file" | "image" | "delivery_status" | "data";
+  value: unknown;
+  mimeType?: string | null;
+  nodeKey?: string;
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function finalOutputsFrom(value: unknown): PublishedOutput[] {
+  const payload = recordValue(value);
+  const outputs = Array.isArray(payload.final_outputs) ? payload.final_outputs : [];
+  return outputs.flatMap((item): PublishedOutput[] => {
+    const output = recordValue(item);
+    const kind = stringValue(output.kind);
+    const key = stringValue(output.key);
+    const label = stringValue(output.label);
+    if (!key || !label || !["text", "file", "image", "delivery_status", "data"].includes(kind)) return [];
+    return [{ key, label, kind: kind as PublishedOutput["kind"], value: output.value, mimeType: stringValue(output.mimeType) || null, nodeKey: stringValue(output.nodeKey) || undefined }];
+  });
+}
+
+function OutputValue({ output }: { output: PublishedOutput }) {
+  const { t } = useLanguage();
+  const value = recordValue(output.value);
+  if (output.kind === "text") return <p className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap text-sm leading-6 text-text-secondary">{stringValue(output.value) || t("workflow.noText")}</p>;
+  if (output.kind === "file") {
+    const downloadBase64 = stringValue(value.downloadBase64);
+    const downloadFile = () => {
+      if (!downloadBase64) return;
+      const binary = atob(downloadBase64);
+      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: output.mimeType || "application/octet-stream" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = stringValue(value.fileName) || t("workflow.document");
+      anchor.click();
+      URL.revokeObjectURL(url);
+    };
+    return <div className="mt-2 flex items-center justify-between gap-3 text-sm text-text-secondary"><div className="flex min-w-0 items-center gap-2"><FileText className="h-4 w-4 shrink-0 text-brand-primary" /><span className="min-w-0 truncate">{stringValue(value.fileName) || t("workflow.generatedDocument")}</span></div>{downloadBase64 ? <button type="button" onClick={downloadFile} className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border-default bg-bg-surface px-2 py-1 text-xs font-medium text-text-primary hover:bg-bg-muted"><Download className="h-3.5 w-3.5" />{t("workflow.download")}</button> : null}</div>;
+  }
+  if (output.kind === "delivery_status") {
+    const sent = value.sent === true;
+    return <div className="mt-2 space-y-1 text-sm text-text-secondary"><p className={sent ? "text-status-success-text" : "text-status-danger-text"}>{sent ? t("workflow.deliveryComplete") : t("workflow.deliveryIncomplete")}</p>{stringValue(value.recipient) ? <p>{t("workflow.recipient")}: {stringValue(value.recipient)}</p> : null}{stringValue(value.message) ? <p>{stringValue(value.message)}</p> : null}</div>;
+  }
+  if (output.kind === "image" && typeof output.value === "string") return <img className="mt-2 max-h-72 w-full rounded-md border border-border-default object-contain" src={output.value} alt={output.label} />;
+  return <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border-default bg-bg-surface p-3 text-xs leading-5 text-text-secondary">{formatPayload(output.value)}</pre>;
+}
+
+export function WorkflowOutputDialog({
+  isOpen,
+  latestRun,
+  nodeKey,
+  nodeLabel,
+  onClose,
+}: {
+  isOpen: boolean;
+  latestRun: WorkflowRun | null;
+  nodeKey: string | null;
+  nodeLabel: string;
+  onClose: () => void;
+}) {
+  const { t } = useLanguage();
+  if (!isOpen) return null;
+  const outputs = finalOutputsFrom(latestRun?.resultPayload).filter((output) => output.nodeKey === nodeKey);
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-labelledby="workflow-output-title">
+      <div className="w-full max-w-2xl overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-bg-surface shadow-elevated">
+        <div className="flex items-start justify-between gap-4 border-b border-border-default px-5 py-4">
+          <div className="min-w-0">
+            <h2 id="workflow-output-title" className="truncate text-base font-semibold text-text-primary">{nodeLabel}</h2>
+            <p className="mt-1 text-sm text-text-muted">{t("workflow.lastRunResult")}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-md p-1.5 text-text-muted hover:bg-bg-muted hover:text-text-primary" aria-label={t("workflow.closeOutput")}>
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="max-h-[70vh] overflow-y-auto p-5">
+          {!latestRun ? <p className="text-sm text-text-muted">{t("workflow.runToView")}</p> : null}
+          {latestRun && outputs.length === 0 ? <p className="text-sm text-text-muted">{t("workflow.outputEmpty")}</p> : null}
+          {outputs.map((output, index) => (
+            <div key={`${output.key}-${index}`} className="rounded-md border border-border-default bg-bg-page p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-primary">{output.label}</p>
+              <OutputValue output={output} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TelegramChannelField({
   value,
   manualChatId,
@@ -34,6 +132,7 @@ export function TelegramChannelField({
   onChange: (channelId: string) => void;
   onManualChatIdChange: (chatId: string) => void;
 }) {
+  const { t } = useLanguage();
   const [channels, setChannels] = useState<ConnectedTelegramChannel[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -77,7 +176,7 @@ export function TelegramChannelField({
         onChange={(event) => onChange(event.target.value)}
         className="h-11 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-3 text-sm text-text-secondary outline-none focus-visible:border-brand-primary focus-visible:ring-2 focus-visible:ring-ring-primary"
       >
-        <option value="">{isLoading ? "Caricamento Telegram..." : "Chat ID manuale"}</option>
+        <option value="">{isLoading ? t("workflow.loadingTelegram") : t("workflow.manualChatId")}</option>
         {channels.map((channel) => (
           <option key={channel.id} value={channel.id}>
             {channel.label} - {channel.recipientId}
@@ -99,6 +198,7 @@ export function TelegramChannelField({
 
 export function RunResultsPanel({
   expandedResultCard,
+  isCollapsed,
   isLoadingRuns,
   isOutputFocused,
   latestRun,
@@ -106,9 +206,11 @@ export function RunResultsPanel({
   nodeLabelByKey,
   runs,
   onSelectRun,
+  onToggleCollapsed,
   onToggleCard,
 }: {
   expandedResultCard: string | null;
+  isCollapsed: boolean;
   isLoadingRuns: boolean;
   isOutputFocused: boolean;
   latestRun: WorkflowRun | null;
@@ -116,13 +218,35 @@ export function RunResultsPanel({
   nodeLabelByKey: Map<string, string>;
   runs: WorkflowRun[];
   onSelectRun: (runId: string) => void;
+  onToggleCollapsed: () => void;
   onToggleCard: (cardId: string) => void;
 }) {
+  const { t } = useLanguage();
+  const finalOutputs = finalOutputsFrom(latestRun?.resultPayload);
+  if (isCollapsed) {
+    return (
+      <aside className="flex w-12 shrink-0 flex-col items-center border-l border-border-default bg-bg-surface py-3">
+        <button
+          type="button"
+          className="rounded-md p-2 text-text-muted transition-colors hover:bg-bg-muted hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
+          onClick={onToggleCollapsed}
+          aria-label={t("workflow.showRuns")}
+          title={t("workflow.showRuns")}
+        >
+          <PanelRightOpen className="h-4 w-4" />
+        </button>
+        {runs.length > 0 ? <span className="mt-2 rounded-full bg-bg-muted px-1.5 py-0.5 text-[10px] font-bold text-text-muted">{runs.length}</span> : null}
+      </aside>
+    );
+  }
   return (
     <aside className="w-96 shrink-0 overflow-y-auto border-l border-border-default bg-bg-surface p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-text-muted">Esecuzioni</h3>
-        {isLoadingRuns ? <span className="text-xs text-text-muted">Caricamento...</span> : null}
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-text-muted">{t("workflow.runs")}</h3>
+        <div className="flex items-center gap-2">
+          {isLoadingRuns ? <span className="text-xs text-text-muted">{t("common.loading")}</span> : null}
+          <button type="button" className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-bg-muted hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary" onClick={onToggleCollapsed} aria-label={t("workflow.hideRuns")} title={t("workflow.hideRuns")}><PanelRightClose className="h-4 w-4" /></button>
+        </div>
       </div>
       {runs.length > 0 ? (
         <div className="mb-4 flex max-h-36 flex-col gap-1 overflow-y-auto pr-1">
@@ -138,21 +262,21 @@ export function RunResultsPanel({
                 <span className="min-w-0 truncate text-xs font-medium text-text-secondary">
                   {formatDateTime(run.completedAt ?? run.startedAt ?? run.queuedAt)}
                 </span>
-                <Badge tone={run.status === "COMPLETED" ? "success" : run.status === "FAILED" ? "warn" : "progress"}>{run.status}</Badge>
+                <Badge tone={run.status === "COMPLETED" ? "success" : run.status === "FAILED" ? "danger" : "progress"}>{run.status}</Badge>
               </button>
             );
           })}
         </div>
       ) : null}
       {!latestRun ? (
-        <p className="text-sm text-text-muted">Esegui il workflow o seleziona un'esecuzione per vedere gli output effettivi.</p>
+        <p className="text-sm text-text-muted">{t("workflow.runOrSelect")}</p>
       ) : (
         <div className="flex flex-col gap-3">
           <div className="rounded-md border border-border-default bg-bg-page p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Esecuzione</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">{t("workflow.run")}</p>
             <p className="mt-1 text-sm font-semibold text-text-primary">{latestRunReference}</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              <Badge tone={latestRun.status === "COMPLETED" ? "success" : latestRun.status === "FAILED" ? "warn" : "progress"}>
+              <Badge tone={latestRun.status === "COMPLETED" ? "success" : latestRun.status === "FAILED" ? "danger" : "progress"}>
                 {latestRun.status}
               </Badge>
               {latestRun.triggerSource ? <Badge tone="info">{latestRun.triggerSource}</Badge> : null}
@@ -161,13 +285,18 @@ export function RunResultsPanel({
           {latestRun.errorMessage ? <p className="text-sm text-status-danger-text">{latestRun.errorMessage}</p> : null}
           {isOutputFocused ? (
             <div className="rounded-md border border-brand-primary bg-bg-subtle p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-brand-primary">Output finale</p>
-              {latestRun.resultPayload !== undefined && latestRun.resultPayload !== null ? (
-                <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border-default bg-bg-surface p-3 text-xs leading-5 text-text-secondary">
-                  {formatPayload(latestRun.resultPayload)}
-                </pre>
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-primary">{t("workflow.finalOutput")}</p>
+              {finalOutputs.length > 0 ? (
+                <div className="mt-2 space-y-3">
+                  {finalOutputs.map((output, index) => (
+                    <div key={`${output.nodeKey ?? "output"}-${output.key}-${index}`} className="rounded-md border border-border-default bg-bg-page p-3">
+                      <p className="text-xs font-semibold text-text-primary">{output.label}</p>
+                      <OutputValue output={output} />
+                    </div>
+                  ))}
+                </div>
               ) : (
-                <p className="mt-2 text-sm text-text-muted">L'output apparirà al completamento dell'esecuzione.</p>
+                <p className="mt-2 text-sm text-text-muted">{t("workflow.outputWillAppear")}</p>
               )}
             </div>
           ) : null}
@@ -182,13 +311,13 @@ export function RunResultsPanel({
                 <div className="min-w-0">
                   <p className="truncate text-xs font-semibold text-text-primary">
                     {step.sequenceNo ? `${step.sequenceNo}. ` : ""}
-                    {step.label ?? nodeLabelByKey.get(step.stepKey ?? step.nodeKey ?? "") ?? "Passaggio"}
+                    {step.label ?? nodeLabelByKey.get(step.stepKey ?? step.nodeKey ?? "") ?? t("workflow.step")}
                   </p>
                   <p className="mt-1 line-clamp-3 text-xs text-text-secondary">
-                    {formatResultPreview(step.outputPayload ?? step.errorMessage ?? "Nessun output")}
+                    {formatResultPreview(step.outputPayload ?? step.errorMessage ?? t("workflow.noOutput"))}
                   </p>
                 </div>
-                <Badge tone={step.status === "SUCCEEDED" ? "success" : step.status === "FAILED" ? "warn" : "progress"}>
+                <Badge tone={step.status === "SUCCEEDED" ? "success" : step.status === "FAILED" ? "danger" : "progress"}>
                   {step.status}
                 </Badge>
               </div>
@@ -206,12 +335,10 @@ export function RunResultsPanel({
               onClick={() => onToggleCard("final")}
               className="rounded-md border border-border-subtle bg-bg-page p-2 text-left transition-colors hover:border-brand-primary/40 hover:bg-bg-muted"
             >
-              <p className="text-xs font-semibold text-text-primary">Risultato finale</p>
-              <p className="mt-1 line-clamp-3 text-xs text-text-secondary">{formatResultPreview(latestRun.resultPayload)}</p>
+              <p className="text-xs font-semibold text-text-primary">{t("workflow.finalResult")}</p>
+              <p className="mt-1 line-clamp-3 text-xs text-text-secondary">{finalOutputs[0] ? `${finalOutputs[0].label}: ${formatResultPreview(finalOutputs[0].value)}` : formatResultPreview(latestRun.resultPayload)}</p>
               {expandedResultCard === "final" ? (
-                <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-md border border-border-subtle bg-bg-surface p-2 text-xs text-text-secondary">
-                  {formatPayload(latestRun.resultPayload)}
-                </pre>
+                finalOutputs.length > 0 ? <div className="mt-2 space-y-2">{finalOutputs.map((output, index) => <div key={`${output.nodeKey ?? "output"}-${output.key}-${index}`} className="rounded-md border border-border-subtle bg-bg-surface p-2"><p className="text-xs font-medium text-text-primary">{output.label}</p><OutputValue output={output} /></div>)}</div> : <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-md border border-border-subtle bg-bg-surface p-2 text-xs text-text-secondary">{formatPayload(latestRun.resultPayload)}</pre>
               ) : null}
             </button>
           ) : null}
@@ -294,12 +421,14 @@ export function PaletteSection({ title, count, defaultOpen = false, children }: 
 }
 
 export function PaletteButton({
+  className,
   icon,
   title,
   subtitle,
   dragPayload,
   onClick,
 }: {
+  className?: string;
   icon: ReactNode;
   title: string;
   subtitle: string;
@@ -313,7 +442,7 @@ export function PaletteButton({
 
   return (
     <button
-      className="group flex w-full items-center gap-3 rounded-md border border-transparent bg-bg-page px-3 py-2.5 text-left transition hover:border-brand-primary/40 hover:bg-bg-muted"
+      className={cn("group flex w-full items-center gap-3 rounded-md border border-transparent bg-bg-page px-3 py-2.5 text-left transition hover:border-brand-primary/40 hover:bg-bg-muted", className)}
       onClick={onClick}
       draggable
       onDragStart={onDragStart}
@@ -535,6 +664,9 @@ export function ToolConfigurationForm({
   }
 
   if (tool.handlerKey === "workflow_scheduler.schedule_report_delivery") {
+    const repeatEnabled = configuration.scheduleRepeatEnabled === undefined
+      ? Boolean(stringValue(configuration.scheduleRepeatValue))
+      : configuration.scheduleRepeatEnabled === true;
     return (
       <div className="rounded-[var(--radius-md)] border border-border-default p-3">
         <div className="mb-3 flex items-center gap-2">
@@ -549,22 +681,27 @@ export function ToolConfigurationForm({
           />
         </Field>
         <Field label="Ripeti ogni">
-          <div className="grid grid-cols-[1fr_1fr] gap-2">
+          <div className="flex items-end gap-2">
+            <div className="grid min-w-0 flex-1 grid-cols-[1fr_1fr] gap-2">
             <Input
               type="number"
               min={1}
               value={stringValue(configuration.scheduleRepeatValue)}
               onChange={(event) => onPatch({ scheduleRepeatValue: event.target.value })}
-              placeholder="7"
+              placeholder="0"
+              disabled={!repeatEnabled}
             />
             <select
               className="h-11 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-3 text-sm text-text-secondary"
               value={stringValue(configuration.scheduleRepeatUnit) || "days"}
               onChange={(event) => onPatch({ scheduleRepeatUnit: event.target.value })}
+              disabled={!repeatEnabled}
             >
               <option value="hours">ore</option>
               <option value="days">giorni</option>
             </select>
+            </div>
+            <WorkflowCheckbox checked={repeatEnabled} label="Ripeti" onChange={(checked) => onPatch({ scheduleRepeatEnabled: checked })} />
           </div>
         </Field>
       </div>
