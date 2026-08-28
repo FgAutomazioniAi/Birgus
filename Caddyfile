@@ -1,0 +1,9 @@
+{
+  auto_https off
+}
+
+:80 {
+  reverse_proxy /api/* app:3000
+  reverse_proxy /health* app:3000
+  reverse_proxy frontend:3100
+}

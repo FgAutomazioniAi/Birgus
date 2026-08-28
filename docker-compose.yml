@@ -278,4 +278,18 @@ services:
       retries: 8
       start_period: 30s
 
+  reverse_proxy:
+    image: caddy:2.8-alpine
+    container_name: birgus_reverse_proxy
+    restart: unless-stopped
+    ports:
+      - "${BIRGUS_HOST_HTTP_PORT:-13080}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      frontend:
+        condition: service_started
+      app:
+        condition: service_healthy
+
 volumes: {}
