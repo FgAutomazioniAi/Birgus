@@ -345,9 +345,7 @@ export class WorkflowRunExecutorService {
             },
           });
 
-          if (node.is_required) {
-            throw error;
-          }
+          throw error;
         }
 
         sequenceNo += 1;

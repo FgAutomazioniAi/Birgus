@@ -161,7 +161,7 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
               is_enabled: input.isEnabled,
               is_default: input.isDefault,
               updated_by_user_id: input.actorUserId,
-              version_no: { increment: 1 },
+              ...(input.incrementVersion === false ? {} : { version_no: { increment: 1 } }),
               deleted_at: null,
             },
           })
@@ -471,6 +471,23 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
       throw new AppError("Workflow run not found after creation.", "WORKFLOW_RUN_NOT_FOUND", 404);
     }
     return run;
+  }
+
+  public async deletePersonalWorkflow(workspaceId: string, workflowId: string, actorUserId: string): Promise<void> {
+    const prisma = PrismaClientManager.getClient();
+    await prisma.moduleWorkflow.updateMany({
+      where: {
+        id: workflowId,
+        workspace_id: workspaceId,
+        deleted_at: null,
+        module: { key: "workflow_management" },
+      },
+      data: {
+        deleted_at: new Date(),
+        is_enabled: false,
+        updated_by_user_id: actorUserId,
+      },
+    });
   }
 
   private mapWorkflow(row: {

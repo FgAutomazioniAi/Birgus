@@ -90,7 +90,6 @@ def recreate_vllm() -> None:
     command = [
         "docker", "compose",
         "--project-name", required_env("VLLM_COMPOSE_PROJECT"),
-        "--env-file", required_env("VLLM_RUNTIME_ENV_FILE"),
         "-f", required_env("VLLM_COMPOSE_FILE"),
         "--profile", required_env("VLLM_COMPOSE_PROFILE"),
         "up", "-d", "--force-recreate", "vllm",

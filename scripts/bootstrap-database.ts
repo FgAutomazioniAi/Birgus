@@ -266,7 +266,7 @@ async function main() {
       create: {
         workspace_id: workspace.id,
         module_id: module.id,
-        is_enabled: true,
+        is_enabled: module.key !== "ai_runtime_control",
       },
     });
   }

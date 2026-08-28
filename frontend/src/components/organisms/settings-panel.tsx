@@ -690,6 +690,47 @@ export function SettingsPanel() {
           </div>
         </details>
 
+        {canControlAiRuntime ? (
+          <section className="space-y-2 border-t border-border-subtle pt-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <Cpu size={16} className="shrink-0 text-brand-primary" />
+                <div>
+                  <Text as="h3" variant="body" className="font-semibold">{t("settings.vllm.runtime")}</Text>
+                  <Text variant="caption">{t("settings.vllm.runtimeHint")}</Text>
+                </div>
+              </div>
+              {vllmRuntime ? (
+                <span className={cn("shrink-0 text-xs font-semibold", vllmRuntime.containerRunning ? "text-status-success-text" : "text-text-muted")}>
+                  {vllmRuntime.containerRunning ? t("settings.vllm.containerRunning") : t("settings.vllm.containerStopped")}
+                </span>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="w-full space-y-1 sm:w-48">
+                <Label className="text-xs" htmlFor="vllm-max-model-len">{t("settings.vllm.contextWindow")}</Label>
+                <Input
+                  id="vllm-max-model-len"
+                  name="vllm-max-model-len"
+                  type="number"
+                  min={1024}
+                  max={32768}
+                  step={256}
+                  value={vllmMaxModelLen}
+                  disabled={loadingVllmRuntime || savingVllmRuntime}
+                  className="h-9 px-3"
+                  onChange={(event) => setVllmMaxModelLen(Number(event.target.value))}
+                />
+              </div>
+              <Button type="button" size="sm" onClick={() => void handleUpdateVllmMaxModelLen()} disabled={loadingVllmRuntime || savingVllmRuntime}>
+                {savingVllmRuntime ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                {savingVllmRuntime ? t("settings.vllm.restarting") : t("settings.vllm.applyRestart")}
+              </Button>
+            </div>
+            {vllmRuntimeError ? <Text className="text-xs font-semibold text-status-danger-text">{vllmRuntimeError}</Text> : null}
+          </section>
+        ) : null}
+
         {aiStatus ? (
           <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-status-success-border bg-status-success-bg px-3 py-2 text-sm font-semibold text-status-success-text">
             <CheckCircle2 size={16} />

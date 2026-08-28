@@ -18,6 +18,16 @@ export class OperationsController {
     private readonly operationsInsightService: OperationsInsightService,
   ) {}
 
+  @Get("/api/operations/my-queue")
+  public async listMyQueuedOperations(
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const { workspaceId, userId } = requestContext.workspace;
+    return {
+      operations: await this.operationsInsightService.listMyQueuedOperations(workspaceId, userId),
+    };
+  }
+
   @Get("/api/customer-map")
   @RequireModule(ModuleKey.CUSTOMER_MAP)
   @RequirePermission(PermissionKey.CUSTOMER_MAP_READ)

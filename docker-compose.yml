@@ -127,9 +127,10 @@ services:
       context: .
       dockerfile: vllm_lifecycle/Dockerfile
     container_name: birgus_vllm_lifecycle
+    profiles: ["ai-runtime"]
     restart: unless-stopped
     environment:
-      VLLM_LIFECYCLE_TOKEN: "${VLLM_LIFECYCLE_TOKEN:?VLLM_LIFECYCLE_TOKEN is required}"
+      VLLM_LIFECYCLE_TOKEN: "${VLLM_LIFECYCLE_TOKEN:-}"
       VLLM_TARGET_CONTAINER: "birgus_vllm"
       VLLM_COMPOSE_FILE: "/workspace/docker-compose.yml"
       VLLM_RUNTIME_ENV_FILE: "/workspace/vllm/runtime.env"
@@ -214,7 +215,7 @@ services:
       OCR_LIFECYCLE_BASE_URL: "${OCR_LIFECYCLE_BASE_URL:-http://ocr_lifecycle:8202}"
       OCR_LIFECYCLE_TOKEN: "${OCR_LIFECYCLE_TOKEN:?OCR_LIFECYCLE_TOKEN is required}"
       VLLM_LIFECYCLE_BASE_URL: "${VLLM_LIFECYCLE_BASE_URL:-http://vllm_lifecycle:8203}"
-      VLLM_LIFECYCLE_TOKEN: "${VLLM_LIFECYCLE_TOKEN:?VLLM_LIFECYCLE_TOKEN is required}"
+      VLLM_LIFECYCLE_TOKEN: "${VLLM_LIFECYCLE_TOKEN:-}"
       TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
       TELEGRAM_BOT_USERNAME: "${TELEGRAM_BOT_USERNAME:-}"
       ORCH_DDT_LM_MAX_TOKENS: "${ORCH_DDT_LM_MAX_TOKENS:-700}"

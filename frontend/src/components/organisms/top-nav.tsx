@@ -32,6 +32,19 @@ interface NotificationItem {
   type: string;
 }
 
+interface QueuedOperation {
+  completedAt: string | null;
+  currentStepLabel: string | null;
+  errorMessage: string | null;
+  id: string;
+  label: string;
+  queuedAt: string;
+  startedAt: string | null;
+  status: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELED";
+  workflowKey: string;
+  workflowId: string;
+}
+
 const formatNotificationDate = (isoDate: string, language: "it" | "en") =>
   new Date(isoDate).toLocaleString(language === "it" ? "it-IT" : "en-GB", {
     day: "2-digit",
@@ -45,16 +58,13 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
+  const [operations, setOperations] = useState<QueuedOperation[]>([]);
   const notificationRef = useRef<HTMLDivElement | null>(null);
   const notificationsEnabled = currentUser.enabledModuleKeys.includes("notification_center");
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
-      if (!notificationRef.current) {
-        return;
-      }
-
-      if (!notificationRef.current.contains(event.target as Node)) {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
       }
     };
@@ -103,6 +113,32 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
     return () => window.clearInterval(interval);
   }, [notificationsEnabled]);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadOperations = async () => {
+      try {
+        const response = await fetch("/api/operations/my-queue", { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+        const payload = await response.json() as { operations?: QueuedOperation[] };
+        if (active) {
+          setOperations(Array.isArray(payload.operations) ? payload.operations.slice(0, 3) : []);
+        }
+      } catch {
+        // The header must remain quiet if the operation feed is temporarily unavailable.
+      }
+    };
+
+    void loadOperations();
+    const interval = window.setInterval(() => void loadOperations(), 3000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, []);
+
   const handleNotificationClick = () => {
     if (!notificationsEnabled) {
       return;
@@ -150,8 +186,27 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
     router.push(APP_ROUTES.personalDashboard);
   };
 
+  const handleOpenOperation = (operation: QueuedOperation) => {
+    router.push(`${APP_ROUTES.workflows}?workflowId=${encodeURIComponent(operation.workflowId)}&runId=${encodeURIComponent(operation.id)}`);
+  };
+
   const userName = currentUser.nome;
   const hasUnreadNotifications = notifications.some((notification) => !notification.readAt);
+  const operationStatus = (status: QueuedOperation["status"]) => {
+    switch (status) {
+      case "RUNNING": return t("operations.queue.running");
+      case "COMPLETED": return t("operations.queue.completed");
+      case "FAILED": return t("operations.queue.failed");
+      case "CANCELED": return t("operations.queue.canceled");
+      default: return t("operations.queue.queued");
+    }
+  };
+  const operationStatusClass = (status: QueuedOperation["status"]) => {
+    if (status === "COMPLETED") return "text-status-success-text";
+    if (status === "FAILED" || status === "CANCELED") return "text-status-danger-text";
+    if (status === "RUNNING") return "text-brand-primary";
+    return "text-text-muted";
+  };
 
   return (
     <header className="sticky top-0 z-30 h-16 border-b border-border-default bg-bg-surface">
@@ -175,6 +230,26 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
         </div>
 
         <div className="flex items-center gap-2 lg:gap-4">
+          {operations.length > 0 ? (
+            <div className="hidden h-9 items-stretch gap-1 border-r border-border-default pr-4 2xl:flex" aria-label={t("operations.queue.title")}>
+              {operations.map((operation) => (
+                <button
+                  key={operation.id}
+                  type="button"
+                  title={operation.label}
+                  onClick={() => handleOpenOperation(operation)}
+                  className="flex w-36 min-w-0 items-center gap-2 border border-border-subtle bg-bg-page px-2 text-left transition-colors hover:border-brand-primary hover:bg-bg-muted"
+                >
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${operation.status === "COMPLETED" ? "bg-status-success-text" : operation.status === "FAILED" || operation.status === "CANCELED" ? "bg-status-danger-text" : operation.status === "RUNNING" ? "bg-brand-primary" : "bg-text-muted"}`} />
+                  <div className="min-w-0 leading-tight">
+                    <p className="truncate text-[11px] font-semibold text-text-primary">{operation.label}</p>
+                    <p className={`truncate text-[10px] font-semibold ${operationStatusClass(operation.status)}`}>{operationStatus(operation.status)}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           <div className="inline-flex overflow-hidden rounded-[var(--radius-md)] border border-border-default" role="group" aria-label={t("language.switch")}>
             <button
               type="button"

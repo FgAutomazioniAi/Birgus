@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
   Background,
   Controls,
@@ -26,6 +26,7 @@ import {
   Boxes,
   Check,
   ChevronDown,
+  Copy,
   GitBranch,
   LayoutGrid,
   Pencil,
@@ -41,6 +42,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useSearchParams } from "next/navigation";
 
 import { Badge, Button, Card, Text } from "@/components/atoms";
 import { PageHelpHint } from "@/components/molecules";
@@ -569,6 +571,7 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
 const nodeTypes = { workflowNode: FlowNodeCard };
 
 export function WorkflowCanvasPanel() {
+  const searchParams = useSearchParams();
   const { enabledModuleKeys } = useModuleAccess();
   const { language, t } = useLanguage();
   const [screen, setScreen] = useState<WorkflowScreen>("modules");
@@ -609,6 +612,7 @@ export function WorkflowCanvasPanel() {
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<Node<CanvasNodeData>, Edge> | null>(null);
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node<CanvasNodeData>>([]);
   const [edges, setEdges, onEdgesChangeBase] = useEdgesState<Edge>([]);
+  const openedRunReference = useRef<string | null>(null);
 
   const selectedNode = useMemo(
     () => draftNodes.find((item) => item.clientId === selectedNodeId) ?? null,
@@ -815,6 +819,22 @@ export function WorkflowCanvasPanel() {
     void loadCatalog();
   }, [loadCatalog]);
 
+  useEffect(() => {
+    const workflowId = searchParams.get("workflowId");
+    const runId = searchParams.get("runId");
+    if (!workflowId || !runId) {
+      openedRunReference.current = null;
+      return;
+    }
+    const reference = `${workflowId}:${runId}`;
+    if (openedRunReference.current === reference) return;
+    openedRunReference.current = reference;
+    void (async () => {
+      await loadWorkflow(workflowId);
+      await selectWorkflowRun(runId);
+    })();
+  }, [loadWorkflow, searchParams, selectWorkflowRun]);
+
   const commitHistory = useCallback(() => {
     setPast((current) => [...current, { nodes: draftNodes, edges: draftEdges }]);
     setFuture([]);
@@ -998,6 +1018,75 @@ export function WorkflowCanvasPanel() {
       toast.error(error instanceof Error ? error.message : "Errore creazione workflow.");
     } finally {
       setIsCreatingWorkflow(false);
+    }
+  };
+
+  const copyPersonalWorkflow = async (source: WorkflowSummary) => {
+    try {
+      const detailResponse = await fetch(`/api/workflows/${source.id}`, { cache: "no-store" });
+      if (!detailResponse.ok) throw new Error("Impossibile leggere il workflow da copiare.");
+      const detail = await detailResponse.json() as WorkflowDetail;
+      const nodeKeyById = new Map(detail.nodes.map((node) => [node.id, node.nodeKey]));
+      const key = `playground_${Date.now().toString(36)}`;
+      const response = await fetch("/api/workflows", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          moduleKey: "workflow_management",
+          key,
+          name: key,
+          label: `${detail.label} - copia`,
+          description: detail.description,
+          configuration: detail.configuration,
+          isEnabled: true,
+          isDefault: false,
+          nodes: detail.nodes.map((node) => ({
+            nodeKey: node.nodeKey,
+            nodeKind: node.nodeKind,
+            label: node.label,
+            positionX: node.positionX + 32,
+            positionY: node.positionY + 32,
+            moduleAgentId: node.moduleAgentId ?? null,
+            moduleToolId: node.moduleToolId ?? null,
+            inputKind: node.inputKind ?? null,
+            outputKind: node.outputKind ?? null,
+            configuration: node.configuration ?? {},
+            inputSchema: node.inputSchema ?? null,
+            outputSchema: node.outputSchema ?? null,
+            isEnabled: node.isEnabled,
+            isRequired: node.isRequired,
+          })),
+          edges: detail.edges.map((edge) => ({
+            sourceNodeKey: nodeKeyById.get(edge.sourceNodeId) ?? edge.sourceNodeId,
+            targetNodeKey: nodeKeyById.get(edge.targetNodeId) ?? edge.targetNodeId,
+            sourceHandle: edge.sourceHandle ?? null,
+            targetHandle: edge.targetHandle ?? null,
+            label: edge.label ?? null,
+            conditionPayload: edge.conditionPayload ?? null,
+            orderNo: edge.orderNo,
+            isEnabled: edge.isEnabled,
+          })),
+        }),
+      });
+      if (!response.ok) throw new Error("Copia workflow non riuscita.");
+      const copied = await response.json() as WorkflowDetail;
+      await loadCatalog();
+      await loadWorkflow(copied.id);
+      toast.success(t("workflow.copySuccess"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Copia workflow non riuscita.");
+    }
+  };
+
+  const deletePersonalWorkflow = async (item: WorkflowSummary) => {
+    if (!window.confirm(t("workflow.deleteConfirm"))) return;
+    try {
+      const response = await fetch(`/api/workflows/${item.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Eliminazione workflow non riuscita.");
+      await loadCatalog();
+      toast.success(t("workflow.deleteSuccess"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Eliminazione workflow non riuscita.");
     }
   };
 
@@ -1232,6 +1321,48 @@ export function WorkflowCanvasPanel() {
         orderNo: index + 1,
         isEnabled: edge.isEnabled,
       }));
+      const semanticNode = (node: typeof payloadNodes[number]) => JSON.stringify({
+        nodeKey: node.nodeKey,
+        nodeKind: node.nodeKind,
+        label: node.label,
+        moduleAgentId: node.moduleAgentId,
+        moduleToolId: node.moduleToolId,
+        inputKind: node.inputKind,
+        outputKind: node.outputKind,
+        configuration: node.configuration,
+        inputSchema: node.inputSchema,
+        outputSchema: node.outputSchema,
+        isEnabled: node.isEnabled,
+      });
+      const storedNodeByKey = new Map(workflow.nodes.map((node) => [node.nodeKey, node]));
+      const hasNodeChanges = payloadNodes.length !== workflow.nodes.length || payloadNodes.some((node) => {
+        const stored = storedNodeByKey.get(node.nodeKey);
+        if (!stored) return true;
+        return semanticNode(node) !== JSON.stringify({
+          nodeKey: stored.nodeKey,
+          nodeKind: stored.nodeKind,
+          label: stored.label,
+          moduleAgentId: stored.moduleAgentId ?? null,
+          moduleToolId: stored.moduleToolId ?? null,
+          inputKind: stored.inputKind ?? null,
+          outputKind: stored.outputKind ?? null,
+          configuration: stored.configuration ?? {},
+          inputSchema: stored.inputSchema ?? null,
+          outputSchema: stored.outputSchema ?? null,
+          isEnabled: stored.isEnabled,
+        });
+      });
+      const storedEdges = workflow.edges.map((edge) => ({
+        sourceNodeKey: workflow.nodes.find((node) => node.id === edge.sourceNodeId)?.nodeKey ?? edge.sourceNodeId,
+        targetNodeKey: workflow.nodes.find((node) => node.id === edge.targetNodeId)?.nodeKey ?? edge.targetNodeId,
+        sourceHandle: edge.sourceHandle ?? null,
+        targetHandle: edge.targetHandle ?? null,
+        label: edge.label ?? null,
+        conditionPayload: edge.conditionPayload ?? null,
+        orderNo: edge.orderNo,
+        isEnabled: edge.isEnabled,
+      }));
+      const hasEdgeChanges = JSON.stringify(payloadEdges.map(({ id: _id, ...edge }) => edge)) !== JSON.stringify(storedEdges);
 
       const response = await fetch(`/api/workflows/${workflow.id}`, {
         method: "PATCH",
@@ -1249,6 +1380,7 @@ export function WorkflowCanvasPanel() {
           name: workflow.name,
           moduleKey: workflow.moduleKey,
           key: workflow.key,
+          incrementVersion: hasNodeChanges || hasEdgeChanges,
           nodes: payloadNodes,
           edges: payloadEdges,
         }),
@@ -1464,11 +1596,8 @@ export function WorkflowCanvasPanel() {
                   onClick={() => void openModule(card)}
                   disabled={isLoading || !card.workflow}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-bg-muted text-brand-primary">
-                      <Boxes className="h-5 w-5" />
-                    </div>
-                    <Badge tone={card.workflow ? "success" : "info"}>{card.workflow ? `v${card.workflow.versionNo}` : t("workflow.notConfigured")}</Badge>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-bg-muted text-brand-primary">
+                    <Boxes className="h-5 w-5" />
                   </div>
                   <p className="mt-4 text-base font-bold text-text-primary">{card.title}</p>
                   <p className="mt-2 min-h-10 text-sm text-text-muted">{card.description}</p>
@@ -1498,33 +1627,40 @@ export function WorkflowCanvasPanel() {
             </Button>
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <button
-              key={playgroundCard.cardKey}
-              className="min-h-32 rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-4 text-left shadow-card transition hover:border-brand-primary hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={() => void openModule(playgroundCard)}
-              disabled={isLoading || isCreatingPlayground}
-            >
+            <div className="min-h-32 border border-border-default bg-bg-surface p-4 shadow-card transition hover:border-brand-primary">
               <div className="flex items-start justify-between gap-3">
-                <Sparkles className="h-5 w-5 text-brand-primary" />
-                <Badge tone={playgroundCard.workflow ? "success" : "progress"}>{playgroundCard.workflow ? `v${playgroundCard.workflow.versionNo}` : "Crea"}</Badge>
-              </div>
-              <p className="mt-4 truncate text-sm font-semibold text-text-primary">{playgroundCard.title}</p>
-              <p className="mt-1 line-clamp-2 text-xs text-text-muted">{playgroundCard.description}</p>
-            </button>
-            {personalWorkflows.map((item) => (
                 <button
-                  key={item.id}
                   type="button"
-                  onClick={() => void loadWorkflow(item.id)}
-                  className="min-h-32 rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-4 text-left shadow-card transition hover:border-brand-primary hover:bg-bg-subtle"
+                  className="min-w-0 flex-1 text-left disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => void openModule(playgroundCard)}
+                  disabled={isLoading || isCreatingPlayground}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <Sparkles className="h-5 w-5 text-brand-primary" />
-                    <Badge tone={item.isEnabled ? "success" : "warn"}>{item.isEnabled ? "Attivo" : "Disattivo"}</Badge>
-                  </div>
-                  <p className="mt-4 truncate text-sm font-semibold text-text-primary">{item.label}</p>
-                  <p className="mt-1 line-clamp-2 text-xs text-text-muted">{item.description || "Workflow libero"}</p>
+                  <Sparkles className="h-5 w-5 text-brand-primary" />
+                  <p className="mt-4 truncate text-sm font-semibold text-text-primary">{playgroundCard.title}</p>
+                  <p className="mt-1 line-clamp-2 text-xs text-text-muted">{playgroundCard.description}</p>
                 </button>
+                {playgroundCard.workflow ? (
+                  <div className="flex gap-1">
+                    <button type="button" title={t("workflow.copy")} aria-label={t("workflow.copy")} onClick={() => void copyPersonalWorkflow(playgroundCard.workflow!)} className="p-1.5 text-text-muted hover:bg-bg-muted hover:text-brand-primary"><Copy className="h-4 w-4" /></button>
+                    <button type="button" title={t("workflow.delete")} aria-label={t("workflow.delete")} onClick={() => void deletePersonalWorkflow(playgroundCard.workflow!)} className="p-1.5 text-text-muted hover:bg-bg-muted hover:text-status-danger-text"><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            {personalWorkflows.map((item) => (
+              <div key={item.id} className="min-h-32 border border-border-default bg-bg-surface p-4 shadow-card transition hover:border-brand-primary">
+                <div className="flex items-start justify-between gap-3">
+                  <button type="button" onClick={() => void loadWorkflow(item.id)} className="min-w-0 flex-1 text-left">
+                    <Sparkles className="h-5 w-5 text-brand-primary" />
+                    <p className="mt-4 truncate text-sm font-semibold text-text-primary">{item.label}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-text-muted">{item.description || "Workflow libero"}</p>
+                  </button>
+                  <div className="flex gap-1">
+                    <button type="button" title={t("workflow.copy")} aria-label={t("workflow.copy")} onClick={() => void copyPersonalWorkflow(item)} className="p-1.5 text-text-muted hover:bg-bg-muted hover:text-brand-primary"><Copy className="h-4 w-4" /></button>
+                    <button type="button" title={t("workflow.delete")} aria-label={t("workflow.delete")} onClick={() => void deletePersonalWorkflow(item)} className="p-1.5 text-text-muted hover:bg-bg-muted hover:text-status-danger-text"><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         </section>

@@ -35,8 +35,8 @@ class OpenAiCompatibleLmService:
             str(provider.get("completions_path") or provider.get("completionsPath") or self._completions_path).strip()
         )
         api_key = str(provider.get("api_key") or provider.get("apiKey") or self._settings.ai_provider_api_key).strip()
-        timeout_ms = self._optional_int(provider.get("timeout_ms") or provider.get("timeoutMs")) or self._settings.ai_provider_timeout_ms
-        provider_temperature = self._optional_float(provider.get("temperature"))
+        timeout_ms = self._optional_int(self._provider_value(provider, "timeout_ms", "timeoutMs")) or self._settings.ai_provider_timeout_ms
+        provider_temperature = self._optional_float(self._provider_value(provider, "temperature"))
 
         payload: dict[str, Any] = {
             "model": model,
@@ -49,7 +49,7 @@ class OpenAiCompatibleLmService:
             ),
             "stream": False,
         }
-        token_budget = max_tokens or self._optional_int(provider.get("max_output_tokens") or provider.get("maxOutputTokens")) or self._settings.ai_provider_max_output_tokens
+        token_budget = max_tokens or self._optional_int(self._provider_value(provider, "max_output_tokens", "maxOutputTokens")) or self._settings.ai_provider_max_output_tokens
         if token_budget > 0:
             payload["max_tokens"] = int(token_budget)
         self._apply_generation_options(payload, provider)
@@ -129,29 +129,36 @@ class OpenAiCompatibleLmService:
         parsed = int(value)
         return parsed if parsed >= 0 else None
 
+    def _provider_value(self, provider: dict[str, Any], *keys: str) -> Any:
+        for key in keys:
+            if key in provider and provider[key] is not None and str(provider[key]).strip() != "":
+                return provider[key]
+        return None
+
     def _apply_generation_options(self, payload: dict[str, Any], provider: dict[str, Any]) -> None:
-        payload["top_p"] = self._optional_float(provider.get("top_p") or provider.get("topP"))
+        payload["top_p"] = self._optional_float(self._provider_value(provider, "top_p", "topP"))
         if payload["top_p"] is None:
             payload["top_p"] = self._settings.ai_provider_top_p
 
-        top_k = self._optional_int(provider.get("top_k") or provider.get("topK"))
-        payload["top_k"] = self._settings.ai_provider_top_k if top_k is None else top_k
+        top_k_value = self._provider_value(provider, "top_k", "topK")
+        top_k = int(top_k_value) if top_k_value is not None else None
+        payload["top_k"] = self._settings.ai_provider_top_k if top_k is None or top_k < -1 else top_k
 
-        payload["min_p"] = self._optional_float(provider.get("min_p") or provider.get("minP"))
+        payload["min_p"] = self._optional_float(self._provider_value(provider, "min_p", "minP"))
         if payload["min_p"] is None:
             payload["min_p"] = self._settings.ai_provider_min_p
 
-        payload["repetition_penalty"] = self._optional_float(provider.get("repetition_penalty") or provider.get("repetitionPenalty"))
+        payload["repetition_penalty"] = self._optional_float(self._provider_value(provider, "repetition_penalty", "repetitionPenalty"))
         if payload["repetition_penalty"] is None:
             payload["repetition_penalty"] = self._settings.ai_provider_repetition_penalty
 
-        seed = self._optional_non_negative_int(provider.get("seed"))
+        seed = self._optional_non_negative_int(self._provider_value(provider, "seed"))
         if seed is None:
             seed = self._settings.ai_provider_seed
         if seed is not None:
             payload["seed"] = seed
 
-        context_limit = self._optional_int(provider.get("context_token_limit") or provider.get("contextTokenLimit"))
+        context_limit = self._optional_int(self._provider_value(provider, "context_token_limit", "contextTokenLimit"))
         if context_limit is None:
             context_limit = self._settings.ai_provider_context_token_limit
         if context_limit is not None:

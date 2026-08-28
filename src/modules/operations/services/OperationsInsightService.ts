@@ -17,6 +17,54 @@ export class OperationsInsightService {
     private readonly prisma: PrismaService,
   ) {}
 
+  public async listMyQueuedOperations(workspaceId: string, userId: string): Promise<Array<Record<string, unknown>>> {
+    const runs = await this.prisma.moduleWorkflowRun.findMany({
+      where: {
+        workspace_id: workspaceId,
+        requested_by_user_id: userId,
+      },
+      select: {
+        id: true,
+        workflow_id: true,
+        status: true,
+        queued_at: true,
+        started_at: true,
+        completed_at: true,
+        error_message: true,
+        workflow: {
+          select: {
+            key: true,
+            label: true,
+          },
+        },
+        steps: {
+          select: {
+            status: true,
+            workflow_node: {
+              select: { label: true },
+            },
+          },
+          take: 1,
+        },
+      },
+      orderBy: { queued_at: "desc" },
+      take: 3,
+    });
+
+    return runs.map((run) => ({
+      id: run.id,
+      workflowId: run.workflow_id,
+      workflowKey: run.workflow.key,
+      label: run.workflow.label,
+      status: run.status === "COMPLETED" && run.steps.some((step) => step.status === "SKIPPED") ? "FAILED" : run.status,
+      currentStepLabel: run.steps.find((step) => step.status === "RUNNING")?.workflow_node?.label ?? null,
+      errorMessage: run.error_message,
+      queuedAt: run.queued_at,
+      startedAt: run.started_at,
+      completedAt: run.completed_at,
+    }));
+  }
+
   public async listCustomerMap(workspaceId: string): Promise<Array<Record<string, unknown>>> {
     const addresses = await this.prisma.customerAddress.findMany({
       where: {

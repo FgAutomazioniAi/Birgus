@@ -13,6 +13,7 @@ export type WorkflowDefinitionInput = {
   configuration?: unknown | null;
   isEnabled: boolean;
   isDefault: boolean;
+  incrementVersion?: boolean;
   actorUserId: string | null;
   nodes: Array<{
     id?: string | null;
@@ -50,6 +51,7 @@ export interface WorkflowRepository {
   findWorkflowById(workspaceId: string, workflowId: string): Promise<ModuleWorkflowEntity | null>;
   findWorkflowByKey(workspaceId: string, moduleKey: string, workflowKey: string): Promise<ModuleWorkflowEntity | null>;
   saveWorkflowDefinition(input: WorkflowDefinitionInput): Promise<ModuleWorkflowEntity>;
+  deletePersonalWorkflow(workspaceId: string, workflowId: string, actorUserId: string): Promise<void>;
   listWorkflowRuns(workspaceId: string, workflowId?: string): Promise<ModuleWorkflowRunEntity[]>;
   findWorkflowRunById(workspaceId: string, runId: string): Promise<ModuleWorkflowRunEntity | null>;
   createWorkflowRun(params: {

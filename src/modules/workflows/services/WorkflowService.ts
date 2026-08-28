@@ -73,4 +73,12 @@ export class WorkflowService {
     }
     return run;
   }
+
+  public async deletePersonalWorkflow(workspaceId: string, workflowId: string, actorUserId: string): Promise<void> {
+    const workflow = await this.getWorkflow(workspaceId, workflowId);
+    if (workflow.moduleKey !== "workflow_management") {
+      throw new AppError("Solo i workflow del Playground possono essere eliminati.", "WORKFLOW_DELETE_NOT_ALLOWED", 403);
+    }
+    await this.repository.deletePersonalWorkflow(workspaceId, workflowId, actorUserId);
+  }
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
@@ -75,6 +75,7 @@ const createWorkflowSchema = z.object({
 });
 
 const updateWorkflowSchema = createWorkflowSchema.partial().extend({
+  incrementVersion: z.boolean().optional(),
   moduleKey: z.string().min(1).optional(),
   key: z.string().min(1).optional(),
   name: z.string().min(1).optional(),
@@ -240,6 +241,7 @@ export class NestWorkflowsController {
       configuration: body.configuration ?? current.configuration,
       isEnabled: body.isEnabled ?? current.isEnabled,
       isDefault: body.isDefault ?? current.isDefault,
+      incrementVersion: body.incrementVersion ?? true,
       actorUserId: userId,
       nodes: body.nodes ?? current.nodes.map((node) => ({
         id: node.id,
@@ -280,6 +282,20 @@ export class NestWorkflowsController {
     });
 
     return this.serializeWorkflow(saved);
+  }
+
+  @Delete("workflows/:workflowId")
+  @HttpCode(204)
+  @RequirePermission(PermissionKey.WORKFLOWS_CONFIGURE)
+  public async deleteWorkflow(
+    @Param("workflowId") workflowIdRaw: string,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<void> {
+    await this.service.deletePersonalWorkflow(
+      requestContext.workspace.workspaceId,
+      this.getPathId(workflowIdRaw, "workflowId"),
+      requestContext.workspace.userId,
+    );
   }
 
   @Get("workflows/:workflowId/runs")

@@ -135,17 +135,20 @@ Il file `garage/garage.local.toml` e richiesto da Docker Compose ma non deve ess
 - Worker backend integrati nel processo app con queue Postgres-backed
 - Pipeline OCR/IA collegata a provider OpenAI-compatible configurabile da `.env` (`AI_PROVIDER_*`, vLLM per MVP)
 
-## vLLM MVP
-Il provider IA interno parte tramite overlay Docker dedicato:
+## vLLM gestito
+Il modello gira come container separato, ma nello stesso Docker host dell'applicazione. Per abilitarlo imposta un token casuale non vuoto in `.env`:
 
 ```bash
-VLLM_MODEL="Qwen/Qwen2-VL-2B-Instruct" \
-VLLM_SERVED_MODEL_NAME="birgus-vl" \
-VLLM_API_KEY="token-locale-lungo" \
-docker compose -f docker-compose.yml -f docker-compose.vllm.yml up
+VLLM_LIFECYCLE_TOKEN="token-locale-lungo-e-casuale"
 ```
 
-L'app usa `http://vllm:8000/v1` dentro la rete Docker e verifica il provider con `GET /health/ai-provider`. Non esporre la porta `8000` in produzione.
+Poi avvia il profilo IA:
+
+```bash
+docker compose --profile ai-runtime up -d --build
+```
+
+Il modulo `ai_runtime_control` e' disabilitato per default e va abilitato dal Superadmin per l'utente autorizzato. Da Impostazioni quell'utente puo' modificare `max_model_len`: il controller interno aggiorna solo `birgus_vllm` e ricrea solo quel container. L'app usa `http://vllm:8000/v1` nella rete Docker.
 Per uno smoke test diretto:
 
 ```bash
