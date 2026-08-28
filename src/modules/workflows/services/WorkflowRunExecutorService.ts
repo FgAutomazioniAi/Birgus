@@ -1093,23 +1093,23 @@ export class WorkflowRunExecutorService {
         ...merged,
         ...(prompt ? { instructions: prompt } : {}),
         content: this.firstString(
-          nodeConfig.content,
-          inputPayload.content,
           contentField.content,
           contentField.formatted_text,
           contentField.text,
           contentField.reply,
           contentField.raw_output,
+          nodeConfig.content,
+          inputPayload.content,
           ...this.pickIncomingStrings(incomingOutputs.items, ["content", "formatted_text", "text", "reply", "raw_output", "extracted_text"]),
         ),
         template: this.firstString(
-          nodeConfig.template,
-          inputPayload.template,
           templateField.template,
           templateField.text,
           templateField.content,
           templateField.formatted_text,
           templateField.raw_output,
+          nodeConfig.template,
+          inputPayload.template,
         ),
       };
     }
@@ -1812,9 +1812,12 @@ export class WorkflowRunExecutorService {
       previous: this.toRecord(this.findLatestNodeOutput(context)),
       incoming: incomingOutputs.byNodeKey,
       fields: incomingOutputs.byTargetHandle,
-      content: this.firstString(configuration.content, contentField.content, contentField.formatted_text, contentField.text, contentField.reply, contentField.raw_output),
+      content: this.firstString(contentField.content, contentField.formatted_text, contentField.text, contentField.reply, contentField.raw_output, configuration.content),
     };
-    const template = this.firstString(configuration.template, templateField.template, templateField.text, templateField.content, templateField.formatted_text, templateField.raw_output);
+    const template = this.firstString(templateField.template, templateField.text, templateField.content, templateField.formatted_text, templateField.raw_output, configuration.template);
+    if (!source.content) {
+      throw new Error("Contenuto mancante per Applica template.");
+    }
     if (!template) {
       throw new Error("Template documento mancante per Applica template.");
     }

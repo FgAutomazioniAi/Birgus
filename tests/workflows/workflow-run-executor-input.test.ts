@@ -38,6 +38,161 @@ test("WorkflowRunExecutorService passes connected text input to LangChain chat n
   assert.equal(input.instructions, "Rispondi in italiano");
 });
 
+test("WorkflowRunExecutorService gives connected formatter inputs precedence over stale manual values", async () => {
+  const service = new WorkflowRunExecutorService({
+    documentArchiveService: {} as never,
+    documentIntelligenceService: {} as never,
+    quotationAnalyzer: {} as never,
+    ddtAnalyzer: {} as never,
+    measureReportAnalyzer: {} as never,
+    pythonModulesClient: {} as never,
+    runtimeAccessPolicy: {} as never,
+  }) as unknown as {
+    buildLangchainToolInput: (
+      action: string,
+      nodeConfig: Record<string, unknown>,
+      inputPayload: Record<string, unknown>,
+      previousOutput: Record<string, unknown>,
+      incomingOutputs: { byNodeKey: Record<string, Record<string, unknown>>; byTargetHandle: Record<string, Record<string, unknown>>; items: Array<Record<string, unknown>> },
+    ) => Promise<Record<string, unknown>>;
+  };
+
+  const input = await service.buildLangchainToolInput(
+    "format_text",
+    { content: "contenuto precedente", template: "template precedente" },
+    {},
+    {},
+    {
+      byNodeKey: {},
+      byTargetHandle: {
+        content: { text: "contenuto collegato" },
+        template: { text: "Titolo\n{{content}}" },
+      },
+      items: [],
+    },
+  );
+
+  assert.equal(input.content, "contenuto collegato");
+  assert.equal(input.template, "Titolo\n{{content}}");
+});
+
+test("WorkflowRunExecutorService formats templates from connected fields and rejects missing content", () => {
+  const service = new WorkflowRunExecutorService({
+    documentArchiveService: {} as never,
+    documentIntelligenceService: {} as never,
+    quotationAnalyzer: {} as never,
+    ddtAnalyzer: {} as never,
+    measureReportAnalyzer: {} as never,
+    pythonModulesClient: {} as never,
+    runtimeAccessPolicy: {} as never,
+  }) as unknown as {
+    executeTemplateFormattingTool: (context: unknown, node: unknown) => Record<string, unknown>;
+  };
+  const context = {
+    inputPayload: {},
+    nodeOutputs: new Map([
+      ["content", { text: "contenuto collegato" }],
+      ["template", { text: "Oggetto\n{{content}}" }],
+    ]),
+    incomingNodeKeys: new Map([["formatter", ["content", "template"]]]),
+    incomingFieldSourceKeys: new Map([["formatter", new Map([["content", ["content"]], ["template", ["template"]]])]]),
+  };
+
+  const result = service.executeTemplateFormattingTool(context, {
+    node_key: "formatter",
+    configuration: { content: "contenuto precedente", template: "{{content}}" },
+  });
+  assert.equal(result.formatted_text, "Oggetto\ncontenuto collegato");
+
+  assert.throws(
+    () => service.executeTemplateFormattingTool({ ...context, nodeOutputs: new Map(), incomingFieldSourceKeys: new Map() }, { node_key: "formatter", configuration: { template: "{{content}}" } }),
+    /Contenuto mancante/,
+  );
+});
+
+test("WorkflowRunExecutorService routes verify-and-route branches exclusively by V/F output", () => {
+  const service = new WorkflowRunExecutorService({
+    documentArchiveService: {} as never,
+    documentIntelligenceService: {} as never,
+    quotationAnalyzer: {} as never,
+    ddtAnalyzer: {} as never,
+    measureReportAnalyzer: {} as never,
+    pythonModulesClient: {} as never,
+    runtimeAccessPolicy: {} as never,
+  }) as unknown as {
+    executeVerifyAndRouteTool: (context: unknown, node: unknown) => Record<string, unknown>;
+    shouldExecuteNode: (nodeId: string, edges: Array<Record<string, unknown>>, context: unknown) => boolean;
+  };
+  const verifier = { id: "verify-id", node_key: "verify", module_tool: { handler_key: "workflow_logic.verify_and_route" } };
+  const context = {
+    inputPayload: {},
+    nodeOutputs: new Map([["amount", { text: "150" }]]),
+    incomingNodeKeys: new Map([["verify", ["amount"]]]),
+    incomingFieldSourceKeys: new Map([["verify", new Map([["rule_0", ["amount"]]])]]),
+    workflowNodesByKey: new Map([["verify", verifier]]),
+  };
+  const result = service.executeVerifyAndRouteTool(context, { node_key: "verify", configuration: { rules: [{ operator: "greater_than", value: "100" }] } });
+  assert.equal(result.valid, true);
+
+  context.nodeOutputs.set("verify", result);
+  const edges = [
+    { source_node_id: "verify-id", target_node_id: "on-valid", source_handle: "valid", condition_payload: null, is_enabled: true },
+    { source_node_id: "verify-id", target_node_id: "on-invalid", source_handle: "invalid", condition_payload: null, is_enabled: true },
+  ];
+  assert.equal(service.shouldExecuteNode("on-valid", edges, context), true);
+  assert.equal(service.shouldExecuteNode("on-invalid", edges, context), false);
+});
+
+test("WorkflowRunExecutorService creates a decision request with the workflow context and pauses the node", async () => {
+  const requests: Array<Record<string, unknown>> = [];
+  const service = new WorkflowRunExecutorService({
+    documentArchiveService: {} as never,
+    documentIntelligenceService: {} as never,
+    quotationAnalyzer: {} as never,
+    ddtAnalyzer: {} as never,
+    measureReportAnalyzer: {} as never,
+    pythonModulesClient: {} as never,
+    runtimeAccessPolicy: {} as never,
+    humanInterventionService: {
+      createDecisionRequest: async (request: Record<string, unknown>) => {
+        requests.push(request);
+        return { id: "intervention-1" };
+      },
+    } as never,
+  }) as unknown as {
+    executeDecisionRequestTool: (context: unknown, node: unknown) => Promise<never>;
+  };
+  const context = {
+    workspaceId: "workspace-1",
+    runId: "run-1",
+    userId: "user-1",
+    inputPayload: {},
+    nodeOutputs: new Map([["verify", { status: "attention_required", valid: false }]]),
+    incomingNodeKeys: new Map([["decision", ["verify"]]]),
+    incomingFieldSourceKeys: new Map(),
+  };
+
+  await assert.rejects(
+    () => service.executeDecisionRequestTool(context, {
+      id: "decision-node-1",
+      node_key: "decision",
+      configuration: { title: "Controlla invio", message: "Destinatario mancante", priority: "high", assigneeUserId: "user-2" },
+    }),
+    /attesa di una decisione/,
+  );
+  assert.deepEqual(requests, [{
+    workspaceId: "workspace-1",
+    workflowRunId: "run-1",
+    workflowNodeId: "decision-node-1",
+    createdByUserId: "user-1",
+    assignedUserId: "user-2",
+    title: "Controlla invio",
+    message: "Destinatario mancante",
+    priority: "high",
+    input: { latest: { status: "attention_required", valid: false }, incoming: { verify: { status: "attention_required", valid: false } } },
+  }]);
+});
+
 test("WorkflowRunExecutorService exposes agent results through a stable published output contract", () => {
   const service = new WorkflowRunExecutorService({
     documentArchiveService: {} as never,
