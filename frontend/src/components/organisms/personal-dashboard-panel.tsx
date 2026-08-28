@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button, Card, Input, Text } from "@/components/atoms";
 import { PageHelpHint, SelectDropdown } from "@/components/molecules";
 import { useLanguage } from "@/components/organisms/language-provider";
+import { HumanInterventionsPanel } from "@/components/organisms/human-interventions-panel";
 import { useTheme } from "@/components/organisms/theme-provider";
 import { isToastPosition, toastPositionOptions, useToasterPreferences, type ToastPosition } from "@/components/organisms/toaster-provider";
 import { cn } from "@/lib/cn";
@@ -226,6 +227,8 @@ export function PersonalDashboardPanel() {
         <div className="flex items-center gap-2"><Text as="h1" variant="h1">{t("account.title")}</Text><PageHelpHint text={t("account.help")} /></div>
         <Text variant="muted">{t("account.subtitle")}</Text>
       </div>
+
+      {hasModule("workflow_management") ? <HumanInterventionsPanel /> : null}
 
       <div className={cn("grid gap-4", canManageWorkflowChannels ? "xl:grid-cols-[minmax(360px,1.15fr)_minmax(330px,0.95fr)_minmax(280px,0.8fr)]" : "xl:grid-cols-[minmax(0,1.15fr)_minmax(330px,0.85fr)]")}>
       <Card className="space-y-3 p-4">

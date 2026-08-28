@@ -24,11 +24,6 @@ interface AssistantSessionResponse {
   knowledgeMode?: KnowledgeMode;
 }
 
-interface AssistantPostResponse {
-  assistantMessage?: AssistantMessage;
-  userMessage?: AssistantMessage;
-}
-
 interface AssistantDocument {
   id: string;
   documentId: string;
@@ -80,7 +75,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [input, setInput] = useState("");
-  const [knowledgeMode, setKnowledgeMode] = useState<KnowledgeMode>("hybrid");
+  const [knowledgeMode, setKnowledgeMode] = useState<KnowledgeMode>("on_demand");
   const [isSending, setIsSending] = useState(false);
   const [isSavingKnowledgeMode, setIsSavingKnowledgeMode] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -140,7 +135,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
     const payload = (await response.json()) as AssistantSessionResponse;
     setSessionId(payload.id);
     if (payload.knowledgeMode && ["hybrid", "on_demand", "saved"].includes(payload.knowledgeMode)) {
-      setKnowledgeMode(payload.knowledgeMode === "saved" ? "hybrid" : payload.knowledgeMode);
+      setKnowledgeMode(payload.knowledgeMode === "saved" ? "on_demand" : payload.knowledgeMode);
     }
     return payload.id;
   };
@@ -161,7 +156,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
         throw new Error(typeof payload.message === "string" ? payload.message : "Modalita knowledge non aggiornata.");
       }
       if (payload.knowledgeMode) {
-        setKnowledgeMode(payload.knowledgeMode === "saved" ? "hybrid" : payload.knowledgeMode);
+        setKnowledgeMode(payload.knowledgeMode === "saved" ? "on_demand" : payload.knowledgeMode);
       }
     } catch (error) {
       setKnowledgeMode(previousMode);
@@ -225,27 +220,64 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
       role: "USER",
       contentText: content,
     };
+    const streamingMessage: AssistantMessage = {
+      id: `stream-${Date.now()}`,
+      role: "ASSISTANT",
+      contentText: "",
+    };
     setMessages((current) => [...current, optimisticMessage]);
 
     try {
       const activeSessionId = await ensureSession();
-      const response = await fetch(`/api/assistant/sessions/${activeSessionId}/messages`, {
+      const response = await fetch(`/api/assistant/sessions/${activeSessionId}/messages/stream`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ content }),
       });
-      const payload = (await response.json().catch(() => ({}))) as AssistantPostResponse & { message?: string };
       if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { message?: string };
         throw new Error(typeof payload.message === "string" ? payload.message : "Risposta assistente non riuscita.");
       }
-
-      setMessages((current) => [
-        ...current.filter((message) => message.id !== optimisticMessage.id),
-        ...(payload.userMessage ? [payload.userMessage] : [optimisticMessage]),
-        ...(payload.assistantMessage ? [payload.assistantMessage] : []),
-      ]);
+      if (!response.body) throw new Error("Streaming non disponibile.");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let hasStreamingMessage = false;
+      const handleEvent = (raw: string) => {
+        const eventName = raw.match(/^event:\s*(.+)$/m)?.[1]?.trim() ?? "message";
+        const data = raw.match(/^data:\s*(.+)$/m)?.[1];
+        if (!data) return;
+        const payload = JSON.parse(data) as { message?: string; text?: string; assistantMessage?: AssistantMessage; id?: string; role?: string; contentText?: string };
+        if (eventName === "error") throw new Error(payload.message ?? "Risposta assistente non riuscita.");
+        if (eventName === "user") {
+          setMessages((current) => current.map((message) => message.id === optimisticMessage.id ? { id: payload.id ?? message.id, role: payload.role ?? message.role, contentText: payload.contentText ?? message.contentText } : message));
+          return;
+        }
+        if (eventName === "delta" && typeof payload.text === "string") {
+          if (!hasStreamingMessage) {
+            hasStreamingMessage = true;
+            setMessages((current) => [...current, streamingMessage]);
+          }
+          setMessages((current) => current.map((message) => message.id === streamingMessage.id ? { ...message, contentText: `${message.contentText ?? ""}${payload.text}` } : message));
+          return;
+        }
+        if (eventName === "done" && payload.assistantMessage) {
+          setMessages((current) => hasStreamingMessage
+            ? current.map((message) => message.id === streamingMessage.id ? payload.assistantMessage! : message)
+            : [...current, payload.assistantMessage!]);
+        }
+      };
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        buffer += decoder.decode(chunk.value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
+        for (const event of events) handleEvent(event);
+      }
+      if (buffer.trim()) handleEvent(buffer);
     } catch {
-      setMessages((current) => current.filter((message) => message.id !== optimisticMessage.id));
+      setMessages((current) => current.filter((message) => message.id !== optimisticMessage.id && message.id !== streamingMessage.id));
       setInput(content);
     } finally {
       setIsSending(false);

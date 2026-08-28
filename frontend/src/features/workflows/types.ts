@@ -1,5 +1,5 @@
 export type WorkflowNodeKind = "INPUT" | "AGENT" | "TOOL" | "OUTPUT";
-export type WorkflowRunStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELED";
+export type WorkflowRunStatus = "QUEUED" | "RUNNING" | "WAITING_FOR_DECISION" | "COMPLETED" | "FAILED" | "CANCELED";
 export type WorkflowKnowledgeMode = "on_demand" | "saved" | "hybrid";
 
 export interface WorkflowTool {

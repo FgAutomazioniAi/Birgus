@@ -335,6 +335,68 @@ export class AssistantConversationService {
     return { persisted, modelMessages };
   }
 
+  public async *postUserMessageStream(params: {
+    workspaceId: string;
+    userId: string;
+    sessionId: string;
+    contentText: string;
+  }): AsyncGenerator<{ type: "user" | "delta" | "done"; payload: Record<string, unknown> }> {
+    const contentText = params.contentText.trim();
+    if (!contentText) throw new AppError("Il messaggio non puo essere vuoto.", "ASSISTANT_MESSAGE_EMPTY", 400);
+    const session = await this.sessionService.getSessionForUser(params.workspaceId, params.userId, params.sessionId);
+    if (session.status !== "OPEN") throw new AppError("La sessione assistente e chiusa.", "ASSISTANT_SESSION_CLOSED", 409);
+
+    const userMessage = await this.repository.appendMessage({
+      sessionId: session.id, workspaceId: params.workspaceId, authorUserId: params.userId, role: "USER", contentText, contentPayload: null,
+    });
+    yield { type: "user", payload: { id: userMessage.id, role: userMessage.role, contentText: userMessage.contentText, createdAt: userMessage.createdAt } };
+
+    const knowledgeMode = this.resolveSessionKnowledgeMode(session.configuration);
+    const documentContext = await this.resolveLinkedDocumentContext(params.workspaceId, session, knowledgeMode);
+    const attachedDocumentsContext = await this.resolveAttachedDocumentsContext(params.workspaceId, session.id, knowledgeMode);
+    const workspaceKnowledgeContext = await this.resolveWorkspaceKnowledgeContext({ workspaceId: params.workspaceId, userId: params.userId, sessionId: session.id, query: contentText, knowledgeMode });
+    const history = await this.repository.listMessages(params.workspaceId, session.id);
+    const memorySnapshot = await this.sessionService.findLatestMemorySnapshot(params.workspaceId, params.userId, session.id);
+    const initialMessages = this.buildModelMessages({
+      session, history, memorySummary: memorySnapshot?.summaryText ?? null, documentContext, attachedDocumentsContext, workspaceKnowledgeContext, knowledgeMode,
+    });
+
+    // The planning pass preserves the existing tool authorization and execution flow.
+    const toolDefinitions = this.toolRegistry.listDefinitions();
+    const firstPass = await this.chatWithOptionalTools({ messages: initialMessages, toolDefinitions });
+    const toolCalls = await this.executeToolCalls({
+      workspaceId: params.workspaceId, userId: params.userId, sessionId: session.id, sourceMessageId: userMessage.id, toolCalls: firstPass.toolCalls, toolDefinitions,
+    });
+    const finalMessages: ModelMessage[] = toolCalls.modelMessages.length > 0
+      ? [...initialMessages, { role: "assistant", content: firstPass.content, tool_calls: firstPass.toolCalls.map((toolCall) => ({ id: toolCall.id, type: toolCall.type, function: toolCall.function })) }, ...toolCalls.modelMessages]
+      : initialMessages;
+
+    let finalContent = "";
+    let modelName = firstPass.model;
+    for await (const chunk of this.chatClient.streamChat({ messages: finalMessages })) {
+      modelName = chunk.model;
+      finalContent += chunk.delta;
+      yield { type: "delta", payload: { text: chunk.delta } };
+    }
+    finalContent = finalContent.trim() || firstPass.content?.trim() || "Non ho trovato ancora una risposta affidabile. Prova a specificare meglio la richiesta.";
+    const assistantMessage = await this.repository.appendMessage({
+      sessionId: session.id,
+      workspaceId: params.workspaceId,
+      authorUserId: null,
+      role: "ASSISTANT",
+      contentText: finalContent,
+      contentPayload: { streamed: true, tool_calls_count: toolCalls.persisted.length },
+      modelName,
+      promptTokens: firstPass.promptTokens,
+      completionTokens: null,
+    });
+    await this.refreshMemorySnapshot(params.workspaceId, session.id, session, history.length + 1);
+    yield { type: "done", payload: {
+      sessionId: session.id,
+      assistantMessage: { id: assistantMessage.id, role: assistantMessage.role, contentText: assistantMessage.contentText, createdAt: assistantMessage.createdAt },
+    } };
+  }
+
   private async chatWithOptionalTools(params: {
     messages: ModelMessage[];
     toolDefinitions: AssistantToolDefinition[];
@@ -743,7 +805,7 @@ export class AssistantConversationService {
   }
 
   private resolveSessionKnowledgeMode(configuration: Record<string, unknown> | null): KnowledgeMode {
-    return normalizeKnowledgeMode(configuration?.knowledgeMode, "hybrid");
+    return normalizeKnowledgeMode(configuration?.knowledgeMode, "on_demand");
   }
 
   private toModelRole(role: string): ModelMessage["role"] | null {

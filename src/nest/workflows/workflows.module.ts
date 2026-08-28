@@ -15,6 +15,7 @@ import { QueueWorkflowRunDispatcher } from "../../modules/workflows/services/Que
 import { ScheduledWorkflowDeliveryService } from "../../modules/workflows/services/ScheduledWorkflowDeliveryService.js";
 import { WorkflowRunExecutorService } from "../../modules/workflows/services/WorkflowRunExecutorService.js";
 import { WorkflowRuntimeAccessPolicy } from "../../modules/workflows/services/WorkflowRuntimeAccessPolicy.js";
+import { HumanInterventionService } from "../../modules/workflows/services/HumanInterventionService.js";
 import { ModuleAccessPolicy } from "../../core/module-access/ModuleAccessPolicy.js";
 import { WorkflowService } from "../../modules/workflows/services/WorkflowService.js";
 import { JobQueue } from "../../worker/queue/JobQueue.js";
@@ -38,6 +39,7 @@ import { NestWorkflowsController } from "./workflows.controller.js";
   ],
   controllers: [NestWorkflowsController],
   providers: [
+    HumanInterventionService,
     {
       provide: WorkflowRuntimeAccessPolicy,
       useFactory: (moduleAccessPolicy: ModuleAccessPolicy) => new WorkflowRuntimeAccessPolicy(moduleAccessPolicy),
@@ -81,6 +83,7 @@ import { NestWorkflowsController } from "./workflows.controller.js";
         scheduledWorkflowDeliveryService: ScheduledWorkflowDeliveryService,
         connectedAppsService: ConnectedAppsService,
         runtimeAccessPolicy: WorkflowRuntimeAccessPolicy,
+        humanInterventionService: HumanInterventionService,
       ) => new WorkflowRunExecutorService({
         documentArchiveService,
         documentIntelligenceService,
@@ -95,6 +98,7 @@ import { NestWorkflowsController } from "./workflows.controller.js";
         scheduledWorkflowDeliveryService,
         connectedAppsService,
         runtimeAccessPolicy,
+        humanInterventionService,
       }),
       inject: [
         DocumentArchiveService,
@@ -110,6 +114,7 @@ import { NestWorkflowsController } from "./workflows.controller.js";
         ScheduledWorkflowDeliveryService,
         ConnectedAppsService,
         WorkflowRuntimeAccessPolicy,
+        HumanInterventionService,
       ],
     },
   ],

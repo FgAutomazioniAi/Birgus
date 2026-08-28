@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Inject, Patch, Post, UseGuards } from 
 import { z } from "zod";
 
 import { ModuleKey } from "../../core/module-access/ModuleKey.js";
-import { AI_PROVIDER_DEFINITIONS } from "../../modules/ai-runtime/domain/AiProviderConfig.js";
+import { AI_PROVIDER_DEFINITIONS, MAX_AI_PROVIDER_OUTPUT_TOKENS } from "../../modules/ai-runtime/domain/AiProviderConfig.js";
 import { AiProviderSettingsService } from "../../modules/ai-runtime/services/AiProviderSettingsService.js";
 import { AiProviderError } from "../../modules/ai-runtime/domain/AiProviderError.js";
 import { AppError } from "../../core/errors/AppError.js";
@@ -16,7 +16,7 @@ const aiProviderSettingsSchema = z.object({
   provider: z.enum(AI_PROVIDER_DEFINITIONS.map((item) => item.id) as [string, ...string[]]).optional(),
   temperature: z.number().min(0).max(2).optional(),
   timeoutMs: z.number().int().min(1000).max(900000).optional(),
-  maxOutputTokens: z.number().int().min(1).max(8192).optional(),
+  maxOutputTokens: z.number().int().min(1).max(MAX_AI_PROVIDER_OUTPUT_TOKENS).optional(),
   topP: z.number().min(0).max(1).optional(),
   topK: z.number().int().min(-1).max(1000).optional(),
   minP: z.number().min(0).max(1).optional(),

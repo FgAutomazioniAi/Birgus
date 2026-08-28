@@ -71,6 +71,10 @@ export class OpenAiCompatibleToolChatClient {
     };
   }
 
+  public streamChat(params: { messages: AiChatMessage[] }): AsyncGenerator<{ model: string; delta: string }> {
+    return this.client.streamMessages(params.messages);
+  }
+
   private normalizeToolCalls(value: Array<Record<string, unknown>>): ToolCallResponse[] {
     const normalized: ToolCallResponse[] = [];
     for (const item of value) {

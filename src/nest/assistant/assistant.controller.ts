@@ -1,5 +1,5 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req, UseGuards } from "@nestjs/common";
-import { FastifyRequest } from "fastify";
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
@@ -79,7 +79,7 @@ export class NestAssistantController {
         shipmentId: session.shipmentId,
         documentId: session.documentId,
         ddtDocumentId: session.ddtDocumentId,
-        knowledgeMode: session.configuration?.knowledgeMode ?? "hybrid",
+        knowledgeMode: session.configuration?.knowledgeMode ?? "on_demand",
         openedAt: session.openedAt,
         lastActivityAt: session.lastActivityAt,
         closedAt: session.closedAt,
@@ -117,7 +117,7 @@ export class NestAssistantController {
       id: session.id,
       status: session.status,
       title: session.title,
-      knowledgeMode: session.configuration?.knowledgeMode ?? "hybrid",
+      knowledgeMode: session.configuration?.knowledgeMode ?? "on_demand",
       openedAt: session.openedAt,
     };
   }
@@ -147,7 +147,7 @@ export class NestAssistantController {
       shipmentId: session.shipmentId,
       documentId: session.documentId,
       ddtDocumentId: session.ddtDocumentId,
-      knowledgeMode: session.configuration?.knowledgeMode ?? "hybrid",
+        knowledgeMode: session.configuration?.knowledgeMode ?? "on_demand",
       openedAt: session.openedAt,
       lastActivityAt: session.lastActivityAt,
       closedAt: session.closedAt,
@@ -204,7 +204,7 @@ export class NestAssistantController {
 
     return {
       sessionId,
-      knowledgeMode: session.configuration?.knowledgeMode ?? "hybrid",
+      knowledgeMode: session.configuration?.knowledgeMode ?? "on_demand",
     };
   }
 
@@ -323,6 +323,40 @@ export class NestAssistantController {
         completedAt: toolCall.completedAt,
       })),
     };
+  }
+
+  @Post("sessions/:sessionId/messages/stream")
+  @RequirePermission(PermissionKey.ASSISTANT_WRITE)
+  public async postMessageStream(
+    @Param() paramsRaw: unknown,
+    @Body() bodyRaw: unknown,
+    @CurrentRequestContext() requestContext: RequestContext,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    const { sessionId } = sessionIdParamsSchema.parse(paramsRaw);
+    const body = postMessageSchema.parse(bodyRaw ?? {});
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "X-Accel-Buffering": "no",
+    });
+    try {
+      for await (const event of this.conversationService.postUserMessageStream({
+        workspaceId: requestContext.workspace.workspaceId,
+        userId: requestContext.workspace.userId,
+        sessionId,
+        contentText: body.content,
+      })) {
+        reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event.payload)}\n\n`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Risposta assistente non riuscita.";
+      reply.raw.write(`event: error\ndata: ${JSON.stringify({ message })}\n\n`);
+    } finally {
+      reply.raw.end();
+    }
   }
 
   @Post("sessions/:sessionId/close")

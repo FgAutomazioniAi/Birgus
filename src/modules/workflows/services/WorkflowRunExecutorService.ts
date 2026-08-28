@@ -5,6 +5,8 @@ import { Prisma, WorkflowStepStatus } from "@prisma/client";
 
 import { ModuleKey } from "../../../core/module-access/ModuleKey.js";
 import { WorkflowRuntimeAccessPolicy } from "./WorkflowRuntimeAccessPolicy.js";
+import { WorkflowRuleEngine } from "./WorkflowRuleEngine.js";
+import { HumanInterventionService } from "./HumanInterventionService.js";
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { GaragePath } from "../../../storage/GaragePath.js";
 import { StorageSelector } from "../../../storage/StorageSelector.js";
@@ -73,6 +75,12 @@ interface StepExecutionContext {
 
 type ConditionPayload = Record<string, unknown>;
 
+class WorkflowDecisionRequiredError extends Error {
+  public constructor(public readonly interventionId: string) {
+    super("Workflow in attesa di una decisione umana.");
+  }
+}
+
 interface IncomingNodeOutputs {
   byNodeKey: Record<string, Record<string, unknown>>;
   byTargetHandle: Record<string, Record<string, unknown>>;
@@ -117,6 +125,8 @@ export class WorkflowRunExecutorService {
   private readonly scheduledWorkflowDeliveryService: ScheduledWorkflowDeliveryService | null;
   private readonly runtimeAccessPolicy: WorkflowRuntimeAccessPolicy;
   private readonly graphPlanner = new WorkflowGraphPlanner();
+  private readonly ruleEngine = new WorkflowRuleEngine();
+  private readonly humanInterventionService: HumanInterventionService | null;
 
   public constructor(params: {
     documentArchiveService: DocumentArchiveService;
@@ -131,6 +141,7 @@ export class WorkflowRunExecutorService {
     jobQueue?: JobQueue | null;
     notificationService?: NotificationService | null;
     scheduledWorkflowDeliveryService?: ScheduledWorkflowDeliveryService | null;
+    humanInterventionService?: HumanInterventionService | null;
     runtimeAccessPolicy: WorkflowRuntimeAccessPolicy;
   }) {
     this.documentArchiveService = params.documentArchiveService;
@@ -145,6 +156,7 @@ export class WorkflowRunExecutorService {
     this.jobQueue = params.jobQueue ?? null;
     this.notificationService = params.notificationService ?? null;
     this.scheduledWorkflowDeliveryService = params.scheduledWorkflowDeliveryService ?? null;
+    this.humanInterventionService = params.humanInterventionService ?? null;
     this.runtimeAccessPolicy = params.runtimeAccessPolicy;
   }
 
@@ -186,6 +198,18 @@ export class WorkflowRunExecutorService {
         });
       }
     }
+  }
+
+  public async resumeAfterDecision(runId: string): Promise<void> {
+    if (this.jobQueue) {
+      await this.jobQueue.enqueue(new Job<WorkflowRunJobPayload>(
+        this.buildQueueJobId(runId),
+        QueueWorkflowRunDispatcher.JOB_NAME,
+        { runId },
+      ));
+      return;
+    }
+    await this.executeRun(runId);
   }
 
   public async executeRun(runId: string): Promise<void> {
@@ -256,18 +280,21 @@ export class WorkflowRunExecutorService {
         error_message: null,
       },
     });
-    await prisma.moduleWorkflowRunStep.deleteMany({
-      where: {
-        workflow_run_id: runId,
-      },
-    });
-
     const context = await this.buildContext(runId);
+    const existingSteps = await prisma.moduleWorkflowRunStep.findMany({
+      where: { workflow_run_id: runId, status: { in: ["SUCCEEDED", "SKIPPED"] } },
+      orderBy: { sequence_no: "asc" },
+    });
+    const completedStepByKey = new Map(existingSteps.map((step) => [step.step_key, step]));
+    for (const step of existingSteps) {
+      context.nodeOutputs.set(step.step_key, step.output_payload ?? {});
+    }
     const evaluateCondition = (payload: unknown) => this.evaluateCondition(payload as ConditionPayload | null, context);
+    const includeForOrdering = () => true;
     const orderedNodes = this.orderScheduleNodesAfterDeliveryInputs(
-      this.graphPlanner.buildExecutionOrder(run.workflow.nodes, run.workflow.edges, evaluateCondition),
+      this.graphPlanner.buildExecutionOrder(run.workflow.nodes, run.workflow.edges, includeForOrdering),
       run.workflow.edges,
-      evaluateCondition,
+      includeForOrdering,
     );
     await this.runtimeAccessPolicy.ensureRunAllowed({
       workspaceId: run.workspace_id,
@@ -287,17 +314,39 @@ export class WorkflowRunExecutorService {
         } : null,
       })),
     });
-    context.incomingNodeKeys = this.graphPlanner.buildIncomingNodeKeyMap(run.workflow.nodes, run.workflow.edges, evaluateCondition);
-    context.incomingFieldSourceKeys = this.buildIncomingFieldSourceKeyMap(run.workflow.nodes, run.workflow.edges, evaluateCondition);
-    context.outgoingNodeKeys = this.buildOutgoingNodeKeyMap(run.workflow.nodes, run.workflow.edges, evaluateCondition);
+    context.incomingNodeKeys = this.graphPlanner.buildIncomingNodeKeyMap(run.workflow.nodes, run.workflow.edges, includeForOrdering);
+    context.incomingFieldSourceKeys = this.buildIncomingFieldSourceKeyMap(run.workflow.nodes, run.workflow.edges, includeForOrdering);
+    context.outgoingNodeKeys = this.buildOutgoingNodeKeyMap(run.workflow.nodes, run.workflow.edges, includeForOrdering);
     context.workflowNodesByKey = new Map(run.workflow.nodes.map((node) => [node.node_key, node]));
     this.ensureScheduleConnectionsAreSupported(context);
     context.scheduledTargetNodeKeys = this.buildScheduledTargetNodeKeys(run.workflow.nodes, context.outgoingNodeKeys);
 
-    let sequenceNo = 1;
+    let sequenceNo = existingSteps.reduce((max, step) => Math.max(max, step.sequence_no), 0) + 1;
     try {
       for (const node of orderedNodes) {
+        if (completedStepByKey.has(node.node_key)) {
+          continue;
+        }
         await this.handlePreStepStatus(context, node.node_key);
+        if (!this.shouldExecuteNode(node.id, run.workflow.edges, context)) {
+          const output = { status: "skipped_by_condition", nodeKey: node.node_key };
+          context.nodeOutputs.set(node.node_key, output);
+          await prisma.moduleWorkflowRunStep.create({
+            data: {
+              workspace_id: run.workspace_id,
+              workflow_run_id: runId,
+              workflow_node_id: node.id,
+              sequence_no: sequenceNo,
+              step_key: node.node_key,
+              status: "SKIPPED",
+              started_at: new Date(),
+              completed_at: new Date(),
+              output_payload: this.toInputJson(output),
+            },
+          });
+          sequenceNo += 1;
+          continue;
+        }
         const step = await prisma.moduleWorkflowRunStep.create({
           data: {
             workspace_id: run.workspace_id,
@@ -333,6 +382,20 @@ export class WorkflowRunExecutorService {
             },
           });
         } catch (error) {
+          if (error instanceof WorkflowDecisionRequiredError) {
+            const output = { status: "waiting_for_decision", interventionId: error.interventionId };
+            context.nodeOutputs.set(node.node_key, output);
+            await prisma.moduleWorkflowRunStep.update({
+              where: { id: step.id },
+              data: { status: "WAITING_FOR_DECISION", output_payload: this.toInputJson(output) },
+            });
+            await prisma.moduleWorkflowRun.update({
+              where: { id: runId },
+              data: { status: "WAITING_FOR_DECISION", result_payload: this.toInputJson(this.buildRunResultPayload(context)) },
+            });
+            await this.notifyRunStatus(context, "waiting_for_decision");
+            return;
+          }
           const message = error instanceof Error ? error.message : "Step failed";
           await prisma.moduleWorkflowRunStep.update({
             where: {
@@ -1023,6 +1086,34 @@ export class WorkflowRunExecutorService {
       };
     }
 
+    if (action === "format_text") {
+      const contentField = this.toRecord(incomingOutputs.byTargetHandle.content);
+      const templateField = this.toRecord(incomingOutputs.byTargetHandle.template);
+      return {
+        ...merged,
+        ...(prompt ? { instructions: prompt } : {}),
+        content: this.firstString(
+          nodeConfig.content,
+          inputPayload.content,
+          contentField.content,
+          contentField.formatted_text,
+          contentField.text,
+          contentField.reply,
+          contentField.raw_output,
+          ...this.pickIncomingStrings(incomingOutputs.items, ["content", "formatted_text", "text", "reply", "raw_output", "extracted_text"]),
+        ),
+        template: this.firstString(
+          nodeConfig.template,
+          inputPayload.template,
+          templateField.template,
+          templateField.text,
+          templateField.content,
+          templateField.formatted_text,
+          templateField.raw_output,
+        ),
+      };
+    }
+
     return merged;
   }
 
@@ -1050,6 +1141,9 @@ export class WorkflowRunExecutorService {
     }
     if (action === "compose_email") {
       return "Componi una bozza email professionale, sintetica e coerente con il contesto ricevuto.";
+    }
+    if (action === "format_text") {
+      return "Applica il template al contenuto senza omettere dati o aggiungere informazioni non presenti.";
     }
     if (action === "chat") {
       return "Rispondi in modo chiaro, operativo e coerente con l'input ricevuto dal workflow.";
@@ -1634,7 +1728,164 @@ export class WorkflowRunExecutorService {
       };
     }
 
+    if (handlerKey === "workflow_logic.verify_and_route") {
+      return this.executeVerifyAndRouteTool(context, node);
+    }
+
+    if (handlerKey === "workflow_text.format_template") {
+      return this.executeTemplateFormattingTool(context, node);
+    }
+
+    if (handlerKey === "workflow_attention.create_human_review") {
+      return this.executeHumanReviewTool(context, node);
+    }
+
+    if (handlerKey === "workflow_attention.request_decision") {
+      return this.executeDecisionRequestTool(context, node);
+    }
+
     throw new Error(`Backend handler non supportato: ${handlerKey}`);
+  }
+
+  private executeVerifyAndRouteTool(context: StepExecutionContext, node: WorkflowNodeRow): Record<string, unknown> {
+    const configuration = this.toRecord(node.configuration);
+    const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
+    const variables = Object.fromEntries(
+      Object.entries(incomingOutputs.byTargetHandle)
+        .filter(([handle]) => /^rule_\d+$/.test(handle))
+        .map(([handle, value]) => [String(Number(handle.slice("rule_".length)) + 1), this.resolveVerificationValue(value)]),
+    );
+    const source = {
+      input: context.inputPayload ?? {},
+      previous: this.toRecord(this.findLatestNodeOutput(context)),
+      incoming: incomingOutputs.byNodeKey,
+      fields: incomingOutputs.byTargetHandle,
+      var: variables,
+      context: {
+        clientEmail: context.clientEmail,
+        clientName: context.clientName,
+        projectId: context.projectId,
+        projectName: context.projectName,
+        documentId: context.documentId,
+      },
+    };
+    const configuredRules = Array.isArray(configuration.rules) ? configuration.rules : [];
+    const rules = configuredRules.map((rule, index) => ({ ...this.toRecord(rule), path: `var.${index + 1}` }));
+    const result = this.ruleEngine.evaluate(rules, source);
+    return {
+      status: result.valid ? "valid" : "attention_required",
+      valid: result.valid,
+      violations: result.violations,
+      checked: source,
+    };
+  }
+
+  private resolveVerificationValue(output: Record<string, unknown>): unknown {
+    const selected = this.toRecord(output.selected_output);
+    if ("value" in selected) {
+      return selected.value;
+    }
+
+    const published = Array.isArray(output.published_outputs) ? output.published_outputs : [];
+    for (const item of published) {
+      const candidate = this.toRecord(item);
+      if ("value" in candidate) {
+        return candidate.value;
+      }
+    }
+
+    for (const key of ["text", "formatted_text", "reply", "extracted_text", "summary", "value", "structured_data"]) {
+      if (output[key] !== undefined && output[key] !== null) {
+        return output[key];
+      }
+    }
+    return output;
+  }
+
+  private executeTemplateFormattingTool(context: StepExecutionContext, node: WorkflowNodeRow): Record<string, unknown> {
+    const configuration = this.toRecord(node.configuration);
+    const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
+    const contentField = this.toRecord(incomingOutputs.byTargetHandle.content);
+    const templateField = this.toRecord(incomingOutputs.byTargetHandle.template);
+    const source = {
+      input: context.inputPayload ?? {},
+      previous: this.toRecord(this.findLatestNodeOutput(context)),
+      incoming: incomingOutputs.byNodeKey,
+      fields: incomingOutputs.byTargetHandle,
+      content: this.firstString(configuration.content, contentField.content, contentField.formatted_text, contentField.text, contentField.reply, contentField.raw_output),
+    };
+    const template = this.firstString(configuration.template, templateField.template, templateField.text, templateField.content, templateField.formatted_text, templateField.raw_output);
+    if (!template) {
+      throw new Error("Template documento mancante per Applica template.");
+    }
+
+    const missing: string[] = [];
+    const formattedText = template.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (_match, rawPath: string) => {
+      const value = this.readPath(source, rawPath.trim());
+      if (value === undefined || value === null) {
+        missing.push(rawPath.trim());
+        return "";
+      }
+      return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+        ? String(value)
+        : JSON.stringify(value);
+    });
+    if (missing.length > 0) {
+      throw new Error(`Valori template mancanti: ${Array.from(new Set(missing)).join(", ")}.`);
+    }
+    return { formatted_text: formattedText, text: formattedText, template, mode: "deterministic" };
+  }
+
+  private async executeHumanReviewTool(context: StepExecutionContext, node: WorkflowNodeRow): Promise<Record<string, unknown>> {
+    const configuration = this.toRecord(node.configuration);
+    const incoming = this.findIncomingNodeOutputs(context, node.node_key);
+    const latest = this.toRecord(this.findLatestNodeOutput(context));
+    const title = this.firstString(configuration.title, configuration.review_title) || "Revisione workflow richiesta";
+    const message = this.firstString(
+      configuration.message,
+      configuration.review_message,
+      latest.message,
+      latest.status === "attention_required" ? "Una verifica del workflow richiede attenzione umana." : "Verifica manuale richiesta dal workflow.",
+    );
+    const userId = this.firstString(configuration.assignee_user_id, configuration.assigneeUserId) || null;
+
+    if (this.notificationService) {
+      await this.notificationService.createInfo({
+        workspaceId: context.workspaceId,
+        userId,
+        moduleKey: context.moduleKey,
+        title,
+        message,
+      });
+    }
+
+    return {
+      status: "attention_created",
+      title,
+      message,
+      assigneeUserId: userId,
+      input: incoming.byNodeKey,
+    };
+  }
+
+  private async executeDecisionRequestTool(context: StepExecutionContext, node: WorkflowNodeRow): Promise<never> {
+    if (!this.humanInterventionService) {
+      throw new Error("Servizio interventi umani non disponibile.");
+    }
+    const configuration = this.toRecord(node.configuration);
+    const latest = this.toRecord(this.findLatestNodeOutput(context));
+    const request = await this.humanInterventionService.createDecisionRequest({
+      workspaceId: context.workspaceId,
+      workflowRunId: context.runId,
+      workflowNodeId: node.id,
+      createdByUserId: context.userId,
+      assignedUserId: this.firstString(configuration.assignee_user_id, configuration.assigneeUserId) || null,
+      title: this.firstString(configuration.title, configuration.decision_title) || "Decisione richiesta",
+      message: this.firstString(configuration.message, configuration.decision_message, latest.message) || "Il workflow richiede una decisione umana per proseguire.",
+      priority: this.firstString(configuration.priority) || "normal",
+      input: { latest, incoming: this.findIncomingNodeOutputs(context, node.node_key).byNodeKey },
+    });
+    throw new WorkflowDecisionRequiredError(request.id);
   }
 
   private async executeDocumentSetAnalysisTool(
@@ -2121,42 +2372,31 @@ export class WorkflowRunExecutorService {
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
       return true;
     }
-
-    if ("all" in payload && Array.isArray(payload.all)) {
-      return payload.all.every((item) => this.evaluateCondition(item as ConditionPayload, context));
-    }
-    if ("any" in payload && Array.isArray(payload.any)) {
-      return payload.any.some((item) => this.evaluateCondition(item as ConditionPayload, context));
-    }
-
-    const op = typeof payload.op === "string" ? payload.op : null;
-    const path = typeof payload.path === "string" ? payload.path : null;
-    if (!op || !path) {
+    if (!("op" in payload) && !("operator" in payload) && !("all" in payload) && !("any" in payload) && !("not" in payload)) {
       return true;
     }
+    const normalize = (value: unknown): unknown => {
+      const record = this.toRecord(value);
+      if (Array.isArray(record.all) || Array.isArray(record.any)) {
+        return {
+          ...record,
+          ...(Array.isArray(record.all) ? { all: record.all.map(normalize) } : {}),
+          ...(Array.isArray(record.any) ? { any: record.any.map(normalize) } : {}),
+        };
+      }
+      if (record.not && typeof record.not === "object") {
+        return { ...record, not: normalize(record.not) };
+      }
+      return {
+        ...record,
+        operator: typeof record.operator === "string" ? record.operator : record.op,
+      };
+    };
 
-    const left = this.readPath(
-      {
-        context,
-        outputs: Object.fromEntries(context.nodeOutputs.entries()),
-      },
-      path,
-    );
-
-    if (op === "exists") {
-      return left !== null && left !== undefined;
-    }
-    if (op === "truthy") {
-      return Boolean(left);
-    }
-    if (op === "equals") {
-      return left === payload.value;
-    }
-    if (op === "not_equals") {
-      return left !== payload.value;
-    }
-
-    return true;
+    return this.ruleEngine.evaluate([normalize(payload)], {
+      context,
+      outputs: Object.fromEntries(context.nodeOutputs.entries()),
+    }).valid;
   }
 
   private readPath(source: Record<string, unknown>, path: string): unknown {
@@ -2176,6 +2416,34 @@ export class WorkflowRunExecutorService {
       return context.nodeOutputs.get(key);
     }
     return null;
+  }
+
+  private shouldExecuteNode(
+    nodeId: string,
+    edges: Array<{ source_node_id: string; target_node_id: string; source_handle: string | null; is_enabled: boolean; condition_payload: Prisma.JsonValue | null }>,
+    context: StepExecutionContext,
+  ): boolean {
+    const incoming = edges.filter((edge) => edge.target_node_id === nodeId && edge.is_enabled);
+    return incoming.length === 0 || incoming.some((edge) => this.isIncomingEdgeSatisfied(edge, context));
+  }
+
+  private isIncomingEdgeSatisfied(
+    edge: { source_node_id: string; source_handle: string | null; condition_payload: Prisma.JsonValue | null },
+    context: StepExecutionContext,
+  ): boolean {
+    if (!this.evaluateCondition(edge.condition_payload as ConditionPayload | null, context)) {
+      return false;
+    }
+    if (edge.source_handle !== "valid" && edge.source_handle !== "invalid") {
+      return true;
+    }
+
+    const sourceNode = Array.from(context.workflowNodesByKey.values()).find((node) => node.id === edge.source_node_id);
+    if (sourceNode?.module_tool?.handler_key !== "workflow_logic.verify_and_route") {
+      return true;
+    }
+    const output = this.normalizeNodeOutput(context.nodeOutputs.get(sourceNode.node_key));
+    return edge.source_handle === "valid" ? output.valid === true : output.valid === false;
   }
 
   private findLatestNodeOutput(context: StepExecutionContext): unknown {
@@ -2381,7 +2649,7 @@ export class WorkflowRunExecutorService {
 
   private async notifyRunStatus(
     context: StepExecutionContext,
-    status: "completed" | "failed",
+    status: "completed" | "failed" | "waiting_for_decision",
     error?: string,
   ): Promise<void> {
     if (!this.notificationService) {
@@ -2410,10 +2678,13 @@ export class WorkflowRunExecutorService {
 
   private composeWorkflowNotification(
     context: StepExecutionContext,
-    status: "completed" | "failed",
+    status: "completed" | "failed" | "waiting_for_decision",
     error?: string,
   ): { title: string; message: string } {
     const workflowName = context.workflowLabel.trim() || context.workflowKey || "Workflow";
+    if (status === "waiting_for_decision") {
+      return { title: workflowName, message: "Esecuzione in attesa di una decisione umana." };
+    }
     if (context.moduleKey === ModuleKey.DDT_PROCESSING) {
       const documentName = context.ddtSource?.fileName ?? "document.pdf";
       return status === "completed"

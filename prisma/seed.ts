@@ -1635,8 +1635,8 @@ async function main() {
       moduleKey: "workflow_management",
       toolKey: "langchain_compose_email",
       name: "langchain_compose_email",
-      label: "Componi email",
-      description: "Compone oggetto e corpo email senza invio, usando il contesto del workflow.",
+      label: "Formatta email",
+      description: "Prepara oggetto e corpo email senza invio, con tono professionale, formale o informale.",
       runtimeKind: "PYTHON_MODULE" as const,
       handlerKey: "langchain_orchestrator.compose_email",
       inputSchema: {
@@ -1663,7 +1663,104 @@ async function main() {
       configuration: {
         module: "langchain_orchestrator",
         action: "compose_email",
+        tone: "professionale",
       },
+    },
+    {
+      moduleKey: "workflow_management",
+      toolKey: "workflow_verify_and_route",
+      name: "workflow_verify_and_route",
+      label: "Verifica e instrada",
+      description: "Valuta regole deterministiche su dati del workflow e pubblica un esito verificabile senza usare AI.",
+      runtimeKind: "BACKEND" as const,
+      handlerKey: "workflow_logic.verify_and_route",
+      inputSchema: {
+        type: "object",
+        properties: {
+          rules: { type: "array" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          status: { type: "string", enum: ["valid", "attention_required"] },
+          valid: { type: "boolean" },
+          violations: { type: "array" },
+        },
+      },
+      configuration: {
+        rules: [],
+      },
+    },
+    {
+      moduleKey: "workflow_management",
+      toolKey: "langchain_format_text",
+      name: "langchain_format_text",
+      label: "Formatta con AI",
+      description: "Applica un template documento al contenuto usando il motore AI.",
+      runtimeKind: "PYTHON_MODULE" as const,
+      handlerKey: "langchain_orchestrator.format_text",
+      inputSchema: {
+        type: "object",
+        required: ["content", "template"],
+        properties: {
+          content: { type: "string" },
+          template: { type: "string" },
+          instructions: { type: "string" },
+          max_tokens: { type: "integer" },
+          temperature: { type: "number" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: { formatted_text: { type: "string" }, text: { type: "string" }, model: { type: "string" } },
+      },
+      configuration: { module: "langchain_orchestrator", action: "format_text", content: "", template: "" },
+    },
+    {
+      moduleKey: "workflow_management",
+      toolKey: "workflow_format_template",
+      name: "workflow_format_template",
+      label: "Applica template",
+      description: "Formatta testo in modo deterministico sostituendo i placeholder del template documento.",
+      runtimeKind: "BACKEND" as const,
+      handlerKey: "workflow_text.format_template",
+      inputSchema: {
+        type: "object",
+        required: ["content", "template"],
+        properties: { content: { type: "string" }, template: { type: "string" } },
+      },
+      outputSchema: {
+        type: "object",
+        properties: { formatted_text: { type: "string" }, text: { type: "string" }, mode: { type: "string" } },
+      },
+      configuration: { content: "", template: "" },
+    },
+    {
+      moduleKey: "workflow_management",
+      toolKey: "workflow_request_decision",
+      name: "workflow_request_decision",
+      label: "Richiedi decisione",
+      description: "Sospende il workflow e lo riprende solo dopo una decisione umana esplicita.",
+      runtimeKind: "BACKEND" as const,
+      handlerKey: "workflow_attention.request_decision",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          message: { type: "string" },
+          priority: { type: "string", enum: ["low", "normal", "high", "urgent"] },
+          assignee_user_id: { type: "string" },
+        },
+      },
+      outputSchema: {
+        type: "object",
+        properties: {
+          decision: { type: "string", enum: ["APPROVED", "REJECTED", "CHANGES_REQUIRED"] },
+          note: { type: "string" },
+        },
+      },
+      configuration: { priority: "normal" },
     },
     {
       moduleKey: "workflow_management",

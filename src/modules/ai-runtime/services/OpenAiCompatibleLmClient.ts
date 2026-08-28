@@ -1,4 +1,4 @@
-import { loadAiProviderConfig, type AiProviderConfig } from "../domain/AiProviderConfig.js";
+import { loadAiProviderConfig, MAX_AI_PROVIDER_OUTPUT_TOKENS, type AiProviderConfig } from "../domain/AiProviderConfig.js";
 import { AiProviderError } from "../domain/AiProviderError.js";
 import type { AiChatMessage } from "../domain/AiChatMessage.js";
 import type { AiChatCompletionsResponse, AiModelItem } from "../domain/AiChatResponse.js";
@@ -333,10 +333,56 @@ export class OpenAiCompatibleLmClient {
     return headers;
   }
 
+  public async *streamMessages(messages: AiChatMessage[]): AsyncGenerator<{ model: string; delta: string }> {
+    const config = await this.resolveConfig();
+    const model = await this.selectModelForConfig(config);
+    const requestPayload: Record<string, unknown> = {
+      model,
+      temperature: config.temperature,
+      stream: true,
+      messages,
+    };
+    this.applyGenerationOptions(requestPayload, config, this.maxOutputTokens);
+    const endpoint = this.resolveEndpoint(config, config.completionsPath);
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: this.buildHeaders(config),
+      body: JSON.stringify(requestPayload),
+      signal: AbortSignal.timeout(config.timeoutMs),
+      cache: "no-store",
+    }).catch((error: unknown) => {
+      if (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) throw new AiProviderError("AI_PROVIDER_TIMEOUT");
+      throw new AiProviderError("AI_PROVIDER_NETWORK_UNREACHABLE");
+    });
+    if (!response.ok || !response.body) throw this.toProviderHttpError(response.status);
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const data = line.trim().startsWith("data:") ? line.trim().slice(5).trim() : "";
+        if (!data || data === "[DONE]") continue;
+        try {
+          const payload = JSON.parse(data) as { choices?: Array<{ delta?: { content?: unknown } }> };
+          const delta = payload.choices?.[0]?.delta?.content;
+          if (typeof delta === "string" && delta.length > 0) yield { model, delta };
+        } catch {
+          // Ignore malformed keep-alive frames from OpenAI-compatible providers.
+        }
+      }
+    }
+  }
+
   private applyGenerationOptions(requestPayload: Record<string, unknown>, config: AiProviderConfig, maxTokens: number | null): void {
     const outputLimit = maxTokens ?? config.maxOutputTokens;
     if (Number.isFinite(outputLimit) && outputLimit > 0) {
-      requestPayload.max_tokens = Math.trunc(outputLimit);
+      requestPayload.max_tokens = Math.min(Math.trunc(outputLimit), MAX_AI_PROVIDER_OUTPUT_TOKENS);
     }
     requestPayload.top_p = config.topP;
     requestPayload.top_k = config.topK;

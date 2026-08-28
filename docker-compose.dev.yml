@@ -1,6 +1,6 @@
 services:
   app:
-    command: sh -c "npm run db:generate && npx tsx watch src/nest/main.ts"
+    command: sh -c "npm run db:generate && npm run db:push && npm run db:bootstrap && npm run db:sync:workflow-tools && npx tsx watch src/nest/main.ts"
     environment:
       NODE_ENV: development
       CHOKIDAR_USEPOLLING: "true"

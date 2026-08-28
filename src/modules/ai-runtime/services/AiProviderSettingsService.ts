@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { PrismaService } from "../../../nest/prisma/prisma.service.js";
-import { AI_PROVIDER_DEFINITIONS, loadAiProviderConfig, normalizeAiProviderId, type AiProviderConfig } from "../domain/AiProviderConfig.js";
+import { AI_PROVIDER_DEFINITIONS, loadAiProviderConfig, MAX_AI_PROVIDER_OUTPUT_TOKENS, normalizeAiProviderId, type AiProviderConfig } from "../domain/AiProviderConfig.js";
 import type { AiModelItem } from "../domain/AiChatResponse.js";
 import { OpenAiCompatibleLmClient } from "./OpenAiCompatibleLmClient.js";
 
@@ -143,7 +143,7 @@ export class AiProviderSettingsService {
       chatModel: this.trimString(patch.chatModel),
       temperature: typeof patch.temperature === "number" && Number.isFinite(patch.temperature) ? patch.temperature : undefined,
       timeoutMs: typeof patch.timeoutMs === "number" && Number.isFinite(patch.timeoutMs) && patch.timeoutMs > 0 ? Math.trunc(patch.timeoutMs) : undefined,
-      maxOutputTokens: this.toBoundedInteger(patch.maxOutputTokens, 1, 8192),
+      maxOutputTokens: this.toBoundedInteger(patch.maxOutputTokens, 1, MAX_AI_PROVIDER_OUTPUT_TOKENS),
       topP: this.toBoundedNumber(patch.topP, 0, 1),
       topK: this.toBoundedInteger(patch.topK, -1, 1000),
       minP: this.toBoundedNumber(patch.minP, 0, 1),
@@ -165,7 +165,7 @@ export class AiProviderSettingsService {
       chatModel: this.trimString(row.chatModel),
       temperature: typeof row.temperature === "number" && Number.isFinite(row.temperature) ? row.temperature : undefined,
       timeoutMs: typeof row.timeoutMs === "number" && Number.isFinite(row.timeoutMs) && row.timeoutMs > 0 ? Math.trunc(row.timeoutMs) : undefined,
-      maxOutputTokens: this.toBoundedInteger(row.maxOutputTokens, 1, 8192),
+      maxOutputTokens: this.clampInteger(row.maxOutputTokens, 1, MAX_AI_PROVIDER_OUTPUT_TOKENS),
       topP: this.toBoundedNumber(row.topP, 0, 1),
       topK: this.toBoundedInteger(row.topK, -1, 1000),
       minP: this.toBoundedNumber(row.minP, 0, 1),
@@ -193,6 +193,10 @@ export class AiProviderSettingsService {
 
   private toBoundedInteger(value: unknown, min: number, max: number): number | undefined {
     return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max ? value : undefined;
+  }
+
+  private clampInteger(value: unknown, min: number, max: number): number | undefined {
+    return typeof value === "number" && Number.isInteger(value) && value >= min ? Math.min(value, max) : undefined;
   }
 
   private compactSettings(settings: StoredAiProviderSettings): StoredAiProviderSettings {

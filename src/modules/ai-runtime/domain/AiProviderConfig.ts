@@ -17,6 +17,9 @@ export interface AiProviderConfig {
   contextTokenLimit: number | null;
 }
 
+// Keep enough room for the prompt on common self-hosted models (for example 8k context vLLM deployments).
+export const MAX_AI_PROVIDER_OUTPUT_TOKENS = 2048;
+
 export const AI_PROVIDER_DEFINITIONS = [
   {
     id: "vllm",

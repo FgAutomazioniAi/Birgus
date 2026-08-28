@@ -155,6 +155,31 @@ test("OpenAiCompatibleLmClient reports timeout without low-level details", async
   );
 });
 
+test("OpenAiCompatibleLmClient caps an unsafe completion limit before calling the provider", async () => {
+  let completionBody: Record<string, unknown> | null = null;
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    if (String(input).endsWith("/v1/models")) {
+      return new Response("down", { status: 503 });
+    }
+
+    completionBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    return Response.json({
+      id: "chatcmpl-test",
+      choices: [{ message: { role: "assistant", content: "ok" } }],
+    });
+  }) as typeof fetch;
+
+  const client = new OpenAiCompatibleLmClient({
+    baseUrl: "http://vllm:8000",
+    requestedModel: "qwen-test",
+    maxOutputTokens: 8192,
+  });
+
+  await client.chat("ciao");
+
+  assert.equal(completionBody?.max_tokens, 2048);
+});
+
 test("OpenAiCompatibleLmClient classifies an unreachable models endpoint", async () => {
   globalThis.fetch = (async () => {
     throw new TypeError("fetch failed");

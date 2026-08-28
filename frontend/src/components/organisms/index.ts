@@ -16,3 +16,4 @@ export * from "./language-provider";
 export * from "./toaster-provider";
 export * from "./top-nav";
 export * from "./personal-dashboard-panel";
+export * from "./human-interventions-panel";

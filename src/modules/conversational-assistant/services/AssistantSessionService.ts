@@ -55,7 +55,7 @@ export class AssistantSessionService {
       documentId: this.normalizeOptionalText(params.documentId),
       ddtDocumentId: this.normalizeOptionalText(params.ddtDocumentId),
       configuration: {
-        knowledgeMode: normalizeKnowledgeMode(params.knowledgeMode, "hybrid"),
+        knowledgeMode: normalizeKnowledgeMode(params.knowledgeMode, "on_demand"),
       },
     });
   }
@@ -69,7 +69,7 @@ export class AssistantSessionService {
     const session = await this.getSessionForUser(workspaceId, userId, sessionId);
     const nextConfiguration = {
       ...(session.configuration ?? {}),
-      knowledgeMode: normalizeKnowledgeMode(knowledgeMode, "hybrid"),
+      knowledgeMode: normalizeKnowledgeMode(knowledgeMode, "on_demand"),
     };
     return this.repository.updateSessionConfiguration({
       workspaceId,

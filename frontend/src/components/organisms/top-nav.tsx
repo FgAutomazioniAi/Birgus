@@ -59,6 +59,7 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
   const [operations, setOperations] = useState<QueuedOperation[]>([]);
+  const [openInterventionsCount, setOpenInterventionsCount] = useState(0);
   const notificationRef = useRef<HTMLDivElement | null>(null);
   const notificationsEnabled = currentUser.enabledModuleKeys.includes("notification_center");
 
@@ -137,6 +138,23 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
       active = false;
       window.clearInterval(interval);
     };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadInterventionsCount = async () => {
+      try {
+        const response = await fetch("/api/workflow-interventions/open-count", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = await response.json() as { count?: number };
+        if (active) setOpenInterventionsCount(typeof payload.count === "number" ? payload.count : 0);
+      } catch {
+        // The dashboard badge is supplementary and must not affect navigation.
+      }
+    };
+    void loadInterventionsCount();
+    const interval = window.setInterval(() => void loadInterventionsCount(), 10_000);
+    return () => { active = false; window.clearInterval(interval); };
   }, []);
 
   const handleNotificationClick = () => {
@@ -316,8 +334,9 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
             </>
           ) : null}
 
-          <button onClick={handleOpenPersonalDashboard} title={t("nav.personalDashboard")}>
+          <button onClick={handleOpenPersonalDashboard} title={t("nav.personalDashboard")} className="relative">
             <UserChip name={userName} />
+            {openInterventionsCount > 0 ? <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-bg-surface bg-status-danger-text px-1 text-[10px] font-bold text-text-inverse">{openInterventionsCount > 99 ? "99+" : openInterventionsCount}</span> : null}
           </button>
         </div>
       </div>

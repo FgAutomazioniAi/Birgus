@@ -518,8 +518,13 @@ export function ToolConfigurationForm({
         </div>
         {action === "compose_email" ? (
           <>
-            <Field label="Tono">
-              <Input value={stringValue(configuration.tone)} onChange={(event) => onPatch({ tone: event.target.value })} placeholder="professionale" />
+            <Field label="Personalita">
+              <select className="h-11 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-3 text-sm text-text-secondary" value={stringValue(configuration.tone) || "professionale"} onChange={(event) => onPatch({ tone: event.target.value })}>
+                <option value="professionale">Professionale</option>
+                <option value="formale">Formale</option>
+                <option value="informale">Informale</option>
+                <option value="breve">Breve</option>
+              </select>
             </Field>
             <Field label="Istruzioni extra">
               <textarea className={textareaClassName} value={stringValue(configuration.extra_instructions)} onChange={(event) => onPatch({ extra_instructions: event.target.value })} />

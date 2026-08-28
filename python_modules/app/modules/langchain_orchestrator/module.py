@@ -17,6 +17,7 @@ class LangchainOrchestratorModule(PythonModule):
             "chat": RunnableLambda(self._chat),
             "structure_text": RunnableLambda(self._structure_text),
             "compose_email": RunnableLambda(self._compose_email),
+            "format_text": RunnableLambda(self._format_text),
         }
 
     @property
@@ -146,9 +147,17 @@ class LangchainOrchestratorModule(PythonModule):
         if not parts:
             raise ValueError("Campo obbligatorio mancante: input.context")
 
+        personality = str(payload.get("tone") or "professionale").strip().lower()
+        personality_prompts = {
+            "professionale": "Scrivi in modo chiaro, cortese e operativo. Mantieni un registro professionale senza essere rigido.",
+            "formale": "Usa un registro formale, rispettoso e completo, con formule di apertura e chiusura appropriate.",
+            "informale": "Scrivi in modo cordiale e diretto, adatto a una relazione di lavoro confidenziale ma rispettosa.",
+            "breve": "Scrivi un messaggio molto breve e concreto: una sola richiesta o aggiornamento, senza preamboli superflui.",
+        }
         result = self._lm_service.chat(
             system_prompt=(
                 "Sei un assistente che scrive email professionali in italiano per Birgus. "
+                f"{personality_prompts.get(personality, personality_prompts['professionale'])} "
                 "Rispondi SOLO con un oggetto JSON valido con le chiavi subject e text."
             ),
             user_prompt="\n\n".join(parts),
@@ -165,6 +174,37 @@ class LangchainOrchestratorModule(PythonModule):
             "subject": subject,
             "text": text,
             "raw_output": result["content"],
+            "model": result["model"],
+            "raw_response": result["response"],
+        }
+
+    def _format_text(self, payload: dict[str, Any]) -> dict[str, Any]:
+        content = str(payload.get("content") or payload.get("input_text") or payload.get("text") or "").strip()
+        template = str(payload.get("template") or "").strip()
+        instructions = str(payload.get("instructions") or "").strip()
+        if not content:
+            raise ValueError("Campo obbligatorio mancante: input.content")
+        if not template:
+            raise ValueError("Campo obbligatorio mancante: input.template")
+
+        result = self._lm_service.chat(
+            system_prompt=(
+                "Sei un assistente che formatta testi in italiano. "
+                "Mantieni tutti i fatti del contenuto, applica fedelmente struttura, sezioni e tono del template. "
+                "Rispondi solo con il testo formattato, senza commenti o markdown aggiuntivo."
+            ),
+            user_prompt=f"Template documento:\n{template}\n\nContenuto da formattare:\n{content}"
+                        + (f"\n\nIstruzioni aggiuntive:\n{instructions}" if instructions else ""),
+            ai_provider=self._ai_provider(payload),
+            max_tokens=self._optional_int(payload.get("max_tokens")),
+            temperature=self._optional_float(payload.get("temperature")) or 0.2,
+        )
+        formatted_text = str(result["content"]).strip()
+        if not formatted_text:
+            raise ValueError("Il modello non ha restituito testo formattato.")
+        return {
+            "formatted_text": formatted_text,
+            "text": formatted_text,
             "model": result["model"],
             "raw_response": result["response"],
         }

@@ -13,6 +13,8 @@ import {
   Mail,
   MessageCircle,
   PenLine,
+  ShieldCheck,
+  UserRoundCheck,
   Send,
   Sparkles,
   Square,
@@ -38,6 +40,11 @@ export type FlowNodeType =
   | "check-mailbox"
   | "quotation-docx"
   | "compose-email"
+  | "format-text-ai"
+  | "format-text-template"
+  | "verify-route"
+  | "human-review"
+  | "request-decision"
   | "send-email"
   | "send-telegram"
   | "send-whatsapp"
@@ -76,6 +83,7 @@ export type DraftEdge = {
   sourceHandle?: string | null;
   targetHandle?: string | null;
   label?: string | null;
+  conditionPayload?: Record<string, unknown> | null;
   orderNo: number;
   isEnabled: boolean;
 };
@@ -179,6 +187,11 @@ export const NODE_KIND_ICONS: Record<FlowNodeType, typeof Type> = {
   "send-whatsapp": MessageCircle,
   schedule: Clock,
   "compose-email": PenLine,
+  "format-text-ai": PenLine,
+  "format-text-template": FileText,
+  "verify-route": ShieldCheck,
+  "human-review": UserRoundCheck,
+  "request-decision": UserRoundCheck,
   output: CheckCircle2,
 };
 
@@ -197,7 +210,12 @@ export const NODE_KIND_LABELS: Record<FlowNodeType, string> = {
   "send-telegram": "Invia Telegram",
   "send-whatsapp": "Invia WhatsApp",
   schedule: "Pianifica",
-  "compose-email": "Componi email",
+  "compose-email": "Formatta email",
+  "format-text-ai": "Formatta con AI",
+  "format-text-template": "Applica template",
+  "verify-route": "Verifica e instrada",
+  "human-review": "Crea revisione umana",
+  "request-decision": "Richiedi decisione",
   output: "Risultato",
 };
 
@@ -216,7 +234,12 @@ const NODE_KIND_LABELS_EN: Record<FlowNodeType, string> = {
   "send-telegram": "Send Telegram",
   "send-whatsapp": "Send WhatsApp",
   schedule: "Schedule",
-  "compose-email": "Compose email",
+  "compose-email": "Format email",
+  "format-text-ai": "Format with AI",
+  "format-text-template": "Apply template",
+  "verify-route": "Verify and route",
+  "human-review": "Create human review",
+  "request-decision": "Request decision",
   output: "Result",
 };
 
@@ -235,7 +258,12 @@ const NODE_KIND_DESCRIPTIONS: Record<FlowNodeType, Record<UiLanguage, string>> =
   "send-telegram": { it: "Invia un messaggio Telegram.", en: "Sends a Telegram message." },
   "send-whatsapp": { it: "Invia un messaggio WhatsApp.", en: "Sends a WhatsApp message." },
   schedule: { it: "Avvia un invio programmato.", en: "Starts a scheduled delivery." },
-  "compose-email": { it: "Prepara una bozza email con AI.", en: "Prepares an AI email draft." },
+  "compose-email": { it: "Prepara una bozza email con AI senza inviarla.", en: "Prepares an AI email draft without sending it." },
+  "format-text-ai": { it: "Riformatta un contenuto seguendo un template documento con AI.", en: "Reformats content with AI following a document template." },
+  "format-text-template": { it: "Applica placeholder di un template documento senza usare AI.", en: "Applies document-template placeholders without AI." },
+  "verify-route": { it: "Controlla dati con regole deterministiche e segnala le violazioni.", en: "Checks data with deterministic rules and reports violations." },
+  "human-review": { it: "Crea una richiesta persistente di attenzione nel workspace.", en: "Creates a persistent workspace attention request." },
+  "request-decision": { it: "Mette la run in attesa finche una persona decide.", en: "Pauses the run until a person decides." },
   output: { it: "Mostra il risultato ricevuto.", en: "Shows the received result." },
 };
 
@@ -261,14 +289,17 @@ export const TOOLBAR_ORDER: FlowNodeType[] = [
   "send-whatsapp",
   "schedule",
   "compose-email",
+  "verify-route",
+  "human-review",
+  "request-decision",
   "output",
 ];
 
 export const TOOLBAR_GROUPS: Array<{ id: string; title: string; titleEn: string; category: CanvasNodeData["paletteKind"]; items: FlowNodeType[] }> = [
   { id: "input", title: "Input", titleEn: "Input", category: "INPUT", items: ["input-text", "input-file"] },
   { id: "output", title: "Output", titleEn: "Output", category: "OUTPUT", items: ["output"] },
-  { id: "agents", title: "Agenti", titleEn: "Agents", category: "AGENT", items: ["llm", "structure-data", "compose-email"] },
-  { id: "tools", title: "Strumenti", titleEn: "Tools", category: "TOOL", items: ["ocr", "document-set-ai", "generate-document"] },
+  { id: "agents", title: "Agenti", titleEn: "Agents", category: "AGENT", items: ["llm", "structure-data", "compose-email", "format-text-ai"] },
+  { id: "tools", title: "Strumenti", titleEn: "Tools", category: "TOOL", items: ["ocr", "document-set-ai", "generate-document", "format-text-template", "verify-route", "request-decision"] },
   { id: "report", title: "Resoconto", titleEn: "Report", category: "REPORT", items: ["schedule", "send-email", "send-telegram", "send-whatsapp"] },
 ];
 
@@ -341,7 +372,7 @@ export function isLangChainTool(tool: WorkflowTool): boolean {
 }
 
 export function isAgentTool(tool: WorkflowTool): boolean {
-  return tool.handlerKey === "langchain_orchestrator.structure_text" || tool.handlerKey === "langchain_orchestrator.compose_email";
+  return tool.handlerKey === "langchain_orchestrator.structure_text" || tool.handlerKey === "langchain_orchestrator.compose_email" || tool.handlerKey === "langchain_orchestrator.format_text";
 }
 
 export function isAdvancedLangChainTool(tool: WorkflowTool): boolean {
@@ -349,7 +380,7 @@ export function isAdvancedLangChainTool(tool: WorkflowTool): boolean {
 }
 
 export function isAiRequestFlowNodeType(kind: FlowNodeType): boolean {
-  return kind === "llm" || kind === "structure-data" || kind === "compose-email" || kind === "document-set-ai";
+  return kind === "llm" || kind === "structure-data" || kind === "compose-email" || kind === "format-text-ai" || kind === "document-set-ai";
 }
 
 export function currentPromptFromConfiguration(configuration: Record<string, unknown>): string {
@@ -410,6 +441,21 @@ export function flowNodeHandlerKey(kind: FlowNodeType): string | null {
   if (kind === "compose-email") {
     return "langchain_orchestrator.compose_email";
   }
+  if (kind === "format-text-ai") {
+    return "langchain_orchestrator.format_text";
+  }
+  if (kind === "format-text-template") {
+    return "workflow_text.format_template";
+  }
+  if (kind === "verify-route") {
+    return "workflow_logic.verify_and_route";
+  }
+  if (kind === "human-review") {
+    return "workflow_attention.create_human_review";
+  }
+  if (kind === "request-decision") {
+    return "workflow_attention.request_decision";
+  }
   if (kind === "generate-document") {
     return "docx_engine.generate_document";
   }
@@ -447,7 +493,7 @@ export function inferFlowNodeType(node: DraftNode, tool: WorkflowTool | null): F
   if (tool?.handlerKey === "ocr_engine.extract_text_from_pdf_storage") {
     return "ocr";
   }
-  if (tool?.handlerKey === "langchain_orchestrator.chat" || node.nodeKind === "AGENT") {
+  if (tool?.handlerKey === "langchain_orchestrator.chat") {
     return "llm";
   }
   if (tool?.handlerKey === "langchain_orchestrator.structure_text") {
@@ -455,6 +501,24 @@ export function inferFlowNodeType(node: DraftNode, tool: WorkflowTool | null): F
   }
   if (tool?.handlerKey === "langchain_orchestrator.compose_email") {
     return "compose-email";
+  }
+  if (tool?.handlerKey === "langchain_orchestrator.format_text") {
+    return "format-text-ai";
+  }
+  if (node.nodeKind === "AGENT") {
+    return "llm";
+  }
+  if (tool?.handlerKey === "workflow_text.format_template") {
+    return "format-text-template";
+  }
+  if (tool?.handlerKey === "workflow_logic.verify_and_route") {
+    return "verify-route";
+  }
+  if (tool?.handlerKey === "workflow_attention.create_human_review") {
+    return "human-review";
+  }
+  if (tool?.handlerKey === "workflow_attention.request_decision") {
+    return "request-decision";
   }
   if (tool?.handlerKey === "docx_engine.generate_document") {
     return "generate-document";
@@ -592,6 +656,7 @@ export function toDraftEdge(item: WorkflowEdgeDto, idToClientId: Map<string, str
     sourceHandle: item.sourceHandle,
     targetHandle: item.targetHandle,
     label: item.label,
+    conditionPayload: toRecordOrNull(item.conditionPayload),
     orderNo: item.orderNo,
     isEnabled: item.isEnabled,
   };

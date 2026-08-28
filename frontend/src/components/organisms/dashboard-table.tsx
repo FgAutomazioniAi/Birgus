@@ -16,6 +16,7 @@ import { toast } from "sonner";
 
 import { Button, Card, CheckboxControl, Text } from "@/components/atoms";
 import { PageHelpHint, SearchField, SelectDropdown } from "@/components/molecules";
+import { HumanInterventionsPanel } from "@/components/organisms/human-interventions-panel";
 import { useLanguage } from "@/components/organisms/language-provider";
 import { cn } from "@/lib/cn";
 import { downloadTablePdf } from "@/lib/pdf-export";
@@ -376,6 +377,8 @@ export function DashboardTable() {
           {t("projects.new")}
         </Button>
       </div>
+
+      <HumanInterventionsPanel />
 
       <Card className="overflow-visible">
         <div className="flex flex-col justify-between gap-4 border-b border-border-subtle p-4 md:flex-row md:items-center">

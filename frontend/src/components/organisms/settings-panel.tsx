@@ -687,7 +687,7 @@ export function SettingsPanel() {
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label className="text-xs" htmlFor="ai-provider-max-output-tokens">{t("settings.ai.maxOutputTokens")}</Label>
-              <Input id="ai-provider-max-output-tokens" name="ai-provider-max-output-tokens" type="number" min={1} max={8192} value={aiSettings.maxOutputTokens} disabled={loadingSettings} className="h-9 px-3" onChange={(event) => setAiSettings((prev) => ({ ...prev, maxOutputTokens: Number(event.target.value) }))} />
+              <Input id="ai-provider-max-output-tokens" name="ai-provider-max-output-tokens" type="number" min={1} max={2048} value={Math.min(aiSettings.maxOutputTokens, 2048)} disabled={loadingSettings} className="h-9 px-3" onChange={(event) => setAiSettings((prev) => ({ ...prev, maxOutputTokens: Number(event.target.value) }))} />
             </div>
             <div className="space-y-1">
               <Label className="text-xs" htmlFor="ai-provider-context-token-limit">{t("settings.ai.contextTokenLimit")}</Label>

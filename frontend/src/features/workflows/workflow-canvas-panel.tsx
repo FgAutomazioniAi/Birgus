@@ -145,6 +145,9 @@ function defaultPromptForTool(tool: WorkflowTool | null): string {
   if (tool.handlerKey === "langchain_orchestrator.compose_email") {
     return "Componi una bozza email professionale, sintetica e coerente con il contesto ricevuto.";
   }
+  if (tool.handlerKey === "langchain_orchestrator.format_text") {
+    return "Applica il template al contenuto senza omettere dati o aggiungere informazioni non presenti.";
+  }
   if (tool.handlerKey === "document_intelligence.analyze_document_set") {
     return "Analizza i documenti collegati e produci una risposta chiara, citando gli elementi rilevanti.";
   }
@@ -160,7 +163,7 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
   const [defaultPromptDraft, setDefaultPromptDraft] = useState("");
   const [isConfirmingDefaultPrompt, setIsConfirmingDefaultPrompt] = useState(false);
   const Icon = NODE_KIND_ICONS[data.type] ?? (data.paletteKind === "AGENT" ? Bot : data.paletteKind === "TOOL" ? Wrench : nodeKindIcon[data.kind]);
-  const hasFieldTargets = data.type === "llm" || data.type === "generate-document" || ["send-email", "send-telegram", "send-whatsapp"].includes(data.type);
+  const hasFieldTargets = data.type === "llm" || data.type === "generate-document" || ["format-text-ai", "format-text-template", "send-email", "send-telegram", "send-whatsapp", "verify-route"].includes(data.type);
   const hasTarget = data.type !== "input-text" && data.type !== "schedule" && !hasFieldTargets;
   const hasSource = data.type !== "output";
   const config = data.configuration;
@@ -202,6 +205,13 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
     "w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary",
     manualInputDisabled ? "cursor-not-allowed bg-bg-muted text-text-muted" : "",
   );
+  const configuredRules = Array.isArray(config.rules)
+    ? config.rules.map((rule) => toRecord(rule)).filter((rule) => Object.keys(rule).length > 0)
+    : [];
+  const updateRule = (index: number, patch: Record<string, unknown>) => {
+    const nextRules = configuredRules.map((rule, ruleIndex) => ruleIndex === index ? { ...rule, ...patch } : rule);
+    data.onConfigChange?.({ rules: nextRules });
+  };
 
   useEffect(() => {
     setDefaultPromptDraft(defaultPrompt);
@@ -211,7 +221,7 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
   return (
     <div
       className={cn(
-        "w-64 rounded-lg border-2 bg-bg-surface p-3 shadow-card",
+        "relative w-64 rounded-lg border-2 bg-bg-surface p-3 shadow-card",
         NODE_CATEGORY_BORDER[data.paletteKind],
         selected ? "ring-2 ring-ring-primary" : "",
       )}
@@ -491,8 +501,75 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
       {data.type === "compose-email" ? (
         <div className="nodrag flex flex-col gap-1">
           <textarea id={fieldId("context")} name={fieldId("context")} value={stringConfig("context")} onChange={(event) => patchConfig("context", event.target.value)} placeholder={manualInputDisabled ? "Input dal nodo collegato" : "Di cosa deve parlare l'email?"} rows={2} disabled={manualInputDisabled} className={inputClassName} />
-          <input id={fieldId("tone")} name={fieldId("tone")} type="text" value={stringConfig("tone")} onChange={(event) => patchConfig("tone", event.target.value)} placeholder="Tono (professionale)" className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+          <label className="flex items-center gap-2 text-xs font-medium text-text-secondary" htmlFor={fieldId("tone")}>
+            Personalita
+          <select id={fieldId("tone")} name={fieldId("tone")} value={stringConfig("tone") || "professionale"} onChange={(event) => {
+            const tone = event.target.value;
+            const prompts: Record<string, string> = {
+              professionale: "Scrivi in modo chiaro, cortese e operativo, senza risultare rigido.",
+              formale: "Usa un registro formale e rispettoso, con formule di apertura e chiusura appropriate.",
+              informale: "Scrivi in modo cordiale e diretto, adatto a una relazione di lavoro confidenziale.",
+              breve: "Scrivi un messaggio molto breve e concreto, senza preamboli superflui.",
+            };
+            data.onConfigChange?.({ tone, instructions: prompts[tone] ?? prompts.professionale, currentPrompt: prompts[tone] ?? prompts.professionale });
+          }} className="min-w-0 flex-1 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary">
+            <option value="professionale">Professionale</option>
+            <option value="formale">Formale</option>
+            <option value="informale">Informale</option>
+            <option value="breve">Breve</option>
+          </select>
+          </label>
           <textarea id={fieldId("extra_instructions")} name={fieldId("extra_instructions")} value={currentPrompt} onChange={(event) => patchCurrentPrompt(event.target.value)} placeholder="Istruzioni aggiuntive" rows={2} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+        </div>
+      ) : null}
+
+      {data.type === "format-text-ai" || data.type === "format-text-template" ? (
+        <div className="nodrag flex flex-col gap-2">
+          <div className="relative">
+            <Handle type="target" id="field:content" position={Position.Left} className={textHandleClassName} title="Collega contenuto" />
+            <textarea id={fieldId("content")} name={fieldId("content")} value={stringConfig("content")} onChange={(event) => patchConfig("content", event.target.value)} placeholder={isFieldConnected("content") ? "Contenuto dal nodo collegato" : "Contenuto da formattare"} rows={2} disabled={isFieldConnected("content")} className={fieldInputClassName("content")} />
+          </div>
+          <div className="relative">
+            <Handle type="target" id="field:template" position={Position.Left} className={textHandleClassName} title="Collega template documento" />
+            <textarea id={fieldId("template")} name={fieldId("template")} value={stringConfig("template")} onChange={(event) => patchConfig("template", event.target.value)} placeholder={isFieldConnected("template") ? "Template dal nodo collegato" : data.type === "format-text-template" ? "Template con {{content}} o {{fields...}}" : "Template documento"} rows={3} disabled={isFieldConnected("template")} className={fieldInputClassName("template")} />
+          </div>
+          {data.type === "format-text-ai" ? <textarea id={fieldId("format-instructions")} name={fieldId("format-instructions")} value={currentPrompt} onChange={(event) => patchCurrentPrompt(event.target.value)} placeholder="Istruzioni aggiuntive" rows={2} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" /> : null}
+        </div>
+      ) : null}
+
+      {data.type === "verify-route" ? (
+        <div className="nodrag flex flex-col gap-2">
+          {configuredRules.map((rule, index) => (
+            <div key={`${data.nodeId}-rule-${index}`} className="relative rounded-md border border-border-subtle bg-bg-muted p-1.5">
+              <Handle type="target" id={`field:rule_${index}`} position={Position.Left} className={textHandleClassName} title={`Collega valore alla regola ${index + 1}`} />
+              <div className="grid grid-cols-[minmax(0,1fr)_24px] gap-1">
+                <select value={typeof rule.operator === "string" ? rule.operator : "not_empty"} onChange={(event) => updateRule(index, { operator: event.target.value })} className="min-w-0 rounded-md border border-border-default bg-bg-page px-1 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary">
+                  <option value="not_empty">Non vuoto</option><option value="exists">Esiste</option><option value="equals">Uguale</option><option value="contains">Contiene</option><option value="greater_than">Maggiore di</option><option value="less_than">Minore di</option><option value="between">Compreso tra</option>
+                </select>
+                <button type="button" className="rounded-md px-1 text-text-muted hover:bg-bg-page hover:text-status-danger-text" title="Rimuovi regola" onClick={() => data.onConfigChange?.({ rules: configuredRules.filter((_, ruleIndex) => ruleIndex !== index) })}><X size={14} /></button>
+              </div>
+              {typeof rule.operator === "string" && rule.operator === "between" ? <div className="mt-1 grid grid-cols-2 gap-1"><input value={typeof rule.min === "string" || typeof rule.min === "number" ? String(rule.min) : ""} onChange={(event) => updateRule(index, { min: event.target.value })} placeholder="Min" className="min-w-0 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" /><input value={typeof rule.max === "string" || typeof rule.max === "number" ? String(rule.max) : ""} onChange={(event) => updateRule(index, { max: event.target.value })} placeholder="Max" className="min-w-0 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" /></div> : <input value={typeof rule.value === "string" || typeof rule.value === "number" ? String(rule.value) : ""} onChange={(event) => updateRule(index, { value: event.target.value })} placeholder="Valore o pattern" className="mt-1 w-full min-w-0 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />}
+            </div>
+          ))}
+          <div className="relative flex min-h-8 items-center justify-center">
+            <button type="button" className="w-36 rounded-md border border-border-default px-2 py-1 text-xs font-semibold text-text-secondary hover:bg-bg-muted" onClick={() => data.onConfigChange?.({ rules: [...configuredRules, { operator: "not_empty", value: "" }] })}>Aggiungi regola</button>
+            <span className="pointer-events-none absolute right-3 top-0.5 text-[10px] font-bold text-text-primary">{language === "en" ? "T" : "V"}</span>
+            <span className="pointer-events-none absolute right-3 bottom-0.5 text-[10px] font-bold text-text-primary">F</span>
+          </div>
+        </div>
+      ) : null}
+
+      {data.type === "verify-route" ? <>
+        <Handle type="source" id="valid" position={Position.Right} className="!h-3 !w-3 !border-2 !border-white !bg-white" style={{ top: "auto", bottom: "23px" }} title={language === "en" ? "Route when true" : "Instrada se valido"} />
+        <Handle type="source" id="invalid" position={Position.Right} className="!h-3 !w-3 !border-2 !border-white !bg-black" style={{ top: "auto", bottom: "7px" }} title={language === "en" ? "Route when false" : "Instrada se non valido"} />
+      </> : null}
+
+      {data.type === "human-review" || data.type === "request-decision" ? (
+        <div className="nodrag flex flex-col gap-1">
+          <input id={fieldId("title")} name={fieldId("title")} value={stringConfig("title")} onChange={(event) => patchConfig("title", event.target.value)} placeholder={data.type === "request-decision" ? "Decisione richiesta" : "Titolo revisione"} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+          <textarea id={fieldId("message")} name={fieldId("message")} value={stringConfig("message")} onChange={(event) => patchConfig("message", event.target.value)} placeholder={data.type === "request-decision" ? "Cosa deve decidere l'utente?" : "Motivo della revisione"} rows={2} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
+          {data.type === "request-decision" ? <select id={fieldId("priority")} name={fieldId("priority")} value={stringConfig("priority") || "normal"} onChange={(event) => patchConfig("priority", event.target.value)} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"><option value="low">Priorita bassa</option><option value="normal">Priorita normale</option><option value="high">Priorita alta</option><option value="urgent">Urgente</option></select> : null}
+          <input id={fieldId("assigneeUserId")} name={fieldId("assigneeUserId")} value={stringConfig("assigneeUserId")} onChange={(event) => patchConfig("assigneeUserId", event.target.value)} placeholder="ID utente assegnatario (facoltativo)" className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
         </div>
       ) : null}
 
@@ -563,7 +640,7 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
         </div>
       ) : null}
 
-      {hasSource ? <Handle type="source" position={Position.Right} className={sourceHandleClassName} /> : null}
+      {hasSource && data.type !== "verify-route" ? <Handle type="source" position={Position.Right} className={sourceHandleClassName} /> : null}
     </div>
   );
 }
@@ -583,6 +660,7 @@ export function WorkflowCanvasPanel() {
   const [draftNodes, setDraftNodes] = useState<DraftNode[]>([]);
   const [draftEdges, setDraftEdges] = useState<DraftEdge[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [label, setLabel] = useState("");
   const [description, setDescription] = useState("");
   const [knowledgeMode, setKnowledgeMode] = useState<WorkflowKnowledgeMode>("on_demand");
@@ -617,6 +695,10 @@ export function WorkflowCanvasPanel() {
   const selectedNode = useMemo(
     () => draftNodes.find((item) => item.clientId === selectedNodeId) ?? null,
     [draftNodes, selectedNodeId],
+  );
+  const selectedEdge = useMemo(
+    () => draftEdges.find((item) => item.clientId === selectedEdgeId) ?? null,
+    [draftEdges, selectedEdgeId],
   );
   const toolById = useMemo(() => new Map(tools.map((tool) => [tool.id, tool])), [tools]);
   const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents]);
@@ -865,6 +947,10 @@ export function WorkflowCanvasPanel() {
       ),
     );
   }, [setNodes]);
+
+  const patchEdgeCondition = useCallback((clientId: string, conditionPayload: Record<string, unknown> | null) => {
+    setDraftEdges((current) => current.map((edge) => edge.clientId === clientId ? { ...edge, conditionPayload } : edge));
+  }, []);
 
   const handleNodeFileChange = useCallback(async (clientId: string, file: File) => {
     if (file.size > MAX_WORKFLOW_UPLOAD_BYTES) {
@@ -1317,7 +1403,7 @@ export function WorkflowCanvasPanel() {
         sourceHandle: edge.sourceHandle ?? null,
         targetHandle: edge.targetHandle ?? null,
         label: edge.label ?? null,
-        conditionPayload: null,
+        conditionPayload: edge.conditionPayload ?? null,
         orderNo: index + 1,
         isEnabled: edge.isEnabled,
       }));
@@ -1458,6 +1544,10 @@ export function WorkflowCanvasPanel() {
       }
       const run = (await response.json()) as WorkflowRun;
       setLatestRun(run);
+      if (run.status === "WAITING_FOR_DECISION") {
+        toast.info("Il workflow e in attesa di una decisione nella dashboard.");
+        return;
+      }
       if (["COMPLETED", "FAILED", "CANCELED"].includes(run.status)) {
         if (run.status === "FAILED") {
           toast.error(run.errorMessage || "L'esecuzione del workflow non e' riuscita.");
@@ -1511,6 +1601,7 @@ export function WorkflowCanvasPanel() {
       targetClientId: connection.target,
       sourceHandle: connection.sourceHandle,
       targetHandle: connection.targetHandle,
+      conditionPayload: null,
       orderNo: draftEdges.length + 1,
       isEnabled: true,
     };
@@ -1845,6 +1936,72 @@ export function WorkflowCanvasPanel() {
         </div>
       </div>
 
+      {selectedEdge ? (() => {
+        const condition = toRecord(selectedEdge.conditionPayload);
+        const sourceNode = draftNodes.find((node) => node.clientId === selectedEdge.sourceClientId);
+        const targetNode = draftNodes.find((node) => node.clientId === selectedEdge.targetClientId);
+        const hasCondition = Object.keys(condition).length > 0;
+        const operator = typeof condition.operator === "string" ? condition.operator : "truthy";
+        const defaultPath = sourceNode ? `outputs.${sourceNode.nodeKey}.valid` : "outputs.node.output";
+        const path = typeof condition.path === "string" ? condition.path : defaultPath;
+        const value = typeof condition.value === "string" || typeof condition.value === "number" ? String(condition.value) : "";
+        return (
+          <div className="flex flex-wrap items-end gap-3 border-b border-border-default bg-bg-page px-6 py-3 text-sm">
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-text-primary">Instradamento del collegamento</p>
+              <p className="truncate text-xs text-text-muted">{sourceNode?.label ?? "Nodo origine"} -&gt; {targetNode?.label ?? "Nodo destinazione"}</p>
+            </div>
+            <label className="flex items-center gap-2 text-text-secondary">
+              <input
+                type="checkbox"
+                checked={hasCondition}
+                onChange={(event) => patchEdgeCondition(selectedEdge.clientId, event.target.checked ? { path: defaultPath, operator: "truthy" } : null)}
+              />
+              Esegui solo se la condizione e valida
+            </label>
+            {hasCondition ? (
+              <>
+                <label className="grid min-w-[190px] gap-1 text-xs font-medium text-text-secondary">
+                  Campo da verificare
+                  <input
+                    value={path}
+                    onChange={(event) => patchEdgeCondition(selectedEdge.clientId, { ...condition, path: event.target.value })}
+                    className="h-9 rounded-md border border-border-default bg-bg-surface px-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+                  />
+                </label>
+                <label className="grid min-w-[150px] gap-1 text-xs font-medium text-text-secondary">
+                  Regola
+                  <select
+                    value={operator}
+                    onChange={(event) => patchEdgeCondition(selectedEdge.clientId, { ...condition, operator: event.target.value })}
+                    className="h-9 rounded-md border border-border-default bg-bg-surface px-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+                  >
+                    <option value="truthy">E valorizzato</option>
+                    <option value="falsy">Non e valorizzato</option>
+                    <option value="equals">Uguale a</option>
+                    <option value="not_equals">Diverso da</option>
+                    <option value="contains">Contiene</option>
+                    <option value="regex">Rispetta regex</option>
+                    <option value="greater_than">Maggiore di</option>
+                    <option value="less_than">Minore di</option>
+                  </select>
+                </label>
+                {operator !== "truthy" && operator !== "falsy" ? (
+                  <label className="grid min-w-[160px] gap-1 text-xs font-medium text-text-secondary">
+                    {operator === "regex" ? "Pattern" : "Valore"}
+                    <input
+                      value={value}
+                      onChange={(event) => patchEdgeCondition(selectedEdge.clientId, { ...condition, value: event.target.value })}
+                      className="h-9 rounded-md border border-border-default bg-bg-surface px-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+                    />
+                  </label>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        );
+      })() : null}
+
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
           <ReactFlow<Node<CanvasNodeData>, Edge>
@@ -1860,11 +2017,19 @@ export function WorkflowCanvasPanel() {
             onNodeDragStop={onNodeDragStop}
             onNodeClick={(_, node) => {
               setSelectedNodeId(node.id);
+              setSelectedEdgeId(null);
               setIsOutputFocused(false);
               setOutputPreviewNodeId(null);
             }}
             onPaneClick={() => {
               setSelectedNodeId(null);
+              setSelectedEdgeId(null);
+              setIsOutputFocused(false);
+              setOutputPreviewNodeId(null);
+            }}
+            onEdgeClick={(_, edge) => {
+              setSelectedNodeId(null);
+              setSelectedEdgeId(edge.id);
               setIsOutputFocused(false);
               setOutputPreviewNodeId(null);
             }}

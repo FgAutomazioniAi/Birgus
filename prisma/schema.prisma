@@ -134,6 +134,7 @@ enum ScheduledWorkflowDeliveryStatus {
 enum WorkflowRunStatus {
   QUEUED
   RUNNING
+  WAITING_FOR_DECISION
   COMPLETED
   FAILED
   CANCELED
@@ -142,10 +143,24 @@ enum WorkflowRunStatus {
 enum WorkflowStepStatus {
   PENDING
   RUNNING
+  WAITING_FOR_DECISION
   SUCCEEDED
   FAILED
   SKIPPED
   CANCELED
+}
+
+enum HumanInterventionStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  CANCELED
+}
+
+enum HumanInterventionDecision {
+  APPROVED
+  REJECTED
+  CHANGES_REQUIRED
 }
 
 enum BackendJobStatus {
@@ -259,6 +274,7 @@ model Workspace {
   module_workflow_runs          ModuleWorkflowRun[]
   module_workflow_run_steps     ModuleWorkflowRunStep[]
   scheduled_workflow_deliveries ScheduledWorkflowDelivery[]
+  human_interventions           HumanIntervention[]
 
   @@unique([organization_id, code])
   @@index([organization_id])
@@ -313,6 +329,9 @@ model User {
   assistant_messages_authored          AssistantMessage[]         @relation("assistant_message_author")
   quotation_jobs_requested             QuotationOrchestratorJob[] @relation("quotation_job_requested_by")
   workflow_runs_requested              ModuleWorkflowRun[]        @relation("module_workflow_run_requested_by")
+  human_interventions_created          HumanIntervention[]        @relation("human_intervention_created_by")
+  human_interventions_assigned         HumanIntervention[]        @relation("human_intervention_assigned_user")
+  human_interventions_resolved         HumanIntervention[]        @relation("human_intervention_resolved_by")
 
   @@index([deleted_at])
   @@map("users")
@@ -1340,6 +1359,7 @@ model ModuleWorkflowRun {
   measure_report_document MeasureReportDocument?      @relation(fields: [measure_report_document_id], references: [id], onDelete: SetNull)
   steps                   ModuleWorkflowRunStep[]
   scheduled_deliveries    ScheduledWorkflowDelivery[]
+  human_interventions     HumanIntervention[]
 
   @@index([workspace_id])
   @@index([workflow_id])
@@ -1384,6 +1404,37 @@ model ModuleWorkflowRunStep {
   @@index([workflow_node_id])
   @@index([status])
   @@map("module_workflow_run_steps")
+}
+
+model HumanIntervention {
+  id                  String                    @id @default(uuid()) @db.Uuid
+  workspace_id        String                    @db.Uuid
+  workflow_run_id     String                    @db.Uuid
+  workflow_node_id    String?                   @db.Uuid
+  created_by_user_id  String?                   @db.Uuid
+  assigned_user_id    String?                   @db.Uuid
+  resolved_by_user_id String?                   @db.Uuid
+  status              HumanInterventionStatus   @default(OPEN)
+  decision            HumanInterventionDecision?
+  priority            String                    @default("normal")
+  title               String
+  message             String                    @db.Text
+  input_payload       Json?
+  decision_payload    Json?
+  resolved_at         DateTime?
+  created_at          DateTime                  @default(now())
+  updated_at          DateTime                  @updatedAt
+
+  workspace        Workspace          @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  workflow_run     ModuleWorkflowRun  @relation(fields: [workflow_run_id], references: [id], onDelete: Cascade)
+  created_by_user User?               @relation("human_intervention_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  assigned_user   User?               @relation("human_intervention_assigned_user", fields: [assigned_user_id], references: [id], onDelete: SetNull)
+  resolved_by_user User?              @relation("human_intervention_resolved_by", fields: [resolved_by_user_id], references: [id], onDelete: SetNull)
+
+  @@index([workspace_id, status, priority, created_at])
+  @@index([workflow_run_id])
+  @@index([assigned_user_id, status])
+  @@map("human_interventions")
 }
 
 model ScheduledWorkflowDelivery {

@@ -6,6 +6,8 @@ import { AppError } from "../../core/errors/AppError.js";
 import { ModuleKey } from "../../core/module-access/ModuleKey.js";
 import { RequestContext } from "../../core/tenancy/RequestContext.js";
 import { WorkflowService } from "../../modules/workflows/services/WorkflowService.js";
+import { WorkflowRunExecutorService } from "../../modules/workflows/services/WorkflowRunExecutorService.js";
+import { HumanInterventionService } from "../../modules/workflows/services/HumanInterventionService.js";
 import { jsonObjectSchema, jsonValueSchema } from "../../shared/validation/json.js";
 import { AccessPolicyGuard } from "../auth/access-policy.guard.js";
 import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
@@ -111,6 +113,11 @@ const createWorkflowRunSchema = z.object({
   inputPayload: workflowRunJsonValueSchema.nullable().optional(),
 });
 
+const decideHumanInterventionSchema = z.object({
+  decision: z.enum(["APPROVED", "REJECTED", "CHANGES_REQUIRED"]),
+  note: z.string().max(4000).nullable().optional(),
+});
+
 @Controller("/api")
 @UseGuards(RequestContextAuthGuard, AccessPolicyGuard)
 @RequireModule(ModuleKey.WORKFLOW_MANAGEMENT)
@@ -118,7 +125,57 @@ export class NestWorkflowsController {
   public constructor(
     @Inject(WorkflowService)
     private readonly service: WorkflowService,
+    @Inject(HumanInterventionService)
+    private readonly humanInterventionService: HumanInterventionService,
+    @Inject(WorkflowRunExecutorService)
+    private readonly workflowRunExecutorService: WorkflowRunExecutorService,
   ) {}
+
+  @Get("workflow-interventions")
+  @RequirePermission(PermissionKey.WORKFLOWS_READ)
+  public async listHumanInterventions(
+    @CurrentRequestContext() requestContext: RequestContext,
+    @Query("scope") scope?: string,
+  ): Promise<Record<string, unknown>> {
+    const { workspaceId, userId } = requestContext.workspace;
+    return {
+      interventions: await this.humanInterventionService.list({
+        workspaceId,
+        userId,
+        mineOnly: scope !== "all",
+      }),
+    };
+  }
+
+  @Get("workflow-interventions/open-count")
+  @RequirePermission(PermissionKey.WORKFLOWS_READ)
+  public async countOpenHumanInterventions(
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, number>> {
+    const { workspaceId, userId } = requestContext.workspace;
+    return { count: await this.humanInterventionService.countOpenForUser(workspaceId, userId) };
+  }
+
+  @Patch("workflow-interventions/:id/decision")
+  @RequirePermission(PermissionKey.WORKFLOWS_WRITE)
+  public async decideHumanIntervention(
+    @CurrentRequestContext() requestContext: RequestContext,
+    @Param("id") id: string,
+    @Body() bodyRaw: unknown,
+  ): Promise<Record<string, unknown>> {
+    const body = decideHumanInterventionSchema.parse(bodyRaw);
+    const result = await this.humanInterventionService.decide({
+      id,
+      workspaceId: requestContext.workspace.workspaceId,
+      userId: requestContext.workspace.userId,
+      decision: body.decision,
+      note: body.note ?? null,
+    });
+    if (result.resumed) {
+      await this.workflowRunExecutorService.resumeAfterDecision(result.workflowRunId);
+    }
+    return { ...result, status: "queued" };
+  }
 
   @Get("workflows/tools")
   @RequirePermission(PermissionKey.WORKFLOWS_READ)
