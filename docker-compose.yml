@@ -283,7 +283,7 @@ services:
     container_name: birgus_reverse_proxy
     restart: unless-stopped
     ports:
-      - "${BIRGUS_HOST_HTTP_PORT:-13080}:80"
+      - "${BIRGUS_HOST_HTTP_PORT:-80}:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
