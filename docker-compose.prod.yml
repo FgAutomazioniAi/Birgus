@@ -64,6 +64,8 @@ services:
     depends_on:
       garage:
         condition: service_healthy
+    extra_hosts:
+      - "internal-ai-vllm:host-gateway"
     expose:
       - "8200"
 
@@ -127,7 +129,7 @@ services:
       AUTH_COOKIE_SAME_SITE: "${AUTH_COOKIE_SAME_SITE:-Lax}"
       TRUST_PROXY: "${TRUST_PROXY:-true}"
       AI_PROVIDER: "${AI_PROVIDER:-vllm}"
-      AI_PROVIDER_BASE_URL: "${AI_PROVIDER_BASE_URL:-http://vllm:8000/v1}"
+      AI_PROVIDER_BASE_URL: "${AI_PROVIDER_BASE_URL:-http://internal-ai-vllm:8000/v1}"
       AI_PROVIDER_API_KEY: "${AI_PROVIDER_API_KEY:-${VLLM_API_KEY:-}}"
       AI_PROVIDER_CHAT_MODEL: "${AI_PROVIDER_CHAT_MODEL:?AI_PROVIDER_CHAT_MODEL is required}"
       AI_PROVIDER_EMBEDDING_MODEL: "${AI_PROVIDER_EMBEDDING_MODEL:-${KNOWLEDGE_EMBEDDING_MODEL:-}}"
@@ -176,6 +178,8 @@ services:
         condition: service_started
       ocr_lifecycle:
         condition: service_started
+    extra_hosts:
+      - "internal-ai-vllm:host-gateway"
     ports:
       - "13001:3000"
     healthcheck:

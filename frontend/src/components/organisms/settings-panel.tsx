@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, CheckCircle2, Cpu, FileSearch, Loader2, Mail, PlugZap, RefreshCw, Save } from "lucide-react";
+import { Bot, CheckCircle2, Cpu, FileSearch, Loader2, Mail, PlugZap, RefreshCw, Save, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -13,7 +13,7 @@ import { cn } from "@/lib/cn";
 import { useModuleAccess } from "@/lib/module-access";
 
 interface AiProviderSettings {
-  availableProviders: Array<{ id: string; label: string; protocol: string }>;
+  availableProviders: Array<{ id: string; label: string; protocol: string; defaultBaseUrl?: string }>;
   baseUrl: string;
   chatModel: string;
   provider: string;
@@ -52,8 +52,8 @@ interface WorkspaceModuleSettings {
 }
 
 const defaultAiProviderSettings: AiProviderSettings = {
-  availableProviders: [{ id: "vllm", label: "vLLM", protocol: "openai_compatible" }],
-  baseUrl: "http://vllm:8000/v1",
+  availableProviders: [{ id: "vllm", label: "Internal AI - vLLM", protocol: "openai_compatible", defaultBaseUrl: "http://internal-ai-vllm:8000/v1" }],
+  baseUrl: "http://internal-ai-vllm:8000/v1",
   chatModel: "birgus-vl",
   provider: "openai_compatible",
   source: "environment",
@@ -278,6 +278,11 @@ export function SettingsPanel() {
 
     return optionsFromModels;
   }, [aiSettings.chatModel, models]);
+
+  const selectedAiProvider = useMemo(
+    () => aiSettings.availableProviders.find((provider) => provider.id === aiSettings.provider) ?? null,
+    [aiSettings.availableProviders, aiSettings.provider],
+  );
 
   const buildAiProviderPayload = () => ({
     baseUrl: aiSettings.baseUrl,
@@ -576,7 +581,7 @@ export function SettingsPanel() {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-[minmax(180px,0.8fr)_minmax(280px,1.2fr)]">
           <div className="space-y-1">
             <Label className="text-xs" htmlFor="ai-provider-kind">Provider</Label>
             <SelectDropdown
@@ -585,10 +590,20 @@ export function SettingsPanel() {
               disabled={loadingSettings}
               size="sm"
               options={aiSettings.availableProviders.map((provider) => ({ value: provider.id, label: provider.label }))}
-              onChange={(value) => setAiSettings((prev) => ({ ...prev, provider: value }))}
+              onChange={(value) => setAiSettings((prev) => {
+                const provider = prev.availableProviders.find((item) => item.id === value);
+                const shouldApplyDefault = !prev.baseUrl.trim()
+                  || prev.baseUrl === "http://vllm:8000/v1"
+                  || prev.baseUrl === "http://internal-ai-vllm:8000/v1";
+                return {
+                  ...prev,
+                  provider: value,
+                  baseUrl: shouldApplyDefault ? provider?.defaultBaseUrl ?? prev.baseUrl : prev.baseUrl,
+                };
+              })}
             />
           </div>
-          <div className="space-y-1 sm:col-span-2">
+          <div className="space-y-1">
             <Label className="text-xs" htmlFor="ai-provider-base-url">Base URL</Label>
             <Input
               id="ai-provider-base-url"
@@ -596,9 +611,18 @@ export function SettingsPanel() {
               value={aiSettings.baseUrl}
               disabled={loadingSettings}
               className="h-9 px-3"
-              placeholder="http://127.0.0.1:xxxx/v1"
+              placeholder="http://internal-ai-vllm:8000/v1"
               onChange={(event) => setAiSettings((prev) => ({ ...prev, baseUrl: event.target.value }))}
             />
+            {selectedAiProvider?.defaultBaseUrl ? (
+              <button
+                type="button"
+                className="text-xs font-semibold text-brand-primary hover:text-brand-accent-hover"
+                onClick={() => setAiSettings((prev) => ({ ...prev, baseUrl: selectedAiProvider.defaultBaseUrl ?? prev.baseUrl }))}
+              >
+                {t("settings.ai.useInternalEndpoint")}
+              </button>
+            ) : null}
           </div>
 
           <div className="space-y-1 sm:col-span-2">
@@ -652,12 +676,15 @@ export function SettingsPanel() {
           </div>
         </div>
 
-        <details className="border-t border-border-subtle pt-3">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-brand-primary marker:hidden">
-            <span>{t("settings.ai.generation")}</span>
-            <span className="text-[11px] font-normal text-text-muted">{t("settings.ai.generationHint")}</span>
-          </summary>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <section className="space-y-3 border-t border-border-subtle pt-3">
+          <div className="flex items-start gap-2">
+            <SlidersHorizontal size={16} className="mt-0.5 shrink-0 text-brand-primary" />
+            <div>
+              <Text as="h3" variant="body" className="font-semibold">{t("settings.ai.generation")}</Text>
+              <Text variant="caption">{t("settings.ai.generationHint")}</Text>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label className="text-xs" htmlFor="ai-provider-max-output-tokens">{t("settings.ai.maxOutputTokens")}</Label>
               <Input id="ai-provider-max-output-tokens" name="ai-provider-max-output-tokens" type="number" min={1} max={8192} value={aiSettings.maxOutputTokens} disabled={loadingSettings} className="h-9 px-3" onChange={(event) => setAiSettings((prev) => ({ ...prev, maxOutputTokens: Number(event.target.value) }))} />
@@ -688,7 +715,7 @@ export function SettingsPanel() {
               <Input id="ai-provider-seed" name="ai-provider-seed" type="number" min={0} max={2147483647} step={1} value={aiSettings.seed ?? ""} disabled={loadingSettings} className="h-9 px-3" placeholder={t("settings.ai.seedHint")} onChange={(event) => setAiSettings((prev) => ({ ...prev, seed: event.target.value === "" ? null : Number(event.target.value) }))} />
             </div>
           </div>
-        </details>
+        </section>
 
         {canControlAiRuntime ? (
           <section className="space-y-2 border-t border-border-subtle pt-3">

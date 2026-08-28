@@ -20,8 +20,9 @@ export interface AiProviderConfig {
 export const AI_PROVIDER_DEFINITIONS = [
   {
     id: "vllm",
-    label: "vLLM",
+    label: "Internal AI - vLLM",
     protocol: "openai_compatible",
+    defaultBaseUrl: "http://internal-ai-vllm:8000/v1",
   },
 ] as const;
 
@@ -61,7 +62,7 @@ export function loadAiProviderConfig(overrides: Partial<AiProviderConfig> = {}):
   const baseUrl = firstNonEmpty(
     overrides.baseUrl,
     process.env.AI_PROVIDER_BASE_URL,
-    "http://vllm:8000/v1",
+    "http://internal-ai-vllm:8000/v1",
   );
   const apiKey = firstNonEmpty(
     overrides.apiKey,
