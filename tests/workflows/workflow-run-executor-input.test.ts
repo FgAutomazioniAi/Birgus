@@ -38,6 +38,41 @@ test("WorkflowRunExecutorService passes connected text input to LangChain chat n
   assert.equal(input.instructions, "Rispondi in italiano");
 });
 
+test("WorkflowRunExecutorService combines every named AI chat input into a readable context", async () => {
+  const service = new WorkflowRunExecutorService({
+    documentArchiveService: {} as never,
+    documentIntelligenceService: {} as never,
+    quotationAnalyzer: {} as never,
+    ddtAnalyzer: {} as never,
+    measureReportAnalyzer: {} as never,
+    pythonModulesClient: {} as never,
+    runtimeAccessPolicy: {} as never,
+  }) as unknown as {
+    buildLangchainToolInput: (
+      action: string,
+      nodeConfig: Record<string, unknown>,
+      inputPayload: Record<string, unknown>,
+      previousOutput: Record<string, unknown>,
+      incomingOutputs: Record<string, unknown>,
+    ) => Promise<Record<string, unknown>>;
+  };
+
+  const input = await service.buildLangchainToolInput("chat", { instructions: "Confronta i documenti" }, {}, {}, {
+    byNodeKey: {},
+    byTargetHandle: {},
+    byTargetHandleItems: {
+      input_text: [
+        { text: "Ciao mondo!", input_label: "Documento ordine" },
+        { text: "Hello world", input_label: "Preventivo" },
+        { text: "Hola mundo!", input_label: "Note tecniche" },
+      ],
+    },
+    items: [],
+  });
+
+  assert.equal(input.input_text, "[Documento ordine]\nCiao mondo!\n\n[Preventivo]\nHello world\n\n[Note tecniche]\nHola mundo!");
+});
+
 test("WorkflowRunExecutorService gives connected formatter inputs precedence over stale manual values", async () => {
   const service = new WorkflowRunExecutorService({
     documentArchiveService: {} as never,
@@ -139,7 +174,11 @@ test("WorkflowRunExecutorService routes verify-and-route branches exclusively by
   const result = service.executeVerifyAndRouteTool(context, { node_key: "verify", configuration: { rules: [{ label: "Importo offerta", operator: "greater_than", value: "100" }] } });
   assert.equal(result.valid, true);
   assert.deepEqual(result.checked_fields, [{ key: "field_1", label: "Importo offerta", value: 150 }]);
-  assert.deepEqual(result.published_outputs, [{ key: "field_1", label: "Importo offerta", kind: "data", value: 150 }]);
+  assert.deepEqual(result.published_outputs, [
+    { key: "text", label: "Tutti i dati verificati", kind: "text", value: "[Importo offerta]\n150" },
+    { key: "bundle", label: "Raccolta dati verificati", kind: "data", value: { "Importo offerta": 150 } },
+    { key: "field_1", label: "Importo offerta", kind: "data", value: 150 },
+  ]);
 
   context.nodeOutputs.set("verify", result);
   const edges = [

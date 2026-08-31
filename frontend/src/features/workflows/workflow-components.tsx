@@ -35,6 +35,17 @@ function recordValue(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function hasRunWarnings(run: WorkflowRun): boolean {
+  return run.status === "COMPLETED" && (run.steps ?? []).some((step) => step.status === "SKIPPED" && Boolean(step.errorMessage));
+}
+
+function runStatusPresentation(run: WorkflowRun): { label: string; tone: "success" | "warn" | "danger" | "progress" } {
+  if (hasRunWarnings(run)) return { label: "COMPLETATA CON AVVISI", tone: "warn" };
+  if (run.status === "COMPLETED") return { label: "COMPLETED", tone: "success" };
+  if (run.status === "FAILED") return { label: "FAILED", tone: "danger" };
+  return { label: run.status, tone: "progress" };
+}
+
 function finalOutputsFrom(value: unknown): PublishedOutput[] {
   const payload = recordValue(value);
   const outputs = Array.isArray(payload.final_outputs) ? payload.final_outputs : [];
@@ -252,6 +263,7 @@ export function RunResultsPanel({
         <div className="mb-4 flex max-h-36 flex-col gap-1 overflow-y-auto pr-1">
           {runs.map((run) => {
             const isSelected = latestRun?.id === run.id;
+            const presentation = runStatusPresentation(run);
             return (
               <button
                 key={run.id}
@@ -262,7 +274,7 @@ export function RunResultsPanel({
                 <span className="min-w-0 truncate text-xs font-medium text-text-secondary">
                   {formatDateTime(run.completedAt ?? run.startedAt ?? run.queuedAt)}
                 </span>
-                <Badge tone={run.status === "COMPLETED" ? "success" : run.status === "FAILED" ? "danger" : "progress"}>{run.status}</Badge>
+                <Badge tone={presentation.tone}>{presentation.label}</Badge>
               </button>
             );
           })}
@@ -272,16 +284,21 @@ export function RunResultsPanel({
         <p className="text-sm text-text-muted">{t("workflow.runOrSelect")}</p>
       ) : (
         <div className="flex flex-col gap-3">
+          {(() => {
+            const presentation = runStatusPresentation(latestRun);
+            return (
           <div className="rounded-md border border-border-default bg-bg-page p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">{t("workflow.run")}</p>
             <p className="mt-1 text-sm font-semibold text-text-primary">{latestRunReference}</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              <Badge tone={latestRun.status === "COMPLETED" ? "success" : latestRun.status === "FAILED" ? "danger" : "progress"}>
-                {latestRun.status}
+              <Badge tone={presentation.tone}>
+                {presentation.label}
               </Badge>
               {latestRun.triggerSource ? <Badge tone="info">{latestRun.triggerSource}</Badge> : null}
             </div>
           </div>
+            );
+          })()}
           {latestRun.errorMessage ? <p className="text-sm text-status-danger-text">{latestRun.errorMessage}</p> : null}
           {isOutputFocused ? (
             <div className="rounded-md border border-brand-primary bg-bg-subtle p-3">
@@ -313,9 +330,9 @@ export function RunResultsPanel({
                     {step.sequenceNo ? `${step.sequenceNo}. ` : ""}
                     {step.label ?? nodeLabelByKey.get(step.stepKey ?? step.nodeKey ?? "") ?? t("workflow.step")}
                   </p>
-                  <p className="mt-1 line-clamp-3 text-xs text-text-secondary">
-                    {formatResultPreview(step.outputPayload ?? step.errorMessage ?? t("workflow.noOutput"))}
-                  </p>
+                  {!step.errorMessage ? <p className="mt-1 line-clamp-3 text-xs text-text-secondary">
+                    {formatResultPreview(step.outputPayload ?? t("workflow.noOutput"))}
+                  </p> : null}
                 </div>
                 <Badge tone={step.status === "SUCCEEDED" ? "success" : step.status === "FAILED" ? "danger" : "progress"}>
                   {step.status}

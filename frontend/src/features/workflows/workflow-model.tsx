@@ -111,6 +111,7 @@ export type CanvasNodeData = {
   paletteKind: PaletteKind | "INPUT" | "OUTPUT" | "REPORT";
   configuration: Record<string, unknown>;
   incomingTargetHandles: string[];
+  incomingFieldLabels: Record<string, string>;
   uploadedFileName?: string;
   onConfigChange?: (patch: Record<string, unknown>) => void;
   onFileChange?: (file: File) => void;
@@ -668,6 +669,7 @@ export function toFlowNode(
   agents: Map<string, WorkflowAgent>,
   uploadedFiles: Record<string, UploadedWorkflowFile>,
   incomingTargetHandles: string[],
+  incomingFieldLabels: Record<string, string>,
   onConfigChange: (clientId: string, patch: Record<string, unknown>) => void,
   onFileChange: (clientId: string, file: File) => void,
   onOutputPreview: (clientId: string) => void,
@@ -697,6 +699,7 @@ export function toFlowNode(
       paletteKind,
       configuration: item.configuration,
       incomingTargetHandles,
+      incomingFieldLabels,
       uploadedFileName: uploadedFiles[item.clientId]?.fileName,
       onConfigChange: (patch) => onConfigChange(item.clientId, patch),
       onFileChange: (file) => onFileChange(item.clientId, file),

@@ -84,12 +84,14 @@ class WorkflowDecisionRequiredError extends Error {
 interface IncomingNodeOutputs {
   byNodeKey: Record<string, Record<string, unknown>>;
   byTargetHandle: Record<string, Record<string, unknown>>;
+  byTargetHandleItems: Record<string, Array<Record<string, unknown>>>;
   items: Array<Record<string, unknown>>;
 }
 
 interface IncomingFieldBinding {
   sourceKey: string;
   selectedOutputKey: string | null;
+  inputLabel?: string | null;
 }
 
 type PublishedOutputKind = "text" | "file" | "image" | "delivery_status" | "data";
@@ -645,7 +647,8 @@ export class WorkflowRunExecutorService {
       const bindings = byField.get(field) ?? [];
       const condition = this.toRecord(edge.condition_payload);
       const selectedOutputKey = this.firstString(condition.selected_output_key, condition.selectedOutputKey) || null;
-      bindings.push({ sourceKey, selectedOutputKey });
+      const inputLabel = this.firstString(condition.input_label, condition.inputLabel) || null;
+      bindings.push({ sourceKey, selectedOutputKey, inputLabel });
       byField.set(field, bindings);
       incoming.set(targetKey, byField);
     }
@@ -830,8 +833,10 @@ export class WorkflowRunExecutorService {
     const previousOutput = this.toRecord(this.findLatestNodeOutput(context));
     const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
     const fieldInput = this.toRecord(incomingOutputs.byTargetHandle.input_text);
+    const connectedInputText = this.formatIncomingText(incomingOutputs.byTargetHandleItems.input_text ?? []);
     const inputPayload = context.inputPayload ?? {};
     const inputText = this.firstString(
+      connectedInputText,
       fieldInput.input_text,
       fieldInput.inputText,
       fieldInput.promptText,
@@ -1037,10 +1042,12 @@ export class WorkflowRunExecutorService {
     const prompt = this.resolveNodePrompt(nodeConfig, this.defaultPromptForLangchainAction(action));
 
     if (action === "chat") {
+      const connectedInputText = this.formatIncomingText(incomingOutputs.byTargetHandleItems?.input_text ?? []);
       return {
         ...merged,
         ...(prompt ? { instructions: prompt } : {}),
         input_text: this.firstString(
+          connectedInputText,
           nodeConfig.input_text,
           inputPayload.input_text,
           previousOutput.input_text,
@@ -1783,17 +1790,23 @@ export class WorkflowRunExecutorService {
     };
     const rules = configuredRules.map((rule, index) => ({ ...this.toRecord(rule), path: `var.${index + 1}` }));
     const result = this.ruleEngine.evaluate(rules, source);
+    const verifiedBundle = Object.fromEntries(checkedFields.map((field) => [field.label, field.value]));
+    const verifiedText = checkedFields
+      .map((field) => `[${field.label}]\n${this.serializeWorkflowValue(field.value)}`)
+      .filter((section) => section.trim().length > 0)
+      .join("\n\n");
     return {
       status: result.valid ? "valid" : "attention_required",
       valid: result.valid,
       violations: result.violations,
       checked_fields: checkedFields,
-      published_outputs: checkedFields.map((field) => ({
-        key: field.key,
-        label: field.label,
-        kind: "data",
-        value: field.value,
-      })),
+      verified_bundle: verifiedBundle,
+      text: verifiedText,
+      published_outputs: [
+        { key: "text", label: "Tutti i dati verificati", kind: "text" as const, value: verifiedText },
+        { key: "bundle", label: "Raccolta dati verificati", kind: "data" as const, value: verifiedBundle },
+        ...checkedFields.map((field) => ({ key: field.key, label: field.label, kind: "data" as const, value: field.value })),
+      ],
     };
   }
 
@@ -2500,6 +2513,7 @@ export class WorkflowRunExecutorService {
     const sourceKeys = context.incomingNodeKeys.get(nodeKey) ?? [];
     const byNodeKey: Record<string, Record<string, unknown>> = {};
     const byTargetHandle: Record<string, Record<string, unknown>> = {};
+    const byTargetHandleItems: Record<string, Array<Record<string, unknown>>> = {};
     const items: Array<Record<string, unknown>> = [];
 
     for (const sourceKey of sourceKeys) {
@@ -2510,16 +2524,19 @@ export class WorkflowRunExecutorService {
 
     const fields = context.incomingFieldBindings.get(nodeKey);
     for (const [field, bindings] of fields ?? []) {
-      const binding = bindings[bindings.length - 1];
-      if (binding) {
+      const fieldItems = bindings.map((binding) => {
         const output = this.normalizeNodeOutput(context.nodeOutputs.get(binding.sourceKey));
-        byTargetHandle[field] = binding.selectedOutputKey
-          ? this.withSelectedPublishedOutput(output, binding.selectedOutputKey)
-          : output;
+        return binding.selectedOutputKey
+          ? this.withSelectedPublishedOutput(output, binding.selectedOutputKey, binding.inputLabel ?? null)
+          : this.withInputLabel(output, binding.inputLabel ?? null);
+      });
+      if (fieldItems.length > 0) {
+        byTargetHandleItems[field] = fieldItems;
+        byTargetHandle[field] = fieldItems[fieldItems.length - 1];
       }
     }
 
-    return { byNodeKey, byTargetHandle, items };
+    return { byNodeKey, byTargetHandle, byTargetHandleItems, items };
   }
 
   private normalizeNodeOutput(value: unknown): Record<string, unknown> {
@@ -2533,15 +2550,50 @@ export class WorkflowRunExecutorService {
     return record;
   }
 
-  private withSelectedPublishedOutput(output: Record<string, unknown>, outputKey: string): Record<string, unknown> {
+  private withSelectedPublishedOutput(output: Record<string, unknown>, outputKey: string, inputLabel: string | null = null): Record<string, unknown> {
     const selected = this.collectPublishedOutputs([output]).find((item) => item.key === outputKey);
     if (!selected) {
-      return output;
+      return this.withInputLabel(output, inputLabel);
     }
     if (typeof selected.value === "string") {
-      return { ...output, selected_output: selected, text: selected.value, content: selected.value };
+      return this.withInputLabel({ ...output, selected_output: selected, text: selected.value, content: selected.value }, inputLabel || selected.label);
     }
-    return { ...output, selected_output: selected };
+    return this.withInputLabel({ ...output, selected_output: selected }, inputLabel || selected.label);
+  }
+
+  private withInputLabel(output: Record<string, unknown>, inputLabel: string | null): Record<string, unknown> {
+    return inputLabel ? { ...output, input_label: inputLabel } : output;
+  }
+
+  private formatIncomingText(outputs: Array<Record<string, unknown>>): string {
+    const sections = outputs.flatMap((output, index) => {
+      const selected = this.toRecord(output.selected_output);
+      const value = this.firstString(
+        output.input_text,
+        output.inputText,
+        output.promptText,
+        output.text,
+        output.content,
+        output.reply,
+        output.extracted_text,
+        output.raw_output,
+        selected.value,
+      ) || this.serializeWorkflowValue(selected.value ?? output.checked_fields ?? output.structured_data);
+      if (!value) return [];
+      const label = this.firstString(output.input_label, selected.label) || `Contenuto ${index + 1}`;
+      return [`[${label}]\n${value}`];
+    });
+    return sections.join("\n\n");
+  }
+
+  private serializeWorkflowValue(value: unknown): string {
+    if (typeof value === "string") return value.trim();
+    if (value === null || value === undefined) return "";
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return "";
+    }
   }
 
   private toRecord(value: unknown): Record<string, unknown> {

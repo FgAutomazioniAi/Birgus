@@ -168,7 +168,11 @@ function publicOutputOptions(source: DraftNode | undefined, sourceType: FlowNode
   if (!source) return [];
   if (sourceType === "verify-route") {
     const rules = Array.isArray(source.configuration.rules) ? source.configuration.rules : [];
-    return rules.map((rule, index) => ({ key: `field_${index + 1}`, label: verificationFieldLabel(toRecord(rule), index) }));
+    return [
+      { key: "text", label: "Tutti i dati verificati" },
+      { key: "bundle", label: "Raccolta dati verificati" },
+      ...rules.map((rule, index) => ({ key: `field_${index + 1}`, label: verificationFieldLabel(toRecord(rule), index) })),
+    ];
   }
 
   const defaults: Partial<Record<FlowNodeType, PublicOutputOption[]>> = {
@@ -249,6 +253,9 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
     const nextRules = configuredRules.map((rule, ruleIndex) => ruleIndex === index ? { ...rule, ...patch } : rule);
     data.onConfigChange?.({ rules: nextRules });
   };
+  const ruleIsConnected = (index: number) => isFieldConnected(`rule_${index}`);
+  const ruleNeedsComparisonValue = (operator: unknown) => !["not_empty", "exists"].includes(typeof operator === "string" ? operator : "not_empty");
+  const connectedFieldCount = (field: string) => data.incomingTargetHandles.filter((handle) => handle === `field:${field}`).length;
 
   useEffect(() => {
     setDefaultPromptDraft(defaultPrompt);
@@ -366,13 +373,14 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
       {data.type === "llm" ? (
         <div className="nodrag flex flex-col gap-2">
           <div className="relative">
-            <Handle type="target" id="field:input_text" position={Position.Left} className={textHandleClassName} title="Collega contenuto" />
+            <Handle type="target" id="field:input_text" position={Position.Left} className={textHandleClassName} title="Collega contenuti da analizzare" />
+            <label className="mb-1 block text-xs font-medium text-text-secondary">Contenuti da analizzare{connectedFieldCount("input_text") > 0 ? ` (${connectedFieldCount("input_text")})` : ""}</label>
             <textarea
               id={fieldId("input_text")}
               name={fieldId("input_text")}
               value={stringConfig("input_text")}
               onChange={(event) => patchConfig("input_text", event.target.value)}
-              placeholder={isFieldConnected("input_text") ? t("workflow.connectedInput") : t("workflow.previousOutput")}
+              placeholder={isFieldConnected("input_text") ? "Contenuti collegati: verranno analizzati insieme" : "Testo da analizzare"}
               rows={2}
               disabled={isFieldConnected("input_text")}
               className={fieldInputClassName("input_text")}
@@ -579,20 +587,16 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
           {configuredRules.map((rule, index) => (
             <div key={`${data.nodeId}-rule-${index}`} className="relative rounded-md border border-border-subtle bg-bg-muted p-1.5">
               <Handle type="target" id={`field:rule_${index}`} position={Position.Left} className={textHandleClassName} title={`Collega valore alla regola ${index + 1}`} />
-              <input
-                value={verificationFieldLabel(rule, index)}
-                onChange={(event) => updateRule(index, { label: event.target.value })}
-                placeholder={`Campo ${index + 1}`}
-                aria-label={`Nome campo ${index + 1}`}
-                className="mb-1 w-full min-w-0 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs font-medium text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
-              />
+              <div className={cn("mb-1 flex min-h-7 items-center rounded-md border px-2 text-xs font-medium", ruleIsConnected(index) ? "border-border-default bg-bg-page text-text-primary" : "border-dashed border-border-default bg-bg-muted text-text-muted")}>
+                {ruleIsConnected(index) ? `Controlla: ${data.incomingFieldLabels[`rule_${index}`] ?? "Output collegato"}` : "Collega un valore in ingresso"}
+              </div>
               <div className="grid grid-cols-[minmax(0,1fr)_24px] gap-1">
                 <select value={typeof rule.operator === "string" ? rule.operator : "not_empty"} onChange={(event) => updateRule(index, { operator: event.target.value })} className="min-w-0 rounded-md border border-border-default bg-bg-page px-1 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary">
                   <option value="not_empty">Non vuoto</option><option value="exists">Esiste</option><option value="equals">Uguale</option><option value="contains">Contiene</option><option value="greater_than">Maggiore di</option><option value="less_than">Minore di</option><option value="between">Compreso tra</option>
                 </select>
                 <button type="button" className="rounded-md px-1 text-text-muted hover:bg-bg-page hover:text-status-danger-text" title="Rimuovi regola" onClick={() => data.onConfigChange?.({ rules: configuredRules.filter((_, ruleIndex) => ruleIndex !== index) })}><X size={14} /></button>
               </div>
-              {typeof rule.operator === "string" && rule.operator === "between" ? <div className="mt-1 grid grid-cols-2 gap-1"><input value={typeof rule.min === "string" || typeof rule.min === "number" ? String(rule.min) : ""} onChange={(event) => updateRule(index, { min: event.target.value })} placeholder="Min" className="min-w-0 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" /><input value={typeof rule.max === "string" || typeof rule.max === "number" ? String(rule.max) : ""} onChange={(event) => updateRule(index, { max: event.target.value })} placeholder="Max" className="min-w-0 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" /></div> : <input value={typeof rule.value === "string" || typeof rule.value === "number" ? String(rule.value) : ""} onChange={(event) => updateRule(index, { value: event.target.value })} placeholder="Valore o pattern" className="mt-1 w-full min-w-0 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />}
+              {ruleNeedsComparisonValue(rule.operator) ? (typeof rule.operator === "string" && rule.operator === "between" ? <div className="mt-1 grid grid-cols-2 gap-1"><input value={typeof rule.min === "string" || typeof rule.min === "number" ? String(rule.min) : ""} onChange={(event) => updateRule(index, { min: event.target.value })} placeholder="Minimo" className="min-w-0 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" /><input value={typeof rule.max === "string" || typeof rule.max === "number" ? String(rule.max) : ""} onChange={(event) => updateRule(index, { max: event.target.value })} placeholder="Massimo" className="min-w-0 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" /></div> : <input value={typeof rule.value === "string" || typeof rule.value === "number" ? String(rule.value) : ""} onChange={(event) => updateRule(index, { value: event.target.value })} placeholder={typeof rule.operator === "string" && rule.operator === "contains" ? "Testo da cercare" : "Valore di confronto"} className="mt-1 w-full min-w-0 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />) : null}
             </div>
           ))}
           <div className="relative flex min-h-8 items-center justify-center">
@@ -787,6 +791,21 @@ export function WorkflowCanvasPanel() {
   // Configurazioni testuali non cambiano i collegamenti: mantenere stabile questa mappa evita di ricreare
   // i nodi React Flow a ogni battuta e preserva correttamente la posizione del cursore.
   }, [draftEdges]);
+  const incomingFieldLabelsByTargetId = useMemo(() => {
+    const labels = new Map<string, Record<string, string>>();
+    for (const edge of draftEdges.filter((item) => item.isEnabled && /^field:rule_\d+$/.test(item.targetHandle ?? ""))) {
+      const source = draftNodes.find((node) => node.clientId === edge.sourceClientId);
+      const sourceType = source ? inferFlowNodeType(source, source.moduleToolId ? toolById.get(source.moduleToolId) ?? null : null) : null;
+      const options = publicOutputOptions(source, sourceType);
+      const condition = toRecord(edge.conditionPayload);
+      const selectedOutputKey = typeof condition.selected_output_key === "string" ? String(condition.selected_output_key) : "";
+      const selected = options.find((option) => option.key === selectedOutputKey) ?? options[0];
+      const targetLabels = labels.get(edge.targetClientId) ?? {};
+      targetLabels[(edge.targetHandle ?? "").replace("field:", "")] = typeof condition.input_label === "string" && condition.input_label.trim() ? condition.input_label.trim() : selected?.label ?? "Output collegato";
+      labels.set(edge.targetClientId, targetLabels);
+    }
+    return labels;
+  }, [draftEdges, draftNodes, toolById]);
   const draftNodeStructureKey = useMemo(
     () => JSON.stringify(draftNodes.map((node) => ({
       clientId: node.clientId,
@@ -996,6 +1015,50 @@ export function WorkflowCanvasPanel() {
     setDraftEdges((current) => current.map((edge) => edge.clientId === clientId ? { ...edge, conditionPayload } : edge));
   }, []);
 
+  const selectFieldOutput = useCallback((edge: DraftEdge, outputKey: string, outputLabel: string) => {
+    const existingInputLabel = typeof toRecord(edge.conditionPayload).input_label === "string" ? String(toRecord(edge.conditionPayload).input_label).trim() : "";
+    setDraftEdges((current) => current.map((item) => {
+      if (item.clientId !== edge.clientId) return item;
+      const condition = toRecord(item.conditionPayload);
+      if (outputKey) condition.selected_output_key = outputKey;
+      else delete condition.selected_output_key;
+      return { ...item, conditionPayload: condition };
+    }));
+
+    const match = /^field:rule_(\d+)$/.exec(edge.targetHandle ?? "");
+    if (!match) return;
+    const ruleIndex = Number(match[1]);
+    setDraftNodes((current) => current.map((node) => {
+      if (node.clientId !== edge.targetClientId) return node;
+      const rules = Array.isArray(node.configuration.rules) ? node.configuration.rules.map(toRecord) : [];
+      if (!rules[ruleIndex]) return node;
+      rules[ruleIndex] = { ...rules[ruleIndex], label: existingInputLabel || outputLabel };
+      return { ...node, configuration: { ...node.configuration, rules } };
+    }));
+  }, []);
+
+  const setFieldInputLabel = useCallback((edge: DraftEdge, inputLabel: string, fallbackLabel: string) => {
+    const normalized = inputLabel.trim();
+    setDraftEdges((current) => current.map((item) => {
+      if (item.clientId !== edge.clientId) return item;
+      const condition = toRecord(item.conditionPayload);
+      if (normalized) condition.input_label = normalized;
+      else delete condition.input_label;
+      return { ...item, conditionPayload: condition };
+    }));
+
+    const match = /^field:rule_(\d+)$/.exec(edge.targetHandle ?? "");
+    if (!match) return;
+    const ruleIndex = Number(match[1]);
+    setDraftNodes((current) => current.map((node) => {
+      if (node.clientId !== edge.targetClientId) return node;
+      const rules = Array.isArray(node.configuration.rules) ? node.configuration.rules.map(toRecord) : [];
+      if (!rules[ruleIndex]) return node;
+      rules[ruleIndex] = { ...rules[ruleIndex], label: normalized || fallbackLabel };
+      return { ...node, configuration: { ...node.configuration, rules } };
+    }));
+  }, []);
+
   const handleNodeFileChange = useCallback(async (clientId: string, file: File) => {
     if (file.size > MAX_WORKFLOW_UPLOAD_BYTES) {
       toast.error("File troppo grande per il Playground workflow. Limite: 15 MB.");
@@ -1035,12 +1098,13 @@ export function WorkflowCanvasPanel() {
       agentById,
       uploadedFiles,
       incomingHandlesByTargetId.get(item.clientId) ?? [],
+      incomingFieldLabelsByTargetId.get(item.clientId) ?? {},
       patchNodeConfiguration,
       handleNodeFileChange,
       (clientId) => setOutputPreviewNodeId(clientId),
     )));
     setEdges(draftEdges.map(toFlowEdge));
-  }, [agentById, draftEdges, draftNodeStructureKey, handleNodeFileChange, incomingHandlesByTargetId, patchNodeConfiguration, setEdges, setNodes, toolById, uploadedFiles]);
+  }, [agentById, draftEdges, draftNodeStructureKey, handleNodeFileChange, incomingFieldLabelsByTargetId, incomingHandlesByTargetId, patchNodeConfiguration, setEdges, setNodes, toolById, uploadedFiles]);
 
   useEffect(() => {
     setPromptDraft(selectedAgent?.activePrompt ?? "");
@@ -1649,6 +1713,25 @@ export function WorkflowCanvasPanel() {
       orderNo: draftEdges.length + 1,
       isEnabled: true,
     };
+    if ((connection.targetHandle ?? "").startsWith("field:")) {
+      const defaultOutput = publicOutputOptions(source, sourceType)[0];
+      if (defaultOutput) {
+        edge.conditionPayload = { selected_output_key: defaultOutput.key };
+      }
+    }
+    if (targetType === "verify-route" && /^field:rule_\d+$/.test(connection.targetHandle ?? "")) {
+      const defaultOutput = publicOutputOptions(source, sourceType)[0];
+      if (defaultOutput) {
+        const ruleIndex = Number((connection.targetHandle ?? "").replace("field:rule_", ""));
+        setDraftNodes((current) => current.map((node) => {
+          if (node.clientId !== connection.target) return node;
+          const rules = Array.isArray(node.configuration.rules) ? node.configuration.rules.map(toRecord) : [];
+          if (!rules[ruleIndex]) return node;
+          rules[ruleIndex] = { ...rules[ruleIndex], label: defaultOutput.label };
+          return { ...node, configuration: { ...node.configuration, rules } };
+        }));
+      }
+    }
     setDraftEdges((current) => [...current, edge]);
     setEdges((current) => addEdge({ ...connection, id: edge.clientId, animated: true }, current));
   }, [commitHistory, draftEdges.length, setEdges, toolById]);
@@ -1989,7 +2072,9 @@ export function WorkflowCanvasPanel() {
         const isVerificationInput = targetType === "verify-route" && /^field:rule_\d+$/.test(selectedEdge.targetHandle ?? "");
         const isFieldInput = selectedEdge.targetHandle?.startsWith("field:") === true;
         const selectedOutputKey = typeof condition.selected_output_key === "string" ? condition.selected_output_key : "";
+        const inputLabel = typeof condition.input_label === "string" ? condition.input_label : "";
         const outputOptions = publicOutputOptions(sourceNode, sourceType);
+        const selectedOutput = outputOptions.find((option) => option.key === selectedOutputKey) ?? outputOptions[0];
         const hasCondition = Object.keys(condition).length > 0;
         const defaultPath = sourceNode ? `outputs.${sourceNode.nodeKey}.valid` : "outputs.node.output";
         return (
@@ -1999,22 +2084,30 @@ export function WorkflowCanvasPanel() {
               <p className="truncate text-xs text-text-muted">{sourceNode?.label ?? "Nodo origine"} -&gt; {targetNode?.label ?? "Nodo destinazione"}</p>
             </div>
             {isFieldInput ? (
-              <label className="grid min-w-[220px] gap-1 text-xs font-medium text-text-secondary">
-                {isVerificationInput ? "Valore da controllare" : "Dato inoltrato"}
-                <select
-                  value={selectedOutputKey}
-                  onChange={(event) => {
-                    const next = { ...condition };
-                    if (event.target.value) next.selected_output_key = event.target.value;
-                    else delete next.selected_output_key;
-                    patchEdgeCondition(selectedEdge.clientId, next);
-                  }}
-                  className="h-9 rounded-md border border-border-default bg-bg-surface px-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
-                >
-                  <option value="">Output principale</option>
-                  {outputOptions.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
-                </select>
-              </label>
+              <>
+                <label className="grid min-w-[220px] gap-1 text-xs font-medium text-text-secondary">
+                  {isVerificationInput ? "Valore da controllare" : "Dato inoltrato"}
+                  <select
+                    value={selectedOutputKey}
+                    onChange={(event) => {
+                      const selected = outputOptions.find((option) => option.key === event.target.value) ?? outputOptions[0];
+                      selectFieldOutput(selectedEdge, event.target.value, selected?.label ?? "Output collegato");
+                    }}
+                    className="h-9 rounded-md border border-border-default bg-bg-surface px-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+                  >
+                    {outputOptions.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
+                  </select>
+                </label>
+                <label className="grid min-w-[180px] gap-1 text-xs font-medium text-text-secondary">
+                  Nome nel workflow
+                  <input
+                    value={inputLabel}
+                    onChange={(event) => setFieldInputLabel(selectedEdge, event.target.value, selectedOutput?.label ?? "Output collegato")}
+                    placeholder={selectedOutput?.label ?? "Output collegato"}
+                    className="h-9 rounded-md border border-border-default bg-bg-surface px-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+                  />
+                </label>
+              </>
             ) : (
               <>
                 <label className="flex items-center gap-2 text-text-secondary">
