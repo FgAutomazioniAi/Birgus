@@ -26,7 +26,7 @@ const menuItems = [
 
 const folders = [
   { label: "Anagrafica", icon: Users, items: ["Clienti", "Mappa clienti"] },
-  { label: "Operativita", icon: FolderKanban, items: ["Progetti", "Spedizioni", "DDT Reader", "Measure Report"] },
+  { label: "Operatività", icon: FolderKanban, items: ["Progetti", "Spedizioni", "DDT Reader", "Measure Report"] },
   { label: "Pianificazione", icon: CalendarDays, items: ["Priorita offerte", "Proposte manutenzione", "Calendario manutenzioni"] },
 ];
 

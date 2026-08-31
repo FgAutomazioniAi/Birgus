@@ -244,7 +244,7 @@ const messages: Record<string, Record<UiLanguage, string>> = {
   "workflow.defaultPrompt": { it: "Prompt default", en: "Default prompt" },
   "workflow.defaultTemplate": { it: "Template di default del nodo", en: "Default node template" },
   "workflow.updateDefaultPrompt": { it: "Aggiornare il prompt default?", en: "Update the default prompt?" },
-  "workflow.updateDefaultPromptHint": { it: "Cambiera il template salvato per questo nodo.", en: "This changes the saved template for this node." },
+  "workflow.updateDefaultPromptHint": { it: "cambierà il template salvato per questo nodo.", en: "This changes the saved template for this node." },
   "archive.title": { it: "Archivio", en: "Archive" },
   "archive.help": { it: "Consulta i documenti del workspace, il loro stato knowledge e gli elementi nel cestino.", en: "Browse workspace documents, their knowledge status, and items in the trash." },
   "archive.documents": { it: "Documenti", en: "Documents" },

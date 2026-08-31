@@ -1587,7 +1587,10 @@ export function WorkflowCanvasPanel() {
       if (!options?.quiet) {
         toast.success("Workflow salvato.");
       }
-      await loadWorkflow(workflow.id);
+      // Il file selezionato e' mantenuto nel canvas fino a quando l'utente cambia
+      // workflow: ricaricare qui azzererebbe uploadedFiles dopo ogni salvataggio.
+      setWorkflow(saved);
+      setSelectedWorkflowId(saved.id);
       await loadCatalog();
       return saved;
     } catch (error) {

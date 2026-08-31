@@ -133,7 +133,7 @@ export function PersonalDashboardPanel({ showInterventions = true, onReturnToPri
       });
 
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({ message: "Cambio password non riuscito." }))) as { message?: string };
+        const payload = (await response.json().catch(() => ({ message: "o password non riuscito." }))) as { message?: string };
         throw new Error(payload.message ?? "Cambio password non riuscito.");
       }
 

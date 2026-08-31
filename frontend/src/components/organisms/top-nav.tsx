@@ -264,6 +264,8 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
             </div>
           ) : null}
 
+          {operations.length > 0 ? <div className="hidden h-8 w-px bg-border-default 2xl:block" /> : null}
+
           <div className="inline-flex overflow-hidden rounded-[var(--radius-md)] border border-border-default" role="group" aria-label={t("language.switch")}>
             <button
               type="button"
