@@ -33,7 +33,6 @@ export class PrismaAssistantSessionRepository implements AssistantSessionReposit
     projectId: string | null;
     projectVersionId: number | null;
     clientId: string | null;
-    shipmentId: string | null;
     documentId: string | null;
     ddtDocumentId: string | null;
     configuration: Record<string, unknown> | null;
@@ -50,7 +49,6 @@ export class PrismaAssistantSessionRepository implements AssistantSessionReposit
         project_id: params.projectId,
         project_version_id: params.projectVersionId,
         client_id: params.clientId,
-        shipment_id: params.shipmentId,
         document_id: params.documentId,
         ddt_document_id: params.ddtDocumentId,
         configuration: this.toInputJson(params.configuration),
@@ -300,7 +298,6 @@ export class PrismaAssistantSessionRepository implements AssistantSessionReposit
       projectId: typeof row.project_id === "string" ? row.project_id : null,
       projectVersionId: typeof row.project_version_id === "number" ? row.project_version_id : null,
       clientId: typeof row.client_id === "string" ? row.client_id : null,
-      shipmentId: typeof row.shipment_id === "string" ? row.shipment_id : null,
       documentId: typeof row.document_id === "string" ? row.document_id : null,
       ddtDocumentId: typeof row.ddt_document_id === "string" ? row.ddt_document_id : null,
       configuration: row.configuration && typeof row.configuration === "object" ? row.configuration as Record<string, unknown> : null,

@@ -104,7 +104,7 @@ export function WorkflowOutputDialog({
   const outputs = finalOutputsFrom(latestRun?.resultPayload).filter((output) => output.nodeKey === nodeKey);
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-labelledby="workflow-output-title">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-labelledby="workflow-output-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div className="w-full max-w-2xl overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-bg-surface shadow-elevated">
         <div className="flex items-start justify-between gap-4 border-b border-border-default px-5 py-4">
           <div className="min-w-0">
@@ -464,6 +464,7 @@ export function PaletteButton({
       draggable
       onDragStart={onDragStart}
       type="button"
+      title={subtitle}
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-bg-surface text-brand-primary">
         {icon}

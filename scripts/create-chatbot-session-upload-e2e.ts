@@ -45,7 +45,7 @@ async function main(): Promise<void> {
     fileName: "chatbot-session-upload-e2e.txt",
     mimeType: "text/plain",
     bytes: Buffer.from(
-      "Documento allegato alla chat. Cliente Delta: manutenzione urgente domani mattina. Priorita critica.",
+      "Documento allegato alla chat. Cliente Delta: manutenzione urgente domani mattina. Priorità critica.",
       "utf8",
     ),
   });
@@ -56,7 +56,7 @@ async function main(): Promise<void> {
   });
   const hits = await intelligenceService.searchWorkspaceKnowledge({
     workspaceId: workspace.id,
-    query: "Quale cliente ha manutenzione urgente e priorita critica?",
+    query: "Quale cliente ha manutenzione urgente e priorità critica?",
     topK: 3,
     sourceEntityType: context.sourceEntityType,
     sourceEntityId: context.sourceEntityId,

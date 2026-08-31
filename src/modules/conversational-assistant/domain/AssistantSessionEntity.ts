@@ -10,7 +10,6 @@ export class AssistantSessionEntity {
   public readonly projectId!: string | null;
   public readonly projectVersionId!: number | null;
   public readonly clientId!: string | null;
-  public readonly shipmentId!: string | null;
   public readonly documentId!: string | null;
   public readonly ddtDocumentId!: string | null;
   public readonly configuration!: Record<string, unknown> | null;
@@ -32,7 +31,6 @@ export class AssistantSessionEntity {
     projectId: string | null;
     projectVersionId: number | null;
     clientId: string | null;
-    shipmentId: string | null;
     documentId: string | null;
     ddtDocumentId: string | null;
     configuration: Record<string, unknown> | null;

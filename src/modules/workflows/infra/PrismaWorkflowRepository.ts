@@ -343,7 +343,6 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
       projectId: row.project_id,
       projectVersionId: row.project_version_id,
       clientId: row.client_id,
-      shipmentId: row.shipment_id,
       documentId: row.document_id,
       ddtDocumentId: row.ddt_document_id,
       measureReportDocumentId: row.measure_report_document_id,
@@ -388,7 +387,6 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
       projectId: row.project_id,
       projectVersionId: row.project_version_id,
       clientId: row.client_id,
-      shipmentId: row.shipment_id,
       documentId: row.document_id,
       ddtDocumentId: row.ddt_document_id,
       measureReportDocumentId: row.measure_report_document_id,
@@ -424,7 +422,6 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
     projectId: string | null;
     projectVersionId: number | null;
     clientId: string | null;
-    shipmentId: string | null;
     documentId: string | null;
     ddtDocumentId: string | null;
     measureReportDocumentId: string | null;
@@ -458,7 +455,6 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
         project_id: params.projectId,
         project_version_id: params.projectVersionId,
         client_id: params.clientId,
-        shipment_id: params.shipmentId,
         document_id: params.documentId,
         ddt_document_id: params.ddtDocumentId,
         measure_report_document_id: params.measureReportDocumentId,

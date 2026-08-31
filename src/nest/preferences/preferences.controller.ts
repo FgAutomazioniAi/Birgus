@@ -26,16 +26,12 @@ const patchPreferencesSchema = z.object({
   languageCode: z.string().min(2).optional(),
   righeProgetti: z.number().int().min(1).max(500).optional(),
   righeClienti: z.number().int().min(1).max(500).optional(),
-  righeSpedizioni: z.number().int().min(1).max(500).optional(),
   colonneProgetti: columnConfigSchema.nullable().optional(),
   colonneClienti: columnConfigSchema.nullable().optional(),
-  colonneSpedizioni: columnConfigSchema.nullable().optional(),
   rowsProjects: z.number().int().min(1).max(500).optional(),
   rowsClients: z.number().int().min(1).max(500).optional(),
-  rowsShipments: z.number().int().min(1).max(500).optional(),
   columnsProjects: columnConfigSchema.nullable().optional(),
   columnsClients: columnConfigSchema.nullable().optional(),
-  columnsShipments: columnConfigSchema.nullable().optional(),
 }).catchall(jsonValueSchema.optional());
 
 @Controller("/api/user/preferences")
@@ -62,16 +58,12 @@ export class NestPreferencesController {
         languageCode: "it",
         righeProgetti: 10,
         righeClienti: 10,
-        righeSpedizioni: 10,
         colonneProgetti: null,
         colonneClienti: null,
-        colonneSpedizioni: null,
         rowsProjects: 10,
         rowsClients: 10,
-        rowsShipments: 10,
         columnsProjects: null,
         columnsClients: null,
-        columnsShipments: null,
       };
     }
 
@@ -82,16 +74,12 @@ export class NestPreferencesController {
       languageCode: preferences.languageCode,
       righeProgetti: preferences.rowsProjects,
       righeClienti: preferences.rowsClients,
-      righeSpedizioni: preferences.rowsShipments,
       colonneProgetti: preferences.columnsProjects,
       colonneClienti: preferences.columnsClients,
-      colonneSpedizioni: preferences.columnsShipments,
       rowsProjects: preferences.rowsProjects,
       rowsClients: preferences.rowsClients,
-      rowsShipments: preferences.rowsShipments,
       columnsProjects: preferences.columnsProjects,
       columnsClients: preferences.columnsClients,
-      columnsShipments: preferences.columnsShipments,
     };
   }
 
@@ -112,10 +100,8 @@ export class NestPreferencesController {
       languageCode: body.languageCode,
       rowsProjects: body.rowsProjects ?? body.righeProgetti,
       rowsClients: body.rowsClients ?? body.righeClienti,
-      rowsShipments: body.rowsShipments ?? body.righeSpedizioni,
       columnsProjects: body.columnsProjects ?? body.colonneProgetti,
       columnsClients: body.columnsClients ?? body.colonneClienti,
-      columnsShipments: body.columnsShipments ?? body.colonneSpedizioni,
     });
 
     return {
@@ -125,16 +111,12 @@ export class NestPreferencesController {
       languageCode: updated.languageCode,
       righeProgetti: updated.rowsProjects,
       righeClienti: updated.rowsClients,
-      righeSpedizioni: updated.rowsShipments,
       colonneProgetti: updated.columnsProjects,
       colonneClienti: updated.columnsClients,
-      colonneSpedizioni: updated.columnsShipments,
       rowsProjects: updated.rowsProjects,
       rowsClients: updated.rowsClients,
-      rowsShipments: updated.rowsShipments,
       columnsProjects: updated.columnsProjects,
       columnsClients: updated.columnsClients,
-      columnsShipments: updated.columnsShipments,
     };
   }
 }

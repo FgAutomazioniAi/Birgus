@@ -95,7 +95,7 @@ const PANEL_CONFIG = {
   },
   "offer-priority": {
     endpoint: "/api/offer-priority",
-    title: "Priorita offerte",
+    title: "Priorità offerte",
     subtitle: "Score proprietario o analisi ABC sul valore cumulato.",
     icon: TrendingUp,
   },
@@ -332,7 +332,7 @@ function OfferPriorityView({ items, isLoading }: { items: OfferPriorityItem[]; i
       },
       {
         key: "priority",
-        label: analysisMode === "abc" ? "Classe ABC" : "Priorita",
+        label: analysisMode === "abc" ? "Classe ABC" : "Priorità",
         defaultWidth: 150,
         sortValue: (item) => (analysisMode === "abc" ? abcRank(String(item.abcClass ?? "C")) : item.priorityScore),
         render: (item) =>

@@ -65,7 +65,7 @@ const addUserWorkspaceSchema = z.object({
 });
 
 const archiveParamsSchema = z.object({
-  entityType: z.enum(["project", "project_version", "shipment", "document"]),
+  entityType: z.enum(["project", "project_version", "document"]),
   entityId: z.string().min(1),
 });
 

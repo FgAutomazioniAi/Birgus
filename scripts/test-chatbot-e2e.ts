@@ -19,8 +19,6 @@ import { DocumentIntelligenceService } from "../src/modules/document-intelligenc
 import { PrismaModuleAccessRepository } from "../src/modules/module-management/infra/PrismaModuleAccessRepository.js";
 import { PrismaProjectRepository } from "../src/modules/projects/infra/PrismaProjectRepository.js";
 import { ProjectService } from "../src/modules/projects/services/ProjectService.js";
-import { PrismaShipmentRepository } from "../src/modules/shipping/infra/PrismaShipmentRepository.js";
-import { ShipmentService } from "../src/modules/shipping/services/ShipmentService.js";
 import { StorageSelector } from "../src/storage/StorageSelector.js";
 
 const DOCS = [
@@ -29,7 +27,7 @@ const DOCS = [
     text: [
       "Documento Alpha per test chatbot.",
       "Cliente Alpha: manutenzione urgente sulla linea packaging A7.",
-      "Priorita: critica.",
+      "Priorità: critica.",
       "Azione: inviare un tecnico domani mattina e preparare ricambi motore.",
     ].join("\n"),
   },
@@ -38,7 +36,7 @@ const DOCS = [
     text: [
       "Documento Beta per test chatbot.",
       "Cliente Beta: offerta retrofit quadro elettrico da 18500 euro.",
-      "Priorita: media.",
+      "Priorità: media.",
       "Azione: inviare follow-up commerciale entro venerdi.",
     ].join("\n"),
   },
@@ -66,9 +64,8 @@ async function main(): Promise<void> {
   const sessionRepository = new PrismaAssistantSessionRepository();
   const sessionService = new AssistantSessionService(sessionRepository);
   const uploadService = new AssistantSessionDocumentService(intelligenceService);
-  const shipmentService = new ShipmentService(new PrismaShipmentRepository());
-  const projectService = new ProjectService(new PrismaProjectRepository(), shipmentService);
-  const toolRegistry = new AssistantToolRegistry(projectService, shipmentService, intelligenceService);
+  const projectService = new ProjectService(new PrismaProjectRepository());
+  const toolRegistry = new AssistantToolRegistry(projectService, intelligenceService);
   const toolAccessService = new AssistantToolAccessService(
     new ModuleAccessPolicy(new PrismaModuleAccessRepository()),
     new PermissionPolicy(new WorkspacePermissionPrismaReader()),
@@ -109,7 +106,7 @@ async function main(): Promise<void> {
       sessionId: session.id,
     },
     {
-      query: "cliente priorita critica manutenzione urgente",
+      query: "cliente priorità critica manutenzione urgente",
       topK: 3,
     },
   );
@@ -118,14 +115,14 @@ async function main(): Promise<void> {
     workspaceId: workspace.id,
     userId: user.id,
     sessionId: session.id,
-    contentText: "Riassumi i documenti allegati e dimmi cliente, priorita e prossima azione per ognuno.",
+    contentText: "Riassumi i documenti allegati e dimmi cliente, priorità e prossima azione per ognuno.",
   });
 
   const secondTurn = await conversationService.postUserMessage({
     workspaceId: workspace.id,
     userId: user.id,
     sessionId: session.id,
-    contentText: "Nel messaggio precedente quale cliente aveva priorita critica? Rispondi solo con cliente e azione.",
+    contentText: "Nel messaggio precedente quale cliente aveva priorità critica? Rispondi solo con cliente e azione.",
   });
 
   const messages = await sessionService.listMessagesForUser(workspace.id, user.id, session.id);

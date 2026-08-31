@@ -12,9 +12,6 @@ export class PermissionKey {
   public static readonly DOCUMENTS_READ = "documents.read";
   public static readonly DOCUMENTS_WRITE = "documents.write";
 
-  public static readonly SHIPMENTS_READ = "shipments.read";
-  public static readonly SHIPMENTS_WRITE = "shipments.write";
-
   public static readonly DDT_READ = "ddt.read";
   public static readonly DDT_PROCESS = "ddt.process";
   public static readonly MEASURE_REPORT_READ = "measure_report.read";

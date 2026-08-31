@@ -11,7 +11,6 @@ import { AssistantToolAccessService } from "../../modules/conversational-assista
 import { AssistantToolRegistry } from "../../modules/conversational-assistant/services/AssistantToolRegistry.js";
 import { DocumentIntelligenceService } from "../../modules/document-intelligence/services/DocumentIntelligenceService.js";
 import { ProjectService } from "../../modules/projects/services/ProjectService.js";
-import { ShipmentService } from "../../modules/shipping/services/ShipmentService.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { KnowledgeNestModule } from "../knowledge/knowledge.module.js";
 import { ProjectsNestModule } from "../projects/projects.module.js";
@@ -30,10 +29,9 @@ import { NestAssistantController } from "./assistant.controller.js";
       provide: AssistantToolRegistry,
       useFactory: (
         projectService: ProjectService,
-        shipmentService: ShipmentService,
         documentIntelligenceService: DocumentIntelligenceService,
-      ) => new AssistantToolRegistry(projectService, shipmentService, documentIntelligenceService),
-      inject: [ProjectService, ShipmentService, DocumentIntelligenceService],
+      ) => new AssistantToolRegistry(projectService, documentIntelligenceService),
+      inject: [ProjectService, DocumentIntelligenceService],
     },
     {
       provide: AssistantToolAccessService,

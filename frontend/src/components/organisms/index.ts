@@ -8,8 +8,6 @@ export * from "./project-form";
 export * from "./project-versions-table";
 export * from "./settings-panel";
 export * from "./superadmin-panel";
-export * from "./shipping-panel";
-export * from "./shipments-table";
 export * from "./sidebar";
 export * from "./theme-provider";
 export * from "./language-provider";

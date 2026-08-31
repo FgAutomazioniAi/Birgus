@@ -2,7 +2,6 @@
 
 import {
   ChevronDown,
-  ChevronRight,
   ChevronUp,
   Columns3,
   Eye,
@@ -17,7 +16,6 @@ import { toast } from "sonner";
 
 import { Button, Card, CheckboxControl, Text } from "@/components/atoms";
 import { PageHelpHint, SearchField, SelectDropdown } from "@/components/molecules";
-import { HumanInterventionsPanel } from "@/components/organisms/human-interventions-panel";
 import { useLanguage } from "@/components/organisms/language-provider";
 import { cn } from "@/lib/cn";
 import { downloadTablePdf } from "@/lib/pdf-export";
@@ -377,10 +375,7 @@ export function DashboardTable() {
           <Plus size={20} />
           {t("projects.new")}
         </Button>
-        <button type="button" onClick={() => router.push(APP_ROUTES.personalDashboard)} title="Preferenze personali" aria-label="Preferenze personali" className="flex h-11 w-11 items-center justify-center rounded-md border border-border-default text-text-secondary hover:bg-bg-muted hover:text-text-primary"><ChevronRight size={20} /></button>
       </div>
-
-      <HumanInterventionsPanel />
 
       <Card className="overflow-visible">
         <div className="flex flex-col justify-between gap-4 border-b border-border-subtle p-4 md:flex-row md:items-center">

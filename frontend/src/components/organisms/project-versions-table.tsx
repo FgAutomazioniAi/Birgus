@@ -9,7 +9,6 @@ import {
   FileDown,
   PlusCircle,
   Save,
-  Truck,
   Trash2,
   X,
 } from "lucide-react";
@@ -34,9 +33,6 @@ interface ProjectVersionRow {
   description: string;
   isDefault: boolean;
   status: ProjectStatus;
-  shipmentCode: string | null;
-  shipmentId: string | null;
-  shipmentStatusKey: string | null;
   versionLabel: string;
 }
 
@@ -54,7 +50,7 @@ interface ClientItem {
   name: string;
 }
 
-type VersionColumnKey = "description" | "versionLabel" | "clientName" | "shipment" | "status" | "createdAt" | "actions";
+type VersionColumnKey = "description" | "versionLabel" | "clientName" | "status" | "createdAt" | "actions";
 
 interface VersionColumnDef {
   cellClassName?: string;
@@ -78,7 +74,6 @@ const DEFAULT_VERSION_COLUMN_ORDER: VersionColumnKey[] = [
   "description",
   "versionLabel",
   "clientName",
-  "shipment",
   "status",
   "createdAt",
   "actions",
@@ -103,16 +98,6 @@ const VERSION_COLUMN_DEFS: VersionColumnDef[] = [
     label: "Cliente",
     required: false,
     render: (version) => version.clientName ?? "N/D",
-  },
-  {
-    key: "shipment",
-    label: "Spedizione",
-    required: false,
-    render: (version) =>
-      version.shipmentCode
-        ? `${version.shipmentCode}${version.shipmentStatusKey ? ` (${formatShipmentStatus(version.shipmentStatusKey)})` : ""}`
-        : "Non collegata",
-    cellClassName: "text-xs text-text-secondary",
   },
   {
     key: "status",
@@ -145,21 +130,6 @@ function formatDate(value: string) {
   }
 
   return date.toLocaleDateString("it-IT");
-}
-
-function formatShipmentStatus(value: string | null): string {
-  switch (value) {
-    case "draft":
-      return "Bozza";
-    case "prepared":
-      return "Preparata";
-    case "shipped":
-      return "Spedita";
-    case "delivered":
-      return "Consegnata";
-    default:
-      return value ?? "-";
-  }
 }
 
 export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
@@ -441,7 +411,6 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
           version.description.toLowerCase().includes(lowered) ||
           version.versionLabel.toLowerCase().includes(lowered) ||
           (version.clientName ?? "").toLowerCase().includes(lowered) ||
-          (version.shipmentCode ?? "").toLowerCase().includes(lowered) ||
           getProjectStatusLabel(version.status).toLowerCase().includes(lowered) ||
           formatDate(version.createdAt).toLowerCase().includes(lowered)
         );
@@ -711,16 +680,6 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
                     <td key={`${version.versionLabel}-${column.key}`} className={cn("px-6 py-4", column.cellClassName)}>
                       {column.key === "actions" ? (
                         <div className="flex items-center justify-end gap-2">
-                          {version.shipmentId && (
-                            <button
-                              type="button"
-                              onClick={() => router.push(APP_ROUTES.shipmentDetail(version.shipmentId as string))}
-                              className="inline-flex h-8 items-center gap-1 rounded-md border border-status-info-border px-2.5 text-[11px] font-medium text-status-info-text transition-colors hover:bg-status-info-bg"
-                            >
-                              <Truck size={12} />
-                              Spedizione
-                            </button>
-                          )}
                           <button
                             type="button"
                             onClick={() => void selectVersion(version.versionLabel)}
@@ -789,7 +748,7 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
       )}
 
       {isClientModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.target === event.currentTarget && !isCreatingClient) setIsClientModalOpen(false); }}>
           <div className="w-full max-w-lg rounded-[var(--radius-xl)] border border-border-default bg-bg-surface p-5 shadow-elevated">
             <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">Nuovo Cliente</h3>
             {/*<p className="mt-1 text-xs text-text-muted"></p>*/}

@@ -1323,7 +1323,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
       </Card>
 
       {isClientModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.target === event.currentTarget && !isCreatingClient) { setIsClientModalOpen(false); resetNewClientForm(); } }}>
           <div className="w-full max-w-lg rounded-[var(--radius-xl)] border border-border-default bg-bg-surface p-5 shadow-elevated">
             <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">Nuovo Cliente</h3>
             <p className="mt-1 text-xs text-text-muted">Crea il cliente senza uscire dalla pagina corrente.</p>

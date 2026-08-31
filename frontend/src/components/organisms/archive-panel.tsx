@@ -23,7 +23,7 @@ interface ArchivePackageSummary {
 
 interface ArchivedItemDto {
   id: string;
-  entityType: "project" | "project_version" | "shipment" | "document";
+  entityType: "project" | "project_version" | "document";
   entityId: string;
   archivedAt: string;
   title: string;
@@ -31,7 +31,6 @@ interface ArchivedItemDto {
   projectId: string | null;
   projectName: string | null;
   versionLabel: string | null;
-  shipmentCode: string | null;
   fileName: string | null;
   scope: string | null;
 }
@@ -110,8 +109,6 @@ const toEntityTypeLabel = (entityType: ArchivedItemDto["entityType"]): string =>
       return "Progetto";
     case "project_version":
       return "Versione";
-    case "shipment":
-      return "Spedizione";
     case "document":
       return "Documento";
     default:
@@ -124,9 +121,6 @@ const toDetails = (item: ArchivedItemDto): string => {
     return `Versione ${item.versionLabel.toUpperCase()}`;
   }
 
-  if (item.entityType === "shipment" && item.shipmentCode) {
-    return `Codice ${item.shipmentCode}`;
-  }
 
   if (item.entityType === "document") {
     const scope = item.scope?.replace(/_/g, " ").toLowerCase();

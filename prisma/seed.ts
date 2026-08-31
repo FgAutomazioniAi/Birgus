@@ -8,7 +8,6 @@ const prisma = new PrismaClient();
 const MODULE_KEYS = [
   "project_management",
   "agent_management",
-  "shipment_management",
   "ddt_processing",
   "measure_report",
   "document_archive",
@@ -38,8 +37,6 @@ const PERMISSION_KEYS = [
   "clients.write",
   "documents.read",
   "documents.write",
-  "shipments.read",
-  "shipments.write",
   "ddt.read",
   "ddt.process",
   "measure_report.read",
@@ -78,8 +75,6 @@ const ROLE_PERMISSION_MATRIX: Record<(typeof ROLE_KEYS)[number], readonly (typeo
     "clients.write",
     "documents.read",
     "documents.write",
-    "shipments.read",
-    "shipments.write",
     "ddt.read",
     "ddt.process",
     "measure_report.read",
@@ -113,8 +108,6 @@ const ROLE_PERMISSION_MATRIX: Record<(typeof ROLE_KEYS)[number], readonly (typeo
     "clients.write",
     "documents.read",
     "documents.write",
-    "shipments.read",
-    "shipments.write",
     "ddt.read",
     "ddt.process",
     "measure_report.read",
@@ -135,13 +128,6 @@ const PROJECT_STATUSES = [
   { key: "in_revisione", label: "In Revisione" },
   { key: "completato", label: "Completato" },
   { key: "in_attesa", label: "In Attesa" },
-] as const;
-
-const SHIPMENT_STATUSES = [
-  { key: "draft", label: "Bozza" },
-  { key: "prepared", label: "Preparata" },
-  { key: "shipped", label: "Spedita" },
-  { key: "delivered", label: "Consegnata" },
 ] as const;
 
 const FILE_TYPES = [
@@ -791,7 +777,7 @@ async function seedOperationsDemoData(workspaceId: string): Promise<void> {
         planned_end_at: new Date("2026-08-28T12:00:00.000Z"),
         status: "CONFIRMED",
         assignee_name: "Marco R.",
-        note: "Intervento prioritario da proposta scaduta.",
+        note: "Intervento prioritàrio da proposta scaduta.",
         deleted_at: null,
       },
       create: {
@@ -804,7 +790,7 @@ async function seedOperationsDemoData(workspaceId: string): Promise<void> {
         planned_end_at: new Date("2026-08-28T12:00:00.000Z"),
         status: "CONFIRMED",
         assignee_name: "Marco R.",
-        note: "Intervento prioritario da proposta scaduta.",
+        note: "Intervento prioritàrio da proposta scaduta.",
       },
     }),
   ]);
@@ -1105,25 +1091,6 @@ async function main() {
 
   for (const status of PROJECT_STATUSES) {
     await prisma.projectStatus.upsert({
-      where: {
-        workspace_id_key: {
-          workspace_id: workspace.id,
-          key: status.key,
-        },
-      },
-      update: {
-        label: status.label,
-      },
-      create: {
-        workspace_id: workspace.id,
-        key: status.key,
-        label: status.label,
-      },
-    });
-  }
-
-  for (const status of SHIPMENT_STATUSES) {
-    await prisma.shipmentStatus.upsert({
       where: {
         workspace_id_key: {
           workspace_id: workspace.id,

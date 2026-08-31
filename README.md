@@ -79,8 +79,6 @@ Nota: il container `app` esegue `db:push` + `db:seed` all'avvio.
 - `GET /api/projects/:projectId/quotation/file`
 - `POST /api/projects/:projectId/quotation/analyze`
 - `GET /api/orchestrator/jobs/:jobId`
-- `GET /api/shipments`
-- `POST /api/shipments`
 - `GET /api/clients`
 - `POST /api/clients`
 - `GET /api/clients/:clientId`
@@ -116,16 +114,8 @@ Compatibilità frontend storico:
 - Controllo `permission` (ruolo workspace -> permessi) per autorizzazione azioni read/write.
 - Le dipendenze tra moduli vengono validate quando abiliti/disabiliti un modulo.
 
-## Seed iniziale
-Il seed crea organization/workspace, ruoli, permessi, moduli, status base e associazioni iniziali.
-
-Per evitare credenziali deboli nel codice, la password degli utenti seed deve essere fornita tramite:
-
-```bash
-BIRGUS_SEED_PASSWORD="una-password-temporanea-lunga"
-```
-
-La variabile e obbligatoria e deve contenere almeno 12 caratteri.
+## Inizializzazione
+Il bootstrap Docker crea soltanto il catalogo tecnico: ruoli, permessi, moduli, dipendenze e tipi file. Non crea organization, workspace o utenti. Per una nuova installazione segui `docs/INSTALLATION_FROM_ZERO.md` e crea il primo superuser con `npm run instance:initialize`.
 
 ## Garage locale
 Il file `garage/garage.local.toml` e richiesto da Docker Compose ma non deve essere versionato. Crealo da `garage/garage.toml.example` e sostituisci `rpc_secret`, `admin_token` e `metrics_token` con valori casuali per ogni ambiente.
@@ -159,6 +149,7 @@ npm run ai:smoke
 ```
 
 ## Documentazione sicurezza
+- Installazione pulita e primo superuser: `docs/INSTALLATION_FROM_ZERO.md`
 - Librerie approvate: `docs/APPROVED_LIBRARIES.md`
 - Coding style sicuro: `docs/CODING_STYLE_SECURITY.md`
 - Eccezioni sicurezza: `docs/SECURITY_EXCEPTION_TEMPLATE.md`

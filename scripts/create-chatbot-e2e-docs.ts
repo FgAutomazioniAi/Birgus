@@ -13,7 +13,7 @@ const TEST_DOCS = [
     text: [
       "Documento test manutenzione.",
       "Il cliente Alfa richiede manutenzione trimestrale sulla linea packaging A7.",
-      "La priorita e alta per vibrazioni anomale sul motore principale.",
+      "La priorità e alta per vibrazioni anomale sul motore principale.",
       "Azione consigliata: programmare intervento entro cinque giorni lavorativi.",
     ].join("\n"),
   },
@@ -159,7 +159,7 @@ async function main(): Promise<void> {
 
   const searchHits = await intelligenceService.searchWorkspaceKnowledge({
     workspaceId: workspace.id,
-    query: "Quale cliente ha priorita alta per manutenzione e quale azione e consigliata?",
+    query: "Quale cliente ha priorità alta per manutenzione e quale azione e consigliata?",
     topK: 5,
   });
 
@@ -170,7 +170,7 @@ async function main(): Promise<void> {
     aiAnalysis = await intelligenceService.analyzeDocumentSet({
       workspaceId: workspace.id,
       documentIds: createdDocuments.map((document) => document.id),
-      prompt: "Riassumi i tre documenti e indica per ogni cliente priorita, rischio o prossima azione.",
+      prompt: "Riassumi i tre documenti e indica per ogni cliente priorità, rischio o prossima azione.",
       knowledgeMode: "hybrid",
       useDeepReasoning: false,
       aiProvider,

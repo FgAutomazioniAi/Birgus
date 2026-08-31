@@ -20,9 +20,9 @@
     "db:push": "prisma db push",
     "db:bootstrap": "tsx scripts/bootstrap-database.ts",
     "db:seed": "tsx prisma/seed.ts",
-    "db:backfill:shipments": "tsx scripts/backfill-project-version-shipments.ts",
     "db:sync:module-agent-prompts": "tsx scripts/sync-module-agent-prompts.ts",
     "db:sync:workflow-tools": "tsx scripts/sync-workflow-tools.ts",
+    "instance:initialize": "tsx scripts/initialize-instance.ts",
     "workspace:provision": "tsx scripts/provision-workspace.ts",
     "ops:backup": "powershell -ExecutionPolicy Bypass -File scripts/backup.ps1",
     "build:frontend": "npm --prefix frontend run build"

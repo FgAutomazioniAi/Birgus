@@ -25,7 +25,6 @@ import { PrismaModule } from "./prisma/prisma.module.js";
 import { ProjectAssetsNestModule } from "./project-assets/project-assets.module.js";
 import { ProjectsNestModule } from "./projects/projects.module.js";
 import { ProjectCrudNestModule } from "./project-crud/project-crud.module.js";
-import { ShippingNestModule } from "./shipping/shipping.module.js";
 import { SuperadminNestModule } from "./superadmin/superadmin.module.js";
 import { RuntimeNestModule } from "./runtime/runtime.module.js";
 import { SettingsNestModule } from "./settings/settings.module.js";
@@ -55,7 +54,6 @@ import { WorkflowsNestModule } from "./workflows/workflows.module.js";
     ProjectAssetsNestModule,
     ProjectCrudNestModule,
     ProjectsNestModule,
-    ShippingNestModule,
     SettingsNestModule,
     SuperadminNestModule,
     WorkflowsNestModule,

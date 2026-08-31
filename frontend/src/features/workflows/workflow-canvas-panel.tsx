@@ -617,7 +617,7 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
         <div className="nodrag flex flex-col gap-1">
           <input id={fieldId("title")} name={fieldId("title")} value={stringConfig("title")} onChange={(event) => patchConfig("title", event.target.value)} placeholder={data.type === "request-decision" ? "Decisione richiesta" : "Titolo revisione"} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
           <textarea id={fieldId("message")} name={fieldId("message")} value={stringConfig("message")} onChange={(event) => patchConfig("message", event.target.value)} placeholder={data.type === "request-decision" ? "Cosa deve decidere l'utente?" : "Motivo della revisione"} rows={2} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
-          {data.type === "request-decision" ? <select id={fieldId("priority")} name={fieldId("priority")} value={stringConfig("priority") || "normal"} onChange={(event) => patchConfig("priority", event.target.value)} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"><option value="low">Priorita bassa</option><option value="normal">Priorita normale</option><option value="high">Priorita alta</option><option value="urgent">Urgente</option></select> : null}
+          {data.type === "request-decision" ? <select id={fieldId("priority")} name={fieldId("priority")} value={stringConfig("priority") || "normal"} onChange={(event) => patchConfig("priority", event.target.value)} className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"><option value="low">Priorità bassa</option><option value="normal">Priorità normale</option><option value="high">Priorità alta</option><option value="urgent">Urgente</option></select> : null}
           <input id={fieldId("assigneeUserId")} name={fieldId("assigneeUserId")} value={stringConfig("assigneeUserId")} onChange={(event) => patchConfig("assigneeUserId", event.target.value)} placeholder="ID utente assegnatario (facoltativo)" className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary" />
         </div>
       ) : null}
@@ -1928,7 +1928,7 @@ export function WorkflowCanvasPanel() {
           </div>
         </section>
         {isCreateWorkflowOpen ? (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-labelledby="create-workflow-title">
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-labelledby="create-workflow-title" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsCreateWorkflowOpen(false); }}>
             <Card className="w-full max-w-md p-5 shadow-elevated">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -2254,7 +2254,7 @@ export function WorkflowCanvasPanel() {
         onClose={() => setOutputPreviewNodeId(null)}
       />
       {nodePickerGroup ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-labelledby="workflow-node-picker-title">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-labelledby="workflow-node-picker-title" onMouseDown={(event) => { if (event.target === event.currentTarget) setNodePickerGroupId(null); }}>
           <Card className="flex max-h-[80vh] w-full max-w-5xl flex-col p-5 shadow-elevated">
             <div className="flex items-start justify-between gap-4">
               <div>

@@ -584,7 +584,6 @@ export class NestProjectAssetsController {
       projectId: params.projectId,
       projectVersionId: version.id,
       clientId: version.client_id,
-      shipmentId: null,
       documentId: null,
       ddtDocumentId: null,
       measureReportDocumentId: null,

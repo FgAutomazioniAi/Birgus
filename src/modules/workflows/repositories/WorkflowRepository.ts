@@ -64,7 +64,6 @@ export interface WorkflowRepository {
     projectId: string | null;
     projectVersionId: number | null;
     clientId: string | null;
-    shipmentId: string | null;
     documentId: string | null;
     ddtDocumentId: string | null;
     measureReportDocumentId: string | null;

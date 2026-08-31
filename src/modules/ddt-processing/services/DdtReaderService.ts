@@ -318,7 +318,6 @@ export class DdtReaderService {
       projectId: null,
       projectVersionId: null,
       clientId: null,
-      shipmentId: null,
       documentId: row.document_id,
       ddtDocumentId: row.id,
       measureReportDocumentId: null,

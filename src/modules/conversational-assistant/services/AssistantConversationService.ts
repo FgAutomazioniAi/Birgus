@@ -462,7 +462,6 @@ export class AssistantConversationService {
     session: {
       projectId: string | null;
       projectVersionId: number | null;
-      shipmentId: string | null;
       documentId: string | null;
       ddtDocumentId: string | null;
       contextEntityType: string | null;
@@ -496,7 +495,6 @@ export class AssistantConversationService {
         contextEntityId: session.contextEntityId,
         projectId: session.projectId,
         projectVersionId: session.projectVersionId,
-        shipmentId: session.shipmentId,
         documentId: session.documentId,
         ddtDocumentId: session.ddtDocumentId,
         knowledgeMode: this.resolveSessionKnowledgeMode(session.configuration),
@@ -513,7 +511,6 @@ export class AssistantConversationService {
       contextEntityId: string | null;
       projectId: string | null;
       projectVersionId: number | null;
-      shipmentId: string | null;
       documentId: string | null;
       ddtDocumentId: string | null;
     };
@@ -628,7 +625,6 @@ export class AssistantConversationService {
     contextEntityId: string | null;
     projectId: string | null;
     projectVersionId: number | null;
-    shipmentId: string | null;
     documentId: string | null;
     ddtDocumentId: string | null;
   }): string | null {
@@ -639,7 +635,6 @@ export class AssistantConversationService {
         : null,
       session.projectId ? `projectId ${session.projectId}` : null,
       session.projectVersionId ? `projectVersionId ${session.projectVersionId}` : null,
-      session.shipmentId ? `shipmentId ${session.shipmentId}` : null,
       session.documentId ? `documentId ${session.documentId}` : null,
       session.ddtDocumentId ? `ddtDocumentId ${session.ddtDocumentId}` : null,
     ].filter((value): value is string => Boolean(value));

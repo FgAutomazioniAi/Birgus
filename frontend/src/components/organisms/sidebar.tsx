@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, CalendarDays, ChevronDown, FileSearch, FolderKanban, GitBranch, LogOut, Map, Ruler, Settings, ShieldCheck, TrendingUp, Truck, UserRound, Users, Wrench } from "lucide-react";
+import { Archive, CalendarDays, ChevronDown, FileSearch, FolderKanban, GitBranch, LogOut, Map, Ruler, Settings, ShieldCheck, TrendingUp, UserRound, Users, Wrench } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -13,21 +13,20 @@ import { useLanguage } from "@/components/organisms/language-provider";
 const menuItems = [
   { icon: FolderKanban, label: "Progetti", path: APP_ROUTES.projects, moduleKey: "project_management" },
   { icon: Users, label: "Clienti", path: APP_ROUTES.clients, moduleKey: "project_management" },
-  { icon: Truck, label: "Spedizioni", path: APP_ROUTES.spedizioni, moduleKey: "shipment_management" },
   // DDT_READER_FEATURE_START
   { icon: FileSearch, label: "DDT Reader", path: APP_ROUTES.ddtReader, moduleKey: "ddt_processing" },
   // DDT_READER_FEATURE_END
   { icon: Ruler, label: "Measure Report", path: APP_ROUTES.measureReport, moduleKey: "measure_report" },
   { icon: Map, label: "Mappa clienti", path: APP_ROUTES.customerMap, moduleKey: "customer_map" },
-  { icon: TrendingUp, label: "Priorita offerte", path: APP_ROUTES.offerPriority, moduleKey: "offer_priority" },
+  { icon: TrendingUp, label: "Priorità offerte", path: APP_ROUTES.offerPriority, moduleKey: "offer_priority" },
   { icon: Wrench, label: "Proposte manutenzione", path: APP_ROUTES.maintenanceProposals, moduleKey: "maintenance_proposals" },
   { icon: CalendarDays, label: "Calendario manutenzioni", path: APP_ROUTES.maintenanceCalendar, moduleKey: "maintenance_calendar" },
 ];
 
 const folders = [
   { label: "Anagrafica", icon: Users, items: ["Clienti", "Mappa clienti"] },
-  { label: "Operatività", icon: FolderKanban, items: ["Progetti", "Spedizioni", "DDT Reader", "Measure Report"] },
-  { label: "Pianificazione", icon: CalendarDays, items: ["Priorita offerte", "Proposte manutenzione", "Calendario manutenzioni"] },
+  { label: "Operatività", icon: FolderKanban, items: ["Progetti", "DDT Reader", "Measure Report"] },
+  { label: "Pianificazione", icon: CalendarDays, items: ["Priorità offerte", "Proposte manutenzione", "Calendario manutenzioni"] },
 ];
 
 export interface SidebarProps {
@@ -99,7 +98,7 @@ export function Sidebar({ collapsed, enabledModuleKeys, isSuperadmin, onClose, o
               const openFolder = openFolders.includes(folder.label);
               return <div key={folder.label} className="pt-2">
                 <button type="button" onClick={() => setOpenFolders((current) => current.includes(folder.label) ? current.filter((label) => label !== folder.label) : [...current, folder.label])} title={collapsed ? folder.label : undefined} className={["flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-sm font-semibold text-text-secondary hover:bg-bg-subtle", collapsed ? "lg:justify-center lg:px-0" : ""].join(" ")}><folder.icon size={18} />{!collapsed && <><span className="flex-1 text-left">{folder.label}</span><ChevronDown size={16} className={openFolder ? "rotate-180 transition-transform" : "transition-transform"} /></>}</button>
-                {openFolder && !collapsed ? <div className="ml-4 mt-1 space-y-1 border-l border-border-subtle pl-2">{items.map((item) => <NavItem key={item.label} href={item.path} icon={item.icon} isActive={isActive(item.path)} label={item.label === "Progetti" ? t("nav.projects") : item.label === "Clienti" ? t("nav.clients") : item.label === "Spedizioni" ? t("nav.shipments") : item.label === "Mappa clienti" ? t("nav.customerMap") : item.label === "Priorita offerte" ? t("nav.offerPriority") : item.label === "Proposte manutenzione" ? t("nav.maintenanceProposals") : item.label === "Calendario manutenzioni" ? t("nav.maintenanceCalendar") : item.label} collapsed={false} onClick={onClose} />)}</div> : null}
+                {openFolder && !collapsed ? <div className="ml-4 mt-1 space-y-1 border-l border-border-subtle pl-2">{items.map((item) => <NavItem key={item.label} href={item.path} icon={item.icon} isActive={isActive(item.path)} label={item.label === "Progetti" ? t("nav.projects") : item.label === "Clienti" ? t("nav.clients") : item.label === "Mappa clienti" ? t("nav.customerMap") : item.label === "Priorità offerte" ? t("nav.offerPriority") : item.label === "Proposte manutenzione" ? t("nav.maintenanceProposals") : item.label === "Calendario manutenzioni" ? t("nav.maintenanceCalendar") : item.label} collapsed={false} onClick={onClose} />)}</div> : null}
               </div>;
             })}
           </nav>

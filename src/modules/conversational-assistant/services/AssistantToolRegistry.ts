@@ -5,22 +5,18 @@ import { ModuleKey } from "../../../core/module-access/ModuleKey.js";
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { DocumentIntelligenceService } from "../../document-intelligence/services/DocumentIntelligenceService.js";
 import { ProjectService } from "../../projects/services/ProjectService.js";
-import { ShipmentService } from "../../shipping/services/ShipmentService.js";
 import { AssistantToolDefinition, AssistantToolExecutionContext } from "../tools/AssistantToolDefinition.js";
 
 export class AssistantToolRegistry {
   private readonly projectService: ProjectService;
-  private readonly shipmentService: ShipmentService;
   private readonly documentIntelligenceService: DocumentIntelligenceService;
   private readonly tools: Map<string, AssistantToolDefinition>;
 
   public constructor(
     projectService: ProjectService,
-    shipmentService: ShipmentService,
     documentIntelligenceService: DocumentIntelligenceService,
   ) {
     this.projectService = projectService;
-    this.shipmentService = shipmentService;
     this.documentIntelligenceService = documentIntelligenceService;
     this.tools = new Map(this.buildTools().map((tool) => [tool.name, tool]));
   }
@@ -163,9 +159,6 @@ export class AssistantToolRegistry {
               description: version.description,
               statusKey: version.statusKey,
               isDefault: version.isDefault,
-              shipmentId: version.shipmentId,
-              shipmentCode: version.shipmentCode,
-              shipmentStatusKey: version.shipmentStatusKey,
             })),
           };
         },
@@ -194,53 +187,9 @@ export class AssistantToolRegistry {
               clientId: version.clientId,
               clientName: version.clientName,
               statusKey: version.statusKey,
-              shipmentId: version.shipmentId,
-              shipmentCode: version.shipmentCode,
-              shipmentStatusKey: version.shipmentStatusKey,
               isDefault: version.isDefault,
               createdAt: version.createdAt.toISOString(),
             })),
-          };
-        },
-      },
-      {
-        name: "get_project_version_shipment",
-        description: "Recupera la spedizione associata a una specifica versione progetto.",
-        moduleKeys: [ModuleKey.PROJECT_MANAGEMENT, ModuleKey.SHIPMENT_MANAGEMENT],
-        permissionKeys: [PermissionKey.PROJECTS_READ, PermissionKey.SHIPMENTS_READ],
-        parametersSchema: projectVersionSchema,
-        parametersJsonSchema: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            projectId: { type: "string" },
-            versionLabel: { type: "string" },
-          },
-          required: ["projectId", "versionLabel"],
-        },
-        execute: async (context, args: ProjectVersionArgs) => {
-          const versions = await this.projectService.listProjectVersions(context.workspaceId, args.projectId);
-          const version = versions.find((item) => item.versionLabel.toLowerCase() === args.versionLabel.trim().toLowerCase());
-          if (!version) {
-            return { found: false, reason: "PROJECT_VERSION_NOT_FOUND" };
-          }
-          if (!version.shipmentId) {
-            return { found: false, reason: "SHIPMENT_NOT_LINKED", versionId: version.id, versionLabel: version.versionLabel };
-          }
-
-          const shipment = await this.shipmentService.getShipment(context.workspaceId, version.shipmentId);
-          return {
-            found: true,
-            shipment: {
-              id: shipment.id,
-              code: shipment.code,
-              clientId: shipment.clientId,
-              clientName: shipment.clientName,
-              statusKey: shipment.statusKey,
-              notes: shipment.notes,
-              specificationUpdatedAt: shipment.specificationUpdatedAt?.toISOString() ?? null,
-              createdAt: shipment.createdAt.toISOString(),
-            },
           };
         },
       },

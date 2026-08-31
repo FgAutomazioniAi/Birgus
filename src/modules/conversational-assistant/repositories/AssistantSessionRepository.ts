@@ -14,7 +14,6 @@ export interface AssistantSessionRepository {
     projectId: string | null;
     projectVersionId: number | null;
     clientId: string | null;
-    shipmentId: string | null;
     documentId: string | null;
     ddtDocumentId: string | null;
     configuration: Record<string, unknown> | null;

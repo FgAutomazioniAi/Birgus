@@ -6,26 +6,21 @@ import { CreateProjectVersionCommand } from "../dto/CreateProjectVersionCommand.
 import { DeleteProjectVersionCommand } from "../dto/DeleteProjectVersionCommand.js";
 import { SelectDefaultVersionCommand } from "../dto/SelectDefaultVersionCommand.js";
 import { ProjectRepository } from "../repositories/ProjectRepository.js";
-import { CreateShipmentCommand } from "../../shipping/dto/CreateShipmentCommand.js";
-import { ShipmentService } from "../../shipping/services/ShipmentService.js";
 import { NotificationService } from "../../notifications/services/NotificationService.js";
 import { ModuleKey } from "../../../core/module-access/ModuleKey.js";
 import { AuditLogService } from "../../audit/services/AuditLogService.js";
 
 export class ProjectService {
   private readonly repository: ProjectRepository;
-  private readonly shipmentService: ShipmentService | null;
   private readonly notificationService: NotificationService | null;
   private readonly auditLogService: AuditLogService | null;
 
   public constructor(
     repository: ProjectRepository,
-    shipmentService?: ShipmentService | null,
     notificationService?: NotificationService | null,
     auditLogService?: AuditLogService | null,
   ) {
     this.repository = repository;
-    this.shipmentService = shipmentService ?? null;
     this.notificationService = notificationService ?? null;
     this.auditLogService = auditLogService ?? null;
   }
@@ -176,15 +171,11 @@ export class ProjectService {
       throw new AppError("Project not found.", "PROJECT_NOT_FOUND", 404);
     }
 
-    const activeVersions = await this.repository.listVersions(workspaceId, projectId);
     const removed = await this.repository.softDeleteProject(workspaceId, projectId);
     if (!removed) {
       throw new AppError("Project not found.", "PROJECT_NOT_FOUND", 404);
     }
 
-    await Promise.all(
-      activeVersions.map((version) => this.shipmentService?.deleteShipmentForProjectVersion(workspaceId, version.id)),
-    );
     await this.notify(workspaceId, project.name, "Progetto archiviato.");
     await this.auditLogService?.record({
       workspaceId,
@@ -226,17 +217,6 @@ export class ProjectService {
       clientId: command.clientId,
       isDefault: true,
     });
-
-    try {
-      await this.ensureShipmentForVersion(command.workspaceId, version.id, command.createdByUserId ?? null);
-    } catch (error) {
-      await this.repository.softDeleteVersion(version.id);
-      const fallback = await this.repository.findMostRecentActiveVersion(command.workspaceId, command.projectId);
-      if (fallback) {
-        await this.repository.setDefaultVersion(fallback.id);
-      }
-      throw error;
-    }
 
     const refreshedVersion = await this.repository.findVersionByLabel(
       command.workspaceId,
@@ -314,7 +294,6 @@ export class ProjectService {
     }
 
     await this.repository.softDeleteVersion(target.id);
-    await this.shipmentService?.deleteShipmentForProjectVersion(command.workspaceId, target.id);
 
     if (target.isDefault) {
       const fallback = await this.repository.findMostRecentActiveVersion(command.workspaceId, command.projectId);
@@ -361,8 +340,6 @@ export class ProjectService {
       isDefault: true,
     });
 
-    await this.ensureShipmentForVersion(workspaceId, version.id, null);
-
     const refreshedVersion = await this.repository.findVersionByLabel(workspaceId, projectId, version.versionLabel);
     return refreshedVersion ?? version;
   }
@@ -392,25 +369,6 @@ export class ProjectService {
     }, 0);
 
     return `v${Math.max(1, maxVersion + 1)}`;
-  }
-
-  private async ensureShipmentForVersion(
-    workspaceId: string,
-    projectVersionId: number,
-    createdByUserId: string | null,
-  ): Promise<void> {
-    if (!this.shipmentService) {
-      return;
-    }
-
-    await this.shipmentService.createShipment(
-      new CreateShipmentCommand({
-        workspaceId,
-        projectVersionId,
-        statusKey: "draft",
-        createdByUserId,
-      }),
-    );
   }
 
   private async notify(workspaceId: string, title: string, message: string): Promise<void> {

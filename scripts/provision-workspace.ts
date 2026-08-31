@@ -84,7 +84,6 @@ async function main(): Promise<void> {
       include: {
         workspace_modules: { select: { module_id: true, is_enabled: true } },
         project_statuses: { select: { key: true, label: true } },
-        shipment_statuses: { select: { key: true, label: true } },
         project_revisions: { select: { code: true } },
         module_agents: {
           where: { deleted_at: null },
@@ -127,7 +126,6 @@ async function main(): Promise<void> {
         data: template.workspace_modules.map((item) => ({ workspace_id: workspace.id, module_id: item.module_id, is_enabled: item.is_enabled, configured_by_user_id: administrator.id })),
       });
       await tx.projectStatus.createMany({ data: template.project_statuses.map((item) => ({ workspace_id: workspace.id, key: item.key, label: item.label })) });
-      await tx.shipmentStatus.createMany({ data: template.shipment_statuses.map((item) => ({ workspace_id: workspace.id, key: item.key, label: item.label })) });
       await tx.projectRevision.createMany({ data: template.project_revisions.map((item) => ({ workspace_id: workspace.id, code: item.code })) });
 
       await tx.workspaceMembership.create({ data: { workspace_id: workspace.id, user_id: administrator.id, status: "ACTIVE" } });

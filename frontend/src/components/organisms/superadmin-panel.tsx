@@ -810,7 +810,7 @@ export function SuperadminPanel() {
       </div>
 
       {userModalOpen && selectedUser ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-label={t("superadmin.userManagement")}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-label={t("superadmin.userManagement")} onMouseDown={(event) => { if (event.target === event.currentTarget && !isSaving) setUserModalOpen(false); }}>
           <section className="flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-bg-surface shadow-elevated">
             <header className="flex flex-col gap-3 border-b border-border-default px-4 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-5">
               <div className="min-w-0">

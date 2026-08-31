@@ -20,7 +20,6 @@ import { PrismaProjectAuthorRepository } from "../../modules/project-authors/inf
 import { PrismaProjectRevisionRepository } from "../../modules/project-revisions/infra/PrismaProjectRevisionRepository.js";
 import { PrismaProjectRepository } from "../../modules/projects/infra/PrismaProjectRepository.js";
 import { PrismaQuotationOrchestratorRepository } from "../../modules/quotation-orchestrator/infra/PrismaQuotationOrchestratorRepository.js";
-import { PrismaShipmentRepository } from "../../modules/shipping/infra/PrismaShipmentRepository.js";
 import { PrismaWorkflowRepository } from "../../modules/workflows/infra/PrismaWorkflowRepository.js";
 
 const PROVIDERS = [
@@ -44,7 +43,6 @@ const PROVIDERS = [
   PrismaProjectRevisionRepository,
   PrismaProjectRepository,
   PrismaQuotationOrchestratorRepository,
-  PrismaShipmentRepository,
   PrismaWorkflowRepository,
 ] as const;
 

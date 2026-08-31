@@ -51,7 +51,6 @@ export class ModuleWorkflowRunEntity {
   public readonly projectId: string | null;
   public readonly projectVersionId: number | null;
   public readonly clientId: string | null;
-  public readonly shipmentId: string | null;
   public readonly documentId: string | null;
   public readonly ddtDocumentId: string | null;
   public readonly measureReportDocumentId: string | null;
@@ -76,7 +75,6 @@ export class ModuleWorkflowRunEntity {
     projectId?: string | null;
     projectVersionId?: number | null;
     clientId?: string | null;
-    shipmentId?: string | null;
     documentId?: string | null;
     ddtDocumentId?: string | null;
     measureReportDocumentId?: string | null;
@@ -100,7 +98,6 @@ export class ModuleWorkflowRunEntity {
     this.projectId = params.projectId ?? null;
     this.projectVersionId = params.projectVersionId ?? null;
     this.clientId = params.clientId ?? null;
-    this.shipmentId = params.shipmentId ?? null;
     this.documentId = params.documentId ?? null;
     this.ddtDocumentId = params.ddtDocumentId ?? null;
     this.measureReportDocumentId = params.measureReportDocumentId ?? null;

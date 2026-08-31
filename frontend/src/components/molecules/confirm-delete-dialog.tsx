@@ -40,7 +40,7 @@ export function ConfirmDeleteDialog({
   const canConfirm = typedText.trim() === expectedText.trim() && !isBusy;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.target === event.currentTarget && !isBusy) onCancel(); }}>
       <div className="w-full max-w-lg rounded-[var(--radius-xl)] border border-border-default bg-bg-surface p-5 shadow-elevated">
         <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">{title ?? t("common.confirmDelete")}</h3>
         <p className="mt-1 text-xs text-text-muted">{t("common.confirmDeletePrompt")}</p>

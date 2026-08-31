@@ -35,7 +35,6 @@ export class AssistantSessionService {
     projectId?: string | null;
     projectVersionId?: number | null;
     clientId?: string | null;
-    shipmentId?: string | null;
     documentId?: string | null;
     ddtDocumentId?: string | null;
     knowledgeMode?: KnowledgeMode | string | null;
@@ -51,7 +50,6 @@ export class AssistantSessionService {
       projectId: this.normalizeOptionalText(params.projectId),
       projectVersionId: params.projectVersionId ?? null,
       clientId: this.normalizeOptionalText(params.clientId),
-      shipmentId: this.normalizeOptionalText(params.shipmentId),
       documentId: this.normalizeOptionalText(params.documentId),
       ddtDocumentId: this.normalizeOptionalText(params.ddtDocumentId),
       configuration: {

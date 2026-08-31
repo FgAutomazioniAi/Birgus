@@ -91,7 +91,7 @@ export function HumanInterventionsPanel() {
         </Button>
       </Card>
       {isOpen ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-label="Interventi da gestire">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-label="Interventi da gestire" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsOpen(false); }}>
           <div className="flex max-h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-md border border-border-default bg-bg-surface shadow-elevated">
             <div className="flex items-center justify-between border-b border-border-default px-5 py-4"><div><Text as="h2" variant="h2" className="text-lg">Interventi da gestire</Text><Text variant="caption">Le decisioni riprendono il workflow senza ripetere gli step precedenti.</Text></div><button type="button" onClick={() => setIsOpen(false)} className="rounded-md p-2 text-text-muted hover:bg-bg-muted" aria-label="Chiudi">x</button></div>
             <div className="min-h-0 flex-1 overflow-y-auto p-5">

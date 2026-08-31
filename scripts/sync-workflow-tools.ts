@@ -51,6 +51,13 @@ const tools = [
 ] as const;
 
 async function main(): Promise<void> {
+  const configuredKeys = (process.env.WORKFLOW_STANDARD_TOOL_KEYS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const selectedKeys = configuredKeys.length > 0 ? new Set(configuredKeys) : new Set(tools.map((tool) => tool.key));
+  const unknownKeys = [...selectedKeys].filter((key) => !tools.some((tool) => tool.key === key));
+  if (unknownKeys.length > 0) throw new Error(`Unknown WORKFLOW_STANDARD_TOOL_KEYS: ${unknownKeys.join(", ")}`);
   const module = await prisma.module.findUnique({ where: { key: "workflow_management" }, select: { id: true } });
   if (!module) throw new Error("Modulo workflow_management non trovato. Eseguire il bootstrap iniziale una sola volta.");
   const workspaces = await prisma.workspaceModule.findMany({ where: { module_id: module.id }, select: { workspace_id: true } });
@@ -60,10 +67,11 @@ async function main(): Promise<void> {
       data: { is_enabled: false, deleted_at: new Date() },
     });
     for (const tool of tools) {
+      const isEnabled = selectedKeys.has(tool.key);
       await prisma.moduleTool.upsert({
         where: { workspace_id_module_id_key: { workspace_id: workspace.workspace_id, module_id: module.id, key: tool.key } },
-        update: { name: tool.name, label: tool.label, description: tool.description, runtime_kind: tool.runtimeKind, handler_key: tool.handlerKey, configuration: tool.configuration, is_enabled: true, deleted_at: null },
-        create: { workspace_id: workspace.workspace_id, module_id: module.id, key: tool.key, name: tool.name, label: tool.label, description: tool.description, runtime_kind: tool.runtimeKind, handler_key: tool.handlerKey, configuration: tool.configuration, is_enabled: true },
+        update: { name: tool.name, label: tool.label, description: tool.description, runtime_kind: tool.runtimeKind, handler_key: tool.handlerKey, configuration: tool.configuration, is_enabled: isEnabled, deleted_at: null },
+        create: { workspace_id: workspace.workspace_id, module_id: module.id, key: tool.key, name: tool.name, label: tool.label, description: tool.description, runtime_kind: tool.runtimeKind, handler_key: tool.handlerKey, configuration: tool.configuration, is_enabled: isEnabled },
       });
     }
   }

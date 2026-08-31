@@ -15,7 +15,7 @@ export interface ArchivePackageSummary {
 
 export interface ArchivedItemDto {
   id: string;
-  entityType: "project" | "project_version" | "shipment" | "document";
+  entityType: "project" | "project_version" | "document";
   entityId: string;
   archivedAt: string;
   title: string;
@@ -23,7 +23,6 @@ export interface ArchivedItemDto {
   projectId: string | null;
   projectName: string | null;
   versionLabel: string | null;
-  shipmentCode: string | null;
   fileName: string | null;
   scope: string | null;
 }
@@ -47,7 +46,7 @@ export class ArchivedItemsService {
   }): Promise<ArchivedItemsView> {
     const prisma = PrismaClientManager.getClient();
 
-    const [projects, versions, shipments, documents] = await Promise.all([
+    const [projects, versions, documents] = await Promise.all([
       prisma.project.findMany({
         where: {
           workspace_id: params.workspaceId,
@@ -76,31 +75,6 @@ export class ArchivedItemsService {
           project: {
             select: {
               name: true,
-            },
-          },
-        },
-      }),
-      prisma.shipment.findMany({
-        where: {
-          workspace_id: params.workspaceId,
-          deleted_at: {
-            not: null,
-          },
-        },
-        select: {
-          id: true,
-          code: true,
-          project_version_id: true,
-          deleted_at: true,
-          project_version: {
-            select: {
-              version_label: true,
-              project_id: true,
-              project: {
-                select: {
-                  name: true,
-                },
-              },
             },
           },
         },
@@ -138,11 +112,6 @@ export class ArchivedItemsService {
     for (const version of versions) {
       if (!projectNameById.has(version.project_id)) {
         missingProjectIds.add(version.project_id);
-      }
-    }
-    for (const shipment of shipments) {
-      if (!projectNameById.has(shipment.project_version.project_id)) {
-        missingProjectIds.add(shipment.project_version.project_id);
       }
     }
 
@@ -187,7 +156,6 @@ export class ArchivedItemsService {
         projectId: project.id,
         projectName: project.name,
         versionLabel: null,
-        shipmentCode: null,
         fileName: null,
         scope: null,
       });
@@ -205,25 +173,6 @@ export class ArchivedItemsService {
         projectId: version.project_id,
         projectName: version.project.name,
         versionLabel: version.version_label,
-        shipmentCode: null,
-        fileName: null,
-        scope: null,
-      });
-    }
-
-    for (const shipment of shipments) {
-      const versionLabel = shipment.project_version.version_label.trim().toUpperCase();
-      allItems.push({
-        id: `shipment:${shipment.id}`,
-        entityType: "shipment",
-        entityId: shipment.id,
-        archivedAt: shipment.deleted_at?.toISOString() ?? new Date(0).toISOString(),
-        title: `Spedizione ${shipment.code}`,
-        description: `Spedizione archiviata della versione ${versionLabel}`,
-        projectId: shipment.project_version.project_id,
-        projectName: shipment.project_version.project.name,
-        versionLabel: shipment.project_version.version_label,
-        shipmentCode: shipment.code,
         fileName: null,
         scope: null,
       });
@@ -242,7 +191,6 @@ export class ArchivedItemsService {
         projectId: projectRef?.projectId ?? null,
         projectName,
         versionLabel: projectRef?.versionLabel ?? null,
-        shipmentCode: null,
         fileName: document.filename?.trim() || null,
         scope: document.scope,
       });
@@ -289,9 +237,6 @@ export class ArchivedItemsService {
       case "project_version":
         await this.restoreProjectVersion(params.workspaceId, params.entityId);
         return;
-      case "shipment":
-        await this.restoreShipment(params.workspaceId, params.entityId);
-        return;
       case "document":
         await this.restoreDocument(params.workspaceId, params.entityId);
         return;
@@ -312,9 +257,6 @@ export class ArchivedItemsService {
       case "project_version":
         await this.permanentlyDeleteProjectVersion(params.workspaceId, params.entityId);
         return;
-      case "shipment":
-        await this.permanentlyDeleteShipment(params.workspaceId, params.entityId);
-        return;
       case "document":
         await this.permanentlyDeleteDocument(params.workspaceId, params.entityId);
         return;
@@ -328,8 +270,7 @@ export class ArchivedItemsService {
     const priority: Record<ArchivedItemDto["entityType"], number> = {
       project: 0,
       project_version: 1,
-      shipment: 2,
-      document: 3,
+      document: 2,
     };
     const items = [...archived.items].sort((left, right) => priority[left.entityType] - priority[right.entityType]);
 
@@ -454,21 +395,6 @@ export class ArchivedItemsService {
         },
       });
 
-      await tx.shipment.updateMany({
-        where: {
-          workspace_id: workspaceId,
-          project_version: {
-            workspace_id: workspaceId,
-            project_id: projectId,
-          },
-          deleted_at: {
-            not: null,
-          },
-        },
-        data: {
-          deleted_at: null,
-        },
-      });
     });
   }
 
@@ -513,72 +439,6 @@ export class ArchivedItemsService {
         },
       });
 
-      await tx.shipment.updateMany({
-        where: {
-          workspace_id: workspaceId,
-          project_version_id: versionId,
-          deleted_at: {
-            not: null,
-          },
-        },
-        data: {
-          deleted_at: null,
-        },
-      });
-    });
-  }
-
-  private async restoreShipment(workspaceId: string, shipmentId: string): Promise<void> {
-    const prisma = PrismaClientManager.getClient();
-    const shipment = await prisma.shipment.findFirst({
-      where: {
-        workspace_id: workspaceId,
-        id: shipmentId,
-        deleted_at: {
-          not: null,
-        },
-      },
-      select: {
-        id: true,
-        project_version_id: true,
-        project_version: {
-          select: {
-            project_id: true,
-          },
-        },
-      },
-    });
-    if (!shipment) {
-      throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
-    }
-
-    await prisma.$transaction(async (tx) => {
-      await tx.project.updateMany({
-        where: {
-          workspace_id: workspaceId,
-          id: shipment.project_version.project_id,
-        },
-        data: {
-          deleted_at: null,
-        },
-      });
-      await tx.projectVersion.updateMany({
-        where: {
-          workspace_id: workspaceId,
-          id: shipment.project_version_id,
-        },
-        data: {
-          deleted_at: null,
-        },
-      });
-      await tx.shipment.update({
-        where: {
-          id: shipment.id,
-        },
-        data: {
-          deleted_at: null,
-        },
-      });
     });
   }
 
@@ -680,21 +540,6 @@ export class ArchivedItemsService {
     });
     const versionIds = versionRows.map((item) => item.id);
 
-    const shipmentRows = versionIds.length > 0
-      ? await prisma.shipment.findMany({
-        where: {
-          workspace_id: workspaceId,
-          project_version_id: {
-            in: versionIds,
-          },
-        },
-        select: {
-          id: true,
-        },
-      })
-      : [];
-    const shipmentIds = shipmentRows.map((item) => item.id);
-
     const projectDocuments = await prisma.document.findMany({
       where: {
         workspace_id: workspaceId,
@@ -731,17 +576,6 @@ export class ArchivedItemsService {
             workspace_id: workspaceId,
             id: {
               in: documentIds,
-            },
-          },
-        });
-      }
-
-      if (shipmentIds.length > 0) {
-        await tx.shipment.deleteMany({
-          where: {
-            workspace_id: workspaceId,
-            id: {
-              in: shipmentIds,
             },
           },
         });
@@ -796,17 +630,6 @@ export class ArchivedItemsService {
       throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
     }
 
-    const shipmentRows = await prisma.shipment.findMany({
-      where: {
-        workspace_id: workspaceId,
-        project_version_id: versionId,
-      },
-      select: {
-        id: true,
-      },
-    });
-    const shipmentIds = shipmentRows.map((item) => item.id);
-
     const docs = await prisma.document.findMany({
       where: {
         workspace_id: workspaceId,
@@ -840,17 +663,6 @@ export class ArchivedItemsService {
         });
       }
 
-      if (shipmentIds.length > 0) {
-        await tx.shipment.deleteMany({
-          where: {
-            workspace_id: workspaceId,
-            id: {
-              in: shipmentIds,
-            },
-          },
-        });
-      }
-
       await tx.projectVersion.delete({
         where: {
           id: versionId,
@@ -859,33 +671,6 @@ export class ArchivedItemsService {
     });
 
     await this.removeStoragePaths(storagePaths);
-  }
-
-  private async permanentlyDeleteShipment(workspaceId: string, shipmentId: string): Promise<void> {
-    const prisma = PrismaClientManager.getClient();
-    const shipment = await prisma.shipment.findFirst({
-      where: {
-        workspace_id: workspaceId,
-        id: shipmentId,
-        deleted_at: {
-          not: null,
-        },
-      },
-      select: {
-        id: true,
-      },
-    });
-    if (!shipment) {
-      throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
-    }
-
-    await prisma.$transaction(async (tx) => {
-      await tx.shipment.delete({
-        where: {
-          id: shipmentId,
-        },
-      });
-    });
   }
 
   private async permanentlyDeleteDocument(workspaceId: string, documentId: string): Promise<void> {

@@ -16,17 +16,3 @@ export interface Client {
   phone: string;
   notes: string;
 }
-
-export interface ShipmentListItem {
-  id: string;
-  code: string;
-  projectId: string;
-  projectName: string;
-  projectVersionId: number;
-  projectVersionLabel: string;
-  clientId: string | null;
-  clientName: string | null;
-  statusKey: string;
-  specificationUpdatedAt?: string | null;
-  createdAt: string;
-}
