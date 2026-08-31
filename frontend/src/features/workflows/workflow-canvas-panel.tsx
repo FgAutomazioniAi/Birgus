@@ -157,6 +157,43 @@ function defaultPromptForTool(tool: WorkflowTool | null): string {
   return "";
 }
 
+type PublicOutputOption = { key: string; label: string };
+
+function verificationFieldLabel(rule: Record<string, unknown>, index: number): string {
+  const label = typeof rule.label === "string" ? rule.label.trim() : "";
+  return label || `Valore ${index + 1}`;
+}
+
+function publicOutputOptions(source: DraftNode | undefined, sourceType: FlowNodeType | null): PublicOutputOption[] {
+  if (!source) return [];
+  if (sourceType === "verify-route") {
+    const rules = Array.isArray(source.configuration.rules) ? source.configuration.rules : [];
+    return rules.map((rule, index) => ({ key: `field_${index + 1}`, label: verificationFieldLabel(toRecord(rule), index) }));
+  }
+
+  const defaults: Partial<Record<FlowNodeType, PublicOutputOption[]>> = {
+    "input-text": [{ key: "text", label: "Testo inserito" }],
+    ocr: [{ key: "text", label: "Testo estratto" }],
+    llm: [{ key: "text", label: "Risposta IA" }],
+    "structure-data": [{ key: "structured_data", label: "Dati estratti" }, { key: "text", label: "Testo elaborato" }],
+    "document-set-ai": [{ key: "text", label: "Risposta IA" }],
+    "format-text-ai": [{ key: "text", label: "Testo formattato" }],
+    "format-text-template": [{ key: "text", label: "Testo formattato" }],
+    "compose-email": [{ key: "subject", label: "Oggetto email" }, { key: "text", label: "Corpo email" }],
+  };
+  const defaultOutputs = defaults[sourceType ?? "output"];
+  if (defaultOutputs) return defaultOutputs;
+
+  const properties = toRecord(toRecord(source.outputSchema).properties);
+  const fromSchema = Object.entries(properties).map(([key, schema]) => {
+    const label = typeof toRecord(schema).title === "string" ? String(toRecord(schema).title) : "";
+    return { key, label: label || key.replace(/_/g, " ").replace(/^./, (character) => character.toUpperCase()) };
+  });
+  if (fromSchema.length > 0) return fromSchema;
+
+  return [];
+}
+
 function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
   const { language, t } = useLanguage();
   const [isDefaultPromptOpen, setIsDefaultPromptOpen] = useState(false);
@@ -542,6 +579,13 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
           {configuredRules.map((rule, index) => (
             <div key={`${data.nodeId}-rule-${index}`} className="relative rounded-md border border-border-subtle bg-bg-muted p-1.5">
               <Handle type="target" id={`field:rule_${index}`} position={Position.Left} className={textHandleClassName} title={`Collega valore alla regola ${index + 1}`} />
+              <input
+                value={verificationFieldLabel(rule, index)}
+                onChange={(event) => updateRule(index, { label: event.target.value })}
+                placeholder={`Campo ${index + 1}`}
+                aria-label={`Nome campo ${index + 1}`}
+                className="mb-1 w-full min-w-0 rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs font-medium text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+              />
               <div className="grid grid-cols-[minmax(0,1fr)_24px] gap-1">
                 <select value={typeof rule.operator === "string" ? rule.operator : "not_empty"} onChange={(event) => updateRule(index, { operator: event.target.value })} className="min-w-0 rounded-md border border-border-default bg-bg-page px-1 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary">
                   <option value="not_empty">Non vuoto</option><option value="exists">Esiste</option><option value="equals">Uguale</option><option value="contains">Contiene</option><option value="greater_than">Maggiore di</option><option value="less_than">Minore di</option><option value="between">Compreso tra</option>
@@ -552,7 +596,7 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
             </div>
           ))}
           <div className="relative flex min-h-8 items-center justify-center">
-            <button type="button" className="w-36 rounded-md border border-border-default px-2 py-1 text-xs font-semibold text-text-secondary hover:bg-bg-muted" onClick={() => data.onConfigChange?.({ rules: [...configuredRules, { operator: "not_empty", value: "" }] })}>Aggiungi regola</button>
+            <button type="button" className="w-36 rounded-md border border-border-default px-2 py-1 text-xs font-semibold text-text-secondary hover:bg-bg-muted" onClick={() => data.onConfigChange?.({ rules: [...configuredRules, { label: `Valore ${configuredRules.length + 1}`, operator: "not_empty", value: "" }] })}>Aggiungi regola</button>
             <span className="pointer-events-none absolute right-3 top-0.5 text-[10px] font-bold text-text-primary">{language === "en" ? "T" : "V"}</span>
             <span className="pointer-events-none absolute right-3 bottom-0.5 text-[10px] font-bold text-text-primary">F</span>
           </div>
@@ -1940,64 +1984,52 @@ export function WorkflowCanvasPanel() {
         const condition = toRecord(selectedEdge.conditionPayload);
         const sourceNode = draftNodes.find((node) => node.clientId === selectedEdge.sourceClientId);
         const targetNode = draftNodes.find((node) => node.clientId === selectedEdge.targetClientId);
+        const sourceType = sourceNode ? inferFlowNodeType(sourceNode, sourceNode.moduleToolId ? toolById.get(sourceNode.moduleToolId) ?? null : null) : null;
+        const targetType = targetNode ? inferFlowNodeType(targetNode, targetNode.moduleToolId ? toolById.get(targetNode.moduleToolId) ?? null : null) : null;
+        const isVerificationInput = targetType === "verify-route" && /^field:rule_\d+$/.test(selectedEdge.targetHandle ?? "");
+        const isFieldInput = selectedEdge.targetHandle?.startsWith("field:") === true;
+        const selectedOutputKey = typeof condition.selected_output_key === "string" ? condition.selected_output_key : "";
+        const outputOptions = publicOutputOptions(sourceNode, sourceType);
         const hasCondition = Object.keys(condition).length > 0;
-        const operator = typeof condition.operator === "string" ? condition.operator : "truthy";
         const defaultPath = sourceNode ? `outputs.${sourceNode.nodeKey}.valid` : "outputs.node.output";
-        const path = typeof condition.path === "string" ? condition.path : defaultPath;
-        const value = typeof condition.value === "string" || typeof condition.value === "number" ? String(condition.value) : "";
         return (
           <div className="flex flex-wrap items-end gap-3 border-b border-border-default bg-bg-page px-6 py-3 text-sm">
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-text-primary">Instradamento del collegamento</p>
               <p className="truncate text-xs text-text-muted">{sourceNode?.label ?? "Nodo origine"} -&gt; {targetNode?.label ?? "Nodo destinazione"}</p>
             </div>
-            <label className="flex items-center gap-2 text-text-secondary">
-              <input
-                type="checkbox"
-                checked={hasCondition}
-                onChange={(event) => patchEdgeCondition(selectedEdge.clientId, event.target.checked ? { path: defaultPath, operator: "truthy" } : null)}
-              />
-              Esegui solo se la condizione e valida
-            </label>
-            {hasCondition ? (
+            {isFieldInput ? (
+              <label className="grid min-w-[220px] gap-1 text-xs font-medium text-text-secondary">
+                {isVerificationInput ? "Valore da controllare" : "Dato inoltrato"}
+                <select
+                  value={selectedOutputKey}
+                  onChange={(event) => {
+                    const next = { ...condition };
+                    if (event.target.value) next.selected_output_key = event.target.value;
+                    else delete next.selected_output_key;
+                    patchEdgeCondition(selectedEdge.clientId, next);
+                  }}
+                  className="h-9 rounded-md border border-border-default bg-bg-surface px-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+                >
+                  <option value="">Output principale</option>
+                  {outputOptions.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
+                </select>
+              </label>
+            ) : (
               <>
-                <label className="grid min-w-[190px] gap-1 text-xs font-medium text-text-secondary">
-                  Campo da verificare
+                <label className="flex items-center gap-2 text-text-secondary">
                   <input
-                    value={path}
-                    onChange={(event) => patchEdgeCondition(selectedEdge.clientId, { ...condition, path: event.target.value })}
-                    className="h-9 rounded-md border border-border-default bg-bg-surface px-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
+                    type="checkbox"
+                    checked={hasCondition}
+                    onChange={(event) => patchEdgeCondition(selectedEdge.clientId, event.target.checked ? { path: defaultPath, operator: "truthy" } : null)}
                   />
+                  Esegui solo se la condizione e valida
                 </label>
-                <label className="grid min-w-[150px] gap-1 text-xs font-medium text-text-secondary">
-                  Regola
-                  <select
-                    value={operator}
-                    onChange={(event) => patchEdgeCondition(selectedEdge.clientId, { ...condition, operator: event.target.value })}
-                    className="h-9 rounded-md border border-border-default bg-bg-surface px-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
-                  >
-                    <option value="truthy">E valorizzato</option>
-                    <option value="falsy">Non e valorizzato</option>
-                    <option value="equals">Uguale a</option>
-                    <option value="not_equals">Diverso da</option>
-                    <option value="contains">Contiene</option>
-                    <option value="regex">Rispetta regex</option>
-                    <option value="greater_than">Maggiore di</option>
-                    <option value="less_than">Minore di</option>
-                  </select>
-                </label>
-                {operator !== "truthy" && operator !== "falsy" ? (
-                  <label className="grid min-w-[160px] gap-1 text-xs font-medium text-text-secondary">
-                    {operator === "regex" ? "Pattern" : "Valore"}
-                    <input
-                      value={value}
-                      onChange={(event) => patchEdgeCondition(selectedEdge.clientId, { ...condition, value: event.target.value })}
-                      className="h-9 rounded-md border border-border-default bg-bg-surface px-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
-                    />
-                  </label>
+                {hasCondition ? (
+                  <p className="text-xs text-text-muted">Le condizioni avanzate esistenti restano attive. Per una verifica leggibile usa Verifica e instrada.</p>
                 ) : null}
               </>
-            ) : null}
+            )}
           </div>
         );
       })() : null}

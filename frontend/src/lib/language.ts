@@ -118,7 +118,7 @@ const messages: Record<string, Record<UiLanguage, string>> = {
   "settings.ai.noModels": { it: "nessun modello disponibile", en: "no model available" },
   "settings.ai.generation": { it: "Generazione", en: "Generation" },
   "settings.ai.generationHint": { it: "Parametri di risposta applicati al modello selezionato.", en: "Response parameters applied to the selected model." },
-  "settings.ai.useInternalEndpoint": { it: "Usa endpoint interno vLLM", en: "Use internal vLLM endpoint" },
+  "settings.ai.useInternalEndpoint": { it: "Usa indirizzo interno vLLM", en: "Use internal vLLM address" },
   "settings.ai.maxOutputTokens": { it: "Max token output", en: "Max output tokens" },
   "settings.ai.contextTokenLimit": { it: "Limite token contesto", en: "Context token limit" },
   "settings.ai.contextTokenLimitHint": { it: "Riduce il prompt inviato al modello; non aumenta la finestra del server.", en: "Limits the prompt sent to the model; it does not increase the server context window." },

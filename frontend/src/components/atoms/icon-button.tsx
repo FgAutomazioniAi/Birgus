@@ -2,7 +2,7 @@ import * as React from "react";
 
 import { cn } from "@/lib/cn";
 
-export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {}
+export type IconButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement>;
 
 export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
   ({ className, type = "button", ...props }, ref) => (

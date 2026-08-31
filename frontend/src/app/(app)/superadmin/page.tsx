@@ -9,10 +9,14 @@ const getApiBaseUrl = () =>
 export default async function SuperadminPage() {
   const cookieStore = await cookies();
   const token = cookieStore.get(AUTH_CONFIGURED_COOKIE_NAME)?.value;
-  if (!token) {
+  if (!token || !await canAccessSuperadmin(token)) {
     return <NotFoundPanel />;
   }
 
+  return <SuperadminPanel />;
+}
+
+async function canAccessSuperadmin(token: string): Promise<boolean> {
   try {
     const sessionResponse = await fetch(`${getApiBaseUrl()}/api/auth/session`, {
       cache: "no-store",
@@ -22,7 +26,7 @@ export default async function SuperadminPage() {
     });
 
     if (!sessionResponse.ok) {
-      return <NotFoundPanel />;
+      return false;
     }
 
     const sessionPayload = (await sessionResponse.json()) as {
@@ -35,7 +39,7 @@ export default async function SuperadminPage() {
     const workspaceId = sessionPayload.workspaceId?.trim() ?? "";
     const isSuperadmin = (sessionPayload.user?.roleKeys ?? []).some((item) => item.trim().toLowerCase() === "superadmin");
     if (!isSuperadmin || !userId) {
-      return <NotFoundPanel />;
+      return false;
     }
 
     const modulesResponse = await fetch(`${getApiBaseUrl()}/api/modules/users/${encodeURIComponent(userId)}`, {
@@ -47,23 +51,17 @@ export default async function SuperadminPage() {
     });
 
     if (!modulesResponse.ok) {
-      return <NotFoundPanel />;
+      return false;
     }
 
     const modulesPayload = (await modulesResponse.json()) as {
       modules?: Array<{ moduleKey?: string; effectiveEnabled?: boolean }>;
     };
 
-    const hasEnabledSuperadminModule = (modulesPayload.modules ?? []).some(
+    return (modulesPayload.modules ?? []).some(
       (item) => item.moduleKey === "superadmin_center" && item.effectiveEnabled,
     );
-
-    if (!hasEnabledSuperadminModule) {
-      return <NotFoundPanel />;
-    }
   } catch {
-    return <NotFoundPanel />;
+    return false;
   }
-
-  return <SuperadminPanel />;
 }

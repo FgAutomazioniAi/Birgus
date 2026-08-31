@@ -22,9 +22,11 @@ async function main(): Promise<void> {
   assert(protectedResponse.status === 401, "Workflow endpoint must reject unauthenticated access.");
   assert(connectedAppsResponse.status === 401, "Connected apps endpoint must reject unauthenticated access.");
 
-  const databaseUrl = process.env.DATABASE_URL?.trim() || readDatabaseUrlFromEnv();
+  const databaseUrl = process.env.BIRGUS_DATABASE_URL?.trim()
+    || process.env.DATABASE_URL?.trim()
+    || readDatabaseUrlFromEnv();
   if (!databaseUrl) {
-    throw new Error("DATABASE_URL non disponibile per la verifica dei workflow.");
+    throw new Error("DATABASE_URL non disponibile per la verifica dei workflow. Impostare BIRGUS_DATABASE_URL per eseguire il test dall'host.");
   }
 
   const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
@@ -51,6 +53,7 @@ async function main(): Promise<void> {
       assertNoDuplicateNodeKeys(workflow.key, workflow.nodes.map((node) => node.node_key));
       assertNoDanglingEdges(workflow.key, workflow.nodes.map((node) => node.id), workflow.edges);
       assertNoCycle(workflow.key, workflow.nodes, workflow.edges);
+      assertWorkflowHandleContracts(workflow.key, workflow.nodes, workflow.edges);
 
       for (const node of workflow.nodes) {
         if (node.node_kind === "TOOL") {
@@ -141,6 +144,45 @@ function assertNoCycle(
   };
   for (const nodeId of activeIds) {
     visit(nodeId);
+  }
+}
+
+function assertWorkflowHandleContracts(
+  workflowKey: string,
+  nodes: Array<{
+    id: string;
+    configuration: unknown;
+    module_tool: { handler_key: string } | null;
+  }>,
+  edges: Array<{ source_node_id: string; target_node_id: string; source_handle: string | null; target_handle: string | null }>,
+): void {
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  for (const edge of edges) {
+    const source = nodesById.get(edge.source_node_id);
+    const target = nodesById.get(edge.target_node_id);
+    const isVerifySource = source?.module_tool?.handler_key === "workflow_logic.verify_and_route";
+    const isVerifyTarget = target?.module_tool?.handler_key === "workflow_logic.verify_and_route";
+
+    if (edge.source_handle === "valid" || edge.source_handle === "invalid") {
+      assert(isVerifySource, `Workflow '${workflowKey}' usa l'uscita ${edge.source_handle} da un nodo che non e Verifica e instrada.`);
+    }
+    if (isVerifySource) {
+      assert(
+        edge.source_handle === "valid" || edge.source_handle === "invalid",
+        `Workflow '${workflowKey}' ha un collegamento di Verifica e instrada senza un'uscita V/F esplicita.`,
+      );
+    }
+
+    if (!edge.target_handle?.startsWith("field:rule_")) {
+      continue;
+    }
+    assert(isVerifyTarget, `Workflow '${workflowKey}' collega una regola a un nodo che non e Verifica e instrada.`);
+    const index = Number(edge.target_handle.slice("field:rule_".length));
+    const configuration = target?.configuration && typeof target.configuration === "object" && !Array.isArray(target.configuration)
+      ? target.configuration as Record<string, unknown>
+      : {};
+    const rules = Array.isArray(configuration.rules) ? configuration.rules : [];
+    assert(Number.isInteger(index) && index >= 0 && index < rules.length, `Workflow '${workflowKey}' collega una regola non piu presente nel nodo Verifica e instrada.`);
   }
 }
 

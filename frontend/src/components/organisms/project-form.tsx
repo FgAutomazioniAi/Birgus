@@ -1197,7 +1197,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-text-secondary">Preventivo Word (DOCX)</p>
-                      <p className="mt-1 text-xs text-text-muted">Generato dall'orchestrator dopo l'analisi.</p>
+                      <p className="mt-1 text-xs text-text-muted">Generato dall&apos;orchestrator dopo l&apos;analisi.</p>
                       <p className="mt-2 truncate text-xs font-medium text-text-secondary" title={quotationDocxName ?? ""}>
                         {quotationDocxName ?? "Non ancora disponibile"}
                       </p>
@@ -1215,7 +1215,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
                         Apri DOCX
                       </a>
                     ) : (
-                      <span className="text-xs text-text-muted">Disponibile al completamento dell'elaborazione.</span>
+                      <span className="text-xs text-text-muted">Disponibile al completamento dell&apos;elaborazione.</span>
                     )}
                   </div>
                 </div>

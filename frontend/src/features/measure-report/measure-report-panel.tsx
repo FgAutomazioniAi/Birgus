@@ -456,7 +456,7 @@ export function MeasureReportPanel() {
         <Card className="space-y-4 p-5">
           <div className="space-y-2">
             <Text as="h2" variant="h2">Carica PDF</Text>
-            <Text variant="muted">Il modulo salva il file nel workspace e prepara il workflow backend per l'analisi.</Text>
+            <Text variant="muted">Il modulo salva il file nel workspace e prepara il workflow backend per l&apos;analisi.</Text>
           </div>
 
           <Input ref={fileInputRef} type="file" accept="application/pdf,.pdf" onChange={onFileChange} />
@@ -466,7 +466,7 @@ export function MeasureReportPanel() {
           </Button>
 
           <div className="rounded-[var(--radius-lg)] border border-border-default bg-bg-muted p-3">
-            <Text variant="caption">Tipo documento per l'analisi</Text>
+            <Text variant="caption">Tipo documento per l&apos;analisi</Text>
             <SelectDropdown
               className="mt-2"
               value={selectedDocumentType}

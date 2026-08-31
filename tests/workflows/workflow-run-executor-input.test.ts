@@ -95,7 +95,7 @@ test("WorkflowRunExecutorService formats templates from connected fields and rej
       ["template", { text: "Oggetto\n{{content}}" }],
     ]),
     incomingNodeKeys: new Map([["formatter", ["content", "template"]]]),
-    incomingFieldSourceKeys: new Map([["formatter", new Map([["content", ["content"]], ["template", ["template"]]])]]),
+    incomingFieldBindings: new Map([["formatter", new Map([["content", [{ sourceKey: "content", selectedOutputKey: null }]], ["template", [{ sourceKey: "template", selectedOutputKey: null }]]])]]),
   };
 
   const result = service.executeTemplateFormattingTool(context, {
@@ -105,7 +105,7 @@ test("WorkflowRunExecutorService formats templates from connected fields and rej
   assert.equal(result.formatted_text, "Oggetto\ncontenuto collegato");
 
   assert.throws(
-    () => service.executeTemplateFormattingTool({ ...context, nodeOutputs: new Map(), incomingFieldSourceKeys: new Map() }, { node_key: "formatter", configuration: { template: "{{content}}" } }),
+    () => service.executeTemplateFormattingTool({ ...context, nodeOutputs: new Map(), incomingFieldBindings: new Map() }, { node_key: "formatter", configuration: { template: "{{content}}" } }),
     /Contenuto mancante/,
   );
 });
@@ -126,13 +126,20 @@ test("WorkflowRunExecutorService routes verify-and-route branches exclusively by
   const verifier = { id: "verify-id", node_key: "verify", module_tool: { handler_key: "workflow_logic.verify_and_route" } };
   const context = {
     inputPayload: {},
-    nodeOutputs: new Map([["amount", { text: "150" }]]),
+    nodeOutputs: new Map([["amount", {
+      published_outputs: [
+        { key: "amount", label: "Importo offerta", kind: "data", value: 150 },
+        { key: "text", label: "Nota", kind: "text", value: "150 euro" },
+      ],
+    }]]),
     incomingNodeKeys: new Map([["verify", ["amount"]]]),
-    incomingFieldSourceKeys: new Map([["verify", new Map([["rule_0", ["amount"]]])]]),
+    incomingFieldBindings: new Map([["verify", new Map([["rule_0", [{ sourceKey: "amount", selectedOutputKey: "amount" }]]])]]),
     workflowNodesByKey: new Map([["verify", verifier]]),
   };
-  const result = service.executeVerifyAndRouteTool(context, { node_key: "verify", configuration: { rules: [{ operator: "greater_than", value: "100" }] } });
+  const result = service.executeVerifyAndRouteTool(context, { node_key: "verify", configuration: { rules: [{ label: "Importo offerta", operator: "greater_than", value: "100" }] } });
   assert.equal(result.valid, true);
+  assert.deepEqual(result.checked_fields, [{ key: "field_1", label: "Importo offerta", value: 150 }]);
+  assert.deepEqual(result.published_outputs, [{ key: "field_1", label: "Importo offerta", kind: "data", value: 150 }]);
 
   context.nodeOutputs.set("verify", result);
   const edges = [
@@ -169,7 +176,7 @@ test("WorkflowRunExecutorService creates a decision request with the workflow co
     inputPayload: {},
     nodeOutputs: new Map([["verify", { status: "attention_required", valid: false }]]),
     incomingNodeKeys: new Map([["decision", ["verify"]]]),
-    incomingFieldSourceKeys: new Map(),
+    incomingFieldBindings: new Map(),
   };
 
   await assert.rejects(

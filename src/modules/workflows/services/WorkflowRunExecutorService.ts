@@ -67,7 +67,7 @@ interface StepExecutionContext {
   inputPayload: Record<string, unknown> | null;
   nodeOutputs: Map<string, unknown>;
   incomingNodeKeys: Map<string, string[]>;
-  incomingFieldSourceKeys: Map<string, Map<string, string[]>>;
+  incomingFieldBindings: Map<string, Map<string, IncomingFieldBinding[]>>;
   outgoingNodeKeys: Map<string, string[]>;
   workflowNodesByKey: Map<string, WorkflowNodeRow>;
   scheduledTargetNodeKeys: Set<string>;
@@ -85,6 +85,11 @@ interface IncomingNodeOutputs {
   byNodeKey: Record<string, Record<string, unknown>>;
   byTargetHandle: Record<string, Record<string, unknown>>;
   items: Array<Record<string, unknown>>;
+}
+
+interface IncomingFieldBinding {
+  sourceKey: string;
+  selectedOutputKey: string | null;
 }
 
 type PublishedOutputKind = "text" | "file" | "image" | "delivery_status" | "data";
@@ -315,7 +320,7 @@ export class WorkflowRunExecutorService {
       })),
     });
     context.incomingNodeKeys = this.graphPlanner.buildIncomingNodeKeyMap(run.workflow.nodes, run.workflow.edges, includeForOrdering);
-    context.incomingFieldSourceKeys = this.buildIncomingFieldSourceKeyMap(run.workflow.nodes, run.workflow.edges, includeForOrdering);
+    context.incomingFieldBindings = this.buildIncomingFieldBindingMap(run.workflow.nodes, run.workflow.edges, includeForOrdering);
     context.outgoingNodeKeys = this.buildOutgoingNodeKeyMap(run.workflow.nodes, run.workflow.edges, includeForOrdering);
     context.workflowNodesByKey = new Map(run.workflow.nodes.map((node) => [node.node_key, node]));
     this.ensureScheduleConnectionsAreSupported(context);
@@ -581,7 +586,7 @@ export class WorkflowRunExecutorService {
       inputPayload: (row.input_payload ?? null) as Record<string, unknown> | null,
       nodeOutputs: new Map<string, unknown>(),
       incomingNodeKeys: new Map<string, string[]>(),
-      incomingFieldSourceKeys: new Map<string, Map<string, string[]>>(),
+      incomingFieldBindings: new Map<string, Map<string, IncomingFieldBinding[]>>(),
       outgoingNodeKeys: new Map<string, string[]>(),
       workflowNodesByKey: new Map<string, WorkflowNodeRow>(),
       scheduledTargetNodeKeys: new Set<string>(),
@@ -616,7 +621,7 @@ export class WorkflowRunExecutorService {
     return outgoing;
   }
 
-  private buildIncomingFieldSourceKeyMap(
+  private buildIncomingFieldBindingMap(
     nodes: WorkflowNodeRow[],
     edges: Array<{
       source_node_id: string;
@@ -626,9 +631,9 @@ export class WorkflowRunExecutorService {
       is_enabled: boolean;
     }>,
     evaluateCondition: (payload: unknown) => boolean,
-  ): Map<string, Map<string, string[]>> {
+  ): Map<string, Map<string, IncomingFieldBinding[]>> {
     const keyById = new Map(nodes.map((node) => [node.id, node.node_key]));
-    const incoming = new Map<string, Map<string, string[]>>();
+    const incoming = new Map<string, Map<string, IncomingFieldBinding[]>>();
     for (const edge of edges) {
       if (!edge.is_enabled || !evaluateCondition(edge.condition_payload)) continue;
       const sourceKey = keyById.get(edge.source_node_id);
@@ -636,10 +641,12 @@ export class WorkflowRunExecutorService {
       if (!sourceKey || !targetKey || !edge.target_handle?.startsWith("field:")) continue;
       const field = edge.target_handle.slice("field:".length);
       if (!field) continue;
-      const byField = incoming.get(targetKey) ?? new Map<string, string[]>();
-      const sources = byField.get(field) ?? [];
-      sources.push(sourceKey);
-      byField.set(field, sources);
+      const byField = incoming.get(targetKey) ?? new Map<string, IncomingFieldBinding[]>();
+      const bindings = byField.get(field) ?? [];
+      const condition = this.toRecord(edge.condition_payload);
+      const selectedOutputKey = this.firstString(condition.selected_output_key, condition.selectedOutputKey) || null;
+      bindings.push({ sourceKey, selectedOutputKey });
+      byField.set(field, bindings);
       incoming.set(targetKey, byField);
     }
     return incoming;
@@ -1750,11 +1757,16 @@ export class WorkflowRunExecutorService {
   private executeVerifyAndRouteTool(context: StepExecutionContext, node: WorkflowNodeRow): Record<string, unknown> {
     const configuration = this.toRecord(node.configuration);
     const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
-    const variables = Object.fromEntries(
-      Object.entries(incomingOutputs.byTargetHandle)
-        .filter(([handle]) => /^rule_\d+$/.test(handle))
-        .map(([handle, value]) => [String(Number(handle.slice("rule_".length)) + 1), this.resolveVerificationValue(value)]),
-    );
+    const configuredRules = Array.isArray(configuration.rules) ? configuration.rules : [];
+    const checkedFields = configuredRules.map((rawRule, index) => {
+      const rule = this.toRecord(rawRule);
+      return {
+        key: `field_${index + 1}`,
+        label: this.firstString(rule.label, rule.name) || `Valore ${index + 1}`,
+        value: this.resolveVerificationValue(this.toRecord(incomingOutputs.byTargetHandle[`rule_${index}`])),
+      };
+    });
+    const variables = Object.fromEntries(checkedFields.map((field, index) => [String(index + 1), field.value]));
     const source = {
       input: context.inputPayload ?? {},
       previous: this.toRecord(this.findLatestNodeOutput(context)),
@@ -1769,14 +1781,19 @@ export class WorkflowRunExecutorService {
         documentId: context.documentId,
       },
     };
-    const configuredRules = Array.isArray(configuration.rules) ? configuration.rules : [];
     const rules = configuredRules.map((rule, index) => ({ ...this.toRecord(rule), path: `var.${index + 1}` }));
     const result = this.ruleEngine.evaluate(rules, source);
     return {
       status: result.valid ? "valid" : "attention_required",
       valid: result.valid,
       violations: result.violations,
-      checked: source,
+      checked_fields: checkedFields,
+      published_outputs: checkedFields.map((field) => ({
+        key: field.key,
+        label: field.label,
+        kind: "data",
+        value: field.value,
+      })),
     };
   }
 
@@ -2058,10 +2075,26 @@ export class WorkflowRunExecutorService {
       return [{ key: "image", label: "Immagine prodotta", kind: "image", value: imageUrl }];
     }
 
+    const structuredData = output.structured_data ?? unwrapped.structured_data;
+    if (structuredData && typeof structuredData === "object") {
+      const rawText = this.firstString(output.raw_output, unwrapped.raw_output);
+      return [
+        { key: "structured_data", label: "Dati estratti", kind: "data", value: structuredData },
+        ...(rawText ? [{ key: "text", label: "Testo elaborato", kind: "text" as const, value: rawText }] : []),
+      ];
+    }
+
     const text = this.firstString(
       output.reply, output.text, output.raw_output, output.extracted_text, output.summary,
       unwrapped.reply, unwrapped.text, unwrapped.raw_output, unwrapped.extracted_text, unwrapped.summary,
     );
+    const subject = this.firstString(output.subject, unwrapped.subject);
+    if (subject && text) {
+      return [
+        { key: "subject", label: "Oggetto email", kind: "text", value: subject },
+        { key: "text", label: this.textOutputLabel(node), kind: "text", value: text },
+      ];
+    }
     if (text) {
       return [{ key: "text", label: this.textOutputLabel(node), kind: "text", value: text }];
     }
@@ -2475,11 +2508,14 @@ export class WorkflowRunExecutorService {
       items.push(output);
     }
 
-    const fields = context.incomingFieldSourceKeys.get(nodeKey);
-    for (const [field, sourceKeysForField] of fields ?? []) {
-      const sourceKey = sourceKeysForField[sourceKeysForField.length - 1];
-      if (sourceKey) {
-        byTargetHandle[field] = this.normalizeNodeOutput(context.nodeOutputs.get(sourceKey));
+    const fields = context.incomingFieldBindings.get(nodeKey);
+    for (const [field, bindings] of fields ?? []) {
+      const binding = bindings[bindings.length - 1];
+      if (binding) {
+        const output = this.normalizeNodeOutput(context.nodeOutputs.get(binding.sourceKey));
+        byTargetHandle[field] = binding.selectedOutputKey
+          ? this.withSelectedPublishedOutput(output, binding.selectedOutputKey)
+          : output;
       }
     }
 
@@ -2495,6 +2531,17 @@ export class WorkflowRunExecutorService {
       };
     }
     return record;
+  }
+
+  private withSelectedPublishedOutput(output: Record<string, unknown>, outputKey: string): Record<string, unknown> {
+    const selected = this.collectPublishedOutputs([output]).find((item) => item.key === outputKey);
+    if (!selected) {
+      return output;
+    }
+    if (typeof selected.value === "string") {
+      return { ...output, selected_output: selected, text: selected.value, content: selected.value };
+    }
+    return { ...output, selected_output: selected };
   }
 
   private toRecord(value: unknown): Record<string, unknown> {
