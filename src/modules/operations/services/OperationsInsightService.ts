@@ -48,7 +48,7 @@ export class OperationsInsightService {
         },
       },
       orderBy: { queued_at: "desc" },
-      take: 3,
+      take: 5,
     });
 
     return runs.map((run) => ({
@@ -56,7 +56,9 @@ export class OperationsInsightService {
       workflowId: run.workflow_id,
       workflowKey: run.workflow.key,
       label: run.workflow.label,
-      status: run.status === "COMPLETED" && run.steps.some((step) => step.status === "SKIPPED") ? "FAILED" : run.status,
+      // Un ramo non selezionato da Verifica e instrada e' SKIPPED per progetto,
+      // non un errore della run. Gli errori reali hanno stato FAILED.
+      status: run.status,
       currentStepLabel: run.steps.find((step) => step.status === "RUNNING")?.workflow_node?.label ?? null,
       errorMessage: run.error_message,
       queuedAt: run.queued_at,

@@ -1960,14 +1960,6 @@ export function WorkflowCanvasPanel() {
           </label>
           <button
             type="button"
-            onClick={handleDeleteSelected}
-            className="flex items-center gap-1.5 rounded-md border border-border-default bg-bg-page px-3 py-1.5 text-sm font-medium text-status-danger-text hover:bg-bg-muted"
-          >
-            <Trash2 className="h-4 w-4" />
-            {t("workflow.deleteSelected")}
-          </button>
-          <button
-            type="button"
             onClick={handleUndo}
             disabled={past.length === 0}
             className="flex items-center gap-1.5 rounded-md border border-border-default bg-bg-page px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-muted disabled:opacity-40"

@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ChevronLeft, ChevronRight, FolderKanban, GitBranch, Settings, UserRound, Users } from "lucide-react";
+import { Archive, FolderKanban, GitBranch, Settings, UserRound, Users } from "lucide-react";
 import { useState } from "react";
 
 import { Card, Text } from "@/components/atoms";
@@ -19,6 +19,6 @@ const shortcuts = [
 export function WorkspaceDashboardPanel() {
   const { hasModule } = useModuleAccess();
   const [personalOpen, setPersonalOpen] = useState(false);
-  if (personalOpen) return <div className="relative"><button type="button" title="Torna alla dashboard" onClick={() => setPersonalOpen(false)} className="fixed right-0 top-1/2 z-20 flex h-12 w-10 -translate-y-1/2 items-center justify-center rounded-l-md border border-r-0 border-border-default bg-bg-surface text-text-secondary hover:bg-bg-muted"><UserRound size={18} /></button><PersonalDashboardPanel showInterventions={false} /></div>;
-  return <div className="relative space-y-6"><button type="button" title="Impostazioni personali" onClick={() => setPersonalOpen(true)} className="fixed right-0 top-1/2 z-20 flex h-12 w-10 -translate-y-1/2 items-center justify-center rounded-l-md border border-r-0 border-border-default bg-bg-surface text-text-secondary hover:bg-bg-muted"><Settings size={18} /><ChevronRight className="sr-only" /></button><header><Text as="h1" variant="h1">Dashboard</Text><Text variant="muted">Interventi e strumenti disponibili nel workspace.</Text></header><HumanInterventionsPanel /><section><Text as="h2" variant="h2">Accessi rapidi</Text><div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{shortcuts.filter((item) => hasModule(item.key)).map((item) => <a key={item.label} href={item.href} className="flex min-h-24 items-center gap-3 rounded-md border border-border-default bg-bg-surface p-4 hover:border-brand-primary"><item.icon size={20} className="text-brand-primary" /><span className="font-semibold text-text-primary">{item.label}</span></a>)}</div></section></div>;
+  if (personalOpen) return <PersonalDashboardPanel showInterventions={false} onReturnToPrivateArea={() => setPersonalOpen(false)} />;
+  return <div className="space-y-6"><header className="flex items-center justify-between gap-3"><Text as="h1" variant="h1">Area privata</Text><button type="button" title="Impostazioni" onClick={() => setPersonalOpen(true)} className="rounded-md p-2 text-text-muted hover:bg-bg-muted hover:text-text-primary"><Settings size={19} /></button></header><HumanInterventionsPanel /><section><Text as="h2" variant="h2">Accessi rapidi</Text><div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{shortcuts.filter((item) => hasModule(item.key)).map((item) => <a key={item.label} href={item.href} className="flex min-h-24 items-center gap-3 rounded-md border border-border-default bg-bg-surface p-4 hover:border-brand-primary"><item.icon size={20} className="text-brand-primary" /><span className="font-semibold text-text-primary">{item.label}</span></a>)}</div></section></div>;
 }

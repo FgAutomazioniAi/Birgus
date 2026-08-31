@@ -124,7 +124,7 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
         }
         const payload = await response.json() as { operations?: QueuedOperation[] };
         if (active) {
-          setOperations(Array.isArray(payload.operations) ? payload.operations.slice(0, 3) : []);
+          setOperations(Array.isArray(payload.operations) ? payload.operations.slice(0, 5) : []);
         }
       } catch {
         // The header must remain quiet if the operation feed is temporarily unavailable.
@@ -220,10 +220,11 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
     if (status === "RUNNING") return "text-brand-primary";
     return "text-text-muted";
   };
+  const operationTime = (operation: QueuedOperation) => new Date(operation.startedAt ?? operation.queuedAt).toLocaleTimeString(language === "it" ? "it-IT" : "en-GB", { hour: "2-digit", minute: "2-digit" });
 
   return (
     <header className="sticky top-0 z-30 h-16 border-b border-border-default bg-bg-surface">
-      <div className="flex h-full items-center justify-between px-4 lg:px-8">
+      <div className="flex h-full items-center justify-between px-4 lg:px-4">
         <div className="flex items-center gap-4">
           <IconButton onClick={onMenuClick} className="lg:hidden">
             <Menu size={24} />
@@ -244,19 +245,19 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
 
         <div className="flex items-center gap-2 lg:gap-4">
           {operations.length > 0 ? (
-            <div className="hidden h-9 items-stretch gap-1 border-r border-border-default pr-4 2xl:flex" aria-label={t("operations.queue.title")}>
+            <div className="hidden h-9 items-stretch gap-1 2xl:flex" aria-label={t("operations.queue.title")}>
               {operations.map((operation) => (
                 <button
                   key={operation.id}
                   type="button"
                   title={operation.label}
                   onClick={() => handleOpenOperation(operation)}
-                  className="flex w-36 min-w-0 items-center gap-2 border border-border-subtle bg-bg-page px-2 text-left transition-colors hover:border-brand-primary hover:bg-bg-muted"
+                  className="flex w-40 min-w-0 items-center gap-2 border border-border-subtle bg-bg-page px-2 text-left transition-colors hover:border-brand-primary hover:bg-bg-muted"
                 >
                   <span className={`h-2 w-2 shrink-0 rounded-full ${operation.status === "COMPLETED" ? "bg-status-success-text" : operation.status === "FAILED" || operation.status === "CANCELED" ? "bg-status-danger-text" : operation.status === "RUNNING" ? "bg-brand-primary" : "bg-text-muted"}`} />
                   <div className="min-w-0 leading-tight">
                     <p className="truncate text-[11px] font-semibold text-text-primary">{operation.label}</p>
-                    <p className={`truncate text-[10px] font-semibold ${operationStatusClass(operation.status)}`}>{operationStatus(operation.status)}</p>
+                    <p className={`truncate text-[10px] font-semibold ${operationStatusClass(operation.status)}`}>{operationTime(operation)} · {operationStatus(operation.status)}</p>
                   </div>
                 </button>
               ))}

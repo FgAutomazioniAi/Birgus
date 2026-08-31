@@ -49,7 +49,7 @@ interface ConnectedAppsResponse {
   }>;
 }
 
-export function PersonalDashboardPanel({ showInterventions = true }: { showInterventions?: boolean }) {
+export function PersonalDashboardPanel({ showInterventions = true, onReturnToPrivateArea }: { showInterventions?: boolean; onReturnToPrivateArea?: () => void }) {
   const { language, t } = useLanguage();
   const { options: themeOptions, theme, setTheme } = useTheme();
   const { enabled: notificationPopupsEnabled, position: toastPosition, setEnabled: setNotificationPopupsEnabled, setPosition: setToastPosition } = useToasterPreferences();
@@ -225,10 +225,7 @@ export function PersonalDashboardPanel({ showInterventions = true }: { showInter
 
   return (
     <div className="w-full space-y-4">
-      <div>
-        <div className="flex items-center gap-2"><Text as="h1" variant="h1">{t("account.title")}</Text><PageHelpHint text={t("account.help")} /></div>
-        <Text variant="muted">{t("account.subtitle")}</Text>
-      </div>
+      <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Text as="h1" variant="h1">Impostazioni</Text><PageHelpHint text={t("account.help")} /></div>{onReturnToPrivateArea ? <button type="button" title="Area privata" onClick={onReturnToPrivateArea} className="rounded-md p-2 text-text-muted hover:bg-bg-muted hover:text-text-primary"><UserRound size={19} /></button> : null}</div>
 
       {showInterventions && hasModule("workflow_management") ? <HumanInterventionsPanel /> : null}
 
