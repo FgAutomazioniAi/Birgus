@@ -108,7 +108,7 @@ export type CanvasNodeData = {
   required: boolean;
   enabled: boolean;
   subtitle: string;
-  paletteKind: PaletteKind | "INPUT" | "OUTPUT" | "REPORT";
+  paletteKind: PaletteKind | "INPUT" | "OUTPUT" | "REPORT" | "BRAINYWARE";
   configuration: Record<string, unknown>;
   incomingTargetHandles: string[];
   incomingFieldLabels: Record<string, string>;
@@ -124,8 +124,6 @@ export type ModuleCard = {
   title: string;
   description: string;
   workflow: WorkflowSummary | null;
-  agentsCount: number;
-  toolsCount: number;
   isPlayground: boolean;
 };
 
@@ -302,6 +300,7 @@ export const TOOLBAR_GROUPS: Array<{ id: string; title: string; titleEn: string;
   { id: "agents", title: "Agenti", titleEn: "Agents", category: "AGENT", items: ["llm", "structure-data", "compose-email", "format-text-ai"] },
   { id: "tools", title: "Strumenti", titleEn: "Tools", category: "TOOL", items: ["ocr", "document-set-ai", "generate-document", "format-text-template", "verify-route", "request-decision"] },
   { id: "report", title: "Resoconto", titleEn: "Report", category: "REPORT", items: ["schedule", "send-email", "send-telegram", "send-whatsapp"] },
+  { id: "brainyware", title: "Brainyware", titleEn: "Brainyware", category: "BRAINYWARE", items: [] },
 ];
 
 export const NODE_CATEGORY_BORDER: Record<CanvasNodeData["paletteKind"], string> = {
@@ -310,6 +309,7 @@ export const NODE_CATEGORY_BORDER: Record<CanvasNodeData["paletteKind"], string>
   TOOL: "border-status-warn-text",
   OUTPUT: "border-status-success-text",
   REPORT: "border-status-danger-text",
+  BRAINYWARE: "border-fuchsia-500",
 };
 
 export const NODE_CATEGORY_TAB_ACTIVE: Record<CanvasNodeData["paletteKind"], string> = {
@@ -318,6 +318,7 @@ export const NODE_CATEGORY_TAB_ACTIVE: Record<CanvasNodeData["paletteKind"], str
   AGENT: "border-status-progress-text bg-status-progress-bg text-status-progress-text",
   TOOL: "border-status-warn-text bg-status-warn-bg text-status-warn-text",
   REPORT: "border-status-danger-text bg-status-danger-bg text-status-danger-text",
+  BRAINYWARE: "border-fuchsia-500 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300",
 };
 
 export const NODE_CATEGORY_BADGE_TONE: Record<CanvasNodeData["paletteKind"], "info" | "success" | "warn" | "progress" | "danger"> = {
@@ -326,6 +327,7 @@ export const NODE_CATEGORY_BADGE_TONE: Record<CanvasNodeData["paletteKind"], "in
   AGENT: "progress",
   TOOL: "warn",
   REPORT: "danger",
+  BRAINYWARE: "progress",
 };
 
 export const textareaClassName = "min-h-32 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-muted p-3 text-sm text-text-secondary focus-visible:border-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary";
@@ -361,8 +363,6 @@ export function buildModuleCards(
       description: (language === "en" ? moduleDescriptionsEn : moduleDescriptions)[moduleKey]
         ?? (language === "en" ? "Configurable modular workflow." : "Workflow modulare configurabile."),
       workflow,
-      agentsCount: agents.filter((agent) => agent.moduleKey === moduleKey).length,
-      toolsCount: tools.filter((tool) => tool.moduleKey === moduleKey).length,
       isPlayground: false,
     };
   });

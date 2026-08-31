@@ -18,6 +18,7 @@ import { WorkflowRuntimeAccessPolicy } from "../../modules/workflows/services/Wo
 import { HumanInterventionService } from "../../modules/workflows/services/HumanInterventionService.js";
 import { ModuleAccessPolicy } from "../../core/module-access/ModuleAccessPolicy.js";
 import { WorkflowService } from "../../modules/workflows/services/WorkflowService.js";
+import { WorkflowTransferService } from "../../modules/workflows/services/WorkflowTransferService.js";
 import { JobQueue } from "../../worker/queue/JobQueue.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { JOB_QUEUE } from "../common/tokens.js";
@@ -60,6 +61,12 @@ import { NestWorkflowsController } from "./workflows.controller.js";
         runDispatcher,
       ),
       inject: [PrismaWorkflowRepository, QueueWorkflowRunDispatcher],
+    },
+    {
+      provide: WorkflowTransferService,
+      useFactory: (workflowService: WorkflowService, moduleAccessPolicy: ModuleAccessPolicy) =>
+        new WorkflowTransferService(workflowService, moduleAccessPolicy),
+      inject: [WorkflowService, ModuleAccessPolicy],
     },
     {
       provide: ScheduledWorkflowDeliveryService,

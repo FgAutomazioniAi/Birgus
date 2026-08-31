@@ -6,6 +6,7 @@ import { AppError } from "../../core/errors/AppError.js";
 import { ModuleKey } from "../../core/module-access/ModuleKey.js";
 import { RequestContext } from "../../core/tenancy/RequestContext.js";
 import { WorkflowService } from "../../modules/workflows/services/WorkflowService.js";
+import { WORKFLOW_TRANSFER_FORMAT, WORKFLOW_TRANSFER_VERSION, WorkflowTransferService, type WorkflowTransferDocument } from "../../modules/workflows/services/WorkflowTransferService.js";
 import { WorkflowRunExecutorService } from "../../modules/workflows/services/WorkflowRunExecutorService.js";
 import { HumanInterventionService } from "../../modules/workflows/services/HumanInterventionService.js";
 import { jsonObjectSchema, jsonValueSchema } from "../../shared/validation/json.js";
@@ -86,6 +87,70 @@ const updateWorkflowSchema = createWorkflowSchema.partial().extend({
   edges: z.array(workflowEdgeSchema).optional(),
 });
 
+const workflowResourceReferenceSchema = z.object({
+  moduleKey: z.string().min(1),
+  key: z.string().min(1),
+});
+
+const workflowTransferNodeSchema = z.object({
+  nodeKey: z.string().min(1),
+  nodeKind: z.enum(["INPUT", "AGENT", "TOOL", "OUTPUT"]),
+  label: z.string().min(1),
+  positionX: z.number(),
+  positionY: z.number(),
+  inputKind: z.string().nullable().optional(),
+  outputKind: z.string().nullable().optional(),
+  configuration: jsonObjectSchema.nullable().optional(),
+  inputSchema: jsonObjectSchema.nullable().optional(),
+  outputSchema: jsonObjectSchema.nullable().optional(),
+  isEnabled: z.boolean().default(true),
+  isRequired: z.boolean().default(false),
+  agent: workflowResourceReferenceSchema.optional(),
+  tool: workflowResourceReferenceSchema.optional(),
+}).superRefine((node, ctx) => {
+  if (node.nodeKind === "AGENT" && !node.agent) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["agent"], message: "agent is required for AGENT nodes." });
+  }
+  if (node.nodeKind === "TOOL" && !node.tool) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["tool"], message: "tool is required for TOOL nodes." });
+  }
+  if (node.nodeKind !== "AGENT" && node.agent) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["agent"], message: "agent is only valid for AGENT nodes." });
+  }
+  if (node.nodeKind !== "TOOL" && node.tool) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["tool"], message: "tool is only valid for TOOL nodes." });
+  }
+});
+
+const workflowTransferSchema = z.object({
+  format: z.literal(WORKFLOW_TRANSFER_FORMAT),
+  version: z.literal(WORKFLOW_TRANSFER_VERSION),
+  exportedAt: z.string().datetime(),
+  workflow: z.object({
+    moduleKey: z.string().min(1),
+    key: z.string().min(1),
+    name: z.string().min(1),
+    label: z.string().min(1),
+    description: z.string().nullable(),
+    configuration: jsonObjectSchema.nullable(),
+    nodes: z.array(workflowTransferNodeSchema).min(1),
+    edges: z.array(workflowEdgeSchema.omit({ id: true })),
+  }),
+}).superRefine((document, ctx) => {
+  const nodeKeys = new Set<string>();
+  for (const [index, node] of document.workflow.nodes.entries()) {
+    if (nodeKeys.has(node.nodeKey)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["workflow", "nodes", index, "nodeKey"], message: "nodeKey must be unique." });
+    }
+    nodeKeys.add(node.nodeKey);
+  }
+  for (const [index, edge] of document.workflow.edges.entries()) {
+    if (!nodeKeys.has(edge.sourceNodeKey) || !nodeKeys.has(edge.targetNodeKey)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["workflow", "edges", index], message: "edge references an unknown node." });
+    }
+  }
+});
+
 type WorkflowRunJsonValue = string | number | boolean | null | WorkflowRunJsonValue[] | { [key: string]: WorkflowRunJsonValue };
 
 const workflowRunJsonValueSchema: z.ZodType<WorkflowRunJsonValue> = z.lazy(() =>
@@ -129,6 +194,8 @@ export class NestWorkflowsController {
     private readonly humanInterventionService: HumanInterventionService,
     @Inject(WorkflowRunExecutorService)
     private readonly workflowRunExecutorService: WorkflowRunExecutorService,
+    @Inject(WorkflowTransferService)
+    private readonly workflowTransferService: WorkflowTransferService,
   ) {}
 
   @Get("workflow-interventions")
@@ -338,6 +405,34 @@ export class NestWorkflowsController {
       }),
     });
 
+    return this.serializeWorkflow(saved);
+  }
+
+  @Get("workflows/:workflowId/export")
+  @RequirePermission(PermissionKey.WORKFLOWS_CONFIGURE)
+  public async exportWorkflow(
+    @Param("workflowId") workflowIdRaw: string,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<WorkflowTransferDocument> {
+    return this.workflowTransferService.exportWorkflow(
+      requestContext.workspace.workspaceId,
+      this.getPathId(workflowIdRaw, "workflowId"),
+    );
+  }
+
+  @Post("workflows/import")
+  @HttpCode(201)
+  @RequirePermission(PermissionKey.WORKFLOWS_CONFIGURE)
+  public async importWorkflow(
+    @Body() bodyRaw: unknown,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const document = workflowTransferSchema.parse(bodyRaw) as WorkflowTransferDocument;
+    const saved = await this.workflowTransferService.importWorkflow({
+      workspaceId: requestContext.workspace.workspaceId,
+      actorUserId: requestContext.workspace.userId,
+      document,
+    });
     return this.serializeWorkflow(saved);
   }
 

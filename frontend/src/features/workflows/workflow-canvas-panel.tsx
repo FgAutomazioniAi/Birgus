@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import {
   Background,
   Controls,
@@ -27,6 +27,7 @@ import {
   Check,
   ChevronDown,
   Copy,
+  Download,
   GitBranch,
   LayoutGrid,
   Pencil,
@@ -739,6 +740,7 @@ export function WorkflowCanvasPanel() {
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node<CanvasNodeData>>([]);
   const [edges, setEdges, onEdgesChangeBase] = useEdgesState<Edge>([]);
   const openedRunReference = useRef<string | null>(null);
+  const workflowImportInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedNode = useMemo(
     () => draftNodes.find((item) => item.clientId === selectedNodeId) ?? null,
@@ -774,11 +776,9 @@ export function WorkflowCanvasPanel() {
         ? "A free area to build and test workflows without adding workflows to modules."
         : "Area libera per costruire e provare workflow senza aumentare i workflow dei moduli.",
       workflow: playground,
-      agentsCount: agents.length + tools.filter(isAgentTool).length,
-      toolsCount: tools.filter((tool) => !isAgentTool(tool)).length,
       isPlayground: true,
     };
-  }, [agents.length, language, tools, workflows]);
+  }, [language, workflows]);
   const nodeLabelByKey = useMemo(() => new Map(draftNodes.map((node) => [node.nodeKey, cleanWorkflowLabel(node.label)])), [draftNodes]);
   const incomingHandlesByTargetId = useMemo(() => {
     const handles = new Map<string, string[]>();
@@ -1601,6 +1601,52 @@ export function WorkflowCanvasPanel() {
     }
   };
 
+  const exportWorkflow = async () => {
+    if (!workflow) return;
+    try {
+      const response = await fetch(`/api/workflows/${workflow.id}/export`, { cache: "no-store" });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(typeof payload?.message === "string" ? payload.message : t("workflow.exportFailed"));
+      }
+      const document = await response.json();
+      const blob = new Blob([JSON.stringify(document, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = window.document.createElement("a");
+      link.href = url;
+      link.download = `${workflow.key || "workflow"}.birgus-workflow.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success(t("workflow.exported"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("workflow.exportFailed"));
+    }
+  };
+
+  const importWorkflow = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const document = JSON.parse(await file.text());
+      const response = await fetch("/api/workflows/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(document),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(typeof payload?.message === "string" ? payload.message : t("workflow.importFailed"));
+      }
+      const imported = await response.json() as WorkflowDetail;
+      await loadCatalog();
+      await loadWorkflow(imported.id);
+      toast.success(t("workflow.imported"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("workflow.importFailed"));
+    }
+  };
+
   const runWorkflow = async () => {
     if (!workflow) {
       return;
@@ -1822,10 +1868,6 @@ export function WorkflowCanvasPanel() {
                   </div>
                   <p className="mt-4 text-base font-bold text-text-primary">{card.title}</p>
                   <p className="mt-2 min-h-10 text-sm text-text-muted">{card.description}</p>
-                  <div className="mt-4 flex gap-2 text-xs text-text-muted">
-                    <span>{t("workflow.agentCount", { count: card.agentsCount })}</span>
-                    <span>{t("workflow.toolCount", { count: card.toolsCount })}</span>
-                  </div>
                 </button>
               ))}
             </div>
@@ -1848,7 +1890,7 @@ export function WorkflowCanvasPanel() {
             </Button>
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <div className="min-h-32 border border-border-default bg-bg-surface p-4 shadow-card transition hover:border-brand-primary">
+            <div className="min-h-32 rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-4 shadow-card transition hover:border-brand-primary">
               <div className="flex items-start justify-between gap-3">
                 <button
                   type="button"
@@ -1869,7 +1911,7 @@ export function WorkflowCanvasPanel() {
               </div>
             </div>
             {personalWorkflows.map((item) => (
-              <div key={item.id} className="min-h-32 border border-border-default bg-bg-surface p-4 shadow-card transition hover:border-brand-primary">
+              <div key={item.id} className="min-h-32 rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-4 shadow-card transition hover:border-brand-primary">
                 <div className="flex items-start justify-between gap-3">
                   <button type="button" onClick={() => void loadWorkflow(item.id)} className="min-w-0 flex-1 text-left">
                     <Sparkles className="h-5 w-5 text-brand-primary" />
@@ -1927,7 +1969,8 @@ export function WorkflowCanvasPanel() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] min-h-[640px] flex-col overflow-hidden">
+      <div className="flex h-[calc(100vh-8rem)] min-h-[640px] flex-col overflow-hidden">
+      <input ref={workflowImportInputRef} type="file" accept="application/json,.json,.birgus-workflow.json" className="hidden" onChange={(event) => void importWorkflow(event)} />
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-default bg-bg-surface px-6 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <button
@@ -1981,6 +2024,23 @@ export function WorkflowCanvasPanel() {
           </button>
           <button
             type="button"
+            onClick={() => workflowImportInputRef.current?.click()}
+            className="flex items-center gap-1.5 rounded-md border border-border-default bg-bg-page px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-muted"
+          >
+            <Upload className="h-4 w-4" />
+            {t("workflow.import")}
+          </button>
+          <button
+            type="button"
+            onClick={() => void exportWorkflow()}
+            disabled={!workflow}
+            className="flex items-center gap-1.5 rounded-md border border-border-default bg-bg-page px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-muted disabled:opacity-40"
+          >
+            <Download className="h-4 w-4" />
+            {t("workflow.export")}
+          </button>
+          <button
+            type="button"
             onClick={runWorkflow}
             disabled={!workflow || isRunning || isSaving}
             className="flex items-center gap-1.5 rounded-md border border-status-success-text bg-status-success-bg px-3 py-1.5 text-sm font-medium text-status-success-text hover:opacity-80 disabled:opacity-60"
@@ -2005,6 +2065,7 @@ export function WorkflowCanvasPanel() {
           {TOOLBAR_GROUPS.map((group) => {
             const isActive = activeToolbarGroup.id === group.id;
             const groupLabel = language === "en" ? group.titleEn : group.title;
+            const isBrainyware = group.id === "brainyware";
             return (
               <button
                 key={group.id}
@@ -2017,8 +2078,11 @@ export function WorkflowCanvasPanel() {
                   isActive ? NODE_CATEGORY_TAB_ACTIVE[group.category] : "border-transparent text-text-muted hover:bg-bg-muted hover:text-text-primary",
                 )}
               >
+                {isBrainyware ? <img src="/brainyware-logo.png" alt="" className="h-5 w-5 rounded-sm object-cover object-top" /> : null}
                 <span>{groupLabel}</span>
-                <Badge tone={NODE_CATEGORY_BADGE_TONE[group.category]}>{group.items.length}</Badge>
+                {isBrainyware ? (
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-amber-400 via-red-500 via-purple-600 to-blue-500 px-1.5 py-0.5 text-xs font-bold text-white shadow-sm">{group.items.length}</span>
+                ) : <Badge tone={NODE_CATEGORY_BADGE_TONE[group.category]}>{group.items.length}</Badge>}
               </button>
             );
           })}
@@ -2027,7 +2091,12 @@ export function WorkflowCanvasPanel() {
 
       <div className="border-b border-border-default bg-bg-surface px-6 py-3" role="tabpanel">
         <div className="flex h-[66px] items-stretch gap-2 overflow-hidden">
-          {featuredToolbarItems.map((kind) => {
+          {activeToolbarGroup.id === "brainyware" ? (
+            <div className="flex min-w-0 flex-1 items-center gap-3 rounded-md border border-dashed border-fuchsia-400/70 bg-fuchsia-500/5 px-4 text-sm text-text-secondary">
+              <img src="/brainyware-logo.png" alt="Brainyware" className="h-10 w-10 shrink-0 rounded-md object-cover object-top" />
+              <span className="font-medium">{t("workflow.brainywareComingSoon")}</span>
+            </div>
+          ) : featuredToolbarItems.map((kind) => {
             const Icon = NODE_KIND_ICONS[kind];
             return (
               <PaletteButton
