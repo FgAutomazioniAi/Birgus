@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { IconButton } from "@/components/atoms";
-import { UserChip } from "@/components/molecules";
 import { useLanguage } from "@/components/organisms/language-provider";
 import { APP_ROUTES } from "@/lib/routes";
 
@@ -200,10 +199,6 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
     }
   };
 
-  const handleOpenPersonalDashboard = () => {
-    router.push(APP_ROUTES.personalDashboard);
-  };
-
   const handleOpenOperation = (operation: QueuedOperation) => {
     router.push(`${APP_ROUTES.workflows}?workflowId=${encodeURIComponent(operation.workflowId)}&runId=${encodeURIComponent(operation.id)}`);
   };
@@ -330,14 +325,9 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
                 )}
               </div>
 
-              <div className="mx-1 hidden h-8 w-px bg-border-default sm:block" />
             </>
           ) : null}
 
-          <button onClick={handleOpenPersonalDashboard} title={t("nav.personalDashboard")} className="relative">
-            <UserChip name={userName} />
-            {openInterventionsCount > 0 ? <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-bg-surface bg-status-danger-text px-1 text-[10px] font-bold text-text-inverse">{openInterventionsCount > 99 ? "99+" : openInterventionsCount}</span> : null}
-          </button>
         </div>
       </div>
     </header>

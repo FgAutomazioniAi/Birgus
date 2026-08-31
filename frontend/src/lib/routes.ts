@@ -1,7 +1,7 @@
 export const APP_ROUTES = {
   dashboard: "/",
   personalDashboard: "/home",
-  projects: "/",
+  projects: "/projects",
   projectNew: "/projects/new",
   projectVersions: (id: string) => `/projects/${id}`,
   projectEdit: (id: string) => `/projects/edit/${id}`,

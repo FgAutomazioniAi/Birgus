@@ -2,6 +2,7 @@
 
 import {
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Columns3,
   Eye,
@@ -376,6 +377,7 @@ export function DashboardTable() {
           <Plus size={20} />
           {t("projects.new")}
         </Button>
+        <button type="button" onClick={() => router.push(APP_ROUTES.personalDashboard)} title="Preferenze personali" aria-label="Preferenze personali" className="flex h-11 w-11 items-center justify-center rounded-md border border-border-default text-text-secondary hover:bg-bg-muted hover:text-text-primary"><ChevronRight size={20} /></button>
       </div>
 
       <HumanInterventionsPanel />

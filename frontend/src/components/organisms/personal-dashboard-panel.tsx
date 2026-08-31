@@ -1,6 +1,7 @@
 "use client";
 
-import { BellRing, Copy, Link2, Mail, Palette, Send, Trash2, UserRound } from "lucide-react";
+import { ArrowLeft, BellRing, Copy, Link2, Mail, Palette, Send, Trash2, UserRound } from "lucide-react";
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -11,6 +12,7 @@ import { HumanInterventionsPanel } from "@/components/organisms/human-interventi
 import { useTheme } from "@/components/organisms/theme-provider";
 import { isToastPosition, toastPositionOptions, useToasterPreferences, type ToastPosition } from "@/components/organisms/toaster-provider";
 import { cn } from "@/lib/cn";
+import { APP_ROUTES } from "@/lib/routes";
 import { useModuleAccess } from "@/lib/module-access";
 import type { ThemeId } from "@/lib/themes";
 
@@ -47,7 +49,7 @@ interface ConnectedAppsResponse {
   }>;
 }
 
-export function PersonalDashboardPanel() {
+export function PersonalDashboardPanel({ showInterventions = true }: { showInterventions?: boolean }) {
   const { language, t } = useLanguage();
   const { options: themeOptions, theme, setTheme } = useTheme();
   const { enabled: notificationPopupsEnabled, position: toastPosition, setEnabled: setNotificationPopupsEnabled, setPosition: setToastPosition } = useToasterPreferences();
@@ -202,7 +204,7 @@ export function PersonalDashboardPanel() {
   if (isLoading) {
     return (
       <div className="w-full space-y-4">
-        <div className="flex items-center gap-2"><Text as="h1" variant="h1">{t("account.title")}</Text><PageHelpHint text={t("account.help")} /></div>
+        <div className="flex items-center gap-2"><Link href={APP_ROUTES.dashboard} title="Torna alla dashboard" className="rounded-md p-2 text-text-muted hover:bg-bg-muted hover:text-text-primary"><ArrowLeft size={18} /></Link><Text as="h1" variant="h1">{t("account.title")}</Text><PageHelpHint text={t("account.help")} /></div>
         <Card className="p-6">
           <Text variant="muted">{t("account.loading")}</Text>
         </Card>
@@ -228,7 +230,7 @@ export function PersonalDashboardPanel() {
         <Text variant="muted">{t("account.subtitle")}</Text>
       </div>
 
-      {hasModule("workflow_management") ? <HumanInterventionsPanel /> : null}
+      {showInterventions && hasModule("workflow_management") ? <HumanInterventionsPanel /> : null}
 
       <div className={cn("grid gap-4", canManageWorkflowChannels ? "xl:grid-cols-[minmax(360px,1.15fr)_minmax(330px,0.95fr)_minmax(280px,0.8fr)]" : "xl:grid-cols-[minmax(0,1.15fr)_minmax(330px,0.85fr)]")}>
       <Card className="space-y-3 p-4">

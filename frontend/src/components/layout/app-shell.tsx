@@ -33,6 +33,7 @@ export function AppShell({ children, currentUser }: AppShellProps) {
         collapsed={sidebarCollapsed}
         enabledModuleKeys={currentUser.enabledModuleKeys}
         isSuperadmin={currentUser.isSuperadmin}
+        userName={currentUser.nome}
         onClose={() => setSidebarOpen(false)}
       />
 
@@ -50,7 +51,7 @@ export function AppShell({ children, currentUser }: AppShellProps) {
         />
         <ModuleAccessProvider enabledModuleKeys={currentUser.enabledModuleKeys}>
           <div className="min-h-0 flex-1 overflow-auto p-4 lg:p-8">
-            <div className="mx-auto w-full max-w-[1600px]">{children}</div>
+            <div className="mx-auto w-full max-w-[1780px]">{children}</div>
           </div>
           <FloatingAssistant enabled={currentUser.enabledModuleKeys.includes("conversational_assistant")} />
         </ModuleAccessProvider>

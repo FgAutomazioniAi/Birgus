@@ -1,11 +1,12 @@
 "use client";
 
-import { Archive, CalendarDays, FileSearch, FolderKanban, GitBranch, LogOut, Map, Ruler, Settings, ShieldCheck, TrendingUp, Truck, Users, Wrench } from "lucide-react";
+import { Archive, CalendarDays, ChevronDown, FileSearch, FolderKanban, GitBranch, LogOut, Map, Ruler, Settings, ShieldCheck, TrendingUp, Truck, UserRound, Users, Wrench } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { IconButton } from "@/components/atoms";
-import { BirgusLogo, NavItem } from "@/components/molecules";
+import { NavItem } from "@/components/molecules";
 import { APP_ROUTES } from "@/lib/routes";
 import { useLanguage } from "@/components/organisms/language-provider";
 
@@ -21,10 +22,12 @@ const menuItems = [
   { icon: TrendingUp, label: "Priorita offerte", path: APP_ROUTES.offerPriority, moduleKey: "offer_priority" },
   { icon: Wrench, label: "Proposte manutenzione", path: APP_ROUTES.maintenanceProposals, moduleKey: "maintenance_proposals" },
   { icon: CalendarDays, label: "Calendario manutenzioni", path: APP_ROUTES.maintenanceCalendar, moduleKey: "maintenance_calendar" },
-  { icon: GitBranch, label: "Workflow", path: APP_ROUTES.workflows, moduleKey: "workflow_management" },
-  { icon: Archive, label: "Archivio", path: APP_ROUTES.archive, moduleKey: "document_archive" },
-  { icon: ShieldCheck, label: "Superadmin", path: APP_ROUTES.superadmin, moduleKey: "superadmin_center", superadminOnly: true },
-  { icon: Settings, label: "Impostazioni", path: APP_ROUTES.settings },
+];
+
+const folders = [
+  { label: "Anagrafica", icon: Users, items: ["Clienti", "Mappa clienti"] },
+  { label: "Operativita", icon: FolderKanban, items: ["Progetti", "Spedizioni", "DDT Reader", "Measure Report"] },
+  { label: "Pianificazione", icon: CalendarDays, items: ["Priorita offerte", "Proposte manutenzione", "Calendario manutenzioni"] },
 ];
 
 export interface SidebarProps {
@@ -33,17 +36,24 @@ export interface SidebarProps {
   isSuperadmin: boolean;
   onClose: () => void;
   open: boolean;
+  userName: string;
 }
 
-export function Sidebar({ collapsed, enabledModuleKeys, isSuperadmin, onClose, open }: SidebarProps) {
+export function Sidebar({ collapsed, enabledModuleKeys, isSuperadmin, onClose, open, userName }: SidebarProps) {
   const { t } = useLanguage();
   const pathname = usePathname();
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [openFolders, setOpenFolders] = useState<string[]>(["Anagrafica"]);
   const visibleMenuItems = menuItems.filter((item) =>
-    (!item.moduleKey || enabledModuleKeys.includes(item.moduleKey))
-    && (!item.superadminOnly || isSuperadmin),
+    !item.moduleKey || enabledModuleKeys.includes(item.moduleKey),
   );
+  const primaryItems = [
+    ...(isSuperadmin && enabledModuleKeys.includes("superadmin_center") ? [{ icon: ShieldCheck, label: "Superadmin", path: APP_ROUTES.superadmin }] : []),
+    ...(enabledModuleKeys.includes("workflow_management") ? [{ icon: GitBranch, label: "Workflow", path: APP_ROUTES.workflows }] : []),
+    ...(enabledModuleKeys.includes("document_archive") ? [{ icon: Archive, label: "Archivio", path: APP_ROUTES.archive }] : []),
+  ];
+  const isActive = (path: string) => path === APP_ROUTES.projects ? pathname === path || pathname.startsWith("/projects") : pathname === path || pathname.startsWith(`${path}/`);
 
   const handleLogout = async () => {
     if (isLoggingOut) {
@@ -73,47 +83,29 @@ export function Sidebar({ collapsed, enabledModuleKeys, isSuperadmin, onClose, o
         ].join(" ")}
       >
         <div className="flex h-full flex-col">
-          <div className={["flex items-center p-6", collapsed ? "lg:justify-center" : ""].join(" ")}>
+          <div className={["flex items-center p-4", collapsed ? "lg:justify-center" : ""].join(" ")}>
             {!collapsed ? (
-              <BirgusLogo className="h-12 w-auto max-w-[440px]" />
+              <Link href={APP_ROUTES.dashboard} onClick={onClose} className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-text-primary hover:bg-bg-subtle"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-primary text-text-inverse"><UserRound size={18} /></span><span className="min-w-0 truncate text-sm font-semibold">{userName}</span></Link>
             ) : (
-              <div className="hidden h-10 w-10 items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-bg-muted p-1 lg:flex">
-                <img src="/favicon.ico" alt="Logo compatto" className="h-8 w-8 object-contain" />
-              </div>
+              <Link href={APP_ROUTES.dashboard} onClick={onClose} title={userName} className="hidden h-10 w-10 items-center justify-center rounded-full bg-brand-primary text-text-inverse lg:flex"><UserRound size={18} /></Link>
             )}
           </div>
 
-          <nav className="flex-1 space-y-1 px-4">
-            {visibleMenuItems.map((item) => {
-              const isProjectsRoute = item.path === APP_ROUTES.projects;
-              const isActive = isProjectsRoute
-                ? pathname === APP_ROUTES.projects || pathname.startsWith("/projects")
-                : pathname === item.path || pathname.startsWith(`${item.path}/`);
-
-              return (
-                <NavItem
-                  key={item.label}
-                  href={item.path}
-                  icon={item.icon}
-                  isActive={isActive}
-                  label={item.label === "Progetti" ? t("nav.projects")
-                    : item.label === "Clienti" ? t("nav.clients")
-                      : item.label === "Spedizioni" ? t("nav.shipments")
-                        : item.label === "Mappa clienti" ? t("nav.customerMap")
-                          : item.label === "Priorita offerte" ? t("nav.offerPriority")
-                            : item.label === "Proposte manutenzione" ? t("nav.maintenanceProposals")
-                              : item.label === "Calendario manutenzioni" ? t("nav.maintenanceCalendar")
-                                : item.label === "Workflow" ? t("nav.workflows")
-                                  : item.label === "Archivio" ? t("nav.archive")
-                                    : item.label === "Impostazioni" ? t("nav.settings") : item.label}
-                  collapsed={collapsed}
-                  onClick={onClose}
-                />
-              );
+          <nav className="flex-1 space-y-1 overflow-y-auto px-4">
+            {primaryItems.map((item) => <NavItem key={item.label} href={item.path} icon={item.icon} isActive={isActive(item.path)} label={item.label === "Workflow" ? t("nav.workflows") : item.label === "Archivio" ? t("nav.archive") : item.label} collapsed={collapsed} onClick={onClose} />)}
+            {folders.map((folder) => {
+              const items = visibleMenuItems.filter((item) => folder.items.includes(item.label));
+              if (!items.length) return null;
+              const openFolder = openFolders.includes(folder.label);
+              return <div key={folder.label} className="pt-2">
+                <button type="button" onClick={() => setOpenFolders((current) => current.includes(folder.label) ? current.filter((label) => label !== folder.label) : [...current, folder.label])} title={collapsed ? folder.label : undefined} className={["flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-sm font-semibold text-text-secondary hover:bg-bg-subtle", collapsed ? "lg:justify-center lg:px-0" : ""].join(" ")}><folder.icon size={18} />{!collapsed && <><span className="flex-1 text-left">{folder.label}</span><ChevronDown size={16} className={openFolder ? "rotate-180 transition-transform" : "transition-transform"} /></>}</button>
+                {openFolder && !collapsed ? <div className="ml-4 mt-1 space-y-1 border-l border-border-subtle pl-2">{items.map((item) => <NavItem key={item.label} href={item.path} icon={item.icon} isActive={isActive(item.path)} label={item.label === "Progetti" ? t("nav.projects") : item.label === "Clienti" ? t("nav.clients") : item.label === "Spedizioni" ? t("nav.shipments") : item.label === "Mappa clienti" ? t("nav.customerMap") : item.label === "Priorita offerte" ? t("nav.offerPriority") : item.label === "Proposte manutenzione" ? t("nav.maintenanceProposals") : item.label === "Calendario manutenzioni" ? t("nav.maintenanceCalendar") : item.label} collapsed={false} onClick={onClose} />)}</div> : null}
+              </div>;
             })}
           </nav>
 
           <div className="border-t border-border-subtle p-4">
+            <NavItem href={APP_ROUTES.settings} icon={Settings} isActive={isActive(APP_ROUTES.settings)} label="Impostazioni Admin" collapsed={collapsed} onClick={onClose} />
             <IconButton
               className={[
                 "h-12 w-full justify-start gap-3 px-4 py-3 text-sm font-medium",
