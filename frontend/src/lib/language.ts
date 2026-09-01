@@ -120,7 +120,7 @@ const messages: Record<string, Record<UiLanguage, string>> = {
   "settings.ai.useInternalEndpoint": { it: "Usa indirizzo interno vLLM", en: "Use internal vLLM address" },
   "settings.ai.maxOutputTokens": { it: "Max token output", en: "Max output tokens" },
   "settings.ai.contextTokenLimit": { it: "Limite token contesto", en: "Context token limit" },
-  "settings.ai.contextTokenLimitHint": { it: "Riduce il prompt inviato al modello; non aumenta la finestra del server.", en: "Limits the prompt sent to the model; it does not increase the server context window." },
+  "settings.ai.contextTokenLimitHint": { it: "Riduce il prompt inviato al modello.", en: "Limits the prompt sent to the model." },
   "settings.ai.topP": { it: "Top-p", en: "Top-p" },
   "settings.ai.topK": { it: "Top-k", en: "Top-k" },
   "settings.ai.minP": { it: "Min-p", en: "Min-p" },

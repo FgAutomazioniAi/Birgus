@@ -983,7 +983,6 @@ async function main() {
   }
 
   const moduleByKey = new Map(modules.map((item) => [item.key, item]));
-  const projectManagementModule = moduleByKey.get("project_management");
   const agentManagementModule = moduleByKey.get("agent_management");
   const documentArchiveModule = moduleByKey.get("document_archive");
   const documentIntelligenceModule = moduleByKey.get("document_intelligence");
@@ -993,21 +992,7 @@ async function main() {
   const auditCenterModule = moduleByKey.get("audit_center");
   const superadminCenterModule = moduleByKey.get("superadmin_center");
 
-  if (projectManagementModule && agentManagementModule) {
-    await prisma.moduleDependency.upsert({
-      where: {
-        module_id_depends_on_module_id: {
-          module_id: agentManagementModule.id,
-          depends_on_module_id: projectManagementModule.id,
-        },
-      },
-      update: {},
-      create: {
-        module_id: agentManagementModule.id,
-        depends_on_module_id: projectManagementModule.id,
-      },
-    });
-  }
+  await prisma.moduleDependency.deleteMany({ where: { module: { key: "agent_management" }, depends_on_module: { key: "project_management" } } });
 
   if (documentArchiveModule && documentIntelligenceModule) {
     await prisma.moduleDependency.upsert({

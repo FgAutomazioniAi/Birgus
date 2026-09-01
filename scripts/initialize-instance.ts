@@ -1,5 +1,7 @@
 import { randomBytes, scrypt } from "node:crypto";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
+import { createInstallationProfile, hashInstallationProfile } from "./installation-profile.js";
+import { activationGroupFor } from "../src/modules/module-management/domain/ModuleActivationGroups.js";
 
 const prisma = new PrismaClient();
 const usage = "npm run instance:initialize -- --organization-code <code> --organization-name <name> --workspace-code <code> --workspace-name <name> --email <email> --first-name <name> --password <password> --modules <comma-separated-module-keys>";
@@ -35,7 +37,8 @@ async function main(): Promise<void> {
   const email = argument("--email").toLowerCase();
   const firstName = argument("--first-name");
   const lastName = process.argv.includes("--last-name") ? argument("--last-name") : null;
-  const moduleKeys = [...new Set(argument("--modules").split(",").map((value) => value.trim()).filter(Boolean))];
+  const requestedModuleKeys = argument("--modules").split(",").map((value) => value.trim()).filter(Boolean);
+  const moduleKeys = [...new Set(requestedModuleKeys.flatMap((moduleKey) => activationGroupFor(moduleKey)))];
   if (!moduleKeys.includes("superadmin_center")) throw new Error("The first workspace must enable superadmin_center.");
 
   const [workspaceCount, superadminCount, existingUser, modules, dependencies, superadminRole] = await Promise.all([
@@ -54,6 +57,8 @@ async function main(): Promise<void> {
   for (const dependency of dependencies) if (moduleKeys.includes(dependency.module.key) && !moduleKeys.includes(dependency.depends_on_module.key)) throw new Error(`Module '${dependency.module.key}' requires '${dependency.depends_on_module.key}'.`);
 
   const hash = await passwordHash(argument("--password"));
+  const profile = createInstallationProfile([{ workspace_code: workspaceCode, enabled_modules: moduleKeys }]);
+  const profileHash = hashInstallationProfile(profile);
   const result = await prisma.$transaction(async (tx) => {
     const organization = await tx.organization.create({ data: { code: organizationCode, legal_name: organizationName } });
     const workspace = await tx.workspace.create({ data: { organization_id: organization.id, code: workspaceCode, name: workspaceName, is_active: true } });
@@ -64,7 +69,15 @@ async function main(): Promise<void> {
     await tx.workspaceModule.createMany({ data: modules.map((module) => ({ workspace_id: workspace.id, module_id: module.id, is_enabled: true, configured_by_user_id: user.id })) });
     await tx.projectStatus.createMany({ data: [{ workspace_id: workspace.id, key: "in_revisione", label: "In Revisione" }, { workspace_id: workspace.id, key: "completato", label: "Completato" }, { workspace_id: workspace.id, key: "in_attesa", label: "In Attesa" }] });
     await tx.projectRevision.createMany({ data: [{ workspace_id: workspace.id, code: "v1" }, { workspace_id: workspace.id, code: "v2" }] });
-    return { organization: organization.code, workspace: workspace.code, email: user.email, modules: modules.map((module) => module.key) };
+    const snapshot = await tx.installationProfileSnapshot.create({
+      data: {
+        version: 1,
+        profile_hash: profileHash,
+        source: "initialization",
+        normalized_profile: profile as Prisma.InputJsonValue,
+      },
+    });
+    return { organization: organization.code, workspace: workspace.code, email: user.email, modules: modules.map((module) => module.key), installation_profile: { version: snapshot.version, hash: snapshot.profile_hash } };
   });
   console.log(JSON.stringify({ ...result, message: "Initial superuser created. The password must be changed at first login." }, null, 2));
 }

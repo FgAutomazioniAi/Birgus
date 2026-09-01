@@ -31,13 +31,13 @@ Copy-Item .env.example .env
 Copy-Item .\garage\garage.toml.example .\garage\garage.local.toml
 ```
 
-Il template `.env.example` contiene tutte le variabili del Compose, comprese quelle opzionali: non devi usare un `.env` preesistente come riferimento. Modifica `.env` dal terminale con un editor disponibile sul server, per esempio `notepad .env` su desktop Windows o `nano .env` su Linux/SSH. Sostituisci tutti i `CHANGE_ME` e configura il provider AI. In una configurazione con vLLM su un altro PC della LAN:
+Modifica `.env`, Sostituisci tutti i `CHANGE_ME` e configura il provider AI. In una configurazione con vLLM su un altro PC della LAN:
 
 ```dotenv
 AI_PROVIDER=vllm
 AI_PROVIDER_BASE_URL=http://192.168.1.253:8000/v1
 AI_PROVIDER_API_KEY=
-AI_PROVIDER_CHAT_MODEL=nome-esatto-del-modello
+AI_PROVIDER_CHAT_MODEL=nome-modello
 ```
 
 Nel file `garage/garage.local.toml` inserisci gli stessi tre valori Garage presenti in `.env`:
@@ -48,7 +48,7 @@ admin_token = "VALORE_DI_GARAGE_ADMIN_TOKEN"
 metrics_token = "VALORE_DI_GARAGE_METRICS_TOKEN"
 ```
 
-Per accesso HTTPS con dominio, imposta anche `AUTH_COOKIE_SECURE=true`, `TRUST_PROXY=true`, `AUTH_COOKIE_DOMAIN=tuo.dominio` e usa una configurazione Caddy/HTTPS adatta al dominio. Non usare `AUTH_COOKIE_SECURE=true` con il solo HTTP locale: il browser non conserverebbe la sessione.
+Per accesso HTTPS con dominio, imposta anche `AUTH_COOKIE_SECURE=true`, `TRUST_PROXY=true`, `AUTH_COOKIE_DOMAIN=tuo.dominio` e usa una configurazione Caddy/HTTPS adatta al dominio.
 
 ## 5. Scegli i nodi standard dei workflow
 
@@ -74,7 +74,6 @@ Lasciando la variabile vuota vengono attivati tutti gli strumenti standard. Dopo
 
 ```powershell
 docker compose up -d --build
-docker compose ps
 ```
 
 Attendi che `birgus_app`, `birgus_frontend`, `birgus_pg` e `birgus_garage` siano `healthy` dove previsto. I primi avvii OCR possono richiedere il download dei modelli solo al primo utilizzo.
@@ -85,19 +84,38 @@ Verifica il backend:
 Invoke-WebRequest -UseBasicParsing http://localhost:13001/health | Select-Object -ExpandProperty StatusCode
 ```
 
-Il risultato atteso e `200`. A questo punto esistono ruoli, permessi, moduli, dipendenze e tipi file, ma non utenti e non workspace.
+CHECKPOINT: A questo punto esistono ruoli, permessi, moduli, dipendenze e tipi file, ma non utenti e non workspace.
 
 ## 7. Crea organizzazione, primo workspace e primo superuser
 
-Scegli prima i moduli da rendere disponibili nel primo workspace. Le dipendenze sono validate: `workflow_management` richiede `agent_management` e `document_intelligence`; quest'ultimo richiede `document_archive`. Il modulo `superadmin_center` e obbligatorio nel primo workspace.
+Scegli prima i moduli da rendere disponibili nel primo workspace. Le dipendenze sono validate: `workflow_management` richiede `agent_management` e `document_intelligence`; quest'ultimo richiede `document_archive`.
 
 Esempio completo da eseguire nel terminale del server:
 
 ```powershell
-docker compose exec app npm run instance:initialize -- --organization-code fg-automazioni --organization-name "FG Automazioni" --workspace-code principale --workspace-name "Workspace principale" --email amministratore@azienda.it --first-name Samuel --last-name Mazzocato --password "Temporanea1" --modules superadmin_center,workflow_management,agent_management,document_intelligence,document_archive,project_management,ddt_processing,measure_report,conversational_assistant,notification_center
+docker compose exec app npm run instance:initialize -- --organization-code fg-automazioni --organization-name "FG Automazioni" --workspace-code principale --workspace-name "Workspace principale" --email amministratore@azienda.it --first-name Samuel --last-name Mazzocato --password "Temporanea1" --modules __X moduli che vuoi (inserisci tutti)__
 ```
 
-Il comando e consentito solo se non esiste alcun workspace attivo e alcun superuser. Crea in un'unica transazione:
+```moduli
+project_management
+agent_management
+ddt_processing
+measure_report
+document_archive
+document_intelligence
+conversational_assistant
+ai_runtime_control
+workflow_management
+customer_map
+offer_priority
+maintenance_proposals
+maintenance_calendar
+notification_center
+audit_center
+superadmin_center
+```
+
+Il comando è consentito solo se non esiste alcun workspace attivo e alcun superuser. Crea in un'unica transazione:
 
 1. organizzazione;
 2. workspace attivo;
@@ -105,7 +123,15 @@ Il comando e consentito solo se non esiste alcun workspace attivo e alcun superu
 4. moduli selezionati;
 5. status progetto, revisioni e preferenze iniziali.
 
-La password temporanea deve avere almeno 8 caratteri, una maiuscola e un numero. L'utente e marcato `must_change_password`, quindi il primo login richiede la scelta della password definitiva.
+La password temporanea deve avere almeno 8 caratteri, una maiuscola e un numero. L'utente è marcato `must_change_password`, quindi il primo login richiede la scelta della password definitiva.
+
+L'inizializzazione crea anche uno snapshot immutabile del profilo di installazione nel database: moduli selezionati, nodi standard del workflow configurati, versione e hash SHA-256. Non include password, chiavi API o altri segreti del file `.env`.
+
+Per un'istanza esistente prima di questo meccanismo, oppure dopo una variazione intenzionale delle funzionalità abilitate, registra la configurazione attuale con:
+
+```powershell
+docker compose exec app npm run instance:snapshot
+```
 
 Subito dopo inizializza i nodi standard del workflow per il workspace appena creato:
 

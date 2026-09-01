@@ -1,0 +1,214 @@
+{
+  "main": {
+    "id": "1dedf869f11a4e76",
+    "type": "split",
+    "children": [
+      {
+        "id": "776b4ead6cbdf020",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "b458878eb8b40b18",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Modules/ai_runtime_control.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "ai_runtime_control"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "1aa5acda775b6a54",
+    "type": "split",
+    "children": [
+      {
+        "id": "fa290eadf0c3d242",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "65b4340757bf19cb",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Esplora file"
+            }
+          },
+          {
+            "id": "331f5d726d4e21ae",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Ricerca"
+            }
+          },
+          {
+            "id": "c605eb66cc12f3ad",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Segnalibri"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "953b951b1f9fdef9",
+    "type": "split",
+    "children": [
+      {
+        "id": "7fe321dc18502535",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "0bcaeadca81c20c7",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Modules/ai_runtime_control.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Riferimenti"
+            }
+          },
+          {
+            "id": "37fa4e555a07825d",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Modules/ai_runtime_control.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Collegamenti in uscita"
+            }
+          },
+          {
+            "id": "6d5b5f6773490a11",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etichette"
+            }
+          },
+          {
+            "id": "8ef087c2b7af69af",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Tutte le proprietà"
+            }
+          },
+          {
+            "id": "d4428690e9ae1b34",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Modules/ai_runtime_control.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Struttura"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Apri selettore rapido": false,
+      "graph:Apri vista grafo": false,
+      "canvas:Crea nuova lavagna": false,
+      "daily-notes:Apri nota giornaliera": false,
+      "templates:Inserisci modello": false,
+      "command-palette:Apri riquadro comandi": false,
+      "bases:Crea nuova Base": false
+    }
+  },
+  "active": "b458878eb8b40b18",
+  "lastOpenFiles": [
+    "Modules/agent_management.md",
+    "Modules/ai_runtime_control.md",
+    "MODULE_DEPENDENCIES.canvas",
+    "MODULE_ARCHITECTURE_REVIEW.md",
+    "Modules/superadmin_center.md",
+    "Modules/audit_center.md",
+    "Modules/notification_center.md",
+    "Modules/maintenance_calendar.md",
+    "Modules/maintenance_proposals.md",
+    "Modules/offer_priority.md",
+    "Modules/customer_map.md",
+    "Modules/workflow_management.md",
+    "Modules/project_management.md",
+    "Modules/measure_report.md",
+    "Modules/document_intelligence.md",
+    "Modules/document_archive.md",
+    "Modules/conversational_assistant.md",
+    "Modules/ddt_processing.md",
+    "Modules",
+    "Benvenuto.md"
+  ]
+}

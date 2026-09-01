@@ -3,23 +3,25 @@ import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { UserModuleState } from "../domain/UserModuleState.js";
 import { ModuleAccessRepository } from "../repositories/ModuleAccessRepository.js";
 import { WorkspaceModuleState } from "../domain/WorkspaceModuleState.js";
+import { activationGroupFor } from "../domain/ModuleActivationGroups.js";
 
 export class PrismaModuleAccessRepository implements ModuleAccessRepository {
   public async isModuleEnabledForWorkspace(workspaceId: string, moduleKey: string): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
-    const workspaceModule = await prisma.workspaceModule.findFirst({
+    const groupModuleKeys = activationGroupFor(moduleKey);
+    const workspaceModules = await prisma.workspaceModule.findMany({
       where: {
         workspace_id: workspaceId,
         is_enabled: true,
         module: {
-          key: moduleKey,
+          key: { in: [...groupModuleKeys] },
           is_active: true,
         },
       },
       select: { id: true },
     });
 
-    return workspaceModule !== null;
+    return workspaceModules.length === groupModuleKeys.length;
   }
 
   public async isModuleEnabledForUser(workspaceId: string, userId: string, moduleKey: string): Promise<boolean> {
@@ -45,22 +47,21 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
       },
     });
 
-    const workspaceModule = await prisma.workspaceModule.findFirst({
+    const groupModuleKeys = activationGroupFor(moduleKey);
+    const workspaceModules = await prisma.workspaceModule.findMany({
       where: {
         workspace_id: workspaceId,
-        module_id: moduleRecord.id,
+        module: { key: { in: [...groupModuleKeys] } },
       },
       select: {
+        module: { select: { key: true } },
         is_enabled: true,
       },
     });
 
-    if (!workspaceModule) {
-      return false;
-    }
-
-    // OCR is a workspace-wide processing switch: user overrides must not restart it.
-    if (moduleKey === "ddt_processing" && workspaceModule.is_enabled === false) {
+    const isGroupEnabled = workspaceModules.length === groupModuleKeys.length
+      && workspaceModules.every((item) => item.is_enabled);
+    if (!isGroupEnabled) {
       return false;
     }
 
@@ -69,10 +70,6 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
     }
 
     if (override?.mode === "DENY") {
-      return false;
-    }
-
-    if (workspaceModule.is_enabled === false) {
       return false;
     }
 
@@ -133,15 +130,17 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
       },
     });
 
+    const enabledByKey = new Map(rows.map((row) => [row.module.key, row.is_enabled]));
     return rows.map((row) => {
       const override = row.module.user_module_overrides[0]?.mode ?? null;
-      const effectiveEnabled = row.module.key === "ddt_processing" && row.is_enabled === false
+      const groupEnabled = activationGroupFor(row.module.key).every((key) => enabledByKey.get(key) === true);
+      const effectiveEnabled = !groupEnabled
         ? false
         : override === "ALLOW"
           ? true
           : override === "DENY"
             ? false
-            : row.is_enabled;
+            : true;
 
       return new UserModuleState({
         moduleKey: row.module.key,

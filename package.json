@@ -23,6 +23,7 @@
     "db:sync:module-agent-prompts": "tsx scripts/sync-module-agent-prompts.ts",
     "db:sync:workflow-tools": "tsx scripts/sync-workflow-tools.ts",
     "instance:initialize": "tsx scripts/initialize-instance.ts",
+    "instance:snapshot": "tsx scripts/snapshot-installation-profile.ts",
     "workspace:provision": "tsx scripts/provision-workspace.ts",
     "ops:backup": "powershell -ExecutionPolicy Bypass -File scripts/backup.ps1",
     "build:frontend": "npm --prefix frontend run build"

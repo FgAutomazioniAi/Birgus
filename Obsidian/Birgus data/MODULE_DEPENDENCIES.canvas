@@ -1,0 +1,21 @@
+{
+	"nodes":[
+		{"id":"project","type":"file","file":"Modules/project_management.md","x":-740,"y":-80,"width":240,"height":160},
+		{"id":"agent","type":"file","file":"Modules/agent_management.md","x":-400,"y":-80,"width":240,"height":160},
+		{"id":"workflow","type":"file","file":"Modules/workflow_management.md","x":0,"y":-220,"width":250,"height":170},
+		{"id":"archive","type":"file","file":"Modules/document_archive.md","x":-740,"y":240,"width":240,"height":160},
+		{"id":"intelligence","type":"file","file":"Modules/document_intelligence.md","x":-400,"y":240,"width":240,"height":170},
+		{"id":"assistant","type":"file","file":"Modules/conversational_assistant.md","x":0,"y":220,"width":250,"height":160},
+		{"id":"notifications","type":"file","file":"Modules/notification_center.md","x":370,"y":120,"width":240,"height":160},
+		{"id":"audit","type":"file","file":"Modules/audit_center.md","x":710,"y":120,"width":240,"height":160},
+		{"id":"independent","type":"text","text":"Moduli senza dipendenze dichiarate\n\n[[Modules/project_management]]\n[[Modules/agent_management]]\n[[Modules/ddt_processing]]\n[[Modules/measure_report]]\n[[Modules/ai_runtime_control]]\n[[Modules/customer_map]]\n[[Modules/superadmin_center]]","x":360,"y":-250,"width":300,"height":280},
+		{"id":"planning-suite","type":"text","text":"Gruppo di attivazione atomico\nPianificazione operativa\n\n[[Modules/offer_priority]]\n[[Modules/maintenance_proposals]]\n[[Modules/maintenance_calendar]]\n\nNon sono dipendenze circolari: si attivano e disattivano insieme.","x":-740,"y":480,"width":300,"height":250}
+	],
+	"edges":[
+		{"id":"workflow-agent","fromNode":"workflow","fromSide":"left","toNode":"agent","toSide":"right","label":"richiede"},
+		{"id":"workflow-intelligence","fromNode":"workflow","fromSide":"bottom","toNode":"intelligence","toSide":"top","label":"richiede"},
+		{"id":"intelligence-archive","fromNode":"intelligence","fromSide":"left","toNode":"archive","toSide":"right","label":"richiede"},
+		{"id":"assistant-intelligence","fromNode":"assistant","fromSide":"left","toNode":"intelligence","toSide":"right","label":"richiede"},
+		{"id":"audit-notifications","fromNode":"audit","fromSide":"left","toNode":"notifications","toSide":"right","label":"richiede"}
+	]
+}

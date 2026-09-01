@@ -1,6 +1,7 @@
 import { AppError } from "../../../core/errors/AppError.js";
 import { UserModuleState } from "../domain/UserModuleState.js";
 import { WorkspaceModuleState } from "../domain/WorkspaceModuleState.js";
+import { activationGroupFor } from "../domain/ModuleActivationGroups.js";
 import { ModuleAccessRepository } from "../repositories/ModuleAccessRepository.js";
 
 export class ModuleManagementService {
@@ -19,7 +20,10 @@ export class ModuleManagementService {
   }
 
   public async enableModule(workspaceId: string, moduleKey: string, configuredByUserId: string): Promise<void> {
-    const missingDependencies = await this.repository.listMissingDependenciesForEnable(workspaceId, moduleKey);
+    const moduleKeys = activationGroupFor(moduleKey);
+    const missingDependencies = [...new Set((await Promise.all(
+      moduleKeys.map((key) => this.repository.listMissingDependenciesForEnable(workspaceId, key)),
+    )).flat())];
     if (missingDependencies.length > 0) {
       throw new AppError(
         `Cannot enable '${moduleKey}'. Missing dependencies: ${missingDependencies.join(", ")}.`,
@@ -28,11 +32,14 @@ export class ModuleManagementService {
       );
     }
 
-    await this.repository.setWorkspaceModule(workspaceId, moduleKey, true, configuredByUserId);
+    await Promise.all(moduleKeys.map((key) => this.repository.setWorkspaceModule(workspaceId, key, true, configuredByUserId)));
   }
 
   public async disableModule(workspaceId: string, moduleKey: string, configuredByUserId: string): Promise<void> {
-    const enabledDependents = await this.repository.listEnabledDependents(workspaceId, moduleKey);
+    const moduleKeys = activationGroupFor(moduleKey);
+    const enabledDependents = [...new Set((await Promise.all(
+      moduleKeys.map((key) => this.repository.listEnabledDependents(workspaceId, key)),
+    )).flat().filter((key) => !moduleKeys.includes(key)))];
     if (enabledDependents.length > 0) {
       throw new AppError(
         `Cannot disable '${moduleKey}'. Dependent modules still enabled: ${enabledDependents.join(", ")}.`,
@@ -41,7 +48,7 @@ export class ModuleManagementService {
       );
     }
 
-    await this.repository.setWorkspaceModule(workspaceId, moduleKey, false, configuredByUserId);
+    await Promise.all(moduleKeys.map((key) => this.repository.setWorkspaceModule(workspaceId, key, false, configuredByUserId)));
   }
 
   public async isModuleEnabledInAnyActiveWorkspace(moduleKey: string): Promise<boolean> {

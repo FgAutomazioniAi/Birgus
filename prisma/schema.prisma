@@ -537,6 +537,17 @@ model AppSetting {
   @@map("app_settings")
 }
 
+model InstallationProfileSnapshot {
+  id                 String   @id @default(uuid()) @db.Uuid
+  version            Int      @unique
+  profile_hash       String   @unique
+  source             String
+  normalized_profile Json
+  created_at         DateTime @default(now())
+
+  @@map("installation_profile_snapshots")
+}
+
 model Module {
   id          Int     @id @default(autoincrement())
   key         String  @unique

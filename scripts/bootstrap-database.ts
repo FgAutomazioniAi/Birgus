@@ -9,7 +9,7 @@ const ROLE_PERMISSIONS: Record<(typeof ROLE_KEYS)[number], readonly (typeof PERM
   admin: PERMISSION_KEYS.filter((key) => key !== "audit.read"),
   operator: ["modules.read", "projects.read", "projects.write", "agents.read", "agents.write", "clients.read", "clients.write", "documents.read", "documents.write", "ddt.read", "ddt.process", "measure_report.read", "measure_report.process", "knowledge.read", "assistant.read", "assistant.write", "workflows.read", "customer_map.read", "offer_priority.read", "maintenance_proposals.read", "maintenance_calendar.read", "notifications.read"],
 };
-const MODULE_DEPENDENCIES = [["agent_management", "project_management"], ["document_intelligence", "document_archive"], ["conversational_assistant", "document_intelligence"], ["workflow_management", "agent_management"], ["workflow_management", "document_intelligence"], ["audit_center", "notification_center"]] as const;
+const MODULE_DEPENDENCIES = [["document_intelligence", "document_archive"], ["conversational_assistant", "document_intelligence"], ["workflow_management", "agent_management"], ["workflow_management", "document_intelligence"], ["audit_center", "notification_center"]] as const;
 
 async function main(): Promise<void> {
   for (const key of ROLE_KEYS) await prisma.role.upsert({ where: { key }, update: { label: key, is_system: true }, create: { key, label: key, is_system: true } });
@@ -28,6 +28,7 @@ async function main(): Promise<void> {
   for (const key of MODULE_KEYS) await prisma.module.upsert({ where: { key }, update: { name: key, is_active: true }, create: { key, name: key, is_active: true } });
   const modules = await prisma.module.findMany({ where: { key: { in: [...MODULE_KEYS] } } });
   const moduleByKey = new Map(modules.map((item) => [item.key, item]));
+  await prisma.moduleDependency.deleteMany({ where: { module: { key: "agent_management" }, depends_on_module: { key: "project_management" } } });
   for (const [moduleKey, dependencyKey] of MODULE_DEPENDENCIES) {
     const module = moduleByKey.get(moduleKey);
     const dependency = moduleByKey.get(dependencyKey);
