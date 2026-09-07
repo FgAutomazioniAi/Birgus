@@ -1,0 +1,754 @@
+Project commission_data_collection {
+  database_type: "PostgreSQL"
+  Note: "Schema logico separato per Anagrafica commesse e Checklist raccolta dati. commission_registry governa l'anagrafica; commission_intake governa la checklist/form. Le tabelle *_ext rappresentano tabelle gia esistenti nel database Birgus e sono qui solo come punti di collegamento."
+}
+
+Enum CommissionRecordStatus {
+  DRAFT
+  IN_PROGRESS
+  WAITING_REVIEW
+  COMPLETED
+  SIGNED
+  ARCHIVED
+  CANCELLED
+}
+
+Enum CommissionRecordPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+Enum CommissionTemplateScope {
+  SYSTEM
+  WORKSPACE
+}
+
+Enum CommissionTemplateVersionStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+}
+
+Enum CommissionFieldType {
+  TEXT
+  LONG_TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  SELECT
+  MULTI_SELECT
+  CHECKBOX_GROUP
+  TABLE
+  SIGNATURE
+  DOCUMENT_CHECKLIST
+}
+
+Enum CommissionDataKind {
+  STRING
+  INTEGER
+  DECIMAL
+  DATE
+  BOOLEAN
+  JSON
+}
+
+Enum CommissionFieldSensitivity {
+  NORMAL
+  CONFIDENTIAL
+  PERSONAL
+  SECRET
+}
+
+Enum CommissionChecklistStatus {
+  DRAFT
+  IN_PROGRESS
+  WAITING_REVIEW
+  COMPLETED
+  SIGNED
+  ARCHIVED
+}
+
+Enum CommissionAccessRole {
+  VIEWER
+  EDITOR
+}
+
+Enum CommissionLockResourceType {
+  RECORD
+  CHECKLIST
+  PAGE
+  SECTION
+  FIELD
+  ATTACHMENT
+}
+
+Enum CommissionEventType {
+  CREATED
+  UPDATED
+  DELETED
+  CHECKLIST_CREATED
+  FIELD_CHANGED
+  TABLE_ROW_UPDATED
+  ATTACHMENT_ADDED
+  ATTACHMENT_REMOVED
+  SIGNED
+  LOCK_ACQUIRED
+  LOCK_RELEASED
+  IMPORT_STARTED
+  IMPORT_APPLIED
+  IMPORT_FAILED
+}
+
+Enum CommissionImportStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+Enum CommissionImportItemStatus {
+  PENDING
+  APPLIED
+  SKIPPED
+  FAILED
+}
+
+Table workspaces_ext {
+  id uuid [pk]
+  name varchar
+}
+
+Table users_ext {
+  id uuid [pk]
+  email varchar
+}
+
+Table modules_ext {
+  id int [pk]
+  key varchar [unique]
+  name varchar
+  is_active boolean
+}
+
+Table workspace_modules_ext {
+  id int [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  module_id int [not null, ref: > modules_ext.id]
+  is_enabled boolean
+
+  indexes {
+    (workspace_id, module_id) [unique]
+  }
+}
+
+Table companies_ext {
+  id int [pk]
+  name varchar
+}
+
+Table clients_ext {
+  id uuid [pk]
+  display_name varchar
+}
+
+Table projects_ext {
+  id uuid [pk]
+  title varchar
+}
+
+Table documents_ext {
+  id uuid [pk]
+  name varchar
+}
+
+Table commission_records {
+  id uuid [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  code varchar [not null]
+  title varchar [not null]
+  description text
+  status CommissionRecordStatus [not null, default: "DRAFT"]
+  priority CommissionRecordPriority [not null, default: "NORMAL"]
+  company_id int [ref: > companies_ext.id]
+  client_id uuid [ref: > clients_ext.id]
+  project_id uuid [ref: > projects_ext.id]
+  source_system varchar
+  external_reference varchar
+  current_checklist_id uuid [unique, ref: > commission_checklists.id]
+  expected_delivery_at timestamp
+  estimated_budget_amount decimal
+  currency varchar(3)
+  metadata json
+  search_text text
+  owner_user_id uuid [ref: > users_ext.id]
+  created_by_user_id uuid [ref: > users_ext.id]
+  updated_by_user_id uuid [ref: > users_ext.id]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  deleted_at timestamp
+
+  indexes {
+    (workspace_id, code) [unique]
+    (workspace_id, status, priority)
+    (workspace_id, company_id)
+    (workspace_id, client_id)
+    (workspace_id, project_id)
+    (workspace_id, owner_user_id)
+    (workspace_id, source_system, external_reference)
+    current_checklist_id
+    deleted_at
+  }
+}
+
+Table commission_record_contacts {
+  id uuid [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  record_id uuid [not null, ref: > commission_records.id]
+  client_id uuid [ref: > clients_ext.id]
+  role_key varchar [not null]
+  display_name varchar [not null]
+  email varchar
+  phone varchar
+  metadata json
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  deleted_at timestamp
+
+  indexes {
+    (workspace_id, record_id)
+    (workspace_id, client_id)
+    (workspace_id, role_key)
+    deleted_at
+  }
+}
+
+Table commission_form_templates {
+  id uuid [pk]
+  workspace_id uuid [ref: > workspaces_ext.id]
+  key varchar [not null]
+  identity_key varchar [not null, unique]
+  name varchar [not null]
+  description text
+  scope CommissionTemplateScope [not null, default: "SYSTEM"]
+  is_active boolean [not null, default: true]
+  metadata json
+  created_by_user_id uuid [ref: > users_ext.id]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  deleted_at timestamp
+
+  indexes {
+    workspace_id
+    key
+    (scope, is_active)
+    deleted_at
+  }
+}
+
+Table commission_form_versions {
+  id uuid [pk]
+  workspace_id uuid [ref: > workspaces_ext.id]
+  template_id uuid [not null, ref: > commission_form_templates.id]
+  version int [not null]
+  status CommissionTemplateVersionStatus [not null, default: "DRAFT"]
+  title varchar [not null]
+  schema_json json
+  published_at timestamp
+  retired_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    (template_id, version) [unique]
+    workspace_id
+    (template_id, status)
+  }
+}
+
+Table commission_form_pages {
+  id uuid [pk]
+  workspace_id uuid [ref: > workspaces_ext.id]
+  version_id uuid [not null, ref: > commission_form_versions.id]
+  page_number int [not null]
+  key varchar [not null]
+  title varchar [not null]
+  description text
+  sort_order int [not null]
+  metadata json
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    (version_id, page_number) [unique]
+    (version_id, key) [unique]
+    workspace_id
+  }
+}
+
+Table commission_form_sections {
+  id uuid [pk]
+  workspace_id uuid [ref: > workspaces_ext.id]
+  page_id uuid [not null, ref: > commission_form_pages.id]
+  key varchar [not null]
+  title varchar [not null]
+  description text
+  sort_order int [not null]
+  metadata json
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    (page_id, key) [unique]
+    workspace_id
+    (page_id, sort_order)
+  }
+}
+
+Table commission_form_fields {
+  id uuid [pk]
+  workspace_id uuid [ref: > workspaces_ext.id]
+  version_id uuid [not null, ref: > commission_form_versions.id]
+  page_id uuid [not null, ref: > commission_form_pages.id]
+  section_id uuid [ref: > commission_form_sections.id]
+  key varchar [not null]
+  label varchar [not null]
+  placeholder varchar
+  help_text text
+  field_type CommissionFieldType [not null]
+  data_kind CommissionDataKind [not null, default: "STRING"]
+  sensitivity CommissionFieldSensitivity [not null, default: "NORMAL"]
+  is_required boolean [not null, default: false]
+  is_indexed boolean [not null, default: false]
+  sort_order int [not null]
+  validation_json json
+  visibility_json json
+  default_json json
+  metadata json
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    (version_id, key) [unique]
+    workspace_id
+    (page_id, sort_order)
+    (section_id, sort_order)
+    field_type
+  }
+}
+
+Table commission_field_options {
+  id uuid [pk]
+  workspace_id uuid [ref: > workspaces_ext.id]
+  field_id uuid [not null, ref: > commission_form_fields.id]
+  value varchar [not null]
+  label varchar [not null]
+  sort_order int [not null]
+  metadata json
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    (field_id, value) [unique]
+    workspace_id
+    (field_id, sort_order)
+  }
+}
+
+Table commission_table_definitions {
+  id uuid [pk]
+  workspace_id uuid [ref: > workspaces_ext.id]
+  field_id uuid [not null, unique, ref: > commission_form_fields.id]
+  key varchar [not null]
+  title varchar [not null]
+  min_rows int
+  max_rows int
+  allow_add_rows boolean [not null, default: true]
+  metadata json
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    workspace_id
+    key
+  }
+}
+
+Table commission_table_columns {
+  id uuid [pk]
+  workspace_id uuid [ref: > workspaces_ext.id]
+  table_definition_id uuid [not null, ref: > commission_table_definitions.id]
+  key varchar [not null]
+  label varchar [not null]
+  placeholder varchar
+  data_kind CommissionDataKind [not null, default: "STRING"]
+  sensitivity CommissionFieldSensitivity [not null, default: "NORMAL"]
+  is_required boolean [not null, default: false]
+  is_indexed boolean [not null, default: false]
+  sort_order int [not null]
+  validation_json json
+  metadata json
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    (table_definition_id, key) [unique]
+    workspace_id
+    (table_definition_id, sort_order)
+  }
+}
+
+Table commission_catalogs {
+  id uuid [pk]
+  workspace_id uuid [ref: > workspaces_ext.id]
+  key varchar [not null]
+  identity_key varchar [not null, unique]
+  label varchar [not null]
+  description text
+  is_active boolean [not null, default: true]
+  metadata json
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  deleted_at timestamp
+
+  indexes {
+    workspace_id
+    key
+    deleted_at
+  }
+}
+
+Table commission_catalog_items {
+  id uuid [pk]
+  workspace_id uuid [ref: > workspaces_ext.id]
+  catalog_id uuid [not null, ref: > commission_catalogs.id]
+  value varchar [not null]
+  label varchar [not null]
+  sort_order int [not null]
+  metadata json
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  deleted_at timestamp
+
+  indexes {
+    (catalog_id, value) [unique]
+    workspace_id
+    (catalog_id, sort_order)
+    deleted_at
+  }
+}
+
+Table commission_checklists {
+  id uuid [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  record_id uuid [not null, ref: > commission_records.id]
+  form_version_id uuid [not null, ref: > commission_form_versions.id]
+  title varchar [not null]
+  status CommissionChecklistStatus [not null, default: "DRAFT"]
+  revision_no int [not null, default: 1]
+  progress_percent int [not null, default: 0]
+  current_page_number int
+  metadata json
+  created_by_user_id uuid [ref: > users_ext.id]
+  updated_by_user_id uuid [ref: > users_ext.id]
+  signed_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  deleted_at timestamp
+
+  indexes {
+    (workspace_id, record_id)
+    (workspace_id, status)
+    form_version_id
+    deleted_at
+  }
+}
+
+Table commission_field_values {
+  id uuid [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  record_id uuid [not null, ref: > commission_records.id]
+  checklist_id uuid [not null, ref: > commission_checklists.id]
+  field_id uuid [not null, ref: > commission_form_fields.id]
+  field_key varchar [not null]
+  value_text text
+  value_number decimal
+  value_date timestamp
+  value_boolean boolean
+  value_json json
+  normalized_value varchar(512)
+  display_value varchar(1024)
+  updated_by_user_id uuid [ref: > users_ext.id]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    (checklist_id, field_id) [unique]
+    (workspace_id, record_id)
+    (workspace_id, field_key)
+    (workspace_id, field_key, normalized_value)
+    (workspace_id, field_key, value_number)
+    (workspace_id, field_key, value_date)
+    (workspace_id, field_key, value_boolean)
+  }
+}
+
+Table commission_table_rows {
+  id uuid [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  record_id uuid [not null, ref: > commission_records.id]
+  checklist_id uuid [not null, ref: > commission_checklists.id]
+  table_definition_id uuid [not null, ref: > commission_table_definitions.id]
+  row_index int [not null]
+  row_key varchar
+  metadata json
+  created_by_user_id uuid [ref: > users_ext.id]
+  updated_by_user_id uuid [ref: > users_ext.id]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  deleted_at timestamp
+
+  indexes {
+    (checklist_id, table_definition_id, row_index) [unique]
+    (workspace_id, record_id)
+    table_definition_id
+    deleted_at
+  }
+}
+
+Table commission_table_cells {
+  id uuid [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  record_id uuid [not null, ref: > commission_records.id]
+  checklist_id uuid [not null, ref: > commission_checklists.id]
+  row_id uuid [not null, ref: > commission_table_rows.id]
+  column_id uuid [not null, ref: > commission_table_columns.id]
+  field_id uuid [ref: > commission_form_fields.id]
+  column_key varchar [not null]
+  value_text text
+  value_number decimal
+  value_date timestamp
+  value_boolean boolean
+  value_json json
+  normalized_value varchar(512)
+  display_value varchar(1024)
+  updated_by_user_id uuid [ref: > users_ext.id]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    (row_id, column_id) [unique]
+    (workspace_id, record_id)
+    (workspace_id, column_key)
+    (workspace_id, column_key, normalized_value)
+    (workspace_id, column_key, value_number)
+    (workspace_id, column_key, value_date)
+    (workspace_id, column_key, value_boolean)
+  }
+}
+
+Table commission_required_document_types {
+  id uuid [pk]
+  workspace_id uuid [ref: > workspaces_ext.id]
+  field_id uuid [not null, ref: > commission_form_fields.id]
+  key varchar [not null]
+  label varchar [not null]
+  is_required boolean [not null, default: false]
+  sort_order int [not null]
+  metadata json
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    (field_id, key) [unique]
+    workspace_id
+    (field_id, sort_order)
+  }
+}
+
+Table commission_attachments {
+  id uuid [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  record_id uuid [not null, ref: > commission_records.id]
+  checklist_id uuid [ref: > commission_checklists.id]
+  required_document_type_id uuid [ref: > commission_required_document_types.id]
+  document_id uuid [not null, ref: > documents_ext.id]
+  label varchar
+  note text
+  uploaded_by_user_id uuid [ref: > users_ext.id]
+  created_at timestamp [not null]
+  deleted_at timestamp
+
+  indexes {
+    (record_id, document_id) [unique]
+    (workspace_id, record_id)
+    checklist_id
+    document_id
+    deleted_at
+  }
+}
+
+Table commission_record_accesses {
+  id uuid [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  record_id uuid [not null, ref: > commission_records.id]
+  user_id uuid [not null, ref: > users_ext.id]
+  role CommissionAccessRole [not null]
+  granted_by_user_id uuid [ref: > users_ext.id]
+  granted_at timestamp [not null]
+  revoked_at timestamp
+
+  indexes {
+    (record_id, user_id) [unique]
+    (workspace_id, user_id, role)
+    revoked_at
+  }
+}
+
+Table commission_resource_locks {
+  id uuid [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  record_id uuid [ref: > commission_records.id]
+  checklist_id uuid [ref: > commission_checklists.id]
+  resource_type CommissionLockResourceType [not null]
+  resource_id uuid [not null]
+  active_scope_key varchar [unique]
+  lock_token_hash varchar [not null]
+  locked_by_user_id uuid [not null, ref: > users_ext.id]
+  locked_at timestamp [not null]
+  expires_at timestamp [not null]
+  heartbeat_at timestamp [not null]
+  released_at timestamp
+  release_reason varchar
+
+  indexes {
+    (workspace_id, resource_type, resource_id)
+    (workspace_id, locked_by_user_id)
+    expires_at
+    released_at
+  }
+}
+
+Table commission_events {
+  id uuid [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  record_id uuid [ref: > commission_records.id]
+  checklist_id uuid [ref: > commission_checklists.id]
+  event_type CommissionEventType [not null]
+  actor_user_id uuid [ref: > users_ext.id]
+  summary varchar [not null]
+  payload json
+  created_at timestamp [not null]
+
+  indexes {
+    (workspace_id, created_at)
+    (record_id, created_at)
+    (checklist_id, created_at)
+    actor_user_id
+    event_type
+  }
+}
+
+Table commission_signatures {
+  id uuid [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  record_id uuid [not null, ref: > commission_records.id]
+  checklist_id uuid [not null, ref: > commission_checklists.id]
+  signed_by_user_id uuid [not null, ref: > users_ext.id]
+  signer_name varchar [not null]
+  signer_role varchar
+  statement text
+  signed_at timestamp [not null]
+  metadata json
+
+  indexes {
+    (workspace_id, record_id)
+    checklist_id
+    signed_by_user_id
+  }
+}
+
+Table commission_import_sources {
+  id uuid [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  key varchar [not null]
+  name varchar [not null]
+  base_url varchar
+  metadata json
+  is_active boolean [not null, default: true]
+  created_by_user_id uuid [ref: > users_ext.id]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  deleted_at timestamp
+
+  indexes {
+    (workspace_id, key) [unique]
+    workspace_id
+    deleted_at
+  }
+}
+
+Table commission_import_mappings {
+  id uuid [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  source_id uuid [not null, ref: > commission_import_sources.id]
+  template_id uuid [ref: > commission_form_templates.id]
+  key varchar [not null]
+  name varchar [not null]
+  mapping_json json [not null]
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  deleted_at timestamp
+
+  indexes {
+    (workspace_id, source_id, key) [unique]
+    workspace_id
+    template_id
+    deleted_at
+  }
+}
+
+Table commission_import_runs {
+  id uuid [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  source_id uuid [not null, ref: > commission_import_sources.id]
+  mapping_id uuid [ref: > commission_import_mappings.id]
+  status CommissionImportStatus [not null, default: "PENDING"]
+  requested_by_user_id uuid [ref: > users_ext.id]
+  source_payload_json json
+  result_summary_json json
+  error_message text
+  started_at timestamp
+  finished_at timestamp
+  created_at timestamp [not null]
+
+  indexes {
+    (workspace_id, status)
+    source_id
+    mapping_id
+    created_at
+  }
+}
+
+Table commission_import_items {
+  id uuid [pk]
+  workspace_id uuid [not null, ref: > workspaces_ext.id]
+  import_run_id uuid [not null, ref: > commission_import_runs.id]
+  record_id uuid [ref: > commission_records.id]
+  source_item_key varchar
+  status CommissionImportItemStatus [not null]
+  source_payload_json json
+  applied_payload_json json
+  error_message text
+  created_at timestamp [not null]
+
+  indexes {
+    (workspace_id, status)
+    import_run_id
+    record_id
+  }
+}

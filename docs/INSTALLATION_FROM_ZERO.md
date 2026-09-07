@@ -43,9 +43,9 @@ AI_PROVIDER_CHAT_MODEL=nome-modello
 Nel file `garage/garage.local.toml` inserisci gli stessi tre valori Garage presenti in `.env`:
 
 ```toml
-rpc_secret = "VALORE_DI_GARAGE_RPC_SECRET"
-admin_token = "VALORE_DI_GARAGE_ADMIN_TOKEN"
-metrics_token = "VALORE_DI_GARAGE_METRICS_TOKEN"
+rpc_secret = "REPLACE_WITH_64_HEX_CHARS"
+admin_token = "REPLACE_WITH_RANDOM_ADMIN_TOKEN"
+metrics_token = "REPLACE_WITH_RANDOM_METRICS_TOKEN"
 ```
 
 Per accesso HTTPS con dominio, imposta anche `AUTH_COOKIE_SECURE=true`, `TRUST_PROXY=true`, `AUTH_COOKIE_DOMAIN=tuo.dominio` e usa una configurazione Caddy/HTTPS adatta al dominio.
@@ -88,7 +88,7 @@ CHECKPOINT: A questo punto esistono ruoli, permessi, moduli, dipendenze e tipi f
 
 ## 7. Crea organizzazione, primo workspace e primo superuser
 
-Scegli prima i moduli da rendere disponibili nel primo workspace. Le dipendenze sono validate: `workflow_management` richiede `agent_management` e `document_intelligence`; quest'ultimo richiede `document_archive`.
+Scegli prima i moduli da rendere disponibili nel primo workspace. Le dipendenze sono validate: `workflow_management` richiede `agent_management` e `document_intelligence`; quest'ultimo richiede `document_archive`. `commission_intake` richiede `commission_registry`.
 
 Esempio completo da eseguire nel terminale del server:
 
@@ -106,6 +106,8 @@ document_intelligence
 conversational_assistant
 ai_runtime_control
 workflow_management
+commission_registry
+commission_intake
 customer_map
 offer_priority
 maintenance_proposals

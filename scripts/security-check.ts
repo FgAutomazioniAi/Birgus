@@ -15,6 +15,7 @@ const requiredFiles = [
 ];
 
 const skippedFilePatterns = [
+  /^\.env\.example$/,
   /^package-lock\.json$/,
   /^frontend\/package-lock\.json$/,
   /^garage\/garage\.toml\.example$/,

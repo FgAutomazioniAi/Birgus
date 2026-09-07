@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, CalendarDays, ChevronDown, FileSearch, FolderKanban, GitBranch, LogOut, Map, Ruler, Settings, ShieldCheck, TrendingUp, UserRound, Users, Wrench } from "lucide-react";
+import { Archive, CalendarDays, ChevronDown, ClipboardList, FileSearch, FolderKanban, GitBranch, LogOut, Map, Ruler, Settings, ShieldCheck, TrendingUp, UserRound, Users, Wrench } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -13,6 +13,8 @@ import { useLanguage } from "@/components/organisms/language-provider";
 const menuItems = [
   { icon: FolderKanban, label: "Progetti", path: APP_ROUTES.projects, moduleKey: "project_management" },
   { icon: Users, label: "Clienti", path: APP_ROUTES.clients, moduleKey: "project_management" },
+  { icon: ClipboardList, label: "Anagrafica commesse", path: APP_ROUTES.commissions, moduleKey: "commission_registry" },
+  { icon: ClipboardList, label: "Checklist raccolta dati", path: APP_ROUTES.dataCollectionChecklists, moduleKey: "commission_intake" },
   // DDT_READER_FEATURE_START
   { icon: FileSearch, label: "DDT Reader", path: APP_ROUTES.ddtReader, moduleKey: "ddt_processing" },
   // DDT_READER_FEATURE_END
@@ -24,7 +26,8 @@ const menuItems = [
 ];
 
 const folders = [
-  { label: "Anagrafica", icon: Users, items: ["Clienti", "Mappa clienti"] },
+  { label: "Anagrafica", icon: Users, items: ["Clienti", "Anagrafica commesse", "Mappa clienti"] },
+  { label: "Raccolta dati", icon: ClipboardList, items: ["Checklist raccolta dati"] },
   { label: "Operatività", icon: FolderKanban, items: ["Progetti", "DDT Reader", "Measure Report"] },
   { label: "Pianificazione", icon: CalendarDays, items: ["Priorità offerte", "Proposte manutenzione", "Calendario manutenzioni"] },
 ];
@@ -98,13 +101,13 @@ export function Sidebar({ collapsed, enabledModuleKeys, isSuperadmin, onClose, o
               const openFolder = openFolders.includes(folder.label);
               return <div key={folder.label} className="pt-2">
                 <button type="button" onClick={() => setOpenFolders((current) => current.includes(folder.label) ? current.filter((label) => label !== folder.label) : [...current, folder.label])} title={collapsed ? folder.label : undefined} className={["flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-sm font-semibold text-text-secondary hover:bg-bg-subtle", collapsed ? "lg:justify-center lg:px-0" : ""].join(" ")}><folder.icon size={18} />{!collapsed && <><span className="flex-1 text-left">{folder.label}</span><ChevronDown size={16} className={openFolder ? "rotate-180 transition-transform" : "transition-transform"} /></>}</button>
-                {openFolder && !collapsed ? <div className="ml-4 mt-1 space-y-1 border-l border-border-subtle pl-2">{items.map((item) => <NavItem key={item.label} href={item.path} icon={item.icon} isActive={isActive(item.path)} label={item.label === "Progetti" ? t("nav.projects") : item.label === "Clienti" ? t("nav.clients") : item.label === "Mappa clienti" ? t("nav.customerMap") : item.label === "Priorità offerte" ? t("nav.offerPriority") : item.label === "Proposte manutenzione" ? t("nav.maintenanceProposals") : item.label === "Calendario manutenzioni" ? t("nav.maintenanceCalendar") : item.label} collapsed={false} onClick={onClose} />)}</div> : null}
+                {openFolder && !collapsed ? <div className="ml-4 mt-1 space-y-1 border-l border-border-subtle pl-2">{items.map((item) => <NavItem key={item.label} href={item.path} icon={item.icon} isActive={isActive(item.path)} label={item.label === "Progetti" ? t("nav.projects") : item.label === "Clienti" ? t("nav.clients") : item.label === "Anagrafica commesse" ? t("nav.commissions") : item.label === "Checklist raccolta dati" ? t("nav.dataCollectionChecklists") : item.label === "Mappa clienti" ? t("nav.customerMap") : item.label === "Priorità offerte" ? t("nav.offerPriority") : item.label === "Proposte manutenzione" ? t("nav.maintenanceProposals") : item.label === "Calendario manutenzioni" ? t("nav.maintenanceCalendar") : item.label} collapsed={false} onClick={onClose} />)}</div> : null}
               </div>;
             })}
           </nav>
 
           <div className="border-t border-border-subtle p-4">
-            <NavItem href={APP_ROUTES.settings} icon={Settings} isActive={isActive(APP_ROUTES.settings)} label="Impostazioni Admin" collapsed={collapsed} onClick={onClose} />
+            <NavItem href={APP_ROUTES.settings} icon={Settings} isActive={isActive(APP_ROUTES.settings)} label={t("nav.adminSettings")} collapsed={collapsed} onClick={onClose} />
             <IconButton
               className={[
                 "h-12 w-full justify-start gap-3 px-4 py-3 text-sm font-medium",

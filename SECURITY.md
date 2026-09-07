@@ -16,7 +16,7 @@ Birgus applica le linee guida di sviluppo sicuro del 15/04/2026:
 
 ## Segnalazioni
 
-Per vulnerabilita o deviazioni di sicurezza, aprire una issue privata/canale interno oppure preparare una PR con:
+Per vulnerabilità o deviazioni di sicurezza, aprire una issue privata/canale interno oppure preparare una PR con:
 
 - descrizione del problema;
 - rischio;

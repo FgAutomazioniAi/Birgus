@@ -371,14 +371,18 @@
 @layer base {
   * {
     @apply border-border-default;
+    box-sizing: border-box;
   }
 
   html {
     font-size: var(--font-size-base);
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-bg-page text-text-primary antialiased;
+    min-width: 0;
+    overflow-x: hidden;
   }
 
   a[href],

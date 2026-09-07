@@ -42,7 +42,7 @@ Servizi:
 - Garage S3 API: `http://localhost:3900`
 - Garage Admin API: `http://localhost:3903`
 
-Nota: il container `app` esegue `db:push` + `db:seed` all'avvio.
+Nota: il container `app` esegue `db:push` + `db:bootstrap` all'avvio.
 
 ## Endpoint principali
 - `POST /api/auth/login`
@@ -115,7 +115,7 @@ Compatibilità frontend storico:
 - Le dipendenze tra moduli vengono validate quando abiliti/disabiliti un modulo.
 
 ## Inizializzazione
-Il bootstrap Docker crea soltanto il catalogo tecnico: ruoli, permessi, moduli, dipendenze e tipi file. Non crea organization, workspace o utenti. Per una nuova installazione segui `docs/INSTALLATION_FROM_ZERO.md` e crea il primo superuser con `npm run instance:initialize`.
+Il bootstrap Docker crea soltanto il catalogo tecnico: ruoli, permessi, moduli, dipendenze e tipi file. Non crea organization, workspace o utenti. `npm run db:seed` e' un alias sicuro di `npm run db:bootstrap`. Per una nuova installazione segui `docs/INSTALLATION_FROM_ZERO.md` e crea il primo superuser con `npm run instance:initialize`.
 
 ## Garage locale
 Il file `garage/garage.local.toml` e richiesto da Docker Compose ma non deve essere versionato. Crealo da `garage/garage.toml.example` e sostituisci `rpc_secret`, `admin_token` e `metrics_token` con valori casuali per ogni ambiente.

@@ -129,6 +129,18 @@ export class SuperadminService {
     return modules;
   }
 
+  public async listWorkspaceModules(workspaceId: string): Promise<Array<{
+    moduleKey: string;
+    enabled: boolean;
+  }>> {
+    await this.ensureWorkspaceExists(workspaceId);
+    const modules = await this.moduleManagementService.listWorkspaceModules(workspaceId);
+    return modules.map((item) => ({
+      moduleKey: item.moduleKey,
+      enabled: item.enabled,
+    }));
+  }
+
   public async listUsers(searchText?: string | null, workspaceId?: string | null): Promise<Array<{
     id: string;
     email: string;
@@ -757,6 +769,44 @@ export class SuperadminService {
         moduleKey: params.moduleKey,
         mode: params.mode,
         reason: params.reason ?? null,
+      },
+      ipAddress: params.auditContext.ipAddress ?? null,
+      userAgent: params.auditContext.userAgent ?? null,
+    });
+  }
+
+  public async setWorkspaceModule(params: {
+    workspaceId: string;
+    moduleKey: string;
+    enabled: boolean;
+    auditContext: AuditContext;
+  }): Promise<void> {
+    await this.ensureWorkspaceExists(params.workspaceId);
+    if (params.enabled) {
+      await this.moduleManagementService.enableModule(
+        params.workspaceId,
+        params.moduleKey,
+        params.auditContext.actorUserId,
+      );
+    } else {
+      await this.moduleManagementService.disableModule(
+        params.workspaceId,
+        params.moduleKey,
+        params.auditContext.actorUserId,
+      );
+    }
+
+    await this.auditLogService.record({
+      workspaceId: params.auditContext.actorWorkspaceId,
+      userId: params.auditContext.actorUserId,
+      moduleKey: "superadmin_center",
+      action: params.enabled ? "superadmin.workspace.module_enabled" : "superadmin.workspace.module_disabled",
+      entityType: "WorkspaceModule",
+      entityId: params.workspaceId,
+      payload: {
+        workspaceId: params.workspaceId,
+        moduleKey: params.moduleKey,
+        enabled: params.enabled,
       },
       ipAddress: params.auditContext.ipAddress ?? null,
       userAgent: params.auditContext.userAgent ?? null,

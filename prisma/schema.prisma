@@ -23,7 +23,118 @@ enum DocumentScope {
   PROJECT
   DDT
   MEASURE_REPORT
+  COMMISSION_INTAKE
   OTHER
+}
+
+enum CommissionRecordStatus {
+  DRAFT
+  IN_PROGRESS
+  READY_FOR_REVIEW
+  SIGNED
+  ARCHIVED
+  CANCELLED
+}
+
+enum CommissionRecordPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum CommissionTemplateScope {
+  SYSTEM
+  WORKSPACE
+}
+
+enum CommissionTemplateVersionStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+}
+
+enum CommissionFieldType {
+  TEXT
+  LONG_TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  SELECT
+  MULTI_SELECT
+  CHECKBOX_GROUP
+  TABLE
+  DOCUMENT_CHECKLIST
+  SIGNATURE
+}
+
+enum CommissionDataKind {
+  STRING
+  INTEGER
+  DECIMAL
+  DATE
+  BOOLEAN
+  JSON
+}
+
+enum CommissionFieldSensitivity {
+  NORMAL
+  CONFIDENTIAL
+  SECRET
+}
+
+enum CommissionChecklistStatus {
+  DRAFT
+  IN_PROGRESS
+  READY_FOR_REVIEW
+  SIGNED
+  LOCKED
+  ARCHIVED
+}
+
+enum CommissionAccessRole {
+  VIEWER
+  EDITOR
+}
+
+enum CommissionLockResourceType {
+  RECORD
+  CHECKLIST
+  PAGE
+}
+
+enum CommissionEventType {
+  CREATED
+  UPDATED
+  FIELD_CHANGED
+  TABLE_ROW_ADDED
+  TABLE_ROW_UPDATED
+  TABLE_ROW_REMOVED
+  ATTACHMENT_ADDED
+  ATTACHMENT_REMOVED
+  LOCK_ACQUIRED
+  LOCK_RELEASED
+  LOCK_EXPIRED
+  SIGNED
+  STATUS_CHANGED
+  IMPORT_APPLIED
+  ARCHIVED
+  DELETED
+}
+
+enum CommissionImportStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+}
+
+enum CommissionImportItemStatus {
+  CREATED
+  UPDATED
+  SKIPPED
+  FAILED
 }
 
 enum DdtDocumentStatus {
@@ -222,7 +333,7 @@ model Workspace {
   updated_at      DateTime  @updatedAt
   deleted_at      DateTime?
 
-  organization                  Organization                @relation(fields: [organization_id], references: [id], onDelete: Restrict)
+  organization                  Organization                     @relation(fields: [organization_id], references: [id], onDelete: Restrict)
   memberships                   WorkspaceMembership[]
   user_workspace_roles          UserWorkspaceRole[]
   workspace_modules             WorkspaceModule[]
@@ -271,6 +382,32 @@ model Workspace {
   module_workflow_run_steps     ModuleWorkflowRunStep[]
   scheduled_workflow_deliveries ScheduledWorkflowDelivery[]
   human_interventions           HumanIntervention[]
+  commission_records            CommissionRecord[]
+  commission_record_contacts    CommissionRecordContact[]
+  commission_form_templates     CommissionFormTemplate[]
+  commission_form_versions      CommissionFormVersion[]
+  commission_form_pages         CommissionFormPage[]
+  commission_form_sections      CommissionFormSection[]
+  commission_form_fields        CommissionFormField[]
+  commission_field_options      CommissionFieldOption[]
+  commission_table_definitions  CommissionTableDefinition[]
+  commission_table_columns      CommissionTableColumn[]
+  commission_catalogs           CommissionCatalog[]
+  commission_catalog_items      CommissionCatalogItem[]
+  commission_checklists         CommissionChecklist[]
+  commission_field_values       CommissionFieldValue[]
+  commission_table_rows         CommissionTableRow[]
+  commission_table_cells        CommissionTableCell[]
+  commission_required_documents CommissionRequiredDocumentType[]
+  commission_attachments        CommissionAttachment[]
+  commission_record_accesses    CommissionRecordAccess[]
+  commission_resource_locks     CommissionResourceLock[]
+  commission_events             CommissionEvent[]
+  commission_signatures         CommissionSignature[]
+  commission_import_sources     CommissionImportSource[]
+  commission_import_mappings    CommissionImportMapping[]
+  commission_import_runs        CommissionImportRun[]
+  commission_import_items       CommissionImportItem[]
 
   @@unique([organization_id, code])
   @@index([organization_id])
@@ -326,6 +463,24 @@ model User {
   human_interventions_created          HumanIntervention[]        @relation("human_intervention_created_by")
   human_interventions_assigned         HumanIntervention[]        @relation("human_intervention_assigned_user")
   human_interventions_resolved         HumanIntervention[]        @relation("human_intervention_resolved_by")
+  commission_records_owned             CommissionRecord[]         @relation("commission_record_owner")
+  commission_records_created           CommissionRecord[]         @relation("commission_record_created_by")
+  commission_records_updated           CommissionRecord[]         @relation("commission_record_updated_by")
+  commission_templates_created         CommissionFormTemplate[]   @relation("commission_template_created_by")
+  commission_checklists_created        CommissionChecklist[]      @relation("commission_checklist_created_by")
+  commission_checklists_updated        CommissionChecklist[]      @relation("commission_checklist_updated_by")
+  commission_field_values_updated      CommissionFieldValue[]     @relation("commission_field_value_updated_by")
+  commission_rows_created              CommissionTableRow[]       @relation("commission_table_row_created_by")
+  commission_rows_updated              CommissionTableRow[]       @relation("commission_table_row_updated_by")
+  commission_cells_updated             CommissionTableCell[]      @relation("commission_table_cell_updated_by")
+  commission_attachments_uploaded      CommissionAttachment[]     @relation("commission_attachment_uploaded_by")
+  commission_accesses_granted          CommissionRecordAccess[]   @relation("commission_access_granted_by")
+  commission_accesses_received         CommissionRecordAccess[]   @relation("commission_access_user")
+  commission_locks_held                CommissionResourceLock[]   @relation("commission_lock_locked_by")
+  commission_events_authored           CommissionEvent[]          @relation("commission_event_actor")
+  commission_signatures_signed         CommissionSignature[]      @relation("commission_signature_signed_by")
+  commission_import_sources_created    CommissionImportSource[]   @relation("commission_import_source_created_by")
+  commission_import_runs_requested     CommissionImportRun[]      @relation("commission_import_run_requested_by")
 
   @@index([deleted_at])
   @@map("users")
@@ -705,6 +860,7 @@ model Document {
   assistant_session_documents AssistantSessionDocument[]
   workflow_runs               ModuleWorkflowRun[]
   knowledge_documents         KnowledgeDocument[]
+  commission_attachments      CommissionAttachment[]
 
   @@index([workspace_id])
   @@index([node_id])
@@ -726,8 +882,9 @@ model Company {
   updated_at   DateTime  @updatedAt
   deleted_at   DateTime?
 
-  workspace Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
-  clients   Client[]
+  workspace          Workspace          @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  clients            Client[]
+  commission_records CommissionRecord[]
 
   @@index([workspace_id])
   @@index([deleted_at])
@@ -747,12 +904,14 @@ model Client {
   updated_at   DateTime  @updatedAt
   deleted_at   DateTime?
 
-  workspace          Workspace           @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
-  company            Company?            @relation(fields: [company_id], references: [id], onDelete: SetNull)
-  project_clients    ProjectClient[]
-  project_versions   ProjectVersion[]
-  assistant_sessions AssistantSession[]
-  workflow_runs      ModuleWorkflowRun[]
+  workspace           Workspace                 @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  company             Company?                  @relation(fields: [company_id], references: [id], onDelete: SetNull)
+  project_clients     ProjectClient[]
+  project_versions    ProjectVersion[]
+  assistant_sessions  AssistantSession[]
+  workflow_runs       ModuleWorkflowRun[]
+  commission_records  CommissionRecord[]
+  commission_contacts CommissionRecordContact[]
 
   @@index([workspace_id])
   @@index([company_id])
@@ -1137,6 +1296,7 @@ model Project {
   quotation_jobs     QuotationOrchestratorJob[]
   assistant_sessions AssistantSession[]
   workflow_runs      ModuleWorkflowRun[]
+  commission_records CommissionRecord[]
 
   @@index([workspace_id])
   @@index([status_id])
@@ -1406,29 +1566,29 @@ model ModuleWorkflowRunStep {
 }
 
 model HumanIntervention {
-  id                  String                    @id @default(uuid()) @db.Uuid
-  workspace_id        String                    @db.Uuid
-  workflow_run_id     String                    @db.Uuid
-  workflow_node_id    String?                   @db.Uuid
-  created_by_user_id  String?                   @db.Uuid
-  assigned_user_id    String?                   @db.Uuid
-  resolved_by_user_id String?                   @db.Uuid
-  status              HumanInterventionStatus   @default(OPEN)
+  id                  String                     @id @default(uuid()) @db.Uuid
+  workspace_id        String                     @db.Uuid
+  workflow_run_id     String                     @db.Uuid
+  workflow_node_id    String?                    @db.Uuid
+  created_by_user_id  String?                    @db.Uuid
+  assigned_user_id    String?                    @db.Uuid
+  resolved_by_user_id String?                    @db.Uuid
+  status              HumanInterventionStatus    @default(OPEN)
   decision            HumanInterventionDecision?
-  priority            String                    @default("normal")
+  priority            String                     @default("normal")
   title               String
-  message             String                    @db.Text
+  message             String                     @db.Text
   input_payload       Json?
   decision_payload    Json?
   resolved_at         DateTime?
-  created_at          DateTime                  @default(now())
-  updated_at          DateTime                  @updatedAt
+  created_at          DateTime                   @default(now())
+  updated_at          DateTime                   @updatedAt
 
-  workspace        Workspace          @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
-  workflow_run     ModuleWorkflowRun  @relation(fields: [workflow_run_id], references: [id], onDelete: Cascade)
-  created_by_user User?               @relation("human_intervention_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull)
-  assigned_user   User?               @relation("human_intervention_assigned_user", fields: [assigned_user_id], references: [id], onDelete: SetNull)
-  resolved_by_user User?              @relation("human_intervention_resolved_by", fields: [resolved_by_user_id], references: [id], onDelete: SetNull)
+  workspace        Workspace         @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  workflow_run     ModuleWorkflowRun @relation(fields: [workflow_run_id], references: [id], onDelete: Cascade)
+  created_by_user  User?             @relation("human_intervention_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  assigned_user    User?             @relation("human_intervention_assigned_user", fields: [assigned_user_id], references: [id], onDelete: SetNull)
+  resolved_by_user User?             @relation("human_intervention_resolved_by", fields: [resolved_by_user_id], references: [id], onDelete: SetNull)
 
   @@index([workspace_id, status, priority, created_at])
   @@index([workflow_run_id])
@@ -1956,6 +2116,728 @@ model KnowledgeChunk {
   @@index([knowledge_document_id])
   @@index([embedding_status])
   @@map("knowledge_chunks")
+}
+
+model CommissionRecord {
+  id                      String                   @id @default(uuid()) @db.Uuid
+  workspace_id            String                   @db.Uuid
+  code                    String
+  title                   String
+  description             String?                  @db.Text
+  status                  CommissionRecordStatus   @default(DRAFT)
+  priority                CommissionRecordPriority @default(NORMAL)
+  company_id              Int?
+  client_id               String?                  @db.Uuid
+  project_id              String?                  @db.Uuid
+  source_system           String?
+  external_reference      String?
+  current_checklist_id    String?                  @unique @db.Uuid
+  expected_delivery_at    DateTime?
+  estimated_budget_amount Decimal?                 @db.Decimal(14, 2)
+  currency                String?                  @db.VarChar(3)
+  metadata                Json?
+  search_text             String?                  @db.Text
+  owner_user_id           String?                  @db.Uuid
+  created_by_user_id      String?                  @db.Uuid
+  updated_by_user_id      String?                  @db.Uuid
+  created_at              DateTime                 @default(now())
+  updated_at              DateTime                 @updatedAt
+  deleted_at              DateTime?
+
+  workspace         Workspace                 @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  company           Company?                  @relation(fields: [company_id], references: [id], onDelete: SetNull)
+  client            Client?                   @relation(fields: [client_id], references: [id], onDelete: SetNull)
+  project           Project?                  @relation(fields: [project_id], references: [id], onDelete: SetNull)
+  owner_user        User?                     @relation("commission_record_owner", fields: [owner_user_id], references: [id], onDelete: SetNull)
+  created_by_user   User?                     @relation("commission_record_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  updated_by_user   User?                     @relation("commission_record_updated_by", fields: [updated_by_user_id], references: [id], onDelete: SetNull)
+  current_checklist CommissionChecklist?      @relation("commission_record_current_checklist", fields: [current_checklist_id], references: [id], onDelete: SetNull)
+  contacts          CommissionRecordContact[]
+  checklists        CommissionChecklist[]
+  field_values      CommissionFieldValue[]
+  table_rows        CommissionTableRow[]
+  table_cells       CommissionTableCell[]
+  attachments       CommissionAttachment[]
+  accesses          CommissionRecordAccess[]
+  locks             CommissionResourceLock[]
+  events            CommissionEvent[]
+  signatures        CommissionSignature[]
+  import_items      CommissionImportItem[]
+
+  @@unique([workspace_id, code])
+  @@index([workspace_id, status, priority])
+  @@index([workspace_id, company_id])
+  @@index([workspace_id, client_id])
+  @@index([workspace_id, project_id])
+  @@index([workspace_id, owner_user_id])
+  @@index([workspace_id, source_system, external_reference])
+  @@index([current_checklist_id])
+  @@index([deleted_at])
+  @@map("commission_records")
+}
+
+model CommissionRecordContact {
+  id           String    @id @default(uuid()) @db.Uuid
+  workspace_id String    @db.Uuid
+  record_id    String    @db.Uuid
+  client_id    String?   @db.Uuid
+  role_key     String
+  display_name String
+  email        String?
+  phone        String?
+  metadata     Json?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  deleted_at   DateTime?
+
+  workspace Workspace        @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  record    CommissionRecord @relation(fields: [record_id], references: [id], onDelete: Cascade)
+  client    Client?          @relation(fields: [client_id], references: [id], onDelete: SetNull)
+
+  @@index([workspace_id, record_id])
+  @@index([workspace_id, client_id])
+  @@index([workspace_id, role_key])
+  @@index([deleted_at])
+  @@map("commission_record_contacts")
+}
+
+model CommissionFormTemplate {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  workspace_id       String?                 @db.Uuid
+  key                String
+  identity_key       String                  @unique
+  name               String
+  description        String?                 @db.Text
+  scope              CommissionTemplateScope @default(SYSTEM)
+  is_active          Boolean                 @default(true)
+  metadata           Json?
+  created_by_user_id String?                 @db.Uuid
+  created_at         DateTime                @default(now())
+  updated_at         DateTime                @updatedAt
+  deleted_at         DateTime?
+
+  workspace       Workspace?                @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  created_by_user User?                     @relation("commission_template_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  versions        CommissionFormVersion[]
+  import_mappings CommissionImportMapping[]
+
+  @@index([workspace_id])
+  @@index([key])
+  @@index([scope, is_active])
+  @@index([deleted_at])
+  @@map("commission_form_templates")
+}
+
+model CommissionFormVersion {
+  id           String                          @id @default(uuid()) @db.Uuid
+  workspace_id String?                         @db.Uuid
+  template_id  String                          @db.Uuid
+  version      Int
+  status       CommissionTemplateVersionStatus @default(DRAFT)
+  title        String
+  schema_json  Json?
+  published_at DateTime?
+  retired_at   DateTime?
+  created_at   DateTime                        @default(now())
+  updated_at   DateTime                        @updatedAt
+
+  workspace  Workspace?             @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  template   CommissionFormTemplate @relation(fields: [template_id], references: [id], onDelete: Cascade)
+  pages      CommissionFormPage[]
+  fields     CommissionFormField[]
+  checklists CommissionChecklist[]
+
+  @@unique([template_id, version])
+  @@index([workspace_id])
+  @@index([template_id, status])
+  @@map("commission_form_versions")
+}
+
+model CommissionFormPage {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspace_id String?  @db.Uuid
+  version_id   String   @db.Uuid
+  page_number  Int
+  key          String
+  title        String
+  description  String?  @db.Text
+  sort_order   Int
+  metadata     Json?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  workspace Workspace?              @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  version   CommissionFormVersion   @relation(fields: [version_id], references: [id], onDelete: Cascade)
+  sections  CommissionFormSection[]
+  fields    CommissionFormField[]
+
+  @@unique([version_id, page_number])
+  @@unique([version_id, key])
+  @@index([workspace_id])
+  @@map("commission_form_pages")
+}
+
+model CommissionFormSection {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspace_id String?  @db.Uuid
+  page_id      String   @db.Uuid
+  key          String
+  title        String
+  description  String?  @db.Text
+  sort_order   Int
+  metadata     Json?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  workspace Workspace?            @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  page      CommissionFormPage    @relation(fields: [page_id], references: [id], onDelete: Cascade)
+  fields    CommissionFormField[]
+
+  @@unique([page_id, key])
+  @@index([workspace_id])
+  @@index([page_id, sort_order])
+  @@map("commission_form_sections")
+}
+
+model CommissionFormField {
+  id              String                     @id @default(uuid()) @db.Uuid
+  workspace_id    String?                    @db.Uuid
+  version_id      String                     @db.Uuid
+  page_id         String                     @db.Uuid
+  section_id      String?                    @db.Uuid
+  key             String
+  label           String
+  placeholder     String?
+  help_text       String?                    @db.Text
+  field_type      CommissionFieldType
+  data_kind       CommissionDataKind         @default(STRING)
+  sensitivity     CommissionFieldSensitivity @default(NORMAL)
+  is_required     Boolean                    @default(false)
+  is_indexed      Boolean                    @default(false)
+  sort_order      Int
+  validation_json Json?
+  visibility_json Json?
+  default_json    Json?
+  metadata        Json?
+  created_at      DateTime                   @default(now())
+  updated_at      DateTime                   @updatedAt
+
+  workspace               Workspace?                       @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  version                 CommissionFormVersion            @relation(fields: [version_id], references: [id], onDelete: Cascade)
+  page                    CommissionFormPage               @relation(fields: [page_id], references: [id], onDelete: Cascade)
+  section                 CommissionFormSection?           @relation(fields: [section_id], references: [id], onDelete: SetNull)
+  options                 CommissionFieldOption[]
+  table_definition        CommissionTableDefinition?
+  required_document_types CommissionRequiredDocumentType[]
+  values                  CommissionFieldValue[]
+  table_cells             CommissionTableCell[]
+
+  @@unique([version_id, key])
+  @@index([workspace_id])
+  @@index([page_id, sort_order])
+  @@index([section_id, sort_order])
+  @@index([field_type])
+  @@map("commission_form_fields")
+}
+
+model CommissionFieldOption {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspace_id String?  @db.Uuid
+  field_id     String   @db.Uuid
+  value        String
+  label        String
+  sort_order   Int
+  metadata     Json?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  workspace Workspace?          @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  field     CommissionFormField @relation(fields: [field_id], references: [id], onDelete: Cascade)
+
+  @@unique([field_id, value])
+  @@index([workspace_id])
+  @@index([field_id, sort_order])
+  @@map("commission_field_options")
+}
+
+model CommissionTableDefinition {
+  id             String   @id @default(uuid()) @db.Uuid
+  workspace_id   String?  @db.Uuid
+  field_id       String   @unique @db.Uuid
+  key            String
+  title          String
+  min_rows       Int?
+  max_rows       Int?
+  allow_add_rows Boolean  @default(true)
+  metadata       Json?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  workspace Workspace?              @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  field     CommissionFormField     @relation(fields: [field_id], references: [id], onDelete: Cascade)
+  columns   CommissionTableColumn[]
+  rows      CommissionTableRow[]
+
+  @@index([workspace_id])
+  @@index([key])
+  @@map("commission_table_definitions")
+}
+
+model CommissionTableColumn {
+  id                  String                     @id @default(uuid()) @db.Uuid
+  workspace_id        String?                    @db.Uuid
+  table_definition_id String                     @db.Uuid
+  key                 String
+  label               String
+  placeholder         String?
+  data_kind           CommissionDataKind         @default(STRING)
+  sensitivity         CommissionFieldSensitivity @default(NORMAL)
+  is_required         Boolean                    @default(false)
+  is_indexed          Boolean                    @default(false)
+  sort_order          Int
+  validation_json     Json?
+  metadata            Json?
+  created_at          DateTime                   @default(now())
+  updated_at          DateTime                   @updatedAt
+
+  workspace        Workspace?                @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  table_definition CommissionTableDefinition @relation(fields: [table_definition_id], references: [id], onDelete: Cascade)
+  cells            CommissionTableCell[]
+
+  @@unique([table_definition_id, key])
+  @@index([workspace_id])
+  @@index([table_definition_id, sort_order])
+  @@map("commission_table_columns")
+}
+
+model CommissionCatalog {
+  id           String    @id @default(uuid()) @db.Uuid
+  workspace_id String?   @db.Uuid
+  key          String
+  identity_key String    @unique
+  label        String
+  description  String?   @db.Text
+  is_active    Boolean   @default(true)
+  metadata     Json?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  deleted_at   DateTime?
+
+  workspace Workspace?              @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  items     CommissionCatalogItem[]
+
+  @@index([workspace_id])
+  @@index([key])
+  @@index([deleted_at])
+  @@map("commission_catalogs")
+}
+
+model CommissionCatalogItem {
+  id           String    @id @default(uuid()) @db.Uuid
+  workspace_id String?   @db.Uuid
+  catalog_id   String    @db.Uuid
+  value        String
+  label        String
+  sort_order   Int
+  metadata     Json?
+  is_active    Boolean   @default(true)
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  deleted_at   DateTime?
+
+  workspace Workspace?        @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  catalog   CommissionCatalog @relation(fields: [catalog_id], references: [id], onDelete: Cascade)
+
+  @@unique([catalog_id, value])
+  @@index([workspace_id])
+  @@index([catalog_id, sort_order])
+  @@index([deleted_at])
+  @@map("commission_catalog_items")
+}
+
+model CommissionChecklist {
+  id                  String                    @id @default(uuid()) @db.Uuid
+  workspace_id        String                    @db.Uuid
+  record_id           String                    @db.Uuid
+  form_version_id     String                    @db.Uuid
+  title               String
+  status              CommissionChecklistStatus @default(DRAFT)
+  revision_no         Int                       @default(1)
+  progress_percent    Int                       @default(0)
+  current_page_number Int?
+  metadata            Json?
+  created_by_user_id  String?                   @db.Uuid
+  updated_by_user_id  String?                   @db.Uuid
+  signed_at           DateTime?
+  created_at          DateTime                  @default(now())
+  updated_at          DateTime                  @updatedAt
+  deleted_at          DateTime?
+
+  workspace          Workspace                @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  record             CommissionRecord         @relation(fields: [record_id], references: [id], onDelete: Cascade)
+  form_version       CommissionFormVersion    @relation(fields: [form_version_id], references: [id], onDelete: Restrict)
+  created_by_user    User?                    @relation("commission_checklist_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  updated_by_user    User?                    @relation("commission_checklist_updated_by", fields: [updated_by_user_id], references: [id], onDelete: SetNull)
+  current_for_record CommissionRecord?        @relation("commission_record_current_checklist")
+  field_values       CommissionFieldValue[]
+  table_rows         CommissionTableRow[]
+  table_cells        CommissionTableCell[]
+  attachments        CommissionAttachment[]
+  locks              CommissionResourceLock[]
+  events             CommissionEvent[]
+  signatures         CommissionSignature[]
+
+  @@index([workspace_id, record_id])
+  @@index([workspace_id, status])
+  @@index([form_version_id])
+  @@index([deleted_at])
+  @@map("commission_checklists")
+}
+
+model CommissionFieldValue {
+  id                 String    @id @default(uuid()) @db.Uuid
+  workspace_id       String    @db.Uuid
+  record_id          String    @db.Uuid
+  checklist_id       String    @db.Uuid
+  field_id           String    @db.Uuid
+  field_key          String
+  value_text         String?   @db.Text
+  value_number       Decimal?  @db.Decimal(18, 6)
+  value_date         DateTime?
+  value_boolean      Boolean?
+  value_json         Json?
+  normalized_value   String?   @db.VarChar(512)
+  display_value      String?   @db.VarChar(1024)
+  updated_by_user_id String?   @db.Uuid
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  workspace       Workspace           @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  record          CommissionRecord    @relation(fields: [record_id], references: [id], onDelete: Cascade)
+  checklist       CommissionChecklist @relation(fields: [checklist_id], references: [id], onDelete: Cascade)
+  field           CommissionFormField @relation(fields: [field_id], references: [id], onDelete: Restrict)
+  updated_by_user User?               @relation("commission_field_value_updated_by", fields: [updated_by_user_id], references: [id], onDelete: SetNull)
+
+  @@unique([checklist_id, field_id])
+  @@index([workspace_id, record_id])
+  @@index([workspace_id, field_key])
+  @@index([workspace_id, field_key, normalized_value])
+  @@index([workspace_id, field_key, value_number])
+  @@index([workspace_id, field_key, value_date])
+  @@index([workspace_id, field_key, value_boolean])
+  @@map("commission_field_values")
+}
+
+model CommissionTableRow {
+  id                  String    @id @default(uuid()) @db.Uuid
+  workspace_id        String    @db.Uuid
+  record_id           String    @db.Uuid
+  checklist_id        String    @db.Uuid
+  table_definition_id String    @db.Uuid
+  row_index           Int
+  row_key             String?
+  metadata            Json?
+  created_by_user_id  String?   @db.Uuid
+  updated_by_user_id  String?   @db.Uuid
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  deleted_at          DateTime?
+
+  workspace        Workspace                 @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  record           CommissionRecord          @relation(fields: [record_id], references: [id], onDelete: Cascade)
+  checklist        CommissionChecklist       @relation(fields: [checklist_id], references: [id], onDelete: Cascade)
+  table_definition CommissionTableDefinition @relation(fields: [table_definition_id], references: [id], onDelete: Restrict)
+  created_by_user  User?                     @relation("commission_table_row_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  updated_by_user  User?                     @relation("commission_table_row_updated_by", fields: [updated_by_user_id], references: [id], onDelete: SetNull)
+  cells            CommissionTableCell[]
+
+  @@unique([checklist_id, table_definition_id, row_index])
+  @@index([workspace_id, record_id])
+  @@index([table_definition_id])
+  @@index([deleted_at])
+  @@map("commission_table_rows")
+}
+
+model CommissionTableCell {
+  id                 String    @id @default(uuid()) @db.Uuid
+  workspace_id       String    @db.Uuid
+  record_id          String    @db.Uuid
+  checklist_id       String    @db.Uuid
+  row_id             String    @db.Uuid
+  column_id          String    @db.Uuid
+  field_id           String?   @db.Uuid
+  column_key         String
+  value_text         String?   @db.Text
+  value_number       Decimal?  @db.Decimal(18, 6)
+  value_date         DateTime?
+  value_boolean      Boolean?
+  value_json         Json?
+  normalized_value   String?   @db.VarChar(512)
+  display_value      String?   @db.VarChar(1024)
+  updated_by_user_id String?   @db.Uuid
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  workspace       Workspace             @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  record          CommissionRecord      @relation(fields: [record_id], references: [id], onDelete: Cascade)
+  checklist       CommissionChecklist   @relation(fields: [checklist_id], references: [id], onDelete: Cascade)
+  row             CommissionTableRow    @relation(fields: [row_id], references: [id], onDelete: Cascade)
+  column          CommissionTableColumn @relation(fields: [column_id], references: [id], onDelete: Restrict)
+  field           CommissionFormField?  @relation(fields: [field_id], references: [id], onDelete: SetNull)
+  updated_by_user User?                 @relation("commission_table_cell_updated_by", fields: [updated_by_user_id], references: [id], onDelete: SetNull)
+
+  @@unique([row_id, column_id])
+  @@index([workspace_id, record_id])
+  @@index([workspace_id, column_key])
+  @@index([workspace_id, column_key, normalized_value])
+  @@index([workspace_id, column_key, value_number])
+  @@index([workspace_id, column_key, value_date])
+  @@index([workspace_id, column_key, value_boolean])
+  @@map("commission_table_cells")
+}
+
+model CommissionRequiredDocumentType {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspace_id String?  @db.Uuid
+  field_id     String   @db.Uuid
+  key          String
+  label        String
+  is_required  Boolean  @default(false)
+  sort_order   Int
+  metadata     Json?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  workspace   Workspace?             @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  field       CommissionFormField    @relation(fields: [field_id], references: [id], onDelete: Cascade)
+  attachments CommissionAttachment[]
+
+  @@unique([field_id, key])
+  @@index([workspace_id])
+  @@index([field_id, sort_order])
+  @@map("commission_required_document_types")
+}
+
+model CommissionAttachment {
+  id                        String    @id @default(uuid()) @db.Uuid
+  workspace_id              String    @db.Uuid
+  record_id                 String    @db.Uuid
+  checklist_id              String?   @db.Uuid
+  required_document_type_id String?   @db.Uuid
+  document_id               String    @db.Uuid
+  label                     String?
+  note                      String?   @db.Text
+  uploaded_by_user_id       String?   @db.Uuid
+  created_at                DateTime  @default(now())
+  deleted_at                DateTime?
+
+  workspace              Workspace                       @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  record                 CommissionRecord                @relation(fields: [record_id], references: [id], onDelete: Cascade)
+  checklist              CommissionChecklist?            @relation(fields: [checklist_id], references: [id], onDelete: Cascade)
+  required_document_type CommissionRequiredDocumentType? @relation(fields: [required_document_type_id], references: [id], onDelete: SetNull)
+  document               Document                        @relation(fields: [document_id], references: [id], onDelete: Restrict)
+  uploaded_by_user       User?                           @relation("commission_attachment_uploaded_by", fields: [uploaded_by_user_id], references: [id], onDelete: SetNull)
+
+  @@unique([record_id, document_id])
+  @@index([workspace_id, record_id])
+  @@index([checklist_id])
+  @@index([document_id])
+  @@index([deleted_at])
+  @@map("commission_attachments")
+}
+
+model CommissionRecordAccess {
+  id                 String               @id @default(uuid()) @db.Uuid
+  workspace_id       String               @db.Uuid
+  record_id          String               @db.Uuid
+  user_id            String               @db.Uuid
+  role               CommissionAccessRole
+  granted_by_user_id String?              @db.Uuid
+  granted_at         DateTime             @default(now())
+  revoked_at         DateTime?
+
+  workspace       Workspace        @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  record          CommissionRecord @relation(fields: [record_id], references: [id], onDelete: Cascade)
+  user            User             @relation("commission_access_user", fields: [user_id], references: [id], onDelete: Cascade)
+  granted_by_user User?            @relation("commission_access_granted_by", fields: [granted_by_user_id], references: [id], onDelete: SetNull)
+
+  @@unique([record_id, user_id])
+  @@index([workspace_id, user_id, role])
+  @@index([revoked_at])
+  @@map("commission_record_accesses")
+}
+
+model CommissionResourceLock {
+  id                String                     @id @default(uuid()) @db.Uuid
+  workspace_id      String                     @db.Uuid
+  record_id         String?                    @db.Uuid
+  checklist_id      String?                    @db.Uuid
+  resource_type     CommissionLockResourceType
+  resource_id       String                     @db.Uuid
+  active_scope_key  String?                    @unique
+  lock_token_hash   String
+  locked_by_user_id String                     @db.Uuid
+  locked_at         DateTime                   @default(now())
+  expires_at        DateTime
+  heartbeat_at      DateTime                   @default(now())
+  released_at       DateTime?
+  release_reason    String?
+
+  workspace      Workspace            @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  record         CommissionRecord?    @relation(fields: [record_id], references: [id], onDelete: Cascade)
+  checklist      CommissionChecklist? @relation(fields: [checklist_id], references: [id], onDelete: Cascade)
+  locked_by_user User                 @relation("commission_lock_locked_by", fields: [locked_by_user_id], references: [id], onDelete: Cascade)
+
+  @@index([workspace_id, resource_type, resource_id])
+  @@index([workspace_id, locked_by_user_id])
+  @@index([expires_at])
+  @@index([released_at])
+  @@map("commission_resource_locks")
+}
+
+model CommissionEvent {
+  id            String              @id @default(uuid()) @db.Uuid
+  workspace_id  String              @db.Uuid
+  record_id     String?             @db.Uuid
+  checklist_id  String?             @db.Uuid
+  event_type    CommissionEventType
+  actor_user_id String?             @db.Uuid
+  summary       String
+  payload       Json?
+  created_at    DateTime            @default(now())
+
+  workspace  Workspace            @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  record     CommissionRecord?    @relation(fields: [record_id], references: [id], onDelete: SetNull)
+  checklist  CommissionChecklist? @relation(fields: [checklist_id], references: [id], onDelete: SetNull)
+  actor_user User?                @relation("commission_event_actor", fields: [actor_user_id], references: [id], onDelete: SetNull)
+
+  @@index([workspace_id, created_at])
+  @@index([record_id, created_at])
+  @@index([checklist_id, created_at])
+  @@index([actor_user_id])
+  @@index([event_type])
+  @@map("commission_events")
+}
+
+model CommissionSignature {
+  id                String   @id @default(uuid()) @db.Uuid
+  workspace_id      String   @db.Uuid
+  record_id         String   @db.Uuid
+  checklist_id      String   @db.Uuid
+  signed_by_user_id String   @db.Uuid
+  signer_name       String
+  signer_role       String?
+  statement         String?  @db.Text
+  signed_at         DateTime @default(now())
+  metadata          Json?
+
+  workspace      Workspace           @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  record         CommissionRecord    @relation(fields: [record_id], references: [id], onDelete: Cascade)
+  checklist      CommissionChecklist @relation(fields: [checklist_id], references: [id], onDelete: Cascade)
+  signed_by_user User                @relation("commission_signature_signed_by", fields: [signed_by_user_id], references: [id], onDelete: Restrict)
+
+  @@index([workspace_id, record_id])
+  @@index([checklist_id])
+  @@index([signed_by_user_id])
+  @@map("commission_signatures")
+}
+
+model CommissionImportSource {
+  id                 String    @id @default(uuid()) @db.Uuid
+  workspace_id       String    @db.Uuid
+  key                String
+  name               String
+  base_url           String?
+  metadata           Json?
+  is_active          Boolean   @default(true)
+  created_by_user_id String?   @db.Uuid
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+  deleted_at         DateTime?
+
+  workspace       Workspace                 @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  created_by_user User?                     @relation("commission_import_source_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  mappings        CommissionImportMapping[]
+  runs            CommissionImportRun[]
+
+  @@unique([workspace_id, key])
+  @@index([workspace_id])
+  @@index([deleted_at])
+  @@map("commission_import_sources")
+}
+
+model CommissionImportMapping {
+  id           String    @id @default(uuid()) @db.Uuid
+  workspace_id String    @db.Uuid
+  source_id    String    @db.Uuid
+  template_id  String?   @db.Uuid
+  key          String
+  name         String
+  mapping_json Json
+  is_active    Boolean   @default(true)
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  deleted_at   DateTime?
+
+  workspace Workspace               @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  source    CommissionImportSource  @relation(fields: [source_id], references: [id], onDelete: Cascade)
+  template  CommissionFormTemplate? @relation(fields: [template_id], references: [id], onDelete: SetNull)
+  runs      CommissionImportRun[]
+
+  @@unique([workspace_id, source_id, key])
+  @@index([workspace_id])
+  @@index([template_id])
+  @@index([deleted_at])
+  @@map("commission_import_mappings")
+}
+
+model CommissionImportRun {
+  id                   String                 @id @default(uuid()) @db.Uuid
+  workspace_id         String                 @db.Uuid
+  source_id            String                 @db.Uuid
+  mapping_id           String?                @db.Uuid
+  status               CommissionImportStatus @default(PENDING)
+  requested_by_user_id String?                @db.Uuid
+  source_payload_json  Json?
+  result_summary_json  Json?
+  error_message        String?                @db.Text
+  started_at           DateTime?
+  finished_at          DateTime?
+  created_at           DateTime               @default(now())
+
+  workspace         Workspace                @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  source            CommissionImportSource   @relation(fields: [source_id], references: [id], onDelete: Restrict)
+  mapping           CommissionImportMapping? @relation(fields: [mapping_id], references: [id], onDelete: SetNull)
+  requested_by_user User?                    @relation("commission_import_run_requested_by", fields: [requested_by_user_id], references: [id], onDelete: SetNull)
+  items             CommissionImportItem[]
+
+  @@index([workspace_id, status])
+  @@index([source_id])
+  @@index([mapping_id])
+  @@index([created_at])
+  @@map("commission_import_runs")
+}
+
+model CommissionImportItem {
+  id                   String                     @id @default(uuid()) @db.Uuid
+  workspace_id         String                     @db.Uuid
+  import_run_id        String                     @db.Uuid
+  record_id            String?                    @db.Uuid
+  source_item_key      String?
+  status               CommissionImportItemStatus
+  source_payload_json  Json?
+  applied_payload_json Json?
+  error_message        String?                    @db.Text
+  created_at           DateTime                   @default(now())
+
+  workspace  Workspace           @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  import_run CommissionImportRun @relation(fields: [import_run_id], references: [id], onDelete: Cascade)
+  record     CommissionRecord?   @relation(fields: [record_id], references: [id], onDelete: SetNull)
+
+  @@index([workspace_id, status])
+  @@index([import_run_id])
+  @@index([record_id])
+  @@map("commission_import_items")
 }
 
 model Notification {

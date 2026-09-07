@@ -39,8 +39,8 @@ export function AppShell({ children, currentUser }: AppShellProps) {
 
       <main
         className={[
-          "flex min-w-0 flex-1 flex-col transition-all duration-300",
-          sidebarCollapsed ? "lg:ml-20" : "lg:ml-64",
+          "flex min-w-0 flex-1 flex-col overflow-x-hidden transition-all duration-300",
+          sidebarCollapsed ? "lg:ml-20 lg:w-[calc(100%-5rem)] lg:flex-none" : "lg:ml-64 lg:w-[calc(100%-16rem)] lg:flex-none",
         ].join(" ")}
       >
         <TopNav
@@ -50,8 +50,8 @@ export function AppShell({ children, currentUser }: AppShellProps) {
           onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
         />
         <ModuleAccessProvider enabledModuleKeys={currentUser.enabledModuleKeys}>
-          <div className="min-h-0 flex-1 overflow-auto p-4 lg:p-8">
-            <div className="mx-auto w-full max-w-[1780px]">{children}</div>
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 lg:p-8">
+            <div className="mx-auto min-w-0 w-full max-w-[1780px]">{children}</div>
           </div>
           <FloatingAssistant enabled={currentUser.enabledModuleKeys.includes("conversational_assistant")} />
         </ModuleAccessProvider>

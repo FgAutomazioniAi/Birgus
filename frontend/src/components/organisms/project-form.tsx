@@ -1351,7 +1351,6 @@ export function ProjectForm({ id }: ProjectFormProps) {
               <Input
                 value={newClientNotes}
                 onChange={(event) => setNewClientNotes(event.target.value)}
-                placeholder="Note"
                 disabled={isCreatingClient}
               />
             </div>

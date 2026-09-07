@@ -21,6 +21,10 @@ Le frecce indicano: **il modulo sorgente richiede il modulo di destinazione**.
 
 ## Moduli
 
+### In progettazione
+
+- [[Drafts/COMMISSION_INTAKE_MODULE|Checklist raccolta dati]]
+
 ### Base e contenuti
 
 - [[Modules/document_archive]]

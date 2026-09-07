@@ -1,0 +1,30 @@
+{
+	"nodes":[
+		{"id":"existing-core","type":"text","text":"Database esistente\n\nWorkspace\nUser\nModule\nDocument / Node\nAuditLog\nNotification\n\nIl nuovo modulo si aggancia qui senza duplicare utenti, workspace, archivio e audit globale.","x":-900,"y":-120,"width":300,"height":260},
+		{"id":"module","type":"text","text":"Modulo\n\ncommission_intake\n\nWorkspace-scoped\nAbilitabile da profilo installazione e settings admin\nNon usa workflow\nRichiede permessi propri","x":-500,"y":-120,"width":260,"height":210},
+		{"id":"registry","type":"text","text":"Anagrafica commesse\n\ncommission_records\n\nUna commessa esistente vive qui.\nContiene codice, titolo, stato, proprietario, riferimenti cliente/progetto opzionali, revisione e date.\nE la lista principale del modulo.","x":-80,"y":-160,"width":330,"height":250},
+		{"id":"template","type":"text","text":"Definizione form\n\ncommission_form_templates\ncommission_form_versions\ncommission_form_pages\ncommission_form_sections\ncommission_form_fields\ncommission_field_options\n\nLe 16 sezioni ricevute diventano pagine/sezioni del template pubblicato.","x":-80,"y":-520,"width":360,"height":270},
+		{"id":"sections","type":"text","text":"Sezioni iniziali\n\n1 Informazioni generali progetto\n2 Processo produttivo attuale\n3 Prodotto/componente\n4 Requisiti automazione\n5 Spazio e layout\n6 Utilities e infrastrutture\n7 Supervisione e IT\n8 Visione/AI\n9 Robotica\n10 Sicurezza\n11 Manutenzione\n12 Collaudo\n13 Tempi e budget\n14 Allegati\n15 Cybersecurity OT / NIS2\n16 Note","x":380,"y":-560,"width":360,"height":420},
+		{"id":"tables","type":"text","text":"Campi tabellari dinamici\n\ncommission_table_definitions\ncommission_table_columns\ncommission_record_table_rows\ncommission_record_table_cells\n\nServe per tabelle dentro il form senza creare una tabella SQL diversa per ogni lista.","x":390,"y":-40,"width":330,"height":240},
+		{"id":"values","type":"text","text":"Compilazione dati\n\ncommission_record_values\n\nValori semplici collegati a record + field.\nSupporta txt, desc, sel, checkbox, numeri/date future.\nI campi importanti possono essere indicizzati o copiati su colonne dell'anagrafica.","x":390,"y":260,"width":330,"height":260},
+		{"id":"access","type":"text","text":"Accesso e concorrenza\n\ncommission_record_access\ncommission_record_locks\n\nVIEWER / EDITOR sul singolo record.\nLock con proprietario, token, scadenza e heartbeat.\nRevision number per evitare salvataggi su dati vecchi.","x":-500,"y":220,"width":320,"height":250},
+		{"id":"audit","type":"text","text":"Backlog modifiche\n\ncommission_record_events\ncommission_record_signatures\n\nStorico leggibile: chi ha modificato cosa, quando, vecchio/nuovo valore se non sensibile.\nFirma finale di presa visione con user id, nome e revisione firmata.","x":-80,"y":240,"width":330,"height":260},
+		{"id":"import","type":"text","text":"Import piattaforma esterna\n\ncommission_import_sources\ncommission_import_mappings\ncommission_import_runs\n\nAdapter futuro: sorgente, mapping verso campi template, log run e errori.\nNiente segreti nei log.","x":-500,"y":-500,"width":310,"height":230},
+		{"id":"documents","type":"text","text":"Allegati e archivio\n\nUsa Document / Node esistenti.\nConsigliato: Document.domain_entity_type = COMMISSION_RECORD\nDocument.domain_entity_id = commission_records.id\n\nLa sezione Documentazione e allegati non deve creare un archivio parallelo.","x":800,"y":70,"width":340,"height":260},
+		{"id":"decision","type":"text","text":"Decisione progettuale\n\nNon creare 16 tabelle SQL per le 16 sezioni.\nLe 16 sezioni sono struttura del template.\nCreare tabelle SQL solo per oggetti stabili: commesse, accessi, lock, eventi, import, firma, valori e righe tabellari.","x":780,"y":-320,"width":360,"height":270},
+		{"id":"52f862c0fe3be4aa","type":"file","file":"DATABASE_SCHEMA.dbml","x":-880,"y":-330,"width":400,"height":400}
+	],
+	"edges":[
+		{"id":"core-module","fromNode":"existing-core","fromSide":"right","toNode":"module","toSide":"left","label":"registra"},
+		{"id":"module-registry","fromNode":"module","fromSide":"right","toNode":"registry","toSide":"left","label":"espone"},
+		{"id":"template-registry","fromNode":"template","fromSide":"bottom","toNode":"registry","toSide":"top","label":"versione usata da"},
+		{"id":"sections-template","fromNode":"sections","fromSide":"left","toNode":"template","toSide":"right","label":"diventano pagine"},
+		{"id":"registry-values","fromNode":"registry","fromSide":"right","toNode":"values","toSide":"left","label":"contiene"},
+		{"id":"registry-tables","fromNode":"registry","fromSide":"right","toNode":"tables","toSide":"left","label":"contiene"},
+		{"id":"registry-access","fromNode":"registry","fromSide":"left","toNode":"access","toSide":"right","label":"protetta da"},
+		{"id":"registry-audit","fromNode":"registry","fromSide":"bottom","toNode":"audit","toSide":"top","label":"tracciata da"},
+		{"id":"import-registry","fromNode":"import","fromSide":"right","toNode":"registry","toSide":"left","label":"crea/aggiorna"},
+		{"id":"registry-documents","fromNode":"registry","fromSide":"right","toNode":"documents","toSide":"left","label":"allega"},
+		{"id":"decision-template","fromNode":"decision","fromSide":"left","toNode":"template","toSide":"right","label":"vincolo"}
+	]
+}

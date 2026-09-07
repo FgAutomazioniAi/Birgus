@@ -17,6 +17,14 @@ const userParamsSchema = z.object({
   userId: z.string().uuid(),
 });
 
+const workspaceParamsSchema = z.object({
+  workspaceId: z.string().uuid(),
+});
+
+const workspaceModuleParamsSchema = workspaceParamsSchema.extend({
+  moduleKey: z.string().trim().min(1),
+});
+
 const userModulesQuerySchema = z.object({
   workspaceId: z.string().uuid(),
 });
@@ -51,6 +59,10 @@ const clearModuleOverrideSchema = z.object({
   userId: z.string().uuid(),
   moduleKey: z.string().trim().min(1),
   confirmText: z.literal("cancella"),
+});
+
+const workspaceModuleSchema = z.object({
+  enabled: z.boolean(),
 });
 
 const workspaceRolesSchema = z.object({
@@ -109,6 +121,41 @@ export class NestSuperadminController {
   ): Promise<Record<string, unknown>> {
     await this.ensureSuperadmin(requestContext);
     return { modules: await this.service.listModules() };
+  }
+
+  @Get("workspaces/:workspaceId/modules")
+  public async listWorkspaceModules(
+    @Param() paramsRaw: unknown,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    await this.ensureSuperadmin(requestContext);
+    const params = workspaceParamsSchema.parse(paramsRaw);
+    return {
+      workspaceId: params.workspaceId,
+      modules: await this.service.listWorkspaceModules(params.workspaceId),
+    };
+  }
+
+  @Put("workspaces/:workspaceId/modules/:moduleKey")
+  @HttpCode(200)
+  public async setWorkspaceModule(
+    @Param() paramsRaw: unknown,
+    @Body() bodyRaw: unknown,
+    @Req() request: FastifyRequest,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    await this.ensureSuperadmin(requestContext);
+    const params = workspaceModuleParamsSchema.parse(paramsRaw);
+    const body = workspaceModuleSchema.parse(bodyRaw);
+
+    await this.service.setWorkspaceModule({
+      workspaceId: params.workspaceId,
+      moduleKey: params.moduleKey,
+      enabled: body.enabled,
+      auditContext: this.getAuditContext(requestContext, request),
+    });
+
+    return { ok: true, workspaceId: params.workspaceId, moduleKey: params.moduleKey, enabled: body.enabled };
   }
 
   @Get("users")

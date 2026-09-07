@@ -10,13 +10,19 @@ import { StorageSelector } from "../src/storage/StorageSelector.js";
 async function main(): Promise<void> {
   const prisma = new PrismaClient();
   PrismaClientManager.setClient(prisma);
+  const workspaceCode = process.env.BIRGUS_E2E_WORKSPACE_CODE?.trim() || "main";
+  const userEmail = process.env.BIRGUS_E2E_USER_EMAIL?.trim();
+
+  if (!userEmail) {
+    throw new Error("BIRGUS_E2E_USER_EMAIL is required to run chatbot upload e2e scripts.");
+  }
 
   const workspace = await prisma.workspace.findFirstOrThrow({
-    where: { code: "main", deleted_at: null },
+    where: { code: workspaceCode, deleted_at: null },
     select: { id: true },
   });
   const user = await prisma.user.findUniqueOrThrow({
-    where: { email: "samuel.m@fgautomazioni.it" },
+    where: { email: userEmail },
     select: { id: true },
   });
   const moduleRecord = await prisma.module.findUnique({

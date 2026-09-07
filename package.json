@@ -19,7 +19,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:bootstrap": "tsx scripts/bootstrap-database.ts",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "tsx scripts/bootstrap-database.ts",
     "db:sync:module-agent-prompts": "tsx scripts/sync-module-agent-prompts.ts",
     "db:sync:workflow-tools": "tsx scripts/sync-workflow-tools.ts",
     "instance:initialize": "tsx scripts/initialize-instance.ts",

@@ -79,61 +79,66 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
   public async listWorkspaceModules(workspaceId: string): Promise<WorkspaceModuleState[]> {
     const prisma = PrismaClientManager.getClient();
 
-    const rows = await prisma.workspaceModule.findMany({
+    const rows = await prisma.module.findMany({
       where: {
-        workspace_id: workspaceId,
+        is_active: true,
       },
-      include: {
-        module: {
+      select: {
+        key: true,
+        workspace_modules: {
+          where: {
+            workspace_id: workspaceId,
+          },
           select: {
-            key: true,
+            is_enabled: true,
           },
         },
       },
       orderBy: {
-        module: {
-          key: "asc",
-        },
+        key: "asc",
       },
     });
 
-    return rows.map((row) => new WorkspaceModuleState(row.module.key, row.is_enabled));
+    return rows.map((row) => new WorkspaceModuleState(row.key, row.workspace_modules[0]?.is_enabled ?? false));
   }
 
   public async listUserModules(workspaceId: string, userId: string): Promise<UserModuleState[]> {
     const prisma = PrismaClientManager.getClient();
 
-    const rows = await prisma.workspaceModule.findMany({
+    const rows = await prisma.module.findMany({
       where: {
-        workspace_id: workspaceId,
+        is_active: true,
       },
-      include: {
-        module: {
+      select: {
+        key: true,
+        workspace_modules: {
+          where: {
+            workspace_id: workspaceId,
+          },
           select: {
-            key: true,
-            user_module_overrides: {
-              where: {
-                workspace_id: workspaceId,
-                user_id: userId,
-              },
-              select: {
-                mode: true,
-              },
-            },
+            is_enabled: true,
+          },
+        },
+        user_module_overrides: {
+          where: {
+            workspace_id: workspaceId,
+            user_id: userId,
+          },
+          select: {
+            mode: true,
           },
         },
       },
       orderBy: {
-        module: {
-          key: "asc",
-        },
+        key: "asc",
       },
     });
 
-    const enabledByKey = new Map(rows.map((row) => [row.module.key, row.is_enabled]));
+    const enabledByKey = new Map(rows.map((row) => [row.key, row.workspace_modules[0]?.is_enabled ?? false]));
     return rows.map((row) => {
-      const override = row.module.user_module_overrides[0]?.mode ?? null;
-      const groupEnabled = activationGroupFor(row.module.key).every((key) => enabledByKey.get(key) === true);
+      const workspaceEnabled = row.workspace_modules[0]?.is_enabled ?? false;
+      const override = row.user_module_overrides[0]?.mode ?? null;
+      const groupEnabled = activationGroupFor(row.key).every((key) => enabledByKey.get(key) === true);
       const effectiveEnabled = !groupEnabled
         ? false
         : override === "ALLOW"
@@ -143,8 +148,8 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
             : true;
 
       return new UserModuleState({
-        moduleKey: row.module.key,
-        workspaceEnabled: row.is_enabled,
+        moduleKey: row.key,
+        workspaceEnabled,
         overrideMode: override,
         effectiveEnabled,
       });

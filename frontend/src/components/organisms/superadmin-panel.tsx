@@ -2,11 +2,14 @@
 
 import {
   Ban,
+  Building2,
   CheckCircle2,
   Eye,
   EyeOff,
   KeyRound,
   MoreHorizontal,
+  Power,
+  PowerOff,
   RefreshCw,
   RotateCcw,
   Search,
@@ -15,6 +18,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -65,6 +69,11 @@ type UserModuleStateDto = {
   workspaceEnabled: boolean;
   overrideMode: "ALLOW" | "DENY" | null;
   effectiveEnabled: boolean;
+};
+
+type WorkspaceModuleStateDto = {
+  moduleKey: string;
+  enabled: boolean;
 };
 
 const fetchJson = async <T,>(url: string, init?: RequestInit): Promise<T> => {
@@ -164,6 +173,7 @@ function RadioChoice({
 
 export function SuperadminPanel() {
   const { t } = useLanguage();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [workspaces, setWorkspaces] = useState<WorkspaceDto[]>([]);
   const [users, setUsers] = useState<UserDto[]>([]);
@@ -172,11 +182,14 @@ export function SuperadminPanel() {
 
   const [search, setSearch] = useState("");
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
+  const [managedWorkspaceId, setManagedWorkspaceId] = useState("");
   const [selectedUserId, setSelectedUserId] = useState("");
   const [userModalOpen, setUserModalOpen] = useState(false);
+  const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false);
 
   const [memberships, setMemberships] = useState<MembershipDto[]>([]);
   const [userModules, setUserModules] = useState<UserModuleStateDto[]>([]);
+  const [workspaceModules, setWorkspaceModules] = useState<WorkspaceModuleStateDto[]>([]);
   const [selectedRoleKey, setSelectedRoleKey] = useState("operator");
 
   const [passwordResetValue, setPasswordResetValue] = useState("");
@@ -195,6 +208,10 @@ export function SuperadminPanel() {
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
     [selectedWorkspaceId, workspaces],
+  );
+  const managedWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === managedWorkspaceId) ?? null,
+    [managedWorkspaceId, workspaces],
   );
   const selectedWorkspaceMembership = useMemo(
     () => memberships.find((membership) => membership.workspaceId === selectedWorkspaceId) ?? null,
@@ -220,6 +237,10 @@ export function SuperadminPanel() {
 
   const overridableModules = useMemo(
     () => modules.filter((module) => module.key !== "superadmin_center"),
+    [modules],
+  );
+  const moduleNameByKey = useMemo(
+    () => new Map(modules.map((module) => [module.key, module.name])),
     [modules],
   );
 
@@ -327,6 +348,30 @@ export function SuperadminPanel() {
     setPasswordResetValue("");
     setShowResetPassword(false);
     setUserModalOpen(true);
+  };
+
+  const loadWorkspaceContext = async (workspaceId: string) => {
+    if (!workspaceId) {
+      setWorkspaceModules([]);
+      return;
+    }
+
+    try {
+      const payload = await fetchJson<{ modules: WorkspaceModuleStateDto[] }>(
+        `/api/superadmin/workspaces/${encodeURIComponent(workspaceId)}/modules`,
+      );
+      setWorkspaceModules(payload.modules ?? []);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("superadmin.workspaceModulesLoadFailed");
+      toast.error(message);
+    }
+  };
+
+  const openWorkspaceManagement = (workspaceId: string) => {
+    setManagedWorkspaceId(workspaceId);
+    setSelectedWorkspaceId(workspaceId);
+    setWorkspaceModalOpen(true);
+    void loadWorkspaceContext(workspaceId);
   };
 
   const handleCreateUser = async () => {
@@ -521,6 +566,32 @@ export function SuperadminPanel() {
     }
   };
 
+  const handleSetWorkspaceModule = async (moduleKey: string, enabled: boolean) => {
+    if (!managedWorkspaceId) {
+      toast.error(t("superadmin.selectWorkspace"));
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await fetchJson(`/api/superadmin/workspaces/${encodeURIComponent(managedWorkspaceId)}/modules/${encodeURIComponent(moduleKey)}`, {
+        method: "PUT",
+        body: JSON.stringify({ enabled }),
+      });
+      await loadWorkspaceContext(managedWorkspaceId);
+      if (selectedUserId) {
+        await loadUserContext(selectedUserId, selectedWorkspaceId);
+      }
+      router.refresh();
+      toast.success(enabled ? t("superadmin.workspaceModuleEnabled") : t("superadmin.workspaceModuleDisabled"));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("superadmin.workspaceModuleUpdateFailed");
+      toast.error(message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleAddWorkspace = async () => {
     if (!selectedUserId || !addWorkspaceId || !addWorkspaceRoleKey) {
       toast.error("Seleziona workspace e ruolo.");
@@ -649,6 +720,39 @@ export function SuperadminPanel() {
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-text-muted">
           <span>{loading ? t("common.loading") : t("superadmin.updated")}</span>
           {selectedWorkspace ? <span>Workspace: {selectedWorkspace.organizationCode}/{selectedWorkspace.code}</span> : <span>{t("superadmin.allWorkspaces")}</span>}
+        </div>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border-default px-4 py-4 lg:px-5">
+          <div className="flex items-center gap-2">
+            <Building2 size={18} className="text-brand-primary" />
+            <Text as="h2" variant="h2">{t("superadmin.workspacesTitle")}</Text>
+          </div>
+        </div>
+        <div className="divide-y divide-border-subtle">
+          {workspaces.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-text-muted">{t("superadmin.noWorkspaces")}</div>
+          ) : workspaces.map((workspace) => (
+            <div key={workspace.id} className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:px-5">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="truncate text-sm font-semibold text-text-primary">{workspace.name}</p>
+                  <StatePill tone={workspace.isActive ? "success" : "danger"}>{workspace.isActive ? t("superadmin.active") : t("superadmin.inactive")}</StatePill>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
+                  <span>{workspace.organizationCode}/{workspace.code}</span>
+                  <span>{workspace.organizationName}</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 lg:justify-end">
+                <Button size="sm" onClick={() => openWorkspaceManagement(workspace.id)} disabled={isSaving}>
+                  <MoreHorizontal size={16} />
+                  {t("superadmin.manage")}
+                </Button>
+              </div>
+            </div>
+          ))}
         </div>
       </Card>
 
@@ -808,6 +912,86 @@ export function SuperadminPanel() {
           </div>
         </Card>
       </div>
+
+      {workspaceModalOpen && managedWorkspace ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-label={t("superadmin.workspaceManagement")} onMouseDown={(event) => { if (event.target === event.currentTarget && !isSaving) setWorkspaceModalOpen(false); }}>
+          <section className="flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-bg-surface shadow-elevated">
+            <header className="flex flex-col gap-3 border-b border-border-default px-4 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-5">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Text as="h2" variant="h2">{managedWorkspace.name}</Text>
+                  <StatePill tone={managedWorkspace.isActive ? "success" : "danger"}>{managedWorkspace.isActive ? t("superadmin.active") : t("superadmin.inactive")}</StatePill>
+                </div>
+                <p className="mt-1 truncate text-sm text-text-muted">{managedWorkspace.organizationCode}/{managedWorkspace.code}</p>
+              </div>
+              <button
+                type="button"
+                className="self-end rounded-[var(--radius-md)] p-2 text-text-muted hover:bg-bg-muted hover:text-text-primary lg:self-auto"
+                onClick={() => setWorkspaceModalOpen(false)}
+                aria-label={t("superadmin.closeWorkspaceManagement")}
+              >
+                <X size={20} />
+              </button>
+            </header>
+
+            <div className="min-h-0 flex-1 overflow-auto p-4 lg:p-5">
+              <section className="rounded-[var(--radius-md)] border border-border-default p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-text-primary">{t("superadmin.workspaceModules")}</h3>
+                    <p className="text-xs text-text-muted">{t("superadmin.workspaceModulesHint")}</p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => void loadWorkspaceContext(managedWorkspace.id)} disabled={isSaving}>
+                    <RefreshCw size={16} />
+                    {t("superadmin.refresh")}
+                  </Button>
+                </div>
+
+                <div className="mt-4 overflow-x-auto">
+                  <table className="min-w-full divide-y divide-border-subtle text-sm">
+                    <thead>
+                      <tr className="text-left text-text-muted">
+                        <th className="px-2 py-2 font-semibold">{t("superadmin.module")}</th>
+                        <th className="px-2 py-2 font-semibold">{t("superadmin.status")}</th>
+                        <th className="px-2 py-2 font-semibold">{t("archive.actions")}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-subtle">
+                      {overridableModules.map((module) => {
+                        const state = workspaceModules.find((item) => item.moduleKey === module.key) ?? null;
+                        const enabled = state?.enabled ?? false;
+                        return (
+                          <tr key={module.key}>
+                            <td className="px-2 py-2">
+                              <div className="font-medium text-text-primary">{moduleNameByKey.get(module.key) ?? module.name}</div>
+                              <div className="font-mono text-[11px] text-text-muted">{module.key}</div>
+                            </td>
+                            <td className="px-2 py-2">
+                              <StatePill tone={enabled ? "success" : "muted"}>{enabled ? "ON" : "OFF"}</StatePill>
+                            </td>
+                            <td className="px-2 py-2">
+                              <div className="flex flex-wrap gap-1">
+                                <Button size="sm" onClick={() => void handleSetWorkspaceModule(module.key, true)} disabled={isSaving || enabled}>
+                                  <Power size={15} />
+                                  {t("superadmin.enableModule")}
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => void handleSetWorkspaceModule(module.key, false)} disabled={isSaving || !enabled}>
+                                  <PowerOff size={15} />
+                                  {t("superadmin.disableModule")}
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {userModalOpen && selectedUser ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-label={t("superadmin.userManagement")} onMouseDown={(event) => { if (event.target === event.currentTarget && !isSaving) setUserModalOpen(false); }}>

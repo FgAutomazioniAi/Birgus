@@ -25,6 +25,12 @@ export class PermissionKey {
   public static readonly WORKFLOWS_READ = "workflows.read";
   public static readonly WORKFLOWS_WRITE = "workflows.write";
   public static readonly WORKFLOWS_CONFIGURE = "workflows.configure";
+  public static readonly COMMISSION_REGISTRY_READ = "commission_registry.read";
+  public static readonly COMMISSION_REGISTRY_WRITE = "commission_registry.write";
+  public static readonly COMMISSION_REGISTRY_CONFIGURE = "commission_registry.configure";
+  public static readonly COMMISSION_INTAKE_READ = "commission_intake.read";
+  public static readonly COMMISSION_INTAKE_WRITE = "commission_intake.write";
+  public static readonly COMMISSION_INTAKE_CONFIGURE = "commission_intake.configure";
   public static readonly CUSTOMER_MAP_READ = "customer_map.read";
   public static readonly CUSTOMER_MAP_WRITE = "customer_map.write";
   public static readonly OFFER_PRIORITY_READ = "offer_priority.read";

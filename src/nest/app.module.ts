@@ -9,6 +9,7 @@ import { HttpErrorFilter } from "./common/filters/http-error.filter.js";
 import { AppConfigModule } from "./config/app-config.module.js";
 import { AgentsNestModule } from "./agents/agents.module.js";
 import { BackendProvidersModule } from "./providers/backend-providers.module.js";
+import { CommissionIntakeNestModule } from "./commission-intake/commission-intake.module.js";
 import { ConnectedAppsNestModule } from "./connected-apps/connected-apps.module.js";
 import { DdtReaderNestModule } from "./ddt-reader/ddt-reader.module.js";
 import { DocumentArchiveNestModule } from "./document-archive/document-archive.module.js";
@@ -41,6 +42,7 @@ import { WorkflowsNestModule } from "./workflows/workflows.module.js";
     AuditNestModule,
     AgentsNestModule,
     AssistantNestModule,
+    CommissionIntakeNestModule,
     ConnectedAppsNestModule,
     DdtReaderNestModule,
     DocumentArchiveNestModule,

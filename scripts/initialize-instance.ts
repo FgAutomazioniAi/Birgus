@@ -41,18 +41,19 @@ async function main(): Promise<void> {
   const moduleKeys = [...new Set(requestedModuleKeys.flatMap((moduleKey) => activationGroupFor(moduleKey)))];
   if (!moduleKeys.includes("superadmin_center")) throw new Error("The first workspace must enable superadmin_center.");
 
-  const [workspaceCount, superadminCount, existingUser, modules, dependencies, superadminRole] = await Promise.all([
+  const [workspaceCount, superadminCount, existingUser, requestedModules, allModules, dependencies, superadminRole] = await Promise.all([
     prisma.workspace.count({ where: { deleted_at: null } }),
     prisma.userWorkspaceRole.count({ where: { role: { key: "superadmin" }, user: { deleted_at: null } } }),
     prisma.user.findUnique({ where: { email }, select: { id: true } }),
     prisma.module.findMany({ where: { key: { in: moduleKeys }, is_active: true }, select: { id: true, key: true } }),
+    prisma.module.findMany({ where: { is_active: true }, select: { id: true, key: true } }),
     prisma.moduleDependency.findMany({ include: { module: { select: { key: true } }, depends_on_module: { select: { key: true } } } }),
     prisma.role.findUnique({ where: { key: "superadmin" }, select: { id: true } }),
   ]);
   if (workspaceCount > 0 || superadminCount > 0) throw new Error("Initial setup is allowed only when no active workspace and no superadmin exist.");
   if (existingUser) throw new Error(`User '${email}' already exists.`);
   if (!superadminRole) throw new Error("System catalog is missing. Wait for app startup, then retry.");
-  const missing = moduleKeys.filter((key) => !modules.some((module) => module.key === key));
+  const missing = moduleKeys.filter((key) => !requestedModules.some((module) => module.key === key));
   if (missing.length) throw new Error(`Unknown or inactive module keys: ${missing.join(", ")}`);
   for (const dependency of dependencies) if (moduleKeys.includes(dependency.module.key) && !moduleKeys.includes(dependency.depends_on_module.key)) throw new Error(`Module '${dependency.module.key}' requires '${dependency.depends_on_module.key}'.`);
 
@@ -66,7 +67,7 @@ async function main(): Promise<void> {
     await tx.workspaceMembership.create({ data: { workspace_id: workspace.id, user_id: user.id, status: "ACTIVE" } });
     await tx.userWorkspaceRole.create({ data: { workspace_id: workspace.id, user_id: user.id, role_id: superadminRole.id } });
     await tx.userPreference.create({ data: { workspace_id: workspace.id, user_id: user.id, palette_id: "predefinito", language_code: "it" } });
-    await tx.workspaceModule.createMany({ data: modules.map((module) => ({ workspace_id: workspace.id, module_id: module.id, is_enabled: true, configured_by_user_id: user.id })) });
+    await tx.workspaceModule.createMany({ data: allModules.map((module) => ({ workspace_id: workspace.id, module_id: module.id, is_enabled: moduleKeys.includes(module.key), configured_by_user_id: user.id })) });
     await tx.projectStatus.createMany({ data: [{ workspace_id: workspace.id, key: "in_revisione", label: "In Revisione" }, { workspace_id: workspace.id, key: "completato", label: "Completato" }, { workspace_id: workspace.id, key: "in_attesa", label: "In Attesa" }] });
     await tx.projectRevision.createMany({ data: [{ workspace_id: workspace.id, code: "v1" }, { workspace_id: workspace.id, code: "v2" }] });
     const snapshot = await tx.installationProfileSnapshot.create({
@@ -77,7 +78,7 @@ async function main(): Promise<void> {
         normalized_profile: profile as Prisma.InputJsonValue,
       },
     });
-    return { organization: organization.code, workspace: workspace.code, email: user.email, modules: modules.map((module) => module.key), installation_profile: { version: snapshot.version, hash: snapshot.profile_hash } };
+    return { organization: organization.code, workspace: workspace.code, email: user.email, modules: requestedModules.map((module) => module.key), installation_profile: { version: snapshot.version, hash: snapshot.profile_hash } };
   });
   console.log(JSON.stringify({ ...result, message: "Initial superuser created. The password must be changed at first login." }, null, 2));
 }

@@ -8,6 +8,8 @@ export class ModuleKey {
   public static readonly CONVERSATIONAL_ASSISTANT = "conversational_assistant";
   public static readonly AI_RUNTIME_CONTROL = "ai_runtime_control";
   public static readonly WORKFLOW_MANAGEMENT = "workflow_management";
+  public static readonly COMMISSION_REGISTRY = "commission_registry";
+  public static readonly COMMISSION_INTAKE = "commission_intake";
   public static readonly CUSTOMER_MAP = "customer_map";
   public static readonly OFFER_PRIORITY = "offer_priority";
   public static readonly MAINTENANCE_PROPOSALS = "maintenance_proposals";
