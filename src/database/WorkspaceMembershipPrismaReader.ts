@@ -9,6 +9,10 @@ export class WorkspaceMembershipPrismaReader implements WorkspaceMembershipReade
         workspace_id: workspaceId,
         user_id: userId,
         status: "ACTIVE",
+        workspace: {
+          is_active: true,
+          deleted_at: null,
+        },
       },
       select: {
         id: true,
@@ -24,6 +28,10 @@ export class WorkspaceMembershipPrismaReader implements WorkspaceMembershipReade
       where: {
         user_id: userId,
         status: "ACTIVE",
+        workspace: {
+          is_active: true,
+          deleted_at: null,
+        },
       },
       select: {
         workspace_id: true,

@@ -14,6 +14,7 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
+  Trash2,
   UserPlus,
   Users,
   X,
@@ -592,6 +593,39 @@ export function SuperadminPanel() {
     }
   };
 
+  const handleDeleteWorkspace = async () => {
+    if (!managedWorkspace) {
+      toast.error(t("superadmin.selectWorkspace"));
+      return;
+    }
+
+    const confirmed = window.prompt(t("superadmin.deleteWorkspacePrompt", { code: managedWorkspace.code }));
+    if (confirmed === null) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await fetchJson(`/api/superadmin/workspaces/${encodeURIComponent(managedWorkspace.id)}`, {
+        method: "DELETE",
+        body: JSON.stringify({ confirmText: confirmed.trim() }),
+      });
+      setWorkspaceModalOpen(false);
+      setManagedWorkspaceId("");
+      if (selectedWorkspaceId === managedWorkspace.id) {
+        setSelectedWorkspaceId("");
+      }
+      await loadBase({ keepLoading: true });
+      router.refresh();
+      toast.success(t("superadmin.workspaceDeleted"));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("superadmin.workspaceDeleteFailed");
+      toast.error(message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleAddWorkspace = async () => {
     if (!selectedUserId || !addWorkspaceId || !addWorkspaceRoleKey) {
       toast.error("Seleziona workspace e ruolo.");
@@ -924,14 +958,20 @@ export function SuperadminPanel() {
                 </div>
                 <p className="mt-1 truncate text-sm text-text-muted">{managedWorkspace.organizationCode}/{managedWorkspace.code}</p>
               </div>
-              <button
-                type="button"
-                className="self-end rounded-[var(--radius-md)] p-2 text-text-muted hover:bg-bg-muted hover:text-text-primary lg:self-auto"
-                onClick={() => setWorkspaceModalOpen(false)}
-                aria-label={t("superadmin.closeWorkspaceManagement")}
-              >
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-2 self-end lg:self-auto">
+                <Button size="sm" variant="danger" onClick={() => void handleDeleteWorkspace()} disabled={isSaving}>
+                  <Trash2 size={16} />
+                  {t("superadmin.deleteWorkspace")}
+                </Button>
+                <button
+                  type="button"
+                  className="rounded-[var(--radius-md)] p-2 text-text-muted hover:bg-bg-muted hover:text-text-primary"
+                  onClick={() => setWorkspaceModalOpen(false)}
+                  aria-label={t("superadmin.closeWorkspaceManagement")}
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </header>
 
             <div className="min-h-0 flex-1 overflow-auto p-4 lg:p-5">

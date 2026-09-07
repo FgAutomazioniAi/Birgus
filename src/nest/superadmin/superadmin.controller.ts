@@ -65,6 +65,10 @@ const workspaceModuleSchema = z.object({
   enabled: z.boolean(),
 });
 
+const deleteWorkspaceSchema = z.object({
+  confirmText: z.string().trim().min(1),
+});
+
 const workspaceRolesSchema = z.object({
   workspaceId: z.string().uuid(),
   userId: z.string().uuid(),
@@ -156,6 +160,27 @@ export class NestSuperadminController {
     });
 
     return { ok: true, workspaceId: params.workspaceId, moduleKey: params.moduleKey, enabled: body.enabled };
+  }
+
+  @Delete("workspaces/:workspaceId")
+  @HttpCode(200)
+  public async deleteWorkspace(
+    @Param() paramsRaw: unknown,
+    @Body() bodyRaw: unknown,
+    @Req() request: FastifyRequest,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    await this.ensureSuperadmin(requestContext);
+    const params = workspaceParamsSchema.parse(paramsRaw);
+    const body = deleteWorkspaceSchema.parse(bodyRaw);
+
+    await this.service.deleteWorkspace({
+      workspaceId: params.workspaceId,
+      confirmText: body.confirmText,
+      auditContext: this.getAuditContext(requestContext, request),
+    });
+
+    return { ok: true, workspaceId: params.workspaceId };
   }
 
   @Get("users")

@@ -813,6 +813,73 @@ export class SuperadminService {
     });
   }
 
+  public async deleteWorkspace(params: {
+    workspaceId: string;
+    confirmText: string;
+    auditContext: AuditContext;
+  }): Promise<void> {
+    const prisma = PrismaClientManager.getClient();
+    if (params.workspaceId === params.auditContext.actorWorkspaceId) {
+      throw new AppError(
+        "Non puoi cancellare il workspace da cui stai operando.",
+        "SUPERADMIN_DELETE_CURRENT_WORKSPACE_FORBIDDEN",
+        400,
+      );
+    }
+
+    const workspace = await prisma.workspace.findFirst({
+      where: {
+        id: params.workspaceId,
+        deleted_at: null,
+      },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        organization_id: true,
+      },
+    });
+
+    if (!workspace) {
+      throw new AppError("Workspace non trovato.", "SUPERADMIN_WORKSPACE_NOT_FOUND", 404);
+    }
+
+    if (params.confirmText.trim() !== workspace.code) {
+      throw new AppError(
+        `Conferma eliminazione non valida: digita '${workspace.code}'.`,
+        "SUPERADMIN_WORKSPACE_DELETE_CONFIRMATION_INVALID",
+        400,
+      );
+    }
+
+    await prisma.workspace.update({
+      where: {
+        id: workspace.id,
+      },
+      data: {
+        is_active: false,
+        deleted_at: new Date(),
+      },
+    });
+
+    await this.auditLogService.record({
+      workspaceId: params.auditContext.actorWorkspaceId,
+      userId: params.auditContext.actorUserId,
+      moduleKey: "superadmin_center",
+      action: "superadmin.workspace.deleted",
+      entityType: "Workspace",
+      entityId: workspace.id,
+      payload: {
+        workspaceId: workspace.id,
+        workspaceCode: workspace.code,
+        workspaceName: workspace.name,
+        organizationId: workspace.organization_id,
+      },
+      ipAddress: params.auditContext.ipAddress ?? null,
+      userAgent: params.auditContext.userAgent ?? null,
+    });
+  }
+
   public async clearModuleOverride(params: {
     workspaceId: string;
     targetUserId: string;
