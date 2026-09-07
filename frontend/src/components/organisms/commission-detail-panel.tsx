@@ -469,7 +469,7 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
   return (
     <div className="min-w-0 space-y-5 overflow-x-clip">
       {view.pages.length && isChapterSwitcherPinned ? (
-        <div className="fixed left-1/2 top-20 z-50 w-[min(64rem,calc(100vw-7rem))] -translate-x-1/2 rounded-[var(--radius-md)] border border-border-default bg-bg-surface/95 p-2 shadow-elevated backdrop-blur">
+        <div className="fixed left-2 right-2 top-16 z-50 rounded-[var(--radius-md)] border border-border-default bg-bg-surface/95 p-2 shadow-elevated backdrop-blur sm:left-1/2 sm:right-auto sm:top-20 sm:w-[min(64rem,calc(100vw-2rem))] sm:-translate-x-1/2">
           <ChapterSwitcher
             activePageId={activePage?.id ?? null}
             compact
@@ -501,14 +501,14 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
       </header>
 
       {readOnlyReason ? (
-        <Card className="flex items-center gap-3 border-status-warning-bg bg-status-warning-bg/15 p-4 text-sm text-status-warning-text">
+        <Card className="flex items-center gap-3 border-status-warn-text/25 bg-status-warn-bg/40 p-4 text-sm text-status-warn-text">
           <Lock size={18} />
           <span>{readOnlyReason}</span>
         </Card>
       ) : null}
 
       {isFinalized ? (
-        <Card className="flex items-center gap-3 border-status-success-border bg-status-success-bg/30 p-4 text-sm text-status-success-text">
+        <Card className="flex items-center gap-3 border-status-success-text/25 bg-status-success-bg/30 p-4 text-sm text-status-success-text">
           <CheckCircle2 size={18} />
           <span>{t("commissions.finalizedReadOnly")}</span>
         </Card>
@@ -965,7 +965,7 @@ function AttachmentPanel({
                 </p>
                 <p className={cn(
                   "text-xs font-semibold",
-                  fieldAttachments.length ? "text-status-success-text" : "text-status-warning-text",
+                  fieldAttachments.length ? "text-status-success-text" : "text-status-warn-text",
                 )}>
                   {fieldAttachments.length
                     ? t("commissions.attachmentLoadedCount", { count: fieldAttachments.length })
@@ -1265,7 +1265,7 @@ function ConfirmedToggle({
       className={cn(
         "h-11 rounded-[var(--radius-md)] border px-3 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60",
         confirmed
-          ? "border-status-success-border bg-status-success-bg text-status-success-text"
+          ? "border-status-success-text/25 bg-status-success-bg text-status-success-text"
           : "border-border-default bg-bg-muted text-text-muted hover:text-text-primary",
       )}
     >
@@ -1295,9 +1295,9 @@ function PriorityToggle({
       className={cn(
         "h-11 rounded-[var(--radius-md)] border px-3 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60",
         current === "Alta"
-          ? "border-status-danger-border bg-status-danger-bg text-status-danger-text"
+          ? "border-status-danger-text/25 bg-status-danger-bg text-status-danger-text"
           : current === "Media"
-            ? "border-status-warning-bg bg-status-warning-bg/20 text-status-warning-text"
+            ? "border-status-warn-text/25 bg-status-warn-bg/50 text-status-warn-text"
             : "border-border-default bg-bg-muted text-text-muted hover:text-text-primary",
       )}
     >

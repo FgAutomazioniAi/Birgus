@@ -16,9 +16,9 @@ Enum ModuleOverrideMode {
 Enum DocumentScope {
   WORKSPACE
   PROJECT
-  SHIPMENT
   DDT
   MEASURE_REPORT
+  COMMISSION_INTAKE
   OTHER
 }
 
