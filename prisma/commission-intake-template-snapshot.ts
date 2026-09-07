@@ -4482,9 +4482,9 @@ export const COMMISSION_INTAKE_TEMPLATE_SNAPSHOT = {
               "table": null
             },
             {
-              "key": "p14_f010_report_analisi_criticita",
-              "label": "Report analisi criticita",
-              "placeholder": "Report analisi criticita",
+              "key": "p14_f010_report_analisi_criticità",
+              "label": "Report analisi criticità",
+              "placeholder": "Report analisi criticità",
               "helpText": null,
               "fieldType": "BOOLEAN",
               "dataKind": "BOOLEAN",
@@ -5164,7 +5164,7 @@ export const COMMISSION_INTAKE_TEMPLATE_SNAPSHOT = {
               "sortOrder": 5,
               "options": [
                 "Standard, marca/modello/firmware",
-                "Esteso, CVE/EOL/fornitore/criticita"
+                "Esteso, CVE/EOL/fornitore/criticità"
               ],
               "table": null
             },
@@ -5378,7 +5378,7 @@ export const COMMISSION_INTAKE_TEMPLATE_SNAPSHOT = {
             },
             {
               "key": "p16_f003_clausole_nis2_supply_chain_security_previste_in_contratto_art_21_lett_d",
-              "label": "Clausole NIS2 / supply-chain security previste in contratto (Art. 21 lett. d)",
+              "label": "Clausole NIS2 / supply-chain security previste in contratto (Art. 21 lett. D)",
               "placeholder": null,
               "helpText": null,
               "fieldType": "CHECKBOX_GROUP",
@@ -5464,9 +5464,9 @@ export const COMMISSION_INTAKE_TEMPLATE_SNAPSHOT = {
           "sortOrder": 1,
           "fields": [
             {
-              "key": "p15_f001_annotazioni_criticita_evidenziate_richieste_particolari",
-              "label": "Annotazioni, criticita evidenziate, richieste particolari",
-              "placeholder": "Annotazioni, criticita evidenziate, richieste particolari",
+              "key": "p15_f001_annotazioni_criticità_evidenziate_richieste_particolari",
+              "label": "Annotazioni, criticità evidenziate, richieste particolari",
+              "placeholder": "Annotazioni, criticità evidenziate, richieste particolari",
               "helpText": null,
               "fieldType": "LONG_TEXT",
               "dataKind": "STRING",

@@ -24,6 +24,12 @@ class FakeCommissionIntakeRepository implements CommissionIntakeRepository {
   public createdRecordParams: CommissionRecordWriteParams | null = null;
   public listedEventsLimit: number | null = null;
   public publishedVersion: { id: string; title: string } | null = { id: "form-version-1", title: "Checklist standard" };
+  public reopenParams: {
+    workspaceId: string;
+    recordId: string;
+    checklistId: string;
+    actorUserId: string;
+  } | null = null;
 
   public async listRecords(): Promise<CommissionRecordEntity[]> {
     return [];
@@ -100,7 +106,7 @@ class FakeCommissionIntakeRepository implements CommissionIntakeRepository {
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
         updatedAt: new Date("2026-01-01T00:00:00.000Z"),
       }),
-      currentUser: { id: "user-1", fullName: "Utente Test" },
+      currentUser: { id: "user-1", fullName: "Utente Test", canReopenSignedChecklist: false },
       checklist: {
         id: "checklist-1",
         title: "Checklist standard",
@@ -143,6 +149,15 @@ class FakeCommissionIntakeRepository implements CommissionIntakeRepository {
 
   public async createChecklistForRecord(): Promise<string> {
     return "checklist-1";
+  }
+
+  public async reopenChecklist(params: {
+    workspaceId: string;
+    recordId: string;
+    checklistId: string;
+    actorUserId: string;
+  }): Promise<void> {
+    this.reopenParams = params;
   }
 }
 
@@ -191,4 +206,23 @@ test("CommissionIntakeService clamps event limits before repository access", asy
   });
 
   assert.equal(repository.listedEventsLimit, 200);
+});
+
+test("CommissionIntakeService delegates signed checklist reopening", async () => {
+  const repository = new FakeCommissionIntakeRepository();
+  const service = new CommissionIntakeService(repository);
+
+  await service.reopenChecklist({
+    workspaceId: "workspace-1",
+    recordId: "record-1",
+    checklistId: "checklist-1",
+    actorUserId: "admin-1",
+  });
+
+  assert.deepEqual(repository.reopenParams, {
+    workspaceId: "workspace-1",
+    recordId: "record-1",
+    checklistId: "checklist-1",
+    actorUserId: "admin-1",
+  });
 });

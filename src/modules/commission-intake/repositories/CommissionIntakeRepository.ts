@@ -186,6 +186,7 @@ export interface CommissionChecklistView {
   currentUser: {
     id: string;
     fullName: string;
+    canReopenSignedChecklist: boolean;
   };
   checklist: {
     id: string;
@@ -293,6 +294,13 @@ export interface CommissionIntakeRepository {
     actorUserId: string;
     statement?: string | null;
   }): Promise<CommissionSignatureItem>;
+
+  reopenChecklist(params: {
+    workspaceId: string;
+    recordId: string;
+    checklistId: string;
+    actorUserId: string;
+  }): Promise<void>;
 
   acquireLock(params: {
     workspaceId: string;

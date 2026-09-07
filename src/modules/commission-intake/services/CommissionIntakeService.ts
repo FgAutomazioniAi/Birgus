@@ -356,6 +356,24 @@ export class CommissionIntakeService {
     });
   }
 
+  public async reopenChecklist(params: {
+    workspaceId: string;
+    recordId: string;
+    checklistId: string;
+    actorUserId: string;
+  }): Promise<void> {
+    await this.repository.reopenChecklist(params);
+    await this.auditLogService?.record({
+      workspaceId: params.workspaceId,
+      userId: params.actorUserId,
+      moduleKey: ModuleKey.COMMISSION_INTAKE,
+      action: "commission_checklist.reopen",
+      entityType: "CommissionChecklist",
+      entityId: params.checklistId,
+      payload: { recordId: params.recordId },
+    });
+  }
+
   public async acquireChecklistLock(params: {
     workspaceId: string;
     recordId: string;

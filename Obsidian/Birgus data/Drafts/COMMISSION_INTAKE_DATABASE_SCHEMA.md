@@ -460,7 +460,7 @@ Esempi iniziali:
 - specifiche qualita e tolleranze
 - flow chart ciclo lavoro
 - dati produttivi storici
-- report analisi criticita
+- report analisi criticità
 - video processo attuale
 - schemi elettrici area
 - documentazione macchine esistenti

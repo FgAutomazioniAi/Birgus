@@ -365,6 +365,25 @@ export class CommissionIntakeController {
     return { signature };
   }
 
+  @Post("records/:recordId/checklists/:checklistId/reopen")
+  @HttpCode(200)
+  @RequireModule(ModuleKey.COMMISSION_INTAKE)
+  @RequirePermission(PermissionKey.COMMISSION_INTAKE_CONFIGURE)
+  public async reopenChecklist(
+    @Param("recordId") recordIdRaw: string,
+    @Param("checklistId") checklistIdRaw: string,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    await this.service.reopenChecklist({
+      workspaceId: requestContext.workspace.workspaceId,
+      recordId: uuidSchema.parse(recordIdRaw),
+      checklistId: uuidSchema.parse(checklistIdRaw),
+      actorUserId: requestContext.workspace.userId,
+    });
+
+    return { ok: true };
+  }
+
   @Post("records/:recordId/checklist/lock")
   @HttpCode(201)
   @RequireModule(ModuleKey.COMMISSION_INTAKE)

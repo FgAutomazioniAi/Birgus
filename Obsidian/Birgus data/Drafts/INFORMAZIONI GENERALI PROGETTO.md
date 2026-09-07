@@ -374,7 +374,7 @@ DOCUMENTAZIONE E ALLEGATI
 [] Specifiche qualita e tolleranze
 [] Ciclo di lavoro attuale, flow chart
 [] Dati produttivi storici
-[] Report analisi criticita
+[] Report analisi criticità
 [] Video processo attuale
 [] Schemi elettrici area
 [] Documentazione macchine esistenti da integrare
@@ -386,7 +386,7 @@ DOCUMENTAZIONE E ALLEGATI
 /
 
 NOTE E OSSERVAZIONI
-desc Annotazioni, criticita evidenziate, richieste particolari
+desc Annotazioni, criticità evidenziate, richieste particolari
 /
 
 CYBERSECURITY OT - CONFORMITA' NIS2 (Dir. UE 2022/2555)
@@ -427,7 +427,7 @@ num 16.4 Hardening dei componenti e gestione vulnerabilità
 [] Patch management OS e firmware (PLC, drives, switch): []A carico Cliente []A carico FG Automazioni []Da definire in contratto SLA
 [] SBOM (Software Bill of Materials) richiesta: []Si []No
 [] Cifratura comunicazioni (TLS, OPC UA Sign&Encrypt, VPN): []Richiesta []Non necessaria
-[] Inventario asset OT da consegnare (PLC, HMI, drives, switch, gateway): []Standard, marca/modello/firmware []Esteso, CVE/EOL/fornitore/criticita
+[] Inventario asset OT da consegnare (PLC, HMI, drives, switch, gateway): []Standard, marca/modello/firmware []Esteso, CVE/EOL/fornitore/criticità
 [] Asset critici identificati come "key components" (Art. 21 Dir. NIS2): txt()
 [] Disabilitazione protocolli/servizi non utilizzati (Telnet, FTP, SNMP v1/v2, HTTP in chiaro): []Standard al collaudo []Eccezioni motivate
 [] Gestione media rimovibili (USB, schede SD): []Porte fisicamente disabilitate []Stazione di sanitizzazione USB Cliente []Whitelist dispositivi []Libero, sconsigliato
@@ -442,7 +442,7 @@ num 16.5 Backup, ripristino e continuita operativa
 num 16.6 Gestione incidenti e responsabilita (Art. 23 Dir. NIS2)
 [] Procedura segnalazione incidenti del Cliente fornita a FG Automazioni: []Si []No []Da fornire
 [] Tempi di notifica concordati (early warning 24h, notifica 72h): []Definiti in contratto []Da definire
-[] Clausole NIS2 / supply-chain security previste in contratto (Art. 21 lett. d): []Si []Da inserire
+[] Clausole NIS2 / supply-chain security previste in contratto (Art. 21 lett. D): []Si []Da inserire
 [] Risk assessment OT richiesto come deliverable: []Si []No
 _ txt(Compilato da) | txt(Data) | txt(Firma) _
 /

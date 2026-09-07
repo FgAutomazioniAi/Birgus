@@ -130,6 +130,7 @@ interface CommissionChecklistView {
   currentUser: {
     id: string;
     fullName: string;
+    canReopenSignedChecklist: boolean;
   };
   checklist: {
     id: string;
@@ -175,6 +176,7 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
   const [readOnlyReason, setReadOnlyReason] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isReopening, setIsReopening] = useState(false);
   const [uploadingFieldKey, setUploadingFieldKey] = useState<string | null>(null);
   const [completionIssues, setCompletionIssues] = useState<CompletionIssue[] | null>(null);
   const [isChapterSwitcherPinned, setIsChapterSwitcherPinned] = useState(false);
@@ -434,6 +436,24 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
     }
   };
 
+  const reopenChecklist = async () => {
+    if (!view?.checklist) return;
+    setIsReopening(true);
+    try {
+      const response = await fetch(`/api/commission-intake/records/${view.record.id}/checklists/${view.checklist.id}/reopen`, {
+        method: "POST",
+      });
+      const payload = await response.json().catch(() => ({})) as { message?: string };
+      if (!response.ok) throw new Error(payload.message ?? t("commissions.reopenFailed"));
+      toast.success(t("commissions.reopenSuccess"));
+      await loadView();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("commissions.reopenFailed"));
+    } finally {
+      setIsReopening(false);
+    }
+  };
+
   if (isLoading && !view) {
     return <div className="px-4 py-8 text-sm text-text-muted">{t("commissions.loading")}</div>;
   }
@@ -607,6 +627,12 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
                 <Save size={16} />
                 {t("commissions.savePage")}
               </Button>
+              {isFinalized && view.currentUser.canReopenSignedChecklist ? (
+                <Button variant="outline" onClick={() => void reopenChecklist()} disabled={isReopening}>
+                  <RefreshCw size={16} />
+                  {t("commissions.reopen")}
+                </Button>
+              ) : null}
               {nextPage ? (
                 <Button onClick={() => void saveAndGoToNextPage()} disabled={isReadOnly || isSaving}>
                   {t("commissions.saveAndNext")}
@@ -1154,9 +1180,22 @@ function renderControl({
     );
   }
 
+  if ((field.fieldType === "MULTI_SELECT" || field.fieldType === "CHECKBOX_GROUP" || field.fieldType === "DOCUMENT_CHECKLIST") && isYesNoOptionSet(field)) {
+    const selectedValues = Array.isArray(value) ? value.map(String) : [];
+    return (
+      <SelectDropdown
+        allowEmpty
+        disabled={disabled}
+        value={selectedValues[0] ?? ""}
+        placeholder="Seleziona"
+        onChange={(nextValue) => onValueChange(nextValue ? [nextValue] : [])}
+        options={field.options.map((option) => ({ label: option.label, value: option.value }))}
+      />
+    );
+  }
+
   if (field.fieldType === "MULTI_SELECT" || field.fieldType === "CHECKBOX_GROUP" || field.fieldType === "DOCUMENT_CHECKLIST") {
     const selectedValues = Array.isArray(value) ? value.map(String) : [];
-    const exclusive = isYesNoOptionSet(field);
     return (
       <div className="flex flex-wrap gap-2">
         {field.options.map((option) => (
@@ -1166,13 +1205,9 @@ function renderControl({
             disabled={disabled}
             label={option.label}
             onChange={(event) => {
-              const next = exclusive
-                ? event.target.checked
-                  ? [option.value]
-                  : []
-                : event.target.checked
-                  ? [...selectedValues, option.value]
-                  : selectedValues.filter((item) => item !== option.value);
+              const next = event.target.checked
+                ? [...selectedValues, option.value]
+                : selectedValues.filter((item) => item !== option.value);
               onValueChange(next);
             }}
           />
@@ -1684,7 +1719,7 @@ function extractDirectUnit(label: string): { label: string; unit: string | null 
   if (colonIndex <= 0) return null;
 
   const unit = trimmed.slice(colonIndex + 1).trim();
-  const knownUnits = ["+/- mm", "x mm", "pz/minuto", "pz/turno", "pz/h", "Nl/min", "kg/m2", "mm", "cm", "metri", "m", "kg", "%", "bar", "mbar", "kW", "N", "ms", "mesi", "lux", "C", "CÂ°", "°C"];
+  const knownUnits = ["+/- mm", "x mm", "pz/minuto", "pz/turno", "pz/h", "Nl/min", "kg/m2", "mm", "cm", "metri", "m", "kg", "%", "bar", "mbar", "kW", "N", "ms", "mesi", "lux", "C", "°C"];
   if (!knownUnits.some((knownUnit) => unit.toLowerCase() === knownUnit.toLowerCase())) {
     return null;
   }

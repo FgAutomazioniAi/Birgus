@@ -387,7 +387,10 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       throw new AppError("Commessa non trovata o non accessibile.", "COMMISSION_RECORD_NOT_FOUND", 404);
     }
 
-    const currentUser = await this.resolveCurrentUser(prisma, params.userId);
+    const [currentUser, canReopenSignedChecklist] = await Promise.all([
+      this.resolveCurrentUser(prisma, params.userId),
+      this.canManageWorkspace(params.workspaceId, params.userId),
+    ]);
     const checklist = await prisma.commissionChecklist.findFirst({
       where: {
         workspace_id: params.workspaceId,
@@ -409,7 +412,7 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     });
 
     if (!checklist) {
-      return { record, currentUser, checklist: null, pages: [], values: [], tableRows: [], attachments: [], signatures: [] };
+      return { record, currentUser: { ...currentUser, canReopenSignedChecklist }, checklist: null, pages: [], values: [], tableRows: [], attachments: [], signatures: [] };
     }
 
     const pages = await prisma.commissionFormPage.findMany({
@@ -496,7 +499,7 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
 
     return {
       record,
-      currentUser,
+      currentUser: { ...currentUser, canReopenSignedChecklist },
       checklist: {
         id: checklist.id,
         title: checklist.title,
@@ -883,6 +886,13 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         throw new AppError("Completa tutti i campi obbligatori prima della firma definitiva.", "COMMISSION_CHECKLIST_INCOMPLETE", 400);
       }
       const signer = await this.resolveCurrentUser(tx, params.actorUserId);
+      await tx.commissionSignature.deleteMany({
+        where: {
+          workspace_id: params.workspaceId,
+          record_id: params.recordId,
+          checklist_id: params.checklistId,
+        },
+      });
       const row = await tx.commissionSignature.create({
         data: {
           workspace_id: params.workspaceId,
@@ -916,6 +926,55 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     });
 
     return this.mapSignature(signature);
+  }
+
+  public async reopenChecklist(params: {
+    workspaceId: string;
+    recordId: string;
+    checklistId: string;
+    actorUserId: string;
+  }): Promise<void> {
+    const prisma = PrismaClientManager.getClient();
+    const canManage = await this.canManageWorkspace(params.workspaceId, params.actorUserId);
+    if (!canManage) {
+      throw new AppError("Solo un admin può riaprire una checklist firmata.", "COMMISSION_CHECKLIST_REOPEN_FORBIDDEN", 403);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const checklist = await this.resolveChecklist(tx, params.workspaceId, params.recordId, params.checklistId);
+      if (checklist.status !== CommissionChecklistStatus.SIGNED) {
+        throw new AppError("Solo una checklist firmata può essere riaperta.", "COMMISSION_CHECKLIST_REOPEN_INVALID_STATUS", 409);
+      }
+
+      await this.ensureNoBlockingLock(tx, params.workspaceId, params.recordId, params.actorUserId);
+
+      await tx.commissionChecklist.update({
+        where: { id: params.checklistId },
+        data: {
+          status: CommissionChecklistStatus.IN_PROGRESS,
+          signed_at: null,
+          updated_by_user_id: params.actorUserId,
+        },
+      });
+
+      await tx.commissionRecord.update({
+        where: { id: params.recordId },
+        data: {
+          status: CommissionRecordStatus.IN_PROGRESS,
+          updated_by_user_id: params.actorUserId,
+        },
+      });
+
+      await this.recordEvent(tx, {
+        workspaceId: params.workspaceId,
+        recordId: params.recordId,
+        checklistId: params.checklistId,
+        actorUserId: params.actorUserId,
+        eventType: CommissionEventType.STATUS_CHANGED,
+        summary: "Checklist riaperta.",
+        payload: { from: CommissionChecklistStatus.SIGNED, to: CommissionChecklistStatus.IN_PROGRESS },
+      });
+    });
   }
 
   public async acquireLock(params: {
