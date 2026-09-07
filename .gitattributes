@@ -1,0 +1,12 @@
+*.md text eol=lf
+*.dbml text eol=lf
+*.sh text eol=lf
+*.sql text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
+Dockerfile text eol=lf
+Dockerfile.* text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml.example text eol=lf
+*.env.example text eol=lf

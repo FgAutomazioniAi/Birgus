@@ -49,7 +49,7 @@ ALTER TABLE "documents" ALTER COLUMN "scope" DROP DEFAULT;
 UPDATE "documents" SET "scope" = 'OTHER' WHERE "scope"::text = 'SHIPMENT';
 ALTER TABLE "documents" ALTER COLUMN "scope" TYPE text USING "scope"::text;
 DROP TYPE IF EXISTS "DocumentScope";
-CREATE TYPE "DocumentScope" AS ENUM ('WORKSPACE', 'PROJECT', 'DDT', 'MEASURE_REPORT', 'OTHER');
+CREATE TYPE "DocumentScope" AS ENUM ('WORKSPACE', 'PROJECT', 'DDT', 'MEASURE_REPORT', 'COMMISSION_INTAKE', 'OTHER');
 ALTER TABLE "documents" ALTER COLUMN "scope" TYPE "DocumentScope" USING "scope"::"DocumentScope";
 ALTER TABLE "documents" ALTER COLUMN "scope" SET DEFAULT 'WORKSPACE'::"DocumentScope";
 

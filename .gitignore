@@ -30,6 +30,7 @@ venv/
 env/
 docs/*
 !docs/commission-intake-schema.dbml
+!docs/handover-birgus-2026-09-07.md
 *.log
 npm-debug.log*
 yarn-debug.log*
