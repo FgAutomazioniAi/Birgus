@@ -43,8 +43,8 @@ const FALLBACK_PAGE_TITLES = [
   "MANUTENZIONE E ASSISTENZA",
   "COLLAUDO E VALIDAZIONE",
   "TEMPI E BUDGET",
-  "DOCUMENTAZIONE E ALLEGATI",
   "CYBERSECURITY OT - CONFORMITÀ NIS2 (Dir. UE 2022/2555)",
+  "DOCUMENTAZIONE E ALLEGATI",
   "NOTE E OSSERVAZIONI",
 ] as const;
 
@@ -352,9 +352,22 @@ function prepareCommissionIntakeForm(form: ParsedForm): ParsedForm {
     })),
   };
 
+  orderCommissionIntakePages(prepared);
   applyCommissionIntakeTemplateCorrections(prepared);
   ensureUniqueFieldKeys(prepared);
   return prepared;
+}
+
+function orderCommissionIntakePages(form: ParsedForm): void {
+  form.pages.sort((left, right) => {
+    const leftOrder = pageSortOrder.get(normalizeComparable(left.title)) ?? left.sortOrder;
+    const rightOrder = pageSortOrder.get(normalizeComparable(right.title)) ?? right.sortOrder;
+    return leftOrder - rightOrder;
+  });
+  form.pages.forEach((page, index) => {
+    page.pageNumber = index + 1;
+    page.sortOrder = index + 1;
+  });
 }
 
 function applyCommissionIntakeTemplateCorrections(form: ParsedForm): void {
@@ -379,20 +392,26 @@ function applyCommissionIntakeTemplateCorrections(form: ParsedForm): void {
   const page5 = findPage(form, 5);
   const section51 = findSection(page5, "5.1 ");
   setField(section51, "Planimetria allegata", {
-    fieldType: CommissionFieldType.CHECKBOX_GROUP,
-    dataKind: CommissionDataKind.JSON,
+    fieldType: CommissionFieldType.SELECT,
+    dataKind: CommissionDataKind.STRING,
     placeholder: null,
     options: ["Sì", "No"],
-    helpText: "Se selezioni Sì, allega la planimetria nella sezione allegati della checklist.",
+    helpText: "Carica il file corrispondente nella scheda Documentazione e allegati.",
   });
   setField(section51, "Foto area disponibili", {
-    fieldType: CommissionFieldType.CHECKBOX_GROUP,
-    dataKind: CommissionDataKind.JSON,
+    fieldType: CommissionFieldType.SELECT,
+    dataKind: CommissionDataKind.STRING,
     placeholder: null,
     options: ["Sì", "No"],
-    helpText: "Se selezioni Sì, allega le foto area nella sezione allegati della checklist.",
+    helpText: "Carica il file corrispondente nella scheda Documentazione e allegati.",
   });
-
+  setField(section51, "Planimetria allegata e Foto area disponibili ", {
+    fieldType: CommissionFieldType.SELECT,
+    dataKind: CommissionDataKind.STRING,
+    placeholder: null,
+    options: ["Sì", "No"],
+    helpText: "Carica i file corrispondenti nella scheda Documentazione e allegati.",
+  });
   const page6 = findPage(form, 6);
   const section62 = findSection(page6, "6.2 ");
   replaceFieldWithFields(section62, "Qualit", [

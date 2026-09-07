@@ -295,8 +295,9 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
   const isLastPage = Boolean(view && activePageIndex === view.pages.length - 1);
   const signatureName = view?.currentUser.fullName ?? "";
   const isFinalized = view?.checklist?.status === "SIGNED";
-  const activePageStats = activePage ? getPageCompletionStats(activePage, fieldValues, tableValues) : null;
+  const activePageStats = activePage ? getPageCompletionStats(activePage, fieldValues, tableValues, view?.attachments ?? []) : null;
   const activePageAttachmentFields = activePage ? getAttachmentToggleFields(activePage) : [];
+  const isDocumentationPage = activePage ? isDocumentationAttachmentsPage(activePage) : false;
 
   const isReadOnly = isFinalized || Boolean(readOnlyReason) || !lockInfo;
 
@@ -349,22 +350,25 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
     }
   };
 
-  const uploadAttachment = async (field: CommissionFormField, file: File): Promise<void> => {
+  const uploadAttachments = async (field: CommissionFormField, files: File[]): Promise<void> => {
     if (!view?.checklist) return;
+    if (!files.length) return;
     setUploadingFieldKey(field.key);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("fieldKey", field.key);
-      formData.append("label", field.label);
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("fieldKey", field.key);
+        formData.append("label", field.label);
 
-      const response = await fetch(`/api/commission-intake/records/${view.record.id}/checklists/${view.checklist.id}/attachments`, {
-        method: "POST",
-        body: formData,
-      });
-      const payload = await response.json().catch(() => ({})) as { message?: string };
-      if (!response.ok) throw new Error(payload.message ?? t("commissions.attachmentUploadFailed"));
-      toast.success(t("commissions.attachmentUploadSuccess"));
+        const response = await fetch(`/api/commission-intake/records/${view.record.id}/checklists/${view.checklist.id}/attachments`, {
+          method: "POST",
+          body: formData,
+        });
+        const payload = await response.json().catch(() => ({})) as { message?: string };
+        if (!response.ok) throw new Error(payload.message ?? t("commissions.attachmentUploadFailed"));
+      }
+      toast.success(files.length > 1 ? t("commissions.attachmentUploadManySuccess") : t("commissions.attachmentUploadSuccess"));
       await loadView();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("commissions.attachmentUploadFailed"));
@@ -532,10 +536,15 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
                           return (
                             <FieldEditor
                               key={field.id}
+                              attachments={view.attachments}
                               disabled={isReadOnly || isSaving}
                               field={field}
+                              showInlineAttachment={isDocumentationPage && isDocumentUploadSlotField(field)}
+                              uploadingFieldKey={uploadingFieldKey}
                               value={fieldValues[field.id] ?? null}
                               tableRows={tableId ? tableValues[tableId] ?? [] : []}
+                              onDeleteAttachment={(attachmentId) => void deleteAttachment(attachmentId)}
+                              onUploadAttachments={(targetField, files) => void uploadAttachments(targetField, files)}
                               onValueChange={(value) => setFieldValues((current) => ({ ...current, [field.id]: value }))}
                               onTableChange={(rows) => {
                                 if (!tableId) return;
@@ -607,21 +616,23 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
             </div>
           </Card>
 
-          <Card className="space-y-3 p-4">
-            <div className="flex items-center gap-2">
-              <Paperclip size={16} className="text-brand-primary" />
-              <h3 className="text-sm font-bold text-text-primary">{t("commissions.attachments")}</h3>
-            </div>
-            <AttachmentPanel
-              attachments={view.attachments}
-              disabled={isReadOnly || isSaving}
-              fields={activePageAttachmentFields}
-              fieldValues={fieldValues}
-              uploadingFieldKey={uploadingFieldKey}
-              onDeleteAttachment={(attachmentId) => void deleteAttachment(attachmentId)}
-              onUpload={(field, file) => void uploadAttachment(field, file)}
-            />
-          </Card>
+          {!isDocumentationPage && activePageAttachmentFields.length ? (
+            <Card className="space-y-3 p-4">
+              <div className="flex items-center gap-2">
+                <Paperclip size={16} className="text-brand-primary" />
+                <h3 className="text-sm font-bold text-text-primary">{t("commissions.attachments")}</h3>
+              </div>
+              <AttachmentPanel
+                attachments={view.attachments}
+                disabled={isReadOnly || isSaving}
+                fields={activePageAttachmentFields}
+                fieldValues={fieldValues}
+                uploadingFieldKey={uploadingFieldKey}
+                onDeleteAttachment={(attachmentId) => void deleteAttachment(attachmentId)}
+                onUpload={(field, files) => void uploadAttachments(field, files)}
+              />
+            </Card>
+          ) : null}
 
           {view.checklist && isLastPage ? (
             <Card className="space-y-4 p-4">
@@ -667,24 +678,36 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
 }
 
 function FieldEditor({
+  attachments = [],
   disabled,
   field,
+  onDeleteAttachment,
+  onUploadAttachments,
   onTableChange,
   onValueChange,
+  showInlineAttachment = false,
   tableRows,
+  uploadingFieldKey,
   value,
 }: {
+  attachments?: CommissionAttachment[];
   disabled: boolean;
   field: CommissionFormField;
+  onDeleteAttachment?: (attachmentId: string) => void;
+  onUploadAttachments?: (field: CommissionFormField, files: File[]) => void;
   onTableChange: (rows: EditableTableRow[]) => void;
   onValueChange: (value: unknown) => void;
+  showInlineAttachment?: boolean;
   tableRows: EditableTableRow[];
+  uploadingFieldKey?: string | null;
   value: unknown;
 }) {
   const { t } = useLanguage();
   const fieldUnit = getUnitMeta(field.label);
   const label = `${fieldUnit.label}${field.required ? " *" : ""}`;
   const fieldLayoutClassName = getFieldLayoutClass(field);
+  const fieldAttachments = attachments.filter((attachment) => attachment.fieldKey === field.key);
+  const canRenderInlineAttachment = showInlineAttachment && onUploadAttachments && onDeleteAttachment;
 
   if (field.fieldType === "TABLE" && field.table) {
     const displayedRows = tableRows.length ? tableRows : buildDefaultEditableRows(field.table.defaultRows);
@@ -793,11 +816,22 @@ function FieldEditor({
   }
 
   return (
-    <label className={cn("min-w-0 space-y-2 rounded-[var(--radius-md)] border border-transparent p-2", fieldLayoutClassName)}>
+    <div className={cn("min-w-0 space-y-2 rounded-[var(--radius-md)] border border-transparent p-2", fieldLayoutClassName)}>
       <span className="block text-sm font-bold text-text-primary">{label}</span>
       {field.helpText ? <span className="block text-xs text-text-muted bg-bg-page">{field.helpText}</span> : null}
-      {renderControl({ disabled, field, value, onValueChange })}
-    </label>
+      {canRenderInlineAttachment ? null : renderControl({ disabled, field, value, onValueChange })}
+      {canRenderInlineAttachment ? (
+        <CompactAttachmentControl
+          attachments={fieldAttachments}
+          disabled={disabled}
+          enabled={true}
+          field={field}
+          uploading={uploadingFieldKey === field.key}
+          onDeleteAttachment={onDeleteAttachment}
+          onUpload={onUploadAttachments}
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -881,7 +915,7 @@ function AttachmentPanel({
   fields: CommissionFormField[];
   fieldValues: Record<string, unknown>;
   onDeleteAttachment: (attachmentId: string) => void;
-  onUpload: (field: CommissionFormField, file: File) => void;
+  onUpload: (field: CommissionFormField, files: File[]) => void;
   uploadingFieldKey: string | null;
 }) {
   const { t } = useLanguage();
@@ -903,6 +937,14 @@ function AttachmentPanel({
                 <p className="text-xs text-text-muted">
                   {enabled ? t("commissions.attachmentEnabled") : t("commissions.attachmentDisabled")}
                 </p>
+                <p className={cn(
+                  "text-xs font-semibold",
+                  fieldAttachments.length ? "text-status-success-text" : "text-status-warning-text",
+                )}>
+                  {fieldAttachments.length
+                    ? t("commissions.attachmentLoadedCount", { count: fieldAttachments.length })
+                    : t("commissions.attachmentMissing")}
+                </p>
               </div>
               <span className={cn(
                 "shrink-0 rounded-full px-2 py-0.5 text-xs font-bold",
@@ -918,16 +960,21 @@ function AttachmentPanel({
             )}>
               <input
                 type="file"
+                multiple
                 className="hidden"
                 disabled={!enabled || disabled || uploadingFieldKey === field.key}
                 onChange={(event) => {
-                  const file = event.target.files?.[0] ?? null;
+                  const files = Array.from(event.target.files ?? []);
                   event.target.value = "";
-                  if (!file) return;
-                  onUpload(field, file);
+                  if (!files.length) return;
+                  onUpload(field, files);
                 }}
               />
-              {uploadingFieldKey === field.key ? t("commissions.attachmentUploading") : t("commissions.attachmentUpload")}
+              {uploadingFieldKey === field.key
+                ? t("commissions.attachmentUploading")
+                : fieldAttachments.length
+                  ? t("commissions.attachmentUploadMore")
+                  : t("commissions.attachmentUpload")}
             </label>
 
             {fieldAttachments.length ? (
@@ -954,6 +1001,81 @@ function AttachmentPanel({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function CompactAttachmentControl({
+  attachments,
+  disabled,
+  enabled,
+  field,
+  onDeleteAttachment,
+  onUpload,
+  uploading,
+}: {
+  attachments: CommissionAttachment[];
+  disabled: boolean;
+  enabled: boolean;
+  field: CommissionFormField;
+  onDeleteAttachment: (attachmentId: string) => void;
+  onUpload: (field: CommissionFormField, files: File[]) => void;
+  uploading: boolean;
+}) {
+  const { t } = useLanguage();
+  const attachmentTitle = attachments
+    .map((attachment) => attachment.fileName ?? t("commissions.attachmentUnnamed"))
+    .join("\n");
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-[var(--radius-sm)] bg-bg-page px-2 py-2">
+      <label className={cn(
+        "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border px-2 text-xs font-bold transition-colors",
+        enabled && !disabled ? "border-brand-primary text-brand-primary hover:bg-bg-subtle" : "cursor-not-allowed border-border-default text-text-muted opacity-70",
+      )}>
+        <input
+          type="file"
+          multiple
+          className="hidden"
+          disabled={!enabled || disabled || uploading}
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            event.target.value = "";
+            if (!files.length) return;
+            onUpload(field, files);
+          }}
+        />
+        <Paperclip size={13} />
+        {uploading
+          ? t("commissions.attachmentUploading")
+          : attachments.length
+            ? t("commissions.attachmentUploadMore")
+            : t("commissions.attachmentUpload")}
+      </label>
+      <span
+        className={cn(
+          "min-w-0 truncate text-xs font-semibold",
+          attachments.length ? "text-status-success-text" : "text-text-muted",
+        )}
+        title={attachmentTitle || undefined}
+      >
+        {attachments.length
+          ? t("commissions.attachmentLoadedCount", { count: attachments.length })
+          : t("commissions.attachmentMissing")}
+      </span>
+      {attachments.map((attachment) => (
+        <button
+          key={attachment.id}
+          type="button"
+          disabled={disabled}
+          title={attachment.fileName ?? t("commissions.attachmentUnnamed")}
+          onClick={() => onDeleteAttachment(attachment.id)}
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-colors hover:bg-bg-muted hover:text-status-danger-text disabled:cursor-not-allowed disabled:opacity-60"
+          aria-label={t("commissions.deleteAttachment")}
+        >
+          <Trash2 size={13} />
+        </button>
+      ))}
     </div>
   );
 }
@@ -1034,6 +1156,7 @@ function renderControl({
 
   if (field.fieldType === "MULTI_SELECT" || field.fieldType === "CHECKBOX_GROUP" || field.fieldType === "DOCUMENT_CHECKLIST") {
     const selectedValues = Array.isArray(value) ? value.map(String) : [];
+    const exclusive = isYesNoOptionSet(field);
     return (
       <div className="flex flex-wrap gap-2">
         {field.options.map((option) => (
@@ -1043,9 +1166,13 @@ function renderControl({
             disabled={disabled}
             label={option.label}
             onChange={(event) => {
-              const next = event.target.checked
-                ? [...selectedValues, option.value]
-                : selectedValues.filter((item) => item !== option.value);
+              const next = exclusive
+                ? event.target.checked
+                  ? [option.value]
+                  : []
+                : event.target.checked
+                  ? [...selectedValues, option.value]
+                  : selectedValues.filter((item) => item !== option.value);
               onValueChange(next);
             }}
           />
@@ -1379,27 +1506,24 @@ function getTableCellPlaceholder(row: EditableTableRow, column: CommissionTableC
 }
 
 function getAttachmentToggleFields(page: CommissionFormPage): CommissionFormField[] {
+  if (!isDocumentationAttachmentsPage(page)) return [];
   return page.sections
     .flatMap((section) => section.fields)
-    .filter((field) => isYesNoField(field) && shouldOfferAttachmentForField(field));
+    .filter((field) => isDocumentUploadSlotField(field));
 }
 
-function isYesNoField(field: CommissionFormField): boolean {
-  if (field.fieldType !== "CHECKBOX_GROUP" && field.fieldType !== "MULTI_SELECT" && field.fieldType !== "SELECT") {
-    return false;
-  }
+function isDocumentationAttachmentsPage(page: CommissionFormPage): boolean {
+  const normalized = normalizeLoose(page.title);
+  return normalized.includes("documentazione") && normalized.includes("allegati");
+}
+
+function isDocumentUploadSlotField(field: CommissionFormField): boolean {
+  return field.fieldType !== "TABLE" && field.fieldType !== "SIGNATURE";
+}
+
+function isYesNoOptionSet(field: CommissionFormField): boolean {
   const optionValues = field.options.map((option) => normalizeLoose(option.label || option.value));
   return optionValues.includes("si") && optionValues.includes("no");
-}
-
-function shouldOfferAttachmentForField(field: CommissionFormField): boolean {
-  const normalized = normalizeLoose(field.label);
-  return normalized.includes("allegata")
-    || normalized.includes("allegato")
-    || normalized.includes("disponibili")
-    || normalized.includes("documentazione")
-    || normalized.includes("foto")
-    || normalized.includes("planimetria");
 }
 
 function isAffirmativeValue(value: unknown): boolean {
@@ -1432,15 +1556,16 @@ function getCompletionIssues(
         continue;
       }
 
-      if (!hasFieldValue(fieldValues[field.id]) && !isIgnorableEmptyField(field)) {
-        issues.push({ pageNumber: page.pageNumber, sectionTitle: section.title, label: getUnitMeta(field.label).label });
-      }
-
-      if (isYesNoField(field) && shouldOfferAttachmentForField(field) && isAffirmativeValue(fieldValues[field.id])) {
+      if (isDocumentationAttachmentsPage(page) && isDocumentUploadSlotField(field)) {
         const hasAttachment = attachments.some((attachment) => attachment.fieldKey === field.key);
         if (!hasAttachment) {
           issues.push({ pageNumber: page.pageNumber, sectionTitle: section.title, label: `Allegato: ${getUnitMeta(field.label).label}` });
         }
+        continue;
+      }
+
+      if (!hasFieldValue(fieldValues[field.id]) && !isIgnorableEmptyField(field)) {
+        issues.push({ pageNumber: page.pageNumber, sectionTitle: section.title, label: getUnitMeta(field.label).label });
       }
     }
   }
@@ -1515,6 +1640,7 @@ function getPageCompletionStats(
   page: CommissionFormPage,
   fieldValues: Record<string, unknown>,
   tableValues: Record<string, EditableTableRow[]>,
+  attachments: CommissionAttachment[],
 ): { total: number; completed: number } {
   let total = 0;
   let completed = 0;
@@ -1522,6 +1648,11 @@ function getPageCompletionStats(
   for (const field of page.sections.flatMap((section) => section.fields)) {
     if (field.fieldType === "SIGNATURE") continue;
     total += 1;
+
+    if (isDocumentationAttachmentsPage(page) && isDocumentUploadSlotField(field)) {
+      if (attachments.some((attachment) => attachment.fieldKey === field.key)) completed += 1;
+      continue;
+    }
 
     if (field.fieldType === "TABLE" && field.table) {
       const rows = tableValues[field.table.id] ?? buildDefaultEditableRows(field.table.defaultRows);
