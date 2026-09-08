@@ -1,176 +1,81 @@
 # Birgus
 
+Birgus viene distribuito tramite Docker Compose. La prima installazione e' gestita da un programma interattivo che prepara l'ambiente, genera i segreti e crea il primo account.
+
 ## Requisiti
 
 - Windows 11 con Docker Desktop e WSL2, oppure Linux con Docker Engine;
 - Docker Compose v2 (`docker compose`);
+- Node.js 22 e npm;
 - Git;
 - almeno 16 GB di RAM;
+- spazio sufficiente per PostgreSQL, Garage e i modelli OCR;
 - porte `80`, `13001`, `13100`, `15433` e `13900-13903` disponibili o protette dalla rete locale.
 
-## 1. Scaricare il progetto
+## Prima installazione
+
+Scaricare il progetto e installare le dipendenze necessarie al programma di setup:
 
 ```bash
 git clone <URL_REPOSITORY> Birgus
 cd Birgus
+npm ci
 ```
 
-## 2. Preparare la configurazione
-
-Su Linux:
+Avviare l'installazione guidata:
 
 ```bash
-cp .env.example .env
-cp garage/garage.toml.example garage/garage.local.toml
+npm run setup
 ```
 
-Su PowerShell:
+Il terminale richiede:
 
-```powershell
-Copy-Item .env.example .env
-Copy-Item garage/garage.toml.example garage/garage.local.toml
-```
+- nome e codice dell'organizzazione;
+- nome e codice del primo workspace;
+- nome, cognome, email e password temporanea del Developer;
+- porta HTTP pubblica;
+- indirizzo, modello ed eventuale API key del provider AI;
+- capacita' da assegnare allo storage Garage.
 
-Aprire `.env` e sostituire tutti i valori `CHANGE_ME`. Ogni installazione deve avere segreti propri, lunghi e casuali.
+I codici proposti vengono ricavati automaticamente dai nomi e possono essere modificati prima della conferma. Password e API key non sono mostrate a schermo.
 
-Le variabili indispensabili sono:
+Il programma esegue in ordine:
 
-- `AUTH_PEPPER` per le password;
-- `AUTH_TOTP_ENCRYPTION_KEY` per i segreti 2FA;
-- `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN` e `GARAGE_METRICS_TOKEN`;
-- `GARAGE_S3_SECRET_ACCESS_KEY`;
-- `OCR_LIFECYCLE_TOKEN`.
+1. verifica di Docker Engine e Docker Compose;
+2. generazione di `.env` e `garage/garage.local.toml`;
+3. validazione della configurazione;
+4. build delle immagini Docker con output visibile;
+5. avvio di PostgreSQL e Garage;
+6. creazione del layout, della chiave e del bucket Garage;
+7. avvio dei servizi e controllo del loro stato;
+8. creazione transazionale del workspace e del primo Developer.
 
-Per generare un segreto esadecimale da PowerShell:
+Al termine viene mostrato l'indirizzo da aprire nel browser. Al primo accesso il Developer deve cambiare la password temporanea e configurare obbligatoriamente la 2FA.
 
-```powershell
-$bytes = New-Object byte[] 32
-[Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-[Convert]::ToHexString($bytes).ToLowerInvariant()
-```
+### Riprendere un'installazione interrotta
 
-Riportare in `garage/garage.local.toml` gli stessi valori usati per:
-
-```toml
-rpc_secret = "REPLACE_WITH_64_HEX_CHARS"
-admin_token = "REPLACE_WITH_RANDOM_ADMIN_TOKEN"
-metrics_token = "REPLACE_WITH_RANDOM_METRICS_TOKEN"
-```
-
-`BIRGUS_DEVELOPER_EMAIL` serve solo durante l'aggiornamento di vecchie installazioni con piu' account `superadmin`. In una nuova installazione puo' restare vuota.
-
-`GARAGE_S3_ACCESS_KEY_ID` deve iniziare con `GK` e continuare con 24 caratteri esadecimali. La chiave segreta S3 puo' essere generata con la stessa procedura usata per gli altri segreti.
-
-## 3. Configurare il provider AI
-
-Birgus usa un provider compatibile con le API OpenAI. Se il provider gira su un altro computer della rete:
-
-```dotenv
-AI_PROVIDER=vllm
-AI_PROVIDER_BASE_URL=http://192.168.1.100:8000/v1
-AI_PROVIDER_API_KEY=
-AI_PROVIDER_CHAT_MODEL=nome-modello
-```
-
-L'applicazione puo' essere installata anche prima che il provider AI sia disponibile. Le funzioni che lo richiedono resteranno inattive o segnaleranno che il servizio non e' raggiungibile.
-
-## 4. Avviare i container
-
-Controllare la configurazione e avviare lo stack:
+Il setup puo' essere eseguito nuovamente con:
 
 ```bash
-docker compose config
-docker compose up -d --build
+npm run setup
+```
+
+Se trova configurazioni locali esistenti, non procede automaticamente. Chiede una conferma esplicita, conserva i segreti gia' generati e crea una copia in `backups/setup-<data>/` prima di modificare i file.
+
+Il setup iniziale non puo' creare un secondo Developer o un altro workspace su un database gia' inizializzato. Gli ambienti esistenti si amministrano dall'applicazione.
+
+## Controllo dei servizi
+
+```bash
 docker compose ps
+docker compose logs --tail=100 app frontend garage postgres
 ```
 
-Al primo avvio vengono creati il database, l'estensione pgvector, il catalogo dei ruoli, i permessi e i moduli. Non vengono creati utenti o workspace automaticamente.
+- Frontend: `http://localhost:13100`
+- Backend: `http://localhost:13001`
+- Health check: `http://localhost:13001/health`
 
-Attendere che `birgus_app`, `birgus_frontend`, `birgus_pg` e `birgus_garage` risultino `healthy`. Il primo avvio dell'OCR può richiedere alcuni minuti per il download dei modelli.
-
-Verifica backend:
-
-```bash
-curl http://localhost:13001/health
-```
-
-In PowerShell si può usare:
-
-```powershell
-Invoke-WebRequest -UseBasicParsing http://localhost:13001/health
-```
-
-## 5. Inizializzare Garage
-
-Garage richiede un layout, una chiave S3 e un bucket al primo avvio. Mostrare l'identificativo del nodo:
-
-```bash
-docker compose exec garage /garage status
-```
-
-Copiare l'ID mostrato nella sezione `HEALTHY NODES`, scegliere una capacità compatibile con il disco e applicare il primo layout:
-
-```bash
-docker compose exec garage /garage layout assign <NODE_ID> --zone local --capacity 10GB
-docker compose exec garage /garage layout apply --version 1
-```
-
-Importare le credenziali presenti in `.env`, creare il bucket e concedere i permessi. Sostituire i valori tra parentesi angolari prima di eseguire i comandi:
-
-```bash
-docker compose exec garage /garage key import <GARAGE_S3_ACCESS_KEY_ID> <GARAGE_S3_SECRET_ACCESS_KEY> --yes
-docker compose exec garage /garage bucket create <GARAGE_S3_BUCKET>
-docker compose exec garage /garage bucket allow --read --write --owner <GARAGE_S3_BUCKET> --key <GARAGE_S3_ACCESS_KEY_ID>
-```
-
-Verificare il risultato:
-
-```bash
-docker compose exec garage /garage layout show
-docker compose exec garage /garage key list
-docker compose exec garage /garage bucket list
-```
-
-Questa procedura va eseguita una sola volta. Su un'installazione esistente con layout, chiave e bucket già presenti non deve essere ripetuta.
-
-## 6. Creare il primo workspace
-
-Il primo account riceve il ruolo `Developer`. Questo ruolo è unico, ha accesso globale e richiede obbligatoriamente la 2FA.
-
-Esempio di installazione:
-
-```bash
-docker compose exec app npm run instance:initialize -- \
-  --organization-code azienda \
-  --organization-name "Azienda" \
-  --workspace-code principale \
-  --workspace-name "Workspace principale" \
-  --email developer@example.com \
-  --first-name Developer \
-  --password "PasswordTemporanea1" \
-  --modules "project_management,commission_registry,commission_intake,customer_map,superadmin_center"
-```
-
-Da PowerShell lo stesso comando puo' essere scritto su una sola riga:
-
-```powershell
-docker compose exec app npm run instance:initialize -- --organization-code azienda --organization-name "Azienda" --workspace-code principale --workspace-name "Workspace principale" --email developer@example.com --first-name Developer --password "PasswordTemporanea1" --modules "project_management,commission_registry,commission_intake,customer_map,superadmin_center"
-```
-
-Il comando funziona solo su un database senza workspace attivi e senza un Developer. La password temporanea deve contenere almeno otto caratteri, una lettera maiuscola e un numero.
-
-## 7. Primo accesso
-
-Aprire `http://IP_DEL_SERVER/` oppure `http://localhost/` se il browser si trova sul server.
-
-Al primo accesso:
-
-1. usare l'email e la password temporanea;
-2. scegliere una nuova password;
-3. configurare la 2FA con un'app TOTP;
-4. conservare in modo sicuro le credenziali dell'account Developer.
-
-Dal menu **Gestione workspace** si possono creare utenti, assegnare ruoli e attivare gli altri moduli.
+L'indirizzo principale usa la porta scelta durante il setup, normalmente `http://localhost/`.
 
 ## Ruoli iniziali
 
@@ -180,6 +85,16 @@ Dal menu **Gestione workspace** si possono creare utenti, assegnare ruoli e atti
 | Superuser | Gestione completa del proprio workspace | Facoltativa |
 | Admin | Operazioni amministrative del workspace | Facoltativa |
 | Guest | Operazioni applicative assegnate | Facoltativa |
+
+## Provider AI
+
+Birgus usa un endpoint compatibile con le API OpenAI. Il setup accetta anche un provider non ancora raggiungibile: l'applicazione si avvia comunque, mentre le funzioni AI restano indisponibili finche' il servizio non viene collegato.
+
+Per modificare successivamente il provider, aggiornare le variabili `AI_PROVIDER_*` in `.env` e ricreare i container interessati:
+
+```bash
+docker compose up -d --force-recreate app python_modules
+```
 
 ## vLLM sullo stesso server
 
@@ -193,13 +108,13 @@ Il profilo richiede Docker con accesso alla GPU NVIDIA.
 
 ## HTTPS
 
-Per un dominio raggiungibile dal server:
+Copiare la configurazione locale:
 
 ```bash
 cp Caddyfile.https.example Caddyfile.https.local
 ```
 
-Impostare in `.env`:
+Impostare in `.env` il dominio pubblico, le porte e i cookie sicuri:
 
 ```dotenv
 BIRGUS_PUBLIC_HOST=birgus.example.com
@@ -219,12 +134,20 @@ DNS e firewall devono consentire a Caddy di raggiungere le porte 80 e 443.
 
 ## Sviluppo locale
 
-Lo stack standard esegue immagini stabili. Per montare i sorgenti e abilitare il reload automatico:
+Per montare i sorgenti e abilitare il reload automatico:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
-Frontend: `http://localhost:13100`  
-Backend: `http://localhost:13001`  
-Health check: `http://localhost:13001/health`
+## Aggiornamento
+
+Prima di aggiornare creare un backup, quindi ricostruire lo stack:
+
+```powershell
+npm run ops:backup
+git pull
+docker compose up -d --build
+```
+
+Il bootstrap applicativo aggiorna schema, catalogo dei ruoli, permessi, moduli e strumenti workflow senza creare automaticamente nuovi utenti o workspace.

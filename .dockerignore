@@ -10,6 +10,8 @@ coverage
 postgres_data
 garage/meta
 garage/data
+garage/garage.local.toml
+garage/garage.local.toml.*
 frontend/node_modules
 frontend/.next
 ocr_service/storage
