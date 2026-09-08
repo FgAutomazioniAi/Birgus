@@ -4,6 +4,15 @@ const prisma = new PrismaClient();
 
 const tools = [
   {
+    key: "langchain_chat",
+    name: "langchain_chat",
+    label: "AI Chat",
+    description: "Esegue una richiesta chat generica tramite orchestratore Python LangChain.",
+    runtimeKind: WorkflowToolRuntimeKind.PYTHON_MODULE,
+    handlerKey: "langchain_orchestrator.chat",
+    configuration: { module: "langchain_orchestrator", action: "chat" },
+  },
+  {
     key: "langchain_compose_email",
     name: "langchain_compose_email",
     label: "Formatta email",
@@ -20,6 +29,15 @@ const tools = [
     runtimeKind: WorkflowToolRuntimeKind.PYTHON_MODULE,
     handlerKey: "langchain_orchestrator.format_text",
     configuration: { module: "langchain_orchestrator", action: "format_text", content: "", template: "" },
+  },
+  {
+    key: "generic_document_generator",
+    name: "generic_document_generator",
+    label: "Generatore documento generico",
+    description: "Genera un documento DOCX/PDF da testo o blocchi strutturati.",
+    runtimeKind: WorkflowToolRuntimeKind.PYTHON_MODULE,
+    handlerKey: "docx_engine.generate_document",
+    configuration: { module: "docx_engine", action: "generate_document", format: "docx" },
   },
   {
     key: "workflow_format_template",

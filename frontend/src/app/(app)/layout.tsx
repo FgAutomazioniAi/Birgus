@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   let currentUserName = "Utente";
   let currentUserId = "";
-  let currentUserRole = "Guest";
+  let currentUserRole = "Operatore";
   let canManageWorkspace = false;
   let currentWorkspaceId = "";
   let enabledModuleKeys: string[] = [];
@@ -56,7 +56,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     } else if (normalizedRoleKeys.includes("admin")) {
       currentUserRole = "Admin";
     } else if (normalizedRoleKeys.includes("operator")) {
-      currentUserRole = "Guest";
+      currentUserRole = "Operatore";
     }
 
     currentUserId = payload.userId?.trim() ?? "";

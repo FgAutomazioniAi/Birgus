@@ -15,7 +15,7 @@ const ROLE_LABELS: Record<(typeof ROLE_KEYS)[number], string> = {
   developer: "Developer",
   superuser: "Superuser",
   admin: "Admin",
-  operator: "Guest",
+  operator: "Operatore",
 };
 const MODULE_DEPENDENCIES = [["document_intelligence", "document_archive"], ["conversational_assistant", "document_intelligence"], ["workflow_management", "agent_management"], ["workflow_management", "document_intelligence"], ["commission_intake", "commission_registry"], ["audit_center", "notification_center"]] as const;
 const MODULE_LABELS: Record<(typeof MODULE_KEYS)[number], string> = {

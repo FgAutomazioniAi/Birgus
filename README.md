@@ -84,7 +84,7 @@ L'indirizzo principale usa la porta scelta durante il setup, normalmente `http:/
 | Developer | Intera installazione | Obbligatoria |
 | Superuser | Gestione completa del proprio workspace | Facoltativa |
 | Admin | Operazioni amministrative del workspace | Facoltativa |
-| Guest | Operazioni applicative assegnate | Facoltativa |
+| Operatore | Operazioni applicative assegnate | Facoltativa |
 
 ## Provider AI
 
