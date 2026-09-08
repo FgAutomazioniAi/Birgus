@@ -12,3 +12,6 @@ garage/meta
 garage/data
 frontend/node_modules
 frontend/.next
+ocr_service/storage
+images_from_pages
+Obsidian

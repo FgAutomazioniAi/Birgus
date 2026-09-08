@@ -1,164 +1,270 @@
-# Birgus Platform
+# Birgus
 
-Backend modulare multi-tenant:
-- `core`
-- `modules`
-- `storage`
-- `worker`
-- `database`
+Birgus e' un'applicazione web multi-workspace per gestire progetti, commesse, checklist, documenti e workflow assistiti da servizi AI.
 
-## Stack
-- TypeScript
-- NestJS + Fastify
-- Prisma + PostgreSQL
-- Garage (S3-compatible)
+Questa guida descrive l'installazione iniziale con Docker. Non e' necessario installare Node.js, PostgreSQL o Python direttamente sul server.
 
-## Avvio locale
+## Requisiti
+
+- Windows 11 con Docker Desktop e WSL2, oppure Linux con Docker Engine;
+- Docker Compose v2 (`docker compose`);
+- Git;
+- almeno 16 GB di RAM;
+- porte `80`, `13001`, `13100`, `15433` e `13900-13903` disponibili o protette dalla rete locale.
+
+Una GPU NVIDIA e' necessaria solo se si vuole eseguire vLLM sullo stesso server.
+
+## 1. Scaricare il progetto
+
 ```bash
-npm install
-cd frontend && npm install && cd ..
+git clone <URL_REPOSITORY> Birgus
+cd Birgus
+```
+
+## 2. Preparare la configurazione
+
+Su Linux:
+
+```bash
 cp .env.example .env
 cp garage/garage.toml.example garage/garage.local.toml
-npm run db:generate
-npm run db:push
-npm run db:seed
-npm run dev
-npm run dev:frontend
 ```
 
-Server API: `http://localhost:3000`
-Frontend Next: `http://localhost:3100`
-Health: `GET /health`
+Su PowerShell:
 
-## Avvio Docker
-```bash
-docker compose up --build -d
+```powershell
+Copy-Item .env.example .env
+Copy-Item garage/garage.toml.example garage/garage.local.toml
 ```
 
-Servizi:
-- API app: `http://localhost:3000`
-- Frontend Next: `http://localhost:3100`
-- PostgreSQL: `localhost:5432`
-- Garage S3 API: `http://localhost:3900`
-- Garage Admin API: `http://localhost:3903`
+Aprire `.env` e sostituire tutti i valori `CHANGE_ME`. Ogni installazione deve avere segreti propri, lunghi e casuali.
 
-Nota: il container `app` esegue `db:push` + `db:bootstrap` all'avvio.
+Le variabili indispensabili sono:
 
-## Endpoint principali
-- `POST /api/auth/login`
-- `POST /api/auth/logout`
-- `GET /api/auth/session`
-- `POST /api/auth/password/forgot`
-- `POST /api/auth/password/reset`
-- `GET /api/modules`
-- `POST /api/modules/:moduleKey/enable`
-- `POST /api/modules/:moduleKey/disable`
-- `GET /api/modules/users/:userId`
-- `POST /api/modules/users/:userId/:moduleKey/allow`
-- `POST /api/modules/users/:userId/:moduleKey/deny`
-- `DELETE /api/modules/users/:userId/:moduleKey/override`
-- `GET /api/projects`
-- `POST /api/projects`
-- `GET /api/projects/:projectId`
-- `PATCH /api/projects/:projectId`
-- `DELETE /api/projects/:projectId`
-- `GET /api/projects/:projectId/versions`
-- `POST /api/projects/:projectId/versions`
-- `PATCH /api/projects/:projectId/versions` (compat frontend storico)
-- `DELETE /api/projects/:projectId/versions` (compat frontend storico)
-- `PATCH /api/projects/:projectId/versions/default`
-- `DELETE /api/projects/:projectId/versions/:versionLabel`
-- `GET /api/projects/:projectId/files`
-- `GET /api/projects/:projectId/files/:fileKind`
-- `POST /api/projects/:projectId/files/:fileKind`
-- `DELETE /api/projects/:projectId/files/:fileKind`
-- `GET /api/projects/:projectId/files/:fileKind/content`
-- `GET /api/projects/:projectId/quotation`
-- `POST /api/projects/:projectId/quotation` (multipart PDF)
-- `DELETE /api/projects/:projectId/quotation`
-- `GET /api/projects/:projectId/quotation/file`
-- `POST /api/projects/:projectId/quotation/analyze`
-- `GET /api/orchestrator/jobs/:jobId`
-- `GET /api/clients`
-- `POST /api/clients`
-- `GET /api/clients/:clientId`
-- `PATCH /api/clients/:clientId`
-- `DELETE /api/clients/:clientId`
-- `GET /api/user/preferences`
-- `PATCH /api/user/preferences`
-- `POST /api/ddt/documents/:documentId/analyze`
-- `GET /api/ddt-reader/config`
-- `GET /api/ddt-reader/documents`
-- `POST /api/ddt-reader/documents` (multipart PDF)
-- `GET /api/ddt-reader/documents/:id`
-- `POST /api/ddt-reader/documents/:id/analyze`
-- `DELETE /api/ddt-reader/documents/:id`
-- `GET /api/ddt-reader/documents/:id/file`
-- `GET /api/notifications`
-- `PATCH /api/notifications` (compat frontend storico)
-- `DELETE /api/notifications` (compat frontend storico)
-- `PATCH /api/notifications/read-all`
-- `POST /api/notifications`
+- `AUTH_PEPPER` per le password;
+- `AUTH_TOTP_ENCRYPTION_KEY` per i segreti 2FA;
+- `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN` e `GARAGE_METRICS_TOKEN`;
+- `GARAGE_S3_SECRET_ACCESS_KEY`;
+- `OCR_LIFECYCLE_TOKEN`.
 
-## Headers richiesti
-Per gli endpoint autenticati:
-- `Authorization: Bearer <token>`
-- `x-workspace-id: <workspace_uuid>`
+Per generare un segreto esadecimale da PowerShell:
 
-Compatibilità frontend storico:
-- cookie di sessione `vl_session` supportato automaticamente
-- se `x-workspace-id` manca, viene risolto il workspace attivo primario dell'utente
+```powershell
+$bytes = New-Object byte[] 32
+[Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+[Convert]::ToHexString($bytes).ToLowerInvariant()
+```
 
-## Modello autorizzativo
-- Controllo `module` (workspace + override utente) per abilitazione funzionale.
-- Controllo `permission` (ruolo workspace -> permessi) per autorizzazione azioni read/write.
-- Le dipendenze tra moduli vengono validate quando abiliti/disabiliti un modulo.
+Riportare in `garage/garage.local.toml` gli stessi valori usati per:
 
-## Inizializzazione
-Il bootstrap Docker crea soltanto il catalogo tecnico: ruoli, permessi, moduli, dipendenze e tipi file. Non crea organization, workspace o utenti. `npm run db:seed` e' un alias sicuro di `npm run db:bootstrap`. Per una nuova installazione segui `docs/INSTALLATION_FROM_ZERO.md` e crea il primo superuser con `npm run instance:initialize`.
+```toml
+rpc_secret = "VALORE_DI_GARAGE_RPC_SECRET"
+admin_token = "VALORE_DI_GARAGE_ADMIN_TOKEN"
+metrics_token = "VALORE_DI_GARAGE_METRICS_TOKEN"
+```
 
-## Garage locale
-Il file `garage/garage.local.toml` e richiesto da Docker Compose ma non deve essere versionato. Crealo da `garage/garage.toml.example` e sostituisci `rpc_secret`, `admin_token` e `metrics_token` con valori casuali per ogni ambiente.
+`BIRGUS_DEVELOPER_EMAIL` serve solo durante l'aggiornamento di vecchie installazioni con piu' account `superadmin`. In una nuova installazione puo' restare vuota.
 
-## Stato corrente
-- Architettura OOP modulare attiva
-- Worker backend integrati nel processo app con queue Postgres-backed
-- Pipeline OCR/IA collegata a provider OpenAI-compatible configurabile da `.env` (`AI_PROVIDER_*`, vLLM per MVP)
+`GARAGE_S3_ACCESS_KEY_ID` deve iniziare con `GK` e continuare con 24 caratteri esadecimali. La chiave segreta S3 puo' essere generata con la stessa procedura usata per gli altri segreti.
 
-## vLLM gestito
-Il modello gira come container separato, ma nello stesso Docker host dell'applicazione. Per abilitarlo imposta un token casuale non vuoto in `.env`:
+## 3. Configurare il provider AI
+
+Birgus usa un provider compatibile con le API OpenAI. Se il provider gira su un altro computer della rete:
+
+```dotenv
+AI_PROVIDER=vllm
+AI_PROVIDER_BASE_URL=http://192.168.1.100:8000/v1
+AI_PROVIDER_API_KEY=
+AI_PROVIDER_CHAT_MODEL=nome-modello
+```
+
+L'applicazione puo' essere installata anche prima che il provider AI sia disponibile. Le funzioni che lo richiedono resteranno inattive o segnaleranno che il servizio non e' raggiungibile.
+
+## 4. Avviare i container
+
+Controllare la configurazione e avviare lo stack:
 
 ```bash
-VLLM_LIFECYCLE_TOKEN="token-locale-lungo-e-casuale"
+docker compose config
+docker compose up -d --build
+docker compose ps
 ```
 
-Poi avvia il profilo IA:
+Al primo avvio vengono creati il database, l'estensione pgvector, il catalogo dei ruoli, i permessi e i moduli. Non vengono creati utenti o workspace automaticamente.
+
+Attendere che `birgus_app`, `birgus_frontend`, `birgus_pg` e `birgus_garage` risultino `healthy`. Il primo avvio dell'OCR puo' richiedere alcuni minuti per il download dei modelli.
+
+Verifica backend:
+
+```bash
+curl http://localhost:13001/health
+```
+
+In PowerShell si puo' usare:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing http://localhost:13001/health
+```
+
+## 5. Inizializzare Garage
+
+Garage richiede un layout, una chiave S3 e un bucket al primo avvio. Mostrare l'identificativo del nodo:
+
+```bash
+docker compose exec garage /garage status
+```
+
+Copiare l'ID mostrato nella sezione `HEALTHY NODES`, scegliere una capacita' compatibile con il disco e applicare il primo layout:
+
+```bash
+docker compose exec garage /garage layout assign <NODE_ID> --zone local --capacity 10GB
+docker compose exec garage /garage layout apply --version 1
+```
+
+Importare le credenziali presenti in `.env`, creare il bucket e concedere i permessi. Sostituire i valori tra parentesi angolari prima di eseguire i comandi:
+
+```bash
+docker compose exec garage /garage key import <GARAGE_S3_ACCESS_KEY_ID> <GARAGE_S3_SECRET_ACCESS_KEY> --yes
+docker compose exec garage /garage bucket create <GARAGE_S3_BUCKET>
+docker compose exec garage /garage bucket allow --read --write --owner <GARAGE_S3_BUCKET> --key <GARAGE_S3_ACCESS_KEY_ID>
+```
+
+Verificare il risultato:
+
+```bash
+docker compose exec garage /garage layout show
+docker compose exec garage /garage key list
+docker compose exec garage /garage bucket list
+```
+
+Questa procedura va eseguita una sola volta. Su un'installazione esistente con layout, chiave e bucket gia' presenti non deve essere ripetuta.
+
+## 6. Creare il primo workspace
+
+Il primo account riceve il ruolo `Developer`. Questo ruolo e' unico, ha accesso globale e richiede obbligatoriamente la 2FA.
+
+Esempio di installazione essenziale:
+
+```bash
+docker compose exec app npm run instance:initialize -- \
+  --organization-code azienda \
+  --organization-name "Azienda" \
+  --workspace-code principale \
+  --workspace-name "Workspace principale" \
+  --email developer@example.com \
+  --first-name Developer \
+  --password "PasswordTemporanea1" \
+  --modules "project_management,commission_registry,commission_intake,customer_map,superadmin_center"
+```
+
+Da PowerShell lo stesso comando puo' essere scritto su una sola riga:
+
+```powershell
+docker compose exec app npm run instance:initialize -- --organization-code azienda --organization-name "Azienda" --workspace-code principale --workspace-name "Workspace principale" --email developer@example.com --first-name Developer --password "PasswordTemporanea1" --modules "project_management,commission_registry,commission_intake,customer_map,superadmin_center"
+```
+
+Il comando funziona solo su un database senza workspace attivi e senza un Developer. La password temporanea deve contenere almeno otto caratteri, una lettera maiuscola e un numero.
+
+## 7. Primo accesso
+
+Aprire `http://IP_DEL_SERVER/` oppure `http://localhost/` se il browser si trova sul server.
+
+Al primo accesso:
+
+1. usare l'email e la password temporanea;
+2. scegliere una nuova password;
+3. configurare la 2FA con un'app TOTP;
+4. conservare in modo sicuro le credenziali dell'account Developer.
+
+Dal menu **Gestione workspace** si possono creare utenti, assegnare ruoli e attivare gli altri moduli.
+
+## Ruoli iniziali
+
+| Ruolo | Ambito | 2FA |
+| --- | --- | --- |
+| Developer | Intera installazione | Obbligatoria |
+| Superuser | Gestione completa del proprio workspace | Facoltativa |
+| Admin | Operazioni amministrative del workspace | Facoltativa |
+| Guest | Operazioni applicative assegnate | Facoltativa |
+
+## vLLM sullo stesso server
+
+Compilare `vllm/runtime.env`, impostare `VLLM_LIFECYCLE_TOKEN` in `.env` e avviare il profilo dedicato:
 
 ```bash
 docker compose --profile ai-runtime up -d --build
 ```
 
-Il modulo `ai_runtime_control` e' disabilitato per default e va abilitato dal Superadmin per l'utente autorizzato. Da Impostazioni quell'utente puo' modificare `max_model_len`: il controller interno aggiorna solo `birgus_vllm` e ricrea solo quel container. L'app usa `http://vllm:8000/v1` nella rete Docker.
-Per uno smoke test diretto:
+Il profilo richiede Docker con accesso alla GPU NVIDIA.
+
+## HTTPS
+
+Per un dominio raggiungibile dal server:
 
 ```bash
-AI_PROVIDER_BASE_URL="http://127.0.0.1:8000/v1" \
-AI_PROVIDER_API_KEY="token-locale-lungo" \
-AI_PROVIDER_CHAT_MODEL="birgus-vl" \
-npm run ai:smoke
+cp Caddyfile.https.example Caddyfile.https.local
 ```
 
-## Documentazione sicurezza
-- Installazione pulita e primo superuser: `docs/INSTALLATION_FROM_ZERO.md`
-- Librerie approvate: `docs/APPROVED_LIBRARIES.md`
-- Coding style sicuro: `docs/CODING_STYLE_SECURITY.md`
-- Eccezioni sicurezza: `docs/SECURITY_EXCEPTION_TEMPLATE.md`
-- HTTPS finale: `docs/HTTPS_FINAL_STEP.md`
+Impostare in `.env`:
 
-## Variabili ambiente auth/proxy
-- `AUTH_COOKIE_NAME` (default `vl_session`)
-- `AUTH_COOKIE_DOMAIN` (opzionale, utile con dominio custom)
-- `AUTH_COOKIE_PATH` (default `/`)
-- `AUTH_COOKIE_SECURE` (`true` in produzione HTTPS)
-- `AUTH_COOKIE_SAME_SITE` (`Lax` default, supporta `Strict`/`None`)
-- `TRUST_PROXY` (`true` se dietro reverse proxy)
+```dotenv
+BIRGUS_PUBLIC_HOST=birgus.example.com
+BIRGUS_HOST_HTTP_PORT=80
+BIRGUS_HOST_HTTPS_PORT=443
+AUTH_COOKIE_SECURE=true
+TRUST_PROXY=true
+```
+
+Avviare con l'override HTTPS:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --build
+```
+
+DNS e firewall devono consentire a Caddy di raggiungere le porte 80 e 443.
+
+## Sviluppo locale
+
+Lo stack standard esegue immagini stabili. Per montare i sorgenti e abilitare il reload automatico:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+
+Frontend: `http://localhost:13100`  
+Backend: `http://localhost:13001`  
+Health check: `http://localhost:13001/health`
+
+## Backup e aggiornamenti
+
+Creare un backup prima di ogni aggiornamento importante:
+
+```powershell
+npm run ops:backup
+```
+
+Aggiornamento standard:
+
+```bash
+git pull
+docker compose up -d --build
+docker compose ps
+```
+
+Per aggiornare una vecchia installazione con piu' account `superadmin`, impostare prima in `.env` l'email che deve diventare Developer:
+
+```dotenv
+BIRGUS_DEVELOPER_EMAIL=developer@example.com
+```
+
+Gli altri account `superadmin` vengono convertiti in `Superuser` mantenendo le assegnazioni ai workspace.
+
+## Diagnostica
+
+```bash
+docker compose ps
+docker compose logs --tail 100 app
+docker compose logs --tail 100 frontend
+```
+
+I dati persistenti si trovano in `postgres_data`, `garage/data`, `garage/meta` e `ocr_service/storage`. Queste directory e il file `.env` non devono essere aggiunti a Git.

@@ -20,6 +20,9 @@ backups/
 Caddyfile.https.local
 frontend/.next/
 frontend/node_modules/
+ocr_service/storage/
+images_from_pages/
+Obsidian/**/.obsidian/
 __pycache__/
 *.pyc
 *.pyo
@@ -30,7 +33,6 @@ venv/
 env/
 docs/*
 !docs/commission-intake-schema.dbml
-!docs/handover-birgus-2026-09-07.md
 *.log
 npm-debug.log*
 yarn-debug.log*
