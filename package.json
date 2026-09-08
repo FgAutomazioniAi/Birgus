@@ -16,6 +16,7 @@
     "e2e:chatbot": "tsx scripts/test-chatbot-e2e.ts",
     "check:mvp": "npm run security:check && npm run typecheck && npm test && npm run build:frontend && npm run e2e:smoke",
     "security:check": "tsx scripts/security-check.ts",
+    "setup": "tsx scripts/setup.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:bootstrap": "tsx scripts/bootstrap-database.ts",

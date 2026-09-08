@@ -4,7 +4,7 @@ import { createInstallationProfile, hashInstallationProfile } from "./installati
 import { activationGroupFor } from "../src/modules/module-management/domain/ModuleActivationGroups.js";
 
 const prisma = new PrismaClient();
-const usage = "npm run instance:initialize -- --organization-code <code> --organization-name <name> --workspace-code <code> --workspace-name <name> --email <email> --first-name <name> --password <password> --modules <comma-separated-module-keys>";
+const usage = "npm run instance:initialize -- --organization-code <code> --organization-name <name> --workspace-code <code> --workspace-name <name> --email <email> --first-name <name> (--password <password> | --password-stdin) --modules <comma-separated-module-keys>";
 
 function argument(name: string): string {
   const index = process.argv.indexOf(name);
@@ -26,6 +26,21 @@ async function passwordHash(password: string): Promise<string> {
   const salt = randomBytes(16).toString("base64url");
   const derived = await new Promise<Buffer>((resolve, reject) => scrypt(password.normalize("NFKC") + pepper, salt, 64, { N: 16384, p: 1, r: 8 }, (error, value) => error ? reject(error) : resolve(value)));
   return `scrypt$${salt}$${derived.toString("base64url")}`;
+}
+
+async function installationPassword(): Promise<string> {
+  if (process.argv.includes("--password-stdin") && process.argv.includes("--password")) {
+    throw new Error("Use only one password input method.");
+  }
+  if (process.argv.includes("--password-stdin")) {
+    if (process.stdin.isTTY) throw new Error("--password-stdin requires piped input.");
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const password = Buffer.concat(chunks).toString("utf8").replace(/[\r\n]+$/, "");
+    if (!password) throw new Error("No password was received on stdin.");
+    return password;
+  }
+  return argument("--password");
 }
 
 async function main(): Promise<void> {
@@ -57,7 +72,7 @@ async function main(): Promise<void> {
   if (missing.length) throw new Error(`Unknown or inactive module keys: ${missing.join(", ")}`);
   for (const dependency of dependencies) if (moduleKeys.includes(dependency.module.key) && !moduleKeys.includes(dependency.depends_on_module.key)) throw new Error(`Module '${dependency.module.key}' requires '${dependency.depends_on_module.key}'.`);
 
-  const hash = await passwordHash(argument("--password"));
+  const hash = await passwordHash(await installationPassword());
   const profile = createInstallationProfile([{ workspace_code: workspaceCode, enabled_modules: moduleKeys }]);
   const profileHash = hashInstallationProfile(profile);
   const result = await prisma.$transaction(async (tx) => {
