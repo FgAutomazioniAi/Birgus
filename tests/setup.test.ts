@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseEnv, setEnvValues, slug, validCode } from "../scripts/setup.js";
+import { nextGarageLayoutVersion, parseEnv, setEnvValues, slug, validCode } from "../scripts/setup.js";
 
 test("setup normalizes names into valid installation codes", () => {
   assert.equal(slug("  Sede Principale S.p.A.  "), "sede-principale-s-p-a");
@@ -21,4 +21,12 @@ test("setup updates dotenv values without removing comments or custom entries", 
   assert.equal(parseEnv(updated).get("CUSTOM_VALUE"), "keep");
   assert.equal(parseEnv(updated).get("GARAGE_S3_BUCKET"), "birgus-files");
   assert.match(updated, /^# Configurazione/m);
+});
+
+test("setup obtains the Garage version after role changes are staged", () => {
+  assert.equal(nextGarageLayoutVersion("Current cluster layout version: 0"), "1");
+  assert.equal(nextGarageLayoutVersion("Current cluster layout version: 4"), "5");
+  assert.equal(nextGarageLayoutVersion("Staged cluster layout version: 7"), "7");
+  assert.equal(nextGarageLayoutVersion("Run garage layout apply --version 9 to enact changes"), "9");
+  assert.equal(nextGarageLayoutVersion("No layout version available"), null);
 });

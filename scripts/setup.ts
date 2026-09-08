@@ -215,6 +215,15 @@ export function validCode(value: string): boolean {
   return /^[a-z0-9][a-z0-9-]{1,62}$/.test(value);
 }
 
+export function nextGarageLayoutVersion(output: string): string | null {
+  const instructedVersion = output.match(/layout apply(?:\s+|\s+.*\s+)--version(?:=|\s+)(\d+)/i)?.[1];
+  if (instructedVersion) return instructedVersion;
+  const stagedVersion = output.match(/staged(?: cluster)? layout version\s*:\s*(\d+)/i)?.[1];
+  if (stagedVersion) return stagedVersion;
+  const currentVersion = output.match(/current(?: cluster)? layout version\s*:\s*(\d+)/i)?.[1];
+  return currentVersion === undefined ? null : String(Number(currentVersion) + 1);
+}
+
 async function askCode(question: string, suggested: string): Promise<string> {
   while (true) {
     const answer = (await askRequired(question, suggested)).toLowerCase();
@@ -385,15 +394,20 @@ async function configureGarage(values: Map<string, string>, capacity: string): P
   const nodeId = status.output.match(/^([0-9a-f]{16})\s+/m)?.[1];
   if (!nodeId) throw new Error("Impossibile rilevare l'identificativo del nodo Garage.");
 
-  const layout = await dockerCompose(["exec", "-T", "garage", "/garage", "layout", "show"], { capture: true });
-  const nodeHasRole = new RegExp(`^${nodeId}\\s+.*\\s(?:MB|GB|TB)\\s`, "m").test(layout.output);
+  const nodeStatusLine = status.output.match(new RegExp(`^${nodeId}\\s+.*$`, "m"))?.[0] ?? "";
+  const nodeHasRole = !nodeStatusLine.includes("NO ROLE ASSIGNED")
+    && /\s(?:MB|GB|TB)\s/.test(nodeStatusLine);
   if (!nodeHasRole) {
-    const assignment = await dockerCompose([
+    await dockerCompose([
       "exec", "-T", "garage", "/garage", "layout", "assign", nodeId,
       "--zone", "local", "--capacity", capacity,
     ], { capture: true });
-    const version = assignment.output.match(/--version\s+(\d+)/)?.[1];
-    if (!version) throw new Error(`Garage non ha restituito la versione del layout da applicare.\n${assignment.output}`);
+    const stagedLayout = await dockerCompose(
+      ["exec", "-T", "garage", "/garage", "layout", "show"],
+      { capture: true },
+    );
+    const version = nextGarageLayoutVersion(stagedLayout.output);
+    if (!version) throw new Error(`Garage non ha restituito una versione di layout riconoscibile.\n${stagedLayout.output}`);
     await dockerCompose(["exec", "-T", "garage", "/garage", "layout", "apply", "--version", version]);
   }
 
