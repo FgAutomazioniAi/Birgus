@@ -52,9 +52,9 @@ $bytes = New-Object byte[] 32
 Riportare in `garage/garage.local.toml` gli stessi valori usati per:
 
 ```toml
-rpc_secret = "VALORE_DI_GARAGE_RPC_SECRET"
-admin_token = "VALORE_DI_GARAGE_ADMIN_TOKEN"
-metrics_token = "VALORE_DI_GARAGE_METRICS_TOKEN"
+rpc_secret = "REPLACE_WITH_64_HEX_CHARS"
+admin_token = "REPLACE_WITH_RANDOM_ADMIN_TOKEN"
+metrics_token = "REPLACE_WITH_RANDOM_METRICS_TOKEN"
 ```
 
 `BIRGUS_DEVELOPER_EMAIL` serve solo durante l'aggiornamento di vecchie installazioni con piu' account `superadmin`. In una nuova installazione puo' restare vuota.
