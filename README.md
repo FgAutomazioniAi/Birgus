@@ -1,9 +1,5 @@
 # Birgus
 
-Birgus e' un'applicazione web multi-workspace per gestire progetti, commesse, checklist, documenti e workflow assistiti da servizi AI.
-
-Questa guida descrive l'installazione iniziale con Docker. Non e' necessario installare Node.js, PostgreSQL o Python direttamente sul server.
-
 ## Requisiti
 
 - Windows 11 con Docker Desktop e WSL2, oppure Linux con Docker Engine;
@@ -11,8 +7,6 @@ Questa guida descrive l'installazione iniziale con Docker. Non e' necessario ins
 - Git;
 - almeno 16 GB di RAM;
 - porte `80`, `13001`, `13100`, `15433` e `13900-13903` disponibili o protette dalla rete locale.
-
-Una GPU NVIDIA e' necessaria solo se si vuole eseguire vLLM sullo stesso server.
 
 ## 1. Scaricare il progetto
 
@@ -58,9 +52,9 @@ $bytes = New-Object byte[] 32
 Riportare in `garage/garage.local.toml` gli stessi valori usati per:
 
 ```toml
-rpc_secret = "VALORE_DI_GARAGE_RPC_SECRET"
-admin_token = "VALORE_DI_GARAGE_ADMIN_TOKEN"
-metrics_token = "VALORE_DI_GARAGE_METRICS_TOKEN"
+rpc_secret = "REPLACE_WITH_64_HEX_CHARS"
+admin_token = "REPLACE_WITH_RANDOM_ADMIN_TOKEN"
+metrics_token = "REPLACE_WITH_RANDOM_METRICS_TOKEN"
 ```
 
 `BIRGUS_DEVELOPER_EMAIL` serve solo durante l'aggiornamento di vecchie installazioni con piu' account `superadmin`. In una nuova installazione puo' restare vuota.
@@ -92,7 +86,7 @@ docker compose ps
 
 Al primo avvio vengono creati il database, l'estensione pgvector, il catalogo dei ruoli, i permessi e i moduli. Non vengono creati utenti o workspace automaticamente.
 
-Attendere che `birgus_app`, `birgus_frontend`, `birgus_pg` e `birgus_garage` risultino `healthy`. Il primo avvio dell'OCR puo' richiedere alcuni minuti per il download dei modelli.
+Attendere che `birgus_app`, `birgus_frontend`, `birgus_pg` e `birgus_garage` risultino `healthy`. Il primo avvio dell'OCR può richiedere alcuni minuti per il download dei modelli.
 
 Verifica backend:
 
@@ -100,7 +94,7 @@ Verifica backend:
 curl http://localhost:13001/health
 ```
 
-In PowerShell si puo' usare:
+In PowerShell si può usare:
 
 ```powershell
 Invoke-WebRequest -UseBasicParsing http://localhost:13001/health
@@ -114,7 +108,7 @@ Garage richiede un layout, una chiave S3 e un bucket al primo avvio. Mostrare l'
 docker compose exec garage /garage status
 ```
 
-Copiare l'ID mostrato nella sezione `HEALTHY NODES`, scegliere una capacita' compatibile con il disco e applicare il primo layout:
+Copiare l'ID mostrato nella sezione `HEALTHY NODES`, scegliere una capacità compatibile con il disco e applicare il primo layout:
 
 ```bash
 docker compose exec garage /garage layout assign <NODE_ID> --zone local --capacity 10GB
@@ -137,13 +131,13 @@ docker compose exec garage /garage key list
 docker compose exec garage /garage bucket list
 ```
 
-Questa procedura va eseguita una sola volta. Su un'installazione esistente con layout, chiave e bucket gia' presenti non deve essere ripetuta.
+Questa procedura va eseguita una sola volta. Su un'installazione esistente con layout, chiave e bucket già presenti non deve essere ripetuta.
 
 ## 6. Creare il primo workspace
 
-Il primo account riceve il ruolo `Developer`. Questo ruolo e' unico, ha accesso globale e richiede obbligatoriamente la 2FA.
+Il primo account riceve il ruolo `Developer`. Questo ruolo è unico, ha accesso globale e richiede obbligatoriamente la 2FA.
 
-Esempio di installazione essenziale:
+Esempio di installazione:
 
 ```bash
 docker compose exec app npm run instance:initialize -- \
@@ -234,37 +228,3 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 Frontend: `http://localhost:13100`  
 Backend: `http://localhost:13001`  
 Health check: `http://localhost:13001/health`
-
-## Backup e aggiornamenti
-
-Creare un backup prima di ogni aggiornamento importante:
-
-```powershell
-npm run ops:backup
-```
-
-Aggiornamento standard:
-
-```bash
-git pull
-docker compose up -d --build
-docker compose ps
-```
-
-Per aggiornare una vecchia installazione con piu' account `superadmin`, impostare prima in `.env` l'email che deve diventare Developer:
-
-```dotenv
-BIRGUS_DEVELOPER_EMAIL=developer@example.com
-```
-
-Gli altri account `superadmin` vengono convertiti in `Superuser` mantenendo le assegnazioni ai workspace.
-
-## Diagnostica
-
-```bash
-docker compose ps
-docker compose logs --tail 100 app
-docker compose logs --tail 100 frontend
-```
-
-I dati persistenti si trovano in `postgres_data`, `garage/data`, `garage/meta` e `ocr_service/storage`. Queste directory e il file `.env` non devono essere aggiunti a Git.
