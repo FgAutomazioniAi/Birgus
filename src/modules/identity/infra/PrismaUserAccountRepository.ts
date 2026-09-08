@@ -94,13 +94,13 @@ export class PrismaUserAccountRepository implements UserAccountRepository {
     });
   }
 
-  public async isSuperadmin(userId: string): Promise<boolean> {
+  public async isDeveloper(userId: string): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
     const assignment = await prisma.userWorkspaceRole.findFirst({
       where: {
         user_id: userId,
         role: {
-          key: "superadmin",
+          key: "developer",
         },
       },
       select: {

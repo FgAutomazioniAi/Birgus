@@ -37,8 +37,8 @@ async function canAccessSuperadmin(token: string): Promise<boolean> {
 
     const userId = sessionPayload.userId?.trim() ?? "";
     const workspaceId = sessionPayload.workspaceId?.trim() ?? "";
-    const isSuperadmin = (sessionPayload.user?.roleKeys ?? []).some((item) => item.trim().toLowerCase() === "superadmin");
-    if (!isSuperadmin || !userId) {
+    const canManageWorkspace = (sessionPayload.user?.roleKeys ?? []).some((item) => ["developer", "superuser"].includes(item.trim().toLowerCase()));
+    if (!canManageWorkspace || !userId) {
       return false;
     }
 

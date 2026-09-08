@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, BellRing, Copy, Link2, Mail, Palette, Send, Trash2, UserRound } from "lucide-react";
+import { ArrowLeft, BellRing, Circle, Copy, Link2, Mail, Palette, Send, Square, Trash2, UserRound } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -51,7 +51,7 @@ interface ConnectedAppsResponse {
 
 export function PersonalDashboardPanel({ showInterventions = true, onReturnToPrivateArea }: { showInterventions?: boolean; onReturnToPrivateArea?: () => void }) {
   const { language, t } = useLanguage();
-  const { options: themeOptions, theme, setTheme } = useTheme();
+  const { cornerStyle, setCornerStyle, options: themeOptions, theme, setTheme } = useTheme();
   const { enabled: notificationPopupsEnabled, position: toastPosition, setEnabled: setNotificationPopupsEnabled, setPosition: setToastPosition } = useToasterPreferences();
   const { hasModule } = useModuleAccess();
   const canManageWorkflowChannels = hasModule("workflow_management");
@@ -240,7 +240,7 @@ export function PersonalDashboardPanel({ showInterventions = true, onReturnToPri
             <Text variant="caption">{t("account.preferencesHint")}</Text>
           </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <div className="rounded-[var(--radius-md)] border border-border-default bg-bg-page p-3">
             <label className="flex items-center gap-2 text-xs font-bold text-text-primary" htmlFor="dashboard-theme-selector">
               <Palette size={15} className="text-brand-primary" />
@@ -259,6 +259,34 @@ export function PersonalDashboardPanel({ showInterventions = true, onReturnToPri
               <div className="flex shrink-0 gap-1">
                 {selectedTheme.swatches.map((swatch) => <span key={`${selectedTheme.id}-${swatch}`} className="h-4 w-4 rounded-full border border-border-default" style={{ backgroundColor: swatch }} />)}
               </div>
+            </div>
+          </div>
+          <div className="rounded-[var(--radius-md)] border border-border-default bg-bg-page p-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-text-primary">
+              <Square size={15} className="text-brand-primary" />
+              {t("account.corners")}
+            </div>
+            <div className="mt-2 grid h-9 grid-cols-2 overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-bg-muted p-1" role="radiogroup" aria-label={t("account.corners")}>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={cornerStyle === "rounded"}
+                onClick={() => setCornerStyle("rounded")}
+                className={cn("flex min-w-0 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] px-2 text-xs font-bold transition-colors", cornerStyle === "rounded" ? "bg-bg-surface text-brand-primary shadow-card" : "text-text-muted hover:text-text-primary")}
+              >
+                <Circle size={13} />
+                {t("account.cornersRounded")}
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={cornerStyle === "square"}
+                onClick={() => setCornerStyle("square")}
+                className={cn("flex min-w-0 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] px-2 text-xs font-bold transition-colors", cornerStyle === "square" ? "bg-bg-surface text-brand-primary shadow-card" : "text-text-muted hover:text-text-primary")}
+              >
+                <Square size={13} />
+                {t("account.cornersSquare")}
+              </button>
             </div>
           </div>
           <div className="rounded-[var(--radius-md)] border border-border-default bg-bg-page p-3">

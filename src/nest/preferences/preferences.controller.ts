@@ -14,6 +14,7 @@ const columnConfigSchema = z.object({
 
 const patchPreferencesSchema = z.object({
   paletteId: z.string().min(1).optional(),
+  cornerStyle: z.enum(["rounded", "square"]).optional(),
   notificationPosition: z.enum([
     "top-left",
     "top-center",
@@ -53,6 +54,7 @@ export class NestPreferencesController {
     if (!preferences) {
       return {
         paletteId: "predefinito",
+        cornerStyle: "rounded",
         notificationPosition: "bottom-right",
         notificationPopups: true,
         languageCode: "it",
@@ -69,6 +71,7 @@ export class NestPreferencesController {
 
     return {
       paletteId: preferences.paletteId,
+      cornerStyle: preferences.cornerStyle,
       notificationPosition: preferences.notificationPosition,
       notificationPopups: preferences.notificationPopups,
       languageCode: preferences.languageCode,
@@ -95,6 +98,7 @@ export class NestPreferencesController {
 
     const updated = await this.service.updatePreferences(userId, workspaceId, {
       paletteId: body.paletteId,
+      cornerStyle: body.cornerStyle,
       notificationPosition: body.notificationPosition,
       notificationPopups: body.notificationPopups,
       languageCode: body.languageCode,
@@ -106,6 +110,7 @@ export class NestPreferencesController {
 
     return {
       paletteId: updated.paletteId,
+      cornerStyle: updated.cornerStyle,
       notificationPosition: updated.notificationPosition,
       notificationPopups: updated.notificationPopups,
       languageCode: updated.languageCode,

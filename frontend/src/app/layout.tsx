@@ -5,7 +5,7 @@ import "@/app/globals.css";
 import "leaflet/dist/leaflet.css";
 import "@xyflow/react/dist/style.css";
 import { LanguageProvider, ThemeProvider, ToasterProvider } from "@/components/organisms";
-import { DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/themes";
+import { CORNER_STYLE_STORAGE_KEY, DEFAULT_CORNER_STYLE, DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/themes";
 
 export const metadata: Metadata = {
   title: "Project Manager FG",
@@ -16,14 +16,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   const themeInitScript = `(() => {
     try {
       const stored = localStorage.getItem("${THEME_STORAGE_KEY}") || "${DEFAULT_THEME}";
+      const corners = localStorage.getItem("${CORNER_STYLE_STORAGE_KEY}") || "${DEFAULT_CORNER_STYLE}";
       document.documentElement.setAttribute("data-theme", stored);
+      document.documentElement.setAttribute("data-corners", corners);
     } catch {
       document.documentElement.setAttribute("data-theme", "${DEFAULT_THEME}");
+      document.documentElement.setAttribute("data-corners", "${DEFAULT_CORNER_STYLE}");
     }
   })();`;
 
   return (
-    <html lang="it" data-theme={DEFAULT_THEME} suppressHydrationWarning>
+    <html lang="it" data-theme={DEFAULT_THEME} data-corners={DEFAULT_CORNER_STYLE} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>

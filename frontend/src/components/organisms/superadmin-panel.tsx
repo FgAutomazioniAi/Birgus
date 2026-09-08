@@ -44,7 +44,8 @@ type UserDto = {
   lastName: string | null;
   isActive: boolean;
   workspaceCount: number;
-  superadmin: boolean;
+  developer: boolean;
+  superuser: boolean;
 };
 
 type RoleDto = {
@@ -180,6 +181,7 @@ export function SuperadminPanel() {
   const [users, setUsers] = useState<UserDto[]>([]);
   const [roles, setRoles] = useState<RoleDto[]>([]);
   const [modules, setModules] = useState<ModuleDto[]>([]);
+  const [managementScope, setManagementScope] = useState<"GLOBAL" | "WORKSPACE">("WORKSPACE");
 
   const [search, setSearch] = useState("");
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
@@ -268,7 +270,7 @@ export function SuperadminPanel() {
       }
 
       const [workspacePayload, userPayload, rolePayload, modulePayload] = await Promise.all([
-        fetchJson<{ workspaces: WorkspaceDto[] }>("/api/superadmin/workspaces"),
+        fetchJson<{ managementScope: "GLOBAL" | "WORKSPACE"; workspaces: WorkspaceDto[] }>("/api/superadmin/workspaces"),
         fetchJson<{ users: UserDto[] }>(`/api/superadmin/users${userQuery.toString() ? `?${userQuery.toString()}` : ""}`),
         fetchJson<{ roles: RoleDto[] }>("/api/superadmin/roles"),
         fetchJson<{ modules: ModuleDto[] }>("/api/superadmin/modules"),
@@ -277,6 +279,7 @@ export function SuperadminPanel() {
       const nextWorkspaces = workspacePayload.workspaces ?? [];
       const nextUsers = userPayload.users ?? [];
       setWorkspaces(nextWorkspaces);
+      setManagementScope(workspacePayload.managementScope);
       setUsers(nextUsers);
       setRoles(rolePayload.roles ?? []);
       setModules(modulePayload.modules ?? []);
@@ -690,7 +693,7 @@ export function SuperadminPanel() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <Text as="h1" variant="h1">Superadmin Center</Text>
+            <Text as="h1" variant="h1">Gestione workspace</Text>
             <PageHelpHint text={t("superadmin.help")} />
           </div>
             <Text variant="muted">{t("superadmin.subtitle")}</Text>
@@ -740,7 +743,7 @@ export function SuperadminPanel() {
               options={workspaceOptions}
               placeholder={t("superadmin.allWorkspaces")}
               disabled={loading || isSaving}
-              allowEmpty
+              allowEmpty={managementScope === "GLOBAL"}
               className="mt-1"
             />
           </div>
@@ -826,7 +829,8 @@ export function SuperadminPanel() {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate text-sm font-semibold text-text-primary">{userFullName(user)}</p>
                     <StatePill tone={user.isActive ? "success" : "danger"}>{user.isActive ? t("superadmin.active") : t("superadmin.inactive")}</StatePill>
-                    {user.superadmin ? <StatePill tone="warn">Superadmin</StatePill> : null}
+                    {user.developer ? <StatePill tone="warn">Developer</StatePill> : null}
+                    {user.superuser ? <StatePill tone="warn">Superuser</StatePill> : null}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
                     <span className="truncate">{user.email}</span>
@@ -959,10 +963,12 @@ export function SuperadminPanel() {
                 <p className="mt-1 truncate text-sm text-text-muted">{managedWorkspace.organizationCode}/{managedWorkspace.code}</p>
               </div>
               <div className="flex items-center gap-2 self-end lg:self-auto">
-                <Button size="sm" variant="danger" onClick={() => void handleDeleteWorkspace()} disabled={isSaving}>
-                  <Trash2 size={16} />
-                  {t("superadmin.deleteWorkspace")}
-                </Button>
+                {managementScope === "GLOBAL" ? (
+                  <Button size="sm" variant="danger" onClick={() => void handleDeleteWorkspace()} disabled={isSaving}>
+                    <Trash2 size={16} />
+                    {t("superadmin.deleteWorkspace")}
+                  </Button>
+                ) : null}
                 <button
                   type="button"
                   className="rounded-[var(--radius-md)] p-2 text-text-muted hover:bg-bg-muted hover:text-text-primary"
@@ -1041,7 +1047,8 @@ export function SuperadminPanel() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Text as="h2" variant="h2">{userFullName(selectedUser)}</Text>
                   <StatePill tone={selectedUser.isActive ? "success" : "danger"}>{selectedUser.isActive ? t("superadmin.active") : t("superadmin.inactive")}</StatePill>
-                  {selectedUser.superadmin ? <StatePill tone="warn">Superadmin</StatePill> : null}
+                  {selectedUser.developer ? <StatePill tone="warn">Developer</StatePill> : null}
+                  {selectedUser.superuser ? <StatePill tone="warn">Superuser</StatePill> : null}
                 </div>
                 <p className="mt-1 truncate text-sm text-text-muted">{selectedUser.email}</p>
               </div>
@@ -1141,7 +1148,7 @@ export function SuperadminPanel() {
                         </div>
                       ))}
                     </div>
-                    <div className="mt-4 border-t border-border-subtle pt-4">
+                    {managementScope === "GLOBAL" ? <div className="mt-4 border-t border-border-subtle pt-4">
                       <h4 className="text-xs font-semibold uppercase text-text-muted">{t("superadmin.assignWorkspace")}</h4>
                       <div className="mt-3 space-y-3">
                         <SelectDropdown
@@ -1167,7 +1174,7 @@ export function SuperadminPanel() {
                           {t("superadmin.assign")}
                         </Button>
                       </div>
-                    </div>
+                    </div> : null}
                   </section>
                 </aside>
 

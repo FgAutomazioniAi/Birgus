@@ -65,9 +65,10 @@ export class AuthService {
     }
 
     const fullName = [user.firstName, user.lastName ?? ""].join(" ").trim();
-    const isSuperadmin = await this.userRepository.isSuperadmin(user.id);
+    const isDeveloper = await this.userRepository.isDeveloper(user.id);
+    const requiresTwoFactor = isDeveloper || user.twoFactorEnabled;
 
-    if (isSuperadmin) {
+    if (requiresTwoFactor) {
       const challengeToken = this.tokenService.generateToken();
       const challengeHash = this.tokenService.hashToken(challengeToken);
       const setupRequired = !user.twoFactorEnabled || !user.twoFactorSecretCiphertext;

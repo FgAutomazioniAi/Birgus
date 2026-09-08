@@ -73,6 +73,7 @@ export class CommissionIntakeService {
     status?: CommissionRecordStatus | null;
     priority?: CommissionRecordPriority | null;
     companyId?: number | null;
+    companyName?: string | null;
     clientId?: string | null;
     projectId?: string | null;
     sourceSystem?: string | null;
@@ -97,6 +98,7 @@ export class CommissionIntakeService {
       status: params.status ?? CommissionRecordStatus.DRAFT,
       priority: params.priority ?? CommissionRecordPriority.NORMAL,
       companyId: params.companyId ?? null,
+      companyName: this.normalizeDisplayName(params.companyName),
       clientId: params.clientId ?? null,
       projectId: params.projectId ?? null,
       sourceSystem: this.normalizeOptional(params.sourceSystem),
@@ -456,6 +458,15 @@ export class CommissionIntakeService {
     }
 
     const normalized = value.trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  private normalizeDisplayName(value: string | null | undefined): string | null {
+    if (typeof value !== "string") {
+      return null;
+    }
+
+    const normalized = value.trim().replace(/\s+/g, " ");
     return normalized.length > 0 ? normalized : null;
   }
 

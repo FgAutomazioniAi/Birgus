@@ -41,18 +41,18 @@ async function main(): Promise<void> {
   const moduleKeys = [...new Set(requestedModuleKeys.flatMap((moduleKey) => activationGroupFor(moduleKey)))];
   if (!moduleKeys.includes("superadmin_center")) throw new Error("The first workspace must enable superadmin_center.");
 
-  const [workspaceCount, superadminCount, existingUser, requestedModules, allModules, dependencies, superadminRole] = await Promise.all([
+  const [workspaceCount, developerCount, existingUser, requestedModules, allModules, dependencies, developerRole] = await Promise.all([
     prisma.workspace.count({ where: { deleted_at: null } }),
-    prisma.userWorkspaceRole.count({ where: { role: { key: "superadmin" }, user: { deleted_at: null } } }),
+    prisma.userWorkspaceRole.count({ where: { role: { key: "developer" }, user: { deleted_at: null } } }),
     prisma.user.findUnique({ where: { email }, select: { id: true } }),
     prisma.module.findMany({ where: { key: { in: moduleKeys }, is_active: true }, select: { id: true, key: true } }),
     prisma.module.findMany({ where: { is_active: true }, select: { id: true, key: true } }),
     prisma.moduleDependency.findMany({ include: { module: { select: { key: true } }, depends_on_module: { select: { key: true } } } }),
-    prisma.role.findUnique({ where: { key: "superadmin" }, select: { id: true } }),
+    prisma.role.findUnique({ where: { key: "developer" }, select: { id: true } }),
   ]);
-  if (workspaceCount > 0 || superadminCount > 0) throw new Error("Initial setup is allowed only when no active workspace and no superadmin exist.");
+  if (workspaceCount > 0 || developerCount > 0) throw new Error("Initial setup is allowed only when no active workspace and no developer exist.");
   if (existingUser) throw new Error(`User '${email}' already exists.`);
-  if (!superadminRole) throw new Error("System catalog is missing. Wait for app startup, then retry.");
+  if (!developerRole) throw new Error("System catalog is missing. Wait for app startup, then retry.");
   const missing = moduleKeys.filter((key) => !requestedModules.some((module) => module.key === key));
   if (missing.length) throw new Error(`Unknown or inactive module keys: ${missing.join(", ")}`);
   for (const dependency of dependencies) if (moduleKeys.includes(dependency.module.key) && !moduleKeys.includes(dependency.depends_on_module.key)) throw new Error(`Module '${dependency.module.key}' requires '${dependency.depends_on_module.key}'.`);
@@ -65,7 +65,7 @@ async function main(): Promise<void> {
     const workspace = await tx.workspace.create({ data: { organization_id: organization.id, code: workspaceCode, name: workspaceName, is_active: true } });
     const user = await tx.user.create({ data: { email, first_name: firstName, last_name: lastName, password_hash: hash, must_change_password: true, is_active: true } });
     await tx.workspaceMembership.create({ data: { workspace_id: workspace.id, user_id: user.id, status: "ACTIVE" } });
-    await tx.userWorkspaceRole.create({ data: { workspace_id: workspace.id, user_id: user.id, role_id: superadminRole.id } });
+    await tx.userWorkspaceRole.create({ data: { workspace_id: workspace.id, user_id: user.id, role_id: developerRole.id } });
     await tx.userPreference.create({ data: { workspace_id: workspace.id, user_id: user.id, palette_id: "predefinito", language_code: "it" } });
     await tx.workspaceModule.createMany({ data: allModules.map((module) => ({ workspace_id: workspace.id, module_id: module.id, is_enabled: moduleKeys.includes(module.key), configured_by_user_id: user.id })) });
     await tx.projectStatus.createMany({ data: [{ workspace_id: workspace.id, key: "in_revisione", label: "In Revisione" }, { workspace_id: workspace.id, key: "completato", label: "Completato" }, { workspace_id: workspace.id, key: "in_attesa", label: "In Attesa" }] });
@@ -80,7 +80,7 @@ async function main(): Promise<void> {
     });
     return { organization: organization.code, workspace: workspace.code, email: user.email, modules: requestedModules.map((module) => module.key), installation_profile: { version: snapshot.version, hash: snapshot.profile_hash } };
   });
-  console.log(JSON.stringify({ ...result, message: "Initial superuser created. The password must be changed at first login." }, null, 2));
+  console.log(JSON.stringify({ ...result, message: "Initial developer created. Password change and 2FA setup are required at first login." }, null, 2));
 }
 
 main().catch((error: unknown) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; }).finally(async () => prisma.$disconnect());

@@ -266,6 +266,7 @@ services:
     environment:
       NODE_ENV: production
       BIRGUS_API_BASE_URL: http://app:3000
+      APP_VERSION: "${APP_VERSION:-}"
       AUTH_COOKIE_NAME: "${AUTH_COOKIE_NAME:-vl_session}"
     extra_hosts:
       - "host.docker.internal:host-gateway"

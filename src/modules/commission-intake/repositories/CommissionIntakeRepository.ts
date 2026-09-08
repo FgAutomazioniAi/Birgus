@@ -19,6 +19,7 @@ export interface CommissionRecordWriteParams {
   status?: CommissionRecordStatus;
   priority?: CommissionRecordPriority;
   companyId?: number | null;
+  companyName?: string | null;
   clientId?: string | null;
   projectId?: string | null;
   sourceSystem?: string | null;

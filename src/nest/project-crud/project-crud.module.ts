@@ -5,6 +5,7 @@ import { PrismaClientRepository } from "../../modules/clients/infra/PrismaClient
 import { ClientService } from "../../modules/clients/services/ClientService.js";
 import { PrismaCompanyRepository } from "../../modules/companies/infra/PrismaCompanyRepository.js";
 import { CompanyService } from "../../modules/companies/services/CompanyService.js";
+import { CompanyGeocodingService } from "../../modules/companies/services/CompanyGeocodingService.js";
 import { PrismaProjectAuthorRepository } from "../../modules/project-authors/infra/PrismaProjectAuthorRepository.js";
 import { ProjectAuthorService } from "../../modules/project-authors/services/ProjectAuthorService.js";
 import { PrismaProjectRevisionRepository } from "../../modules/project-revisions/infra/PrismaProjectRevisionRepository.js";
@@ -17,6 +18,7 @@ import { NestProjectCrudController } from "./project-crud.controller.js";
   imports: [AuthModule, AuditNestModule],
   controllers: [NestProjectCrudController],
   providers: [
+    CompanyGeocodingService,
     {
       provide: CompanyService,
       useFactory: (

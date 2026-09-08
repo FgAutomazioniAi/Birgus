@@ -44,7 +44,7 @@ async function bootstrap(): Promise<void> {
   Logger.log(`Nest HTTP server listening on ${host}:${port}`, "NestBootstrap");
 }
 
-function resolveTrustProxy(): boolean | string | number | string[] {
+function resolveTrustProxy(): boolean | string | string[] {
   const raw = (process.env.TRUST_PROXY ?? "").trim();
   if (!raw) {
     return false;
@@ -56,11 +56,6 @@ function resolveTrustProxy(): boolean | string | number | string[] {
 
   if (raw === "false") {
     return false;
-  }
-
-  const parsedNumber = Number.parseInt(raw, 10);
-  if (!Number.isNaN(parsedNumber) && String(parsedNumber) === raw) {
-    return parsedNumber;
   }
 
   if (raw.includes(",")) {

@@ -21,7 +21,7 @@ export class AppConfigService {
     return Number.isFinite(parsed) ? parsed : fallback;
   }
 
-  public getTrustProxy(): boolean | string | number | string[] {
+  public getTrustProxy(): boolean | string | string[] {
     const raw = (process.env.TRUST_PROXY ?? "").trim();
     if (!raw) {
       return false;
@@ -33,11 +33,6 @@ export class AppConfigService {
 
     if (raw === "false") {
       return false;
-    }
-
-    const parsedNumber = Number.parseInt(raw, 10);
-    if (!Number.isNaN(parsedNumber) && String(parsedNumber) === raw) {
-      return parsedNumber;
     }
 
     if (raw.includes(",")) {

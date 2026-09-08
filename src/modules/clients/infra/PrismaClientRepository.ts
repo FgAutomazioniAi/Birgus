@@ -53,8 +53,15 @@ export class PrismaClientRepository implements ClientRepository {
     workspaceId: string;
     name: string;
     companyId: number | null;
+    role: string;
+    department: string;
     email: string;
     phone: string;
+    mobile: string;
+    address: string;
+    city: string;
+    province: string;
+    country: string;
     notes: string;
   }): Promise<ClientEntity> {
     const prisma = PrismaClientManager.getClient();
@@ -82,8 +89,15 @@ export class PrismaClientRepository implements ClientRepository {
         company_id: params.companyId,
         first_name: firstName || params.name.trim(),
         last_name: lastName,
+        role: params.role || null,
+        department: params.department || null,
         email: params.email || null,
         phone: params.phone || null,
+        mobile: params.mobile || null,
+        address: params.address || null,
+        city: params.city || null,
+        province: params.province || null,
+        country: params.country || null,
         notes: params.notes || null,
       },
     });
@@ -96,8 +110,15 @@ export class PrismaClientRepository implements ClientRepository {
     clientId: string;
     name: string;
     companyId: number | null;
+    role: string;
+    department: string;
     email: string;
     phone: string;
+    mobile: string;
+    address: string;
+    city: string;
+    province: string;
+    country: string;
     notes: string;
   }): Promise<ClientEntity | null> {
     const prisma = PrismaClientManager.getClient();
@@ -142,8 +163,15 @@ export class PrismaClientRepository implements ClientRepository {
         company_id: params.companyId,
         first_name: firstName || params.name.trim(),
         last_name: lastName,
+        role: params.role || null,
+        department: params.department || null,
         email: params.email || null,
         phone: params.phone || null,
+        mobile: params.mobile || null,
+        address: params.address || null,
+        city: params.city || null,
+        province: params.province || null,
+        country: params.country || null,
         notes: params.notes || null,
       },
     });
@@ -173,8 +201,15 @@ export class PrismaClientRepository implements ClientRepository {
     company_id: number | null;
     first_name: string;
     last_name: string | null;
+    role: string | null;
+    department: string | null;
     email: string | null;
     phone: string | null;
+    mobile: string | null;
+    address: string | null;
+    city: string | null;
+    province: string | null;
+    country: string | null;
     notes: string | null;
     created_at: Date;
     company?: {
@@ -190,8 +225,15 @@ export class PrismaClientRepository implements ClientRepository {
       name,
       companyId: row.company_id,
       companyName: row.company?.name ?? "",
+      role: row.role,
+      department: row.department,
       email: row.email ?? "",
       phone: row.phone ?? "",
+      mobile: row.mobile,
+      address: row.address,
+      city: row.city,
+      province: row.province,
+      country: row.country,
       notes: row.notes ?? "",
       createdAt: row.created_at,
     });

@@ -46,7 +46,6 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     status?: CommissionRecordStatus | null;
   }): Promise<CommissionRecordEntity[]> {
     const prisma = PrismaClientManager.getClient();
-    const canManage = await this.canManageWorkspace(params.workspaceId, params.userId);
     const where: Prisma.CommissionRecordWhereInput = {
       workspace_id: params.workspaceId,
       deleted_at: null,
@@ -56,9 +55,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
           { code: { contains: params.search, mode: "insensitive" } },
           { title: { contains: params.search, mode: "insensitive" } },
           { search_text: { contains: params.search, mode: "insensitive" } },
+          { company: { is: { name: { contains: params.search, mode: "insensitive" } } } },
+          { client: { is: { first_name: { contains: params.search, mode: "insensitive" } } } },
+          { client: { is: { last_name: { contains: params.search, mode: "insensitive" } } } },
         ],
       } : {}),
-      ...(canManage ? {} : this.userAccessWhere(params.userId)),
     };
 
     const rows = await prisma.commissionRecord.findMany({
@@ -83,13 +84,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     recordId: string;
   }): Promise<CommissionRecordEntity | null> {
     const prisma = PrismaClientManager.getClient();
-    const canManage = await this.canManageWorkspace(params.workspaceId, params.userId);
     const row = await prisma.commissionRecord.findFirst({
       where: {
         workspace_id: params.workspaceId,
         id: params.recordId,
         deleted_at: null,
-        ...(canManage ? {} : this.userAccessWhere(params.userId)),
       },
       include: {
         client: { select: { first_name: true, last_name: true, company: { select: { name: true } } } },
@@ -105,7 +104,8 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
 
     try {
       const row = await prisma.$transaction(async (tx) => {
-        await this.ensureRelatedEntities(tx, params);
+        const companyId = params.companyId ?? await this.findOrCreateCompanyByName(tx, params.workspaceId, params.companyName ?? null);
+        await this.ensureRelatedEntities(tx, { ...params, companyId });
         await this.ensureUserActiveInWorkspace(tx, params.workspaceId, params.ownerUserId ?? params.actorUserId);
 
         const record = await tx.commissionRecord.create({
@@ -116,7 +116,7 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
             description: params.description ?? null,
             status: params.status ?? CommissionRecordStatus.DRAFT,
             priority: params.priority,
-            company_id: params.companyId ?? null,
+            company_id: companyId,
             client_id: params.clientId ?? null,
             project_id: params.projectId ?? null,
             source_system: params.sourceSystem ?? null,
@@ -183,9 +183,13 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
           payload: { code: record.code, title: record.title },
         });
 
-        return currentChecklistId
-          ? tx.commissionRecord.findUniqueOrThrow({ where: { id: record.id } })
-          : record;
+        return tx.commissionRecord.findUniqueOrThrow({
+          where: { id: record.id },
+          include: {
+            client: { select: { first_name: true, last_name: true, company: { select: { name: true } } } },
+            company: { select: { name: true } },
+          },
+        });
       });
 
       return this.mapRecord(row);
@@ -1199,14 +1203,12 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
   }
 
   private async ensureCanRead(workspaceId: string, recordId: string, userId: string): Promise<void> {
-    const canManage = await this.canManageWorkspace(workspaceId, userId);
     const prisma = PrismaClientManager.getClient();
     const record = await prisma.commissionRecord.findFirst({
       where: {
         workspace_id: workspaceId,
         id: recordId,
         deleted_at: null,
-        ...(canManage ? {} : this.userAccessWhere(userId)),
       },
       select: { id: true },
     });
@@ -1217,14 +1219,12 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
   }
 
   private async ensureCanWrite(workspaceId: string, recordId: string, userId: string): Promise<void> {
-    const canManage = await this.canManageWorkspace(workspaceId, userId);
     const prisma = PrismaClientManager.getClient();
     const record = await prisma.commissionRecord.findFirst({
       where: {
         workspace_id: workspaceId,
         id: recordId,
         deleted_at: null,
-        ...(canManage ? {} : this.userWriteAccessWhere(userId)),
       },
       select: { id: true },
     });
@@ -1313,7 +1313,7 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
           },
         },
         role: {
-          key: { in: ["superadmin", "admin"] },
+          key: { in: ["developer", "superuser", "admin"] },
         },
       },
     });
@@ -1321,37 +1321,37 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     return count > 0;
   }
 
-  private userAccessWhere(userId: string): Prisma.CommissionRecordWhereInput {
-    return {
-      OR: [
-        { owner_user_id: userId },
-        {
-          accesses: {
-            some: {
-              user_id: userId,
-              revoked_at: null,
-            },
-          },
-        },
-      ],
-    };
-  }
+  private async findOrCreateCompanyByName(
+    prisma: Prisma.TransactionClient,
+    workspaceId: string,
+    companyName: string | null,
+  ): Promise<number | null> {
+    const name = companyName?.trim().replace(/\s+/g, " ") ?? "";
+    if (!name) {
+      return null;
+    }
 
-  private userWriteAccessWhere(userId: string): Prisma.CommissionRecordWhereInput {
-    return {
-      OR: [
-        { owner_user_id: userId },
-        {
-          accesses: {
-            some: {
-              user_id: userId,
-              role: CommissionAccessRole.EDITOR,
-              revoked_at: null,
-            },
-          },
-        },
-      ],
-    };
+    const existing = await prisma.company.findFirst({
+      where: {
+        workspace_id: workspaceId,
+        deleted_at: null,
+        name: { equals: name, mode: "insensitive" },
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      return existing.id;
+    }
+
+    const created = await prisma.company.create({
+      data: {
+        workspace_id: workspaceId,
+        name,
+      },
+      select: { id: true },
+    });
+
+    return created.id;
   }
 
   private async ensureRelatedEntities(

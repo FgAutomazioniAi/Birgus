@@ -32,6 +32,7 @@ export class PrismaUserPreferenceRepository implements UserPreferenceRepository 
       },
       update: {
         palette_id: patch.paletteId,
+        corner_style: patch.cornerStyle,
         notification_position: patch.notificationPosition,
         notification_popups: patch.notificationPopups,
         language_code: patch.languageCode,
@@ -44,6 +45,7 @@ export class PrismaUserPreferenceRepository implements UserPreferenceRepository 
         user_id: userId,
         workspace_id: workspaceId,
         palette_id: patch.paletteId ?? "predefinito",
+        corner_style: patch.cornerStyle ?? "rounded",
         notification_position: patch.notificationPosition ?? "bottom-right",
         notification_popups: patch.notificationPopups ?? true,
         language_code: patch.languageCode ?? "it",
@@ -61,6 +63,7 @@ export class PrismaUserPreferenceRepository implements UserPreferenceRepository 
     user_id: string;
     workspace_id: string | null;
     palette_id: string;
+    corner_style: string;
     notification_position: string;
     notification_popups: boolean;
     language_code: string;
@@ -73,6 +76,7 @@ export class PrismaUserPreferenceRepository implements UserPreferenceRepository 
       userId: row.user_id,
       workspaceId: row.workspace_id,
       paletteId: row.palette_id,
+      cornerStyle: row.corner_style,
       notificationPosition: row.notification_position,
       notificationPopups: row.notification_popups,
       languageCode: row.language_code,

@@ -487,9 +487,8 @@ function toRadians(value: number): number {
 function buildItineraryUrl(anchor: CustomerGeoPoint | null, destination: CustomerGeoPoint): string {
   const url = new URL("https://www.google.com/maps/dir/");
   url.searchParams.set("api", "1");
-  url.searchParams.set("origin", "Via Giacomin Dorino, 5, 32030 Fonzaso BL, Italia");
   if (anchor) {
-    url.searchParams.set("waypoints", `${anchor.latitude},${anchor.longitude}`);
+    url.searchParams.set("origin", `${anchor.latitude},${anchor.longitude}`);
   }
   url.searchParams.set("destination", `${destination.latitude},${destination.longitude}`);
   return url.toString();

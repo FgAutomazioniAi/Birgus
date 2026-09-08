@@ -665,6 +665,7 @@ model UserPreference {
   user_id               String   @db.Uuid
   workspace_id          String?  @db.Uuid
   palette_id            String   @default("predefinito")
+  corner_style          String   @default("rounded")
   notification_position String   @default("bottom-right")
   notification_popups   Boolean  @default(true)
   language_code         String   @default("it")
@@ -875,9 +876,22 @@ model Company {
   id           Int       @id @default(autoincrement())
   workspace_id String    @db.Uuid
   name         String
+  is_headquarters Boolean @default(false)
+  legal_name   String?
+  vat_number   String?
+  tax_code     String?
+  email        String?
+  phone        String?
+  website      String?
+  industry     String?
   address      String?
   postal_code  String?
   city         String?
+  province     String?
+  country      String?
+  latitude     Decimal?  @db.Decimal(10, 7)
+  longitude    Decimal?  @db.Decimal(10, 7)
+  notes        String?
   created_at   DateTime  @default(now())
   updated_at   DateTime  @updatedAt
   deleted_at   DateTime?
@@ -887,6 +901,10 @@ model Company {
   commission_records CommissionRecord[]
 
   @@index([workspace_id])
+  @@index([workspace_id, name])
+  @@index([workspace_id, name, is_headquarters])
+  @@index([workspace_id, vat_number])
+  @@index([latitude, longitude])
   @@index([deleted_at])
   @@map("companies")
 }
@@ -897,8 +915,15 @@ model Client {
   company_id   Int?
   first_name   String
   last_name    String?
+  role         String?
+  department   String?
   phone        String?
+  mobile       String?
   email        String?
+  address      String?
+  city         String?
+  province     String?
+  country      String?
   notes        String?
   created_at   DateTime  @default(now())
   updated_at   DateTime  @updatedAt

@@ -3,12 +3,19 @@ import { ensureCommissionIntakeSystemTemplate } from "../prisma/commission-intak
 
 const prisma = new PrismaClient();
 const MODULE_KEYS = ["project_management", "agent_management", "ddt_processing", "measure_report", "document_archive", "document_intelligence", "conversational_assistant", "ai_runtime_control", "workflow_management", "commission_registry", "commission_intake", "customer_map", "offer_priority", "maintenance_proposals", "maintenance_calendar", "notification_center", "audit_center", "superadmin_center"] as const;
-const ROLE_KEYS = ["superadmin", "admin", "operator"] as const;
+const ROLE_KEYS = ["developer", "superuser", "admin", "operator"] as const;
 const PERMISSION_KEYS = ["modules.read", "modules.configure", "projects.read", "projects.write", "agents.read", "agents.write", "clients.read", "clients.write", "documents.read", "documents.write", "ddt.read", "ddt.process", "measure_report.read", "measure_report.process", "knowledge.read", "knowledge.write", "assistant.read", "assistant.write", "assistant.configure", "workflows.read", "workflows.write", "workflows.configure", "commission_registry.read", "commission_registry.write", "commission_registry.configure", "commission_intake.read", "commission_intake.write", "commission_intake.configure", "customer_map.read", "customer_map.write", "offer_priority.read", "offer_priority.write", "maintenance_proposals.read", "maintenance_proposals.write", "maintenance_calendar.read", "maintenance_calendar.write", "notifications.read", "notifications.write", "audit.read"] as const;
 const ROLE_PERMISSIONS: Record<(typeof ROLE_KEYS)[number], readonly (typeof PERMISSION_KEYS)[number][]> = {
-  superadmin: PERMISSION_KEYS,
+  developer: PERMISSION_KEYS,
+  superuser: PERMISSION_KEYS,
   admin: PERMISSION_KEYS.filter((key) => key !== "audit.read"),
   operator: ["modules.read", "projects.read", "projects.write", "agents.read", "agents.write", "clients.read", "clients.write", "documents.read", "documents.write", "ddt.read", "ddt.process", "measure_report.read", "measure_report.process", "knowledge.read", "assistant.read", "assistant.write", "workflows.read", "commission_registry.read", "commission_registry.write", "commission_intake.read", "commission_intake.write", "customer_map.read", "offer_priority.read", "maintenance_proposals.read", "maintenance_calendar.read", "notifications.read"],
+};
+const ROLE_LABELS: Record<(typeof ROLE_KEYS)[number], string> = {
+  developer: "Developer",
+  superuser: "Superuser",
+  admin: "Admin",
+  operator: "Guest",
 };
 const MODULE_DEPENDENCIES = [["document_intelligence", "document_archive"], ["conversational_assistant", "document_intelligence"], ["workflow_management", "agent_management"], ["workflow_management", "document_intelligence"], ["commission_intake", "commission_registry"], ["audit_center", "notification_center"]] as const;
 const MODULE_LABELS: Record<(typeof MODULE_KEYS)[number], string> = {
@@ -29,7 +36,7 @@ const MODULE_LABELS: Record<(typeof MODULE_KEYS)[number], string> = {
   maintenance_calendar: "Calendario manutenzioni",
   notification_center: "Notifiche",
   audit_center: "Audit",
-  superadmin_center: "Superadmin",
+  superadmin_center: "Gestione workspace",
 };
 
 async function syncRolePermissions(
@@ -114,7 +121,24 @@ async function ensureWorkspaceModuleRows(modules: Array<{ id: number }>): Promis
 }
 
 async function main(): Promise<void> {
-  for (const key of ROLE_KEYS) await prisma.role.upsert({ where: { key }, update: { label: key, is_system: true }, create: { key, label: key, is_system: true } });
+  for (const key of ROLE_KEYS) await prisma.role.upsert({ where: { key }, update: { label: ROLE_LABELS[key], is_system: true }, create: { key, label: ROLE_LABELS[key], is_system: true } });
+  const legacyRole = await prisma.role.findUnique({ where: { key: "superadmin" }, select: { id: true } });
+  if (legacyRole) {
+    const legacyAssignments = await prisma.userWorkspaceRole.findMany({ where: { role_id: legacyRole.id }, select: { id: true, workspace_id: true, user_id: true } });
+    const legacyUsers = new Set(legacyAssignments.map((assignment) => assignment.user_id));
+    if (legacyUsers.size > 1) throw new Error("Legacy superadmin migration is ambiguous: assign the developer role manually before bootstrap.");
+    const developerRole = await prisma.role.findUniqueOrThrow({ where: { key: "developer" }, select: { id: true } });
+    for (const assignment of legacyAssignments) {
+      await prisma.userWorkspaceRole.upsert({
+        where: { workspace_id_user_id_role_id: { workspace_id: assignment.workspace_id, user_id: assignment.user_id, role_id: developerRole.id } },
+        update: {},
+        create: { workspace_id: assignment.workspace_id, user_id: assignment.user_id, role_id: developerRole.id },
+      });
+    }
+    await prisma.userWorkspaceRole.deleteMany({ where: { role_id: legacyRole.id } });
+    await prisma.rolePermission.deleteMany({ where: { role_id: legacyRole.id } });
+    await prisma.role.delete({ where: { id: legacyRole.id } });
+  }
   for (const key of PERMISSION_KEYS) await prisma.permission.upsert({ where: { key }, update: { label: key }, create: { key, label: key } });
   const [roles, permissions] = await Promise.all([prisma.role.findMany({ where: { key: { in: [...ROLE_KEYS] } } }), prisma.permission.findMany({ where: { key: { in: [...PERMISSION_KEYS] } } })]);
   const roleByKey = new Map(roles.map((item) => [item.key, item]));

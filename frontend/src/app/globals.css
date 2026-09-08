@@ -325,6 +325,13 @@
   --token-shadow-accent: 0 12px 28px rgba(246, 134, 33, 0.26);
 }
 
+[data-corners="square"] {
+  --token-radius-sm: 0;
+  --token-radius-md: 0;
+  --token-radius-lg: 0;
+  --token-radius-xl: 0;
+}
+
 @theme inline {
   --color-brand-primary: var(--token-color-brand-primary);
   --color-brand-primary-hover: var(--token-color-brand-primary-hover);
@@ -383,6 +390,11 @@
     @apply bg-bg-page text-text-primary antialiased;
     min-width: 0;
     overflow-x: hidden;
+  }
+
+  html.app-shell-scroll-lock,
+  body.app-shell-scroll-lock {
+    overflow: hidden;
   }
 
   a[href],

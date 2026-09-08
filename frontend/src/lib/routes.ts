@@ -15,7 +15,7 @@ export const APP_ROUTES = {
   measureReport: "/measure-report",
   workflows: "/workflows",
   customerMap: "/mappa-clienti",
-  offerPriority: "/priorità-offerte",
+  offerPriority: "/priorita-offerte",
   maintenanceProposals: "/proposte-manutenzione",
   maintenanceCalendar: "/calendario-manutenzioni",
   archive: "/archivio",

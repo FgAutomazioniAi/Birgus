@@ -29,7 +29,7 @@ interface LoginApiSuccessPayload {
   } | null;
 }
 
-export function LoginForm() {
+export function LoginForm({ version }: { version: string }) {
   const { t } = useLanguage();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -615,6 +615,9 @@ export function LoginForm() {
           )}
           </>}
         </Card>
+        <p className="mt-4 text-right text-xs font-medium text-text-muted">
+          Versione: {version}
+        </p>
       </div>
     </div>
   );

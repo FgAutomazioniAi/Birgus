@@ -225,9 +225,11 @@ export class NestAuthController {
     const fullName = [user.first_name, user.last_name ?? ""].join(" ").trim();
     const roleKeys = await this.listWorkspaceRoleKeys(workspaceId, userId);
     const normalizedRoleKeys = roleKeys.map((item) => item.trim().toLowerCase());
-    let roleLabel = "Operatore";
-    if (normalizedRoleKeys.includes("superadmin")) {
-      roleLabel = "Superadmin";
+    let roleLabel = "Guest";
+    if (normalizedRoleKeys.includes("developer")) {
+      roleLabel = "Developer";
+    } else if (normalizedRoleKeys.includes("superuser")) {
+      roleLabel = "Superuser";
     } else if (normalizedRoleKeys.includes("admin")) {
       roleLabel = "Admin";
     }

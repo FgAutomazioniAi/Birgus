@@ -110,7 +110,7 @@ class StaticUserAccountRepository implements UserAccountRepository {
 
   public async updatePassword(): Promise<void> {}
 
-  public async isSuperadmin(): Promise<boolean> {
+  public async isDeveloper(): Promise<boolean> {
     return false;
   }
 

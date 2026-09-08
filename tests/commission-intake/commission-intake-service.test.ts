@@ -169,10 +169,12 @@ test("CommissionIntakeService creates a normalized record with default owner, pr
     workspaceId: "workspace-1",
     actorUserId: "user-1",
     title: "  Nuova   commessa  ",
+    companyName: "  FG   Automazioni  ",
     currency: "eur",
   });
 
   assert.equal(record.title, "Nuova commessa");
+  assert.equal(repository.createdRecordParams?.companyName, "FG Automazioni");
   assert.equal(repository.createdRecordParams?.ownerUserId, "user-1");
   assert.equal(repository.createdRecordParams?.priority, CommissionRecordPriority.NORMAL);
   assert.equal(repository.createdRecordParams?.formVersionId, "form-version-1");

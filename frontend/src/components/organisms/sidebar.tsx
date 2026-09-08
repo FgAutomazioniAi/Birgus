@@ -35,13 +35,13 @@ const folders = [
 export interface SidebarProps {
   collapsed: boolean;
   enabledModuleKeys: string[];
-  isSuperadmin: boolean;
+  canManageWorkspace: boolean;
   onClose: () => void;
   open: boolean;
   userName: string;
 }
 
-export function Sidebar({ collapsed, enabledModuleKeys, isSuperadmin, onClose, open, userName }: SidebarProps) {
+export function Sidebar({ collapsed, enabledModuleKeys, canManageWorkspace, onClose, open, userName }: SidebarProps) {
   const { t } = useLanguage();
   const pathname = usePathname();
   const router = useRouter();
@@ -51,7 +51,7 @@ export function Sidebar({ collapsed, enabledModuleKeys, isSuperadmin, onClose, o
     !item.moduleKey || enabledModuleKeys.includes(item.moduleKey),
   );
   const primaryItems = [
-    ...(isSuperadmin && enabledModuleKeys.includes("superadmin_center") ? [{ icon: ShieldCheck, label: "Superadmin", path: APP_ROUTES.superadmin }] : []),
+    ...(canManageWorkspace && enabledModuleKeys.includes("superadmin_center") ? [{ icon: ShieldCheck, label: "Gestione workspace", path: APP_ROUTES.superadmin }] : []),
     ...(enabledModuleKeys.includes("workflow_management") ? [{ icon: GitBranch, label: "Workflow", path: APP_ROUTES.workflows }] : []),
     ...(enabledModuleKeys.includes("document_archive") ? [{ icon: Archive, label: "Archivio", path: APP_ROUTES.archive }] : []),
   ];

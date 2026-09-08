@@ -33,9 +33,22 @@ export class CompanyService {
     const company = await this.repository.create({
       workspaceId: command.workspaceId,
       name,
+      isHeadquarters: command.isHeadquarters,
+      legalName: command.legalName,
+      vatNumber: command.vatNumber,
+      taxCode: command.taxCode,
+      email: command.email,
+      phone: command.phone,
+      website: command.website,
+      industry: command.industry,
       address: command.address,
       postalCode: command.postalCode,
       city: command.city,
+      province: command.province,
+      country: command.country,
+      latitude: command.latitude,
+      longitude: command.longitude,
+      notes: command.notes,
     });
 
     await this.auditLogService?.record({
@@ -56,9 +69,22 @@ export class CompanyService {
       workspaceId: command.workspaceId,
       companyId: command.companyId,
       name: this.normalizeName(command.name),
+      isHeadquarters: command.isHeadquarters,
+      legalName: command.legalName,
+      vatNumber: command.vatNumber,
+      taxCode: command.taxCode,
+      email: command.email,
+      phone: command.phone,
+      website: command.website,
+      industry: command.industry,
       address: command.address,
       postalCode: command.postalCode,
       city: command.city,
+      province: command.province,
+      country: command.country,
+      latitude: command.latitude,
+      longitude: command.longitude,
+      notes: command.notes,
     });
 
     if (!company) {

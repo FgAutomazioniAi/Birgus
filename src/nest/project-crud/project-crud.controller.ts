@@ -7,8 +7,11 @@ import { ModuleKey } from "../../core/module-access/ModuleKey.js";
 import { RequestContext } from "../../core/tenancy/RequestContext.js";
 import { CreateClientCommand } from "../../modules/clients/dto/CreateClientCommand.js";
 import { UpdateClientCommand } from "../../modules/clients/dto/UpdateClientCommand.js";
+import { ClientEntity } from "../../modules/clients/domain/ClientEntity.js";
 import { ClientService } from "../../modules/clients/services/ClientService.js";
 import { CompanyService } from "../../modules/companies/services/CompanyService.js";
+import { CompanyGeocodingService } from "../../modules/companies/services/CompanyGeocodingService.js";
+import { CompanyEntity } from "../../modules/companies/domain/CompanyEntity.js";
 import { CreateCompanyCommand } from "../../modules/companies/dto/CreateCompanyCommand.js";
 import { UpdateCompanyCommand } from "../../modules/companies/dto/UpdateCompanyCommand.js";
 import { CreateProjectAuthorCommand } from "../../modules/project-authors/dto/CreateProjectAuthorCommand.js";
@@ -25,9 +28,30 @@ import { RequirePermission } from "../common/decorators/require-permission.decor
 
 const companyPayloadSchema = z.object({
   name: z.string().min(2),
+  isHeadquarters: z.boolean().optional().default(false),
+  legalName: z.string().trim().optional().default(""),
+  vatNumber: z.string().trim().optional().default(""),
+  taxCode: z.string().trim().optional().default(""),
+  email: z.string().trim().optional().default(""),
+  phone: z.string().trim().optional().default(""),
+  website: z.string().trim().optional().default(""),
+  industry: z.string().trim().optional().default(""),
   address: z.string().trim().optional().default(""),
   postalCode: z.string().trim().optional().default(""),
   city: z.string().trim().optional().default(""),
+  province: z.string().trim().optional().default(""),
+  country: z.string().trim().optional().default(""),
+  latitude: z.string().trim().optional().default(""),
+  longitude: z.string().trim().optional().default(""),
+  notes: z.string().trim().optional().default(""),
+});
+
+const companyGeocodingPayloadSchema = z.object({
+  address: z.string().trim().min(1),
+  postalCode: z.string().trim().optional().default(""),
+  city: z.string().trim().min(1),
+  province: z.string().trim().optional().default(""),
+  country: z.string().trim().optional().default("Italia"),
 });
 
 const deleteCompanySchema = z.object({
@@ -37,8 +61,15 @@ const deleteCompanySchema = z.object({
 const clientPayloadSchema = z.object({
   name: z.string().min(2),
   companyId: z.number().int().positive().nullable().optional(),
+  role: z.string().trim().optional().default(""),
+  department: z.string().trim().optional().default(""),
   email: z.string().trim().optional().default(""),
   phone: z.string().trim().optional().default(""),
+  mobile: z.string().trim().optional().default(""),
+  address: z.string().trim().optional().default(""),
+  city: z.string().trim().optional().default(""),
+  province: z.string().trim().optional().default(""),
+  country: z.string().trim().optional().default(""),
   notes: z.string().trim().optional().default(""),
 });
 
@@ -72,6 +103,8 @@ export class NestProjectCrudController {
   public constructor(
     @Inject(CompanyService)
     private readonly companyService: CompanyService,
+    @Inject(CompanyGeocodingService)
+    private readonly companyGeocodingService: CompanyGeocodingService,
     @Inject(ClientService)
     private readonly clientService: ClientService,
     @Inject(ProjectAuthorService)
@@ -80,19 +113,20 @@ export class NestProjectCrudController {
     private readonly projectRevisionService: ProjectRevisionService,
   ) {}
 
+  @Post("/api/companies/geocode")
+  @HttpCode(200)
+  @RequirePermission(PermissionKey.CLIENTS_WRITE)
+  public async geocodeCompany(@Body() bodyRaw: unknown): Promise<Record<string, unknown>> {
+    return { ...await this.companyGeocodingService.geocode(companyGeocodingPayloadSchema.parse(bodyRaw)) };
+  }
+
   @Get("/api/companies")
   @RequirePermission(PermissionKey.CLIENTS_READ)
   public async listCompanies(
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Array<Record<string, unknown>>> {
     const items = await this.companyService.list(requestContext.workspace.workspaceId);
-    return items.map((item) => ({
-      id: item.id,
-      name: item.name,
-      address: item.address,
-      postalCode: item.postalCode,
-      city: item.city,
-    }));
+    return items.map((item) => this.serializeCompany(item));
   }
 
   @Get("/api/companies/:companyId")
@@ -106,12 +140,12 @@ export class NestProjectCrudController {
       this.getCompanyId(companyIdRaw),
     );
 
+    const clients = await this.clientService.list(requestContext.workspace.workspaceId);
     return {
-      id: item.id,
-      name: item.name,
-      address: item.address,
-      postalCode: item.postalCode,
-      city: item.city,
+      ...this.serializeCompany(item),
+      clients: clients
+        .filter((client) => client.companyId === item.id)
+        .map((client) => this.serializeClient(client)),
     };
   }
 
@@ -127,20 +161,27 @@ export class NestProjectCrudController {
       new CreateCompanyCommand({
         workspaceId: requestContext.workspace.workspaceId,
         name: body.name,
+        isHeadquarters: body.isHeadquarters,
+        legalName: body.legalName,
+        vatNumber: body.vatNumber,
+        taxCode: body.taxCode,
+        email: body.email,
+        phone: body.phone,
+        website: body.website,
+        industry: body.industry,
         address: body.address,
         postalCode: body.postalCode,
         city: body.city,
+        province: body.province,
+        country: body.country,
+        latitude: body.latitude,
+        longitude: body.longitude,
+        notes: body.notes,
         actorUserId: requestContext.workspace.userId,
       }),
     );
 
-    return {
-      id: created.id,
-      name: created.name,
-      address: created.address,
-      postalCode: created.postalCode,
-      city: created.city,
-    };
+    return this.serializeCompany(created);
   }
 
   @Patch("/api/companies/:companyId")
@@ -157,20 +198,27 @@ export class NestProjectCrudController {
         workspaceId: requestContext.workspace.workspaceId,
         companyId: this.getCompanyId(companyIdRaw),
         name: body.name,
+        isHeadquarters: body.isHeadquarters,
+        legalName: body.legalName,
+        vatNumber: body.vatNumber,
+        taxCode: body.taxCode,
+        email: body.email,
+        phone: body.phone,
+        website: body.website,
+        industry: body.industry,
         address: body.address,
         postalCode: body.postalCode,
         city: body.city,
+        province: body.province,
+        country: body.country,
+        latitude: body.latitude,
+        longitude: body.longitude,
+        notes: body.notes,
         actorUserId: requestContext.workspace.userId,
       }),
     );
 
-    return {
-      id: updated.id,
-      name: updated.name,
-      address: updated.address,
-      postalCode: updated.postalCode,
-      city: updated.city,
-    };
+    return this.serializeCompany(updated);
   }
 
   @Delete("/api/companies/:companyId")
@@ -205,15 +253,7 @@ export class NestProjectCrudController {
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Array<Record<string, unknown>>> {
     const clients = await this.clientService.list(requestContext.workspace.workspaceId);
-    return clients.map((item) => ({
-      id: item.id,
-      name: item.name,
-      companyId: item.companyId,
-      companyName: item.companyName,
-      email: item.email,
-      phone: item.phone,
-      notes: item.notes,
-    }));
+    return clients.map((item) => this.serializeClient(item));
   }
 
   @Get("/api/clients/:clientId")
@@ -227,15 +267,7 @@ export class NestProjectCrudController {
       this.getClientId(clientIdRaw),
     );
 
-    return {
-      id: client.id,
-      name: client.name,
-      companyId: client.companyId,
-      companyName: client.companyName,
-      email: client.email,
-      phone: client.phone,
-      notes: client.notes,
-    };
+    return this.serializeClient(client);
   }
 
   @Post("/api/clients")
@@ -251,22 +283,21 @@ export class NestProjectCrudController {
         workspaceId: requestContext.workspace.workspaceId,
         name: body.name,
         companyId: body.companyId ?? null,
+        role: body.role,
+        department: body.department,
         email: body.email,
         phone: body.phone,
+        mobile: body.mobile,
+        address: body.address,
+        city: body.city,
+        province: body.province,
+        country: body.country,
         notes: body.notes,
         actorUserId: requestContext.workspace.userId,
       }),
     );
 
-    return {
-      id: created.id,
-      name: created.name,
-      companyId: created.companyId,
-      companyName: created.companyName,
-      email: created.email,
-      phone: created.phone,
-      notes: created.notes,
-    };
+    return this.serializeClient(created);
   }
 
   @Patch("/api/clients/:clientId")
@@ -284,22 +315,21 @@ export class NestProjectCrudController {
         clientId: this.getClientId(clientIdRaw),
         name: body.name,
         companyId: body.companyId ?? null,
+        role: body.role,
+        department: body.department,
         email: body.email,
         phone: body.phone,
+        mobile: body.mobile,
+        address: body.address,
+        city: body.city,
+        province: body.province,
+        country: body.country,
         notes: body.notes,
         actorUserId: requestContext.workspace.userId,
       }),
     );
 
-    return {
-      id: updated.id,
-      name: updated.name,
-      companyId: updated.companyId,
-      companyName: updated.companyName,
-      email: updated.email,
-      phone: updated.phone,
-      notes: updated.notes,
-    };
+    return this.serializeClient(updated);
   }
 
   @Delete("/api/clients/:clientId")
@@ -537,6 +567,48 @@ export class NestProjectCrudController {
     );
 
     return { ok: true, id: revisionId };
+  }
+
+  private serializeCompany(item: CompanyEntity): Record<string, unknown> {
+    return {
+      id: item.id,
+      name: item.name,
+      isHeadquarters: item.isHeadquarters,
+      legalName: item.legalName,
+      vatNumber: item.vatNumber,
+      taxCode: item.taxCode,
+      email: item.email,
+      phone: item.phone,
+      website: item.website,
+      industry: item.industry,
+      address: item.address,
+      postalCode: item.postalCode,
+      city: item.city,
+      province: item.province,
+      country: item.country,
+      latitude: item.latitude,
+      longitude: item.longitude,
+      notes: item.notes,
+    };
+  }
+
+  private serializeClient(item: ClientEntity): Record<string, unknown> {
+    return {
+      id: item.id,
+      name: item.name,
+      companyId: item.companyId,
+      companyName: item.companyName,
+      role: item.role,
+      department: item.department,
+      email: item.email,
+      phone: item.phone,
+      mobile: item.mobile,
+      address: item.address,
+      city: item.city,
+      province: item.province,
+      country: item.country,
+      notes: item.notes,
+    };
   }
 
   private getCompanyId(value: string): number {

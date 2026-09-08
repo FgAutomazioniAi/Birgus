@@ -1,4 +1,17 @@
 export const THEME_STORAGE_KEY = "vl_theme";
+export const CORNER_STYLE_STORAGE_KEY = "vl_corner_style";
+
+export const CORNER_STYLE_OPTIONS = [
+  { id: "rounded", label: "Arrotondati" },
+  { id: "square", label: "Squadrati" },
+] as const;
+
+export type CornerStyle = (typeof CORNER_STYLE_OPTIONS)[number]["id"];
+
+export const DEFAULT_CORNER_STYLE: CornerStyle = "rounded";
+
+export const isCornerStyle = (value: string): value is CornerStyle =>
+  CORNER_STYLE_OPTIONS.some((option) => option.id === value);
 
 export const THEME_OPTIONS = [
   {

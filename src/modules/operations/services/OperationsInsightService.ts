@@ -68,49 +68,37 @@ export class OperationsInsightService {
   }
 
   public async listCustomerMap(workspaceId: string): Promise<Array<Record<string, unknown>>> {
-    const addresses = await this.prisma.customerAddress.findMany({
+    const companies = await this.prisma.company.findMany({
       where: {
         workspace_id: workspaceId,
         deleted_at: null,
-        customer: {
-          deleted_at: null,
-        },
+        latitude: { not: null },
+        longitude: { not: null },
       },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-            source_system: true,
-            external_id: true,
-          },
-        },
-      },
-      orderBy: [{ customer: { name: "asc" } }, { city: "asc" }, { label: "asc" }],
+      orderBy: [{ name: "asc" }, { is_headquarters: "desc" }, { city: "asc" }],
     });
 
-    return addresses.map((address) => ({
-      id: address.id,
-      customerId: address.customer_id,
-      customerName: address.customer.name,
-      customerEmail: address.customer.email,
-      customerPhone: address.customer.phone,
-      label: address.label,
-      addressLine1: address.address_line_1,
-      addressLine2: address.address_line_2,
-      postalCode: address.postal_code,
-      city: address.city,
-      province: address.province,
-      country: address.country,
-      latitude: toNumber(address.latitude),
-      longitude: toNumber(address.longitude),
-      geocodingStatus: address.geocoding_status,
-      geocodingProvider: address.geocoding_provider,
-      sourceSystem: address.source_system ?? address.customer.source_system,
-      externalId: address.external_id,
-      customerExternalId: address.customer.external_id,
+    return companies.map((company) => ({
+      id: String(company.id),
+      companyId: company.id,
+      customerId: String(company.id),
+      customerName: company.name,
+      customerEmail: company.email,
+      customerPhone: company.phone,
+      label: [company.is_headquarters ? "Sede principale" : "Sede", company.address, company.postal_code, company.city, company.province, company.country]
+        .filter(Boolean)
+        .join(" - "),
+      addressLine1: company.address,
+      addressLine2: null,
+      postalCode: company.postal_code,
+      city: company.city,
+      province: company.province,
+      country: company.country,
+      latitude: toNumber(company.latitude),
+      longitude: toNumber(company.longitude),
+      geocodingStatus: "GEOCODED",
+      geocodingProvider: "OpenStreetMap Nominatim",
+      isHeadquarters: company.is_headquarters,
     }));
   }
 

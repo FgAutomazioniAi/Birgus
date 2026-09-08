@@ -35,6 +35,7 @@ const createRecordSchema = z.object({
   status: z.nativeEnum(CommissionRecordStatus).optional().nullable(),
   priority: z.nativeEnum(CommissionRecordPriority).optional().nullable(),
   companyId: z.number().int().positive().optional().nullable(),
+  companyName: z.string().trim().min(2).max(240).optional().nullable(),
   clientId: uuidSchema.optional().nullable(),
   projectId: uuidSchema.optional().nullable(),
   sourceSystem: z.string().trim().max(80).optional().nullable(),

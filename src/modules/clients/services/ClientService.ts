@@ -36,8 +36,15 @@ export class ClientService {
         workspaceId: command.workspaceId,
         name,
         companyId: command.companyId,
+        role: command.role,
+        department: command.department,
         email: command.email,
         phone: command.phone,
+        mobile: command.mobile,
+        address: command.address,
+        city: command.city,
+        province: command.province,
+        country: command.country,
         notes: command.notes,
       });
     } catch (error) {
@@ -73,8 +80,15 @@ export class ClientService {
         clientId: command.clientId,
         name,
         companyId: command.companyId,
+        role: command.role,
+        department: command.department,
         email: command.email,
         phone: command.phone,
+        mobile: command.mobile,
+        address: command.address,
+        city: command.city,
+        province: command.province,
+        country: command.country,
         notes: command.notes,
       });
     } catch (error) {

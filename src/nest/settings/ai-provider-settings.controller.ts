@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Inject, Patch, Post, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 
+import { PermissionKey } from "../../core/authorization/PermissionKey.js";
 import { ModuleKey } from "../../core/module-access/ModuleKey.js";
 import { AI_PROVIDER_DEFINITIONS, MAX_AI_PROVIDER_OUTPUT_TOKENS } from "../../modules/ai-runtime/domain/AiProviderConfig.js";
 import { AiProviderSettingsService } from "../../modules/ai-runtime/services/AiProviderSettingsService.js";
@@ -9,6 +10,7 @@ import { AppError } from "../../core/errors/AppError.js";
 import { AccessPolicyGuard } from "../auth/access-policy.guard.js";
 import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
 import { RequireModule } from "../common/decorators/require-module.decorator.js";
+import { RequirePermission } from "../common/decorators/require-permission.decorator.js";
 
 const aiProviderSettingsSchema = z.object({
   baseUrl: z.string().trim().min(1).max(300).optional(),
@@ -35,12 +37,14 @@ export class AiProviderSettingsController {
   ) {}
 
   @Get()
+  @RequirePermission(PermissionKey.ASSISTANT_READ)
   public async getSettings(): Promise<Record<string, unknown>> {
     return { settings: await this.settingsService.getPublicSettings() };
   }
 
   @Patch()
   @HttpCode(200)
+  @RequirePermission(PermissionKey.ASSISTANT_CONFIGURE)
   public async patchSettings(@Body() bodyRaw: unknown): Promise<Record<string, unknown>> {
     const body = aiProviderSettingsSchema.parse(bodyRaw ?? {});
     return { settings: await this.settingsService.saveSettings(body) };
@@ -48,6 +52,7 @@ export class AiProviderSettingsController {
 
   @Post("models")
   @HttpCode(200)
+  @RequirePermission(PermissionKey.ASSISTANT_CONFIGURE)
   public async loadModels(@Body() bodyRaw: unknown): Promise<Record<string, unknown>> {
     const body = aiProviderSettingsSchema.parse(bodyRaw ?? {});
     try {
@@ -59,6 +64,7 @@ export class AiProviderSettingsController {
 
   @Post("validate")
   @HttpCode(200)
+  @RequirePermission(PermissionKey.ASSISTANT_CONFIGURE)
   public async validate(@Body() bodyRaw: unknown): Promise<Record<string, unknown>> {
     const body = aiProviderSettingsSchema.parse(bodyRaw ?? {});
     const result = await this.settingsService.validateSettings(body);

@@ -31,7 +31,7 @@ export function DataCollectionChecklistPanel() {
     const query = search.trim().toLowerCase();
     if (!query) return records;
     return records.filter((record) =>
-      [record.code, record.title, record.description, record.clientDisplayName, record.companyName, record.status]
+      [record.title, record.description, record.clientDisplayName, record.companyName, record.status]
         .some((value) => (value ?? "").toLowerCase().includes(query)),
     );
   }, [records, search]);
@@ -76,8 +76,7 @@ export function DataCollectionChecklistPanel() {
       </Card>
 
       <div className="overflow-x-auto rounded-md border border-border-default bg-bg-surface">
-        <div className="grid min-w-[940px] grid-cols-[1fr_1.5fr_1.3fr_2fr_0.8fr_auto] gap-3 border-b border-border-subtle px-4 py-3 text-xs font-bold uppercase text-text-muted">
-          <span>{t("commissions.code")}</span>
+        <div className="grid min-w-[820px] grid-cols-[1.5fr_1.3fr_2fr_0.8fr_auto] gap-3 border-b border-border-subtle px-4 py-3 text-xs font-bold uppercase text-text-muted">
           <span>{t("checklists.commission")}</span>
           <span>{t("checklists.customer")}</span>
           <span>{t("checklists.projectDescription")}</span>
@@ -88,8 +87,7 @@ export function DataCollectionChecklistPanel() {
           <div className="px-4 py-8 text-sm text-text-muted">{t("commissions.loading")}</div>
         ) : filteredRecords.length ? (
           filteredRecords.map((record) => (
-            <div key={record.id} className="grid min-w-[940px] grid-cols-[1fr_1.5fr_1.3fr_2fr_0.8fr_auto] gap-3 border-b border-border-subtle px-4 py-3 text-sm last:border-b-0">
-              <span className="font-mono text-xs text-text-secondary">{record.code}</span>
+            <div key={record.id} className="grid min-w-[820px] grid-cols-[1.5fr_1.3fr_2fr_0.8fr_auto] gap-3 border-b border-border-subtle px-4 py-3 text-sm last:border-b-0">
               <span className="font-semibold text-text-primary">{record.title}</span>
               <span className="text-text-secondary">{record.clientDisplayName ?? record.companyName ?? "-"}</span>
               <span className="line-clamp-2 text-text-secondary">{record.description ?? "-"}</span>

@@ -3,7 +3,7 @@
 import { ArrowLeft, ArrowRight, CheckCircle2, ClipboardList, Lock, Paperclip, Plus, RefreshCw, Save, Signature, Trash2 } from "lucide-react";
 import Link from "next/link";
 import type { InputHTMLAttributes } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Checkbox, CheckboxControl, Input, Text } from "@/components/atoms";
@@ -29,6 +29,7 @@ interface CommissionRecord {
   id: string;
   code: string;
   title: string;
+  companyName: string | null;
   status: string;
   priority: string;
   updatedAt: string;
@@ -179,8 +180,6 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
   const [isReopening, setIsReopening] = useState(false);
   const [uploadingFieldKey, setUploadingFieldKey] = useState<string | null>(null);
   const [completionIssues, setCompletionIssues] = useState<CompletionIssue[] | null>(null);
-  const [isChapterSwitcherPinned, setIsChapterSwitcherPinned] = useState(false);
-  const chapterSwitcherSentinelRef = useRef<HTMLDivElement | null>(null);
 
   const loadView = useCallback(async () => {
     setIsLoading(true);
@@ -205,28 +204,6 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
   useEffect(() => {
     void loadView();
   }, [loadView]);
-
-  useEffect(() => {
-    const sentinel = chapterSwitcherSentinelRef.current;
-    if (!sentinel) return;
-
-    const scrollContainer = findScrollParent(sentinel);
-    const updatePinnedState = () => {
-      const sentinelRect = sentinel.getBoundingClientRect();
-      const containerRect = scrollContainer === window
-        ? { top: 0 }
-        : (scrollContainer as HTMLElement).getBoundingClientRect();
-      setIsChapterSwitcherPinned(sentinelRect.top < containerRect.top + 8);
-    };
-
-    updatePinnedState();
-    scrollContainer.addEventListener("scroll", updatePinnedState, { passive: true });
-    window.addEventListener("resize", updatePinnedState);
-    return () => {
-      scrollContainer.removeEventListener("scroll", updatePinnedState);
-      window.removeEventListener("resize", updatePinnedState);
-    };
-  }, [view?.pages.length]);
 
   useEffect(() => {
     if (!view?.checklist) {
@@ -468,16 +445,6 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
 
   return (
     <div className="min-w-0 space-y-5 overflow-x-clip">
-      {view.pages.length && isChapterSwitcherPinned ? (
-        <div className="fixed left-2 right-2 top-16 z-50 rounded-[var(--radius-md)] border border-border-default bg-bg-surface/95 p-2 shadow-elevated backdrop-blur sm:left-1/2 sm:right-auto sm:top-20 sm:w-[min(64rem,calc(100vw-2rem))] sm:-translate-x-1/2">
-          <ChapterSwitcher
-            activePageId={activePage?.id ?? null}
-            compact
-            pages={view.pages}
-            onSelectPage={setActivePageId}
-          />
-        </div>
-      ) : null}
       <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-2">
           <Link href={APP_ROUTES.dataCollectionChecklists} className="inline-flex h-9 items-center gap-2 rounded-[var(--radius-md)] px-0 text-sm font-bold text-text-secondary transition-colors hover:text-text-primary">
@@ -486,7 +453,7 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
           </Link>
           <div>
             <Text as="h1" variant="h1">{view.record.title}</Text>
-            <p className="mt-1 text-sm text-text-muted">{view.record.code} - {view.record.status}</p>
+            <p className="mt-1 text-sm text-text-muted">{[view.record.companyName, view.record.status].filter(Boolean).join(" - ")}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -517,10 +484,8 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <main className="min-w-0 space-y-5">
           {view.pages.length ? (
-            <>
-            <div ref={chapterSwitcherSentinelRef} className="h-px" aria-hidden="true" />
             <Card
-              className="overflow-visible p-4"
+              className="sticky top-4 z-20 overflow-visible bg-bg-surface/95 p-4 shadow-elevated backdrop-blur"
               aria-label={t("commissions.chapters")}
             >
               <ChapterSwitcher
@@ -530,7 +495,6 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
                 onSelectPage={setActivePageId}
               />
             </Card>
-            </>
           ) : null}
 
           {activePage ? (
@@ -913,18 +877,6 @@ function ChapterSwitcher({
       ))}
     </div>
   );
-}
-
-function findScrollParent(element: HTMLElement): HTMLElement | Window {
-  let current: HTMLElement | null = element.parentElement;
-  while (current) {
-    const style = window.getComputedStyle(current);
-    if (/(auto|scroll)/.test(`${style.overflowY}${style.overflow}`)) {
-      return current;
-    }
-    current = current.parentElement;
-  }
-  return window;
 }
 
 function AttachmentPanel({

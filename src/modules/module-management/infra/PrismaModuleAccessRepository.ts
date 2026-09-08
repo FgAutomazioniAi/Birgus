@@ -36,6 +36,14 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
       return false;
     }
 
+    if (await this.isDeveloper(userId)) {
+      return true;
+    }
+
+    if (moduleKey === "superadmin_center" && await this.isWorkspaceSuperuser(workspaceId, userId)) {
+      return true;
+    }
+
     const override = await prisma.userModuleOverride.findFirst({
       where: {
         workspace_id: workspaceId,
@@ -104,6 +112,10 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
 
   public async listUserModules(workspaceId: string, userId: string): Promise<UserModuleState[]> {
     const prisma = PrismaClientManager.getClient();
+    const [isDeveloper, isWorkspaceSuperuser] = await Promise.all([
+      this.isDeveloper(userId),
+      this.isWorkspaceSuperuser(workspaceId, userId),
+    ]);
 
     const rows = await prisma.module.findMany({
       where: {
@@ -139,7 +151,9 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
       const workspaceEnabled = row.workspace_modules[0]?.is_enabled ?? false;
       const override = row.user_module_overrides[0]?.mode ?? null;
       const groupEnabled = activationGroupFor(row.key).every((key) => enabledByKey.get(key) === true);
-      const effectiveEnabled = !groupEnabled
+      const effectiveEnabled = isDeveloper || (isWorkspaceSuperuser && row.key === "superadmin_center")
+        ? true
+        : !groupEnabled
         ? false
         : override === "ALLOW"
           ? true
@@ -386,5 +400,23 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
     if (!membership) {
       throw new AppError("Target user is not active in workspace.", "MODULE_USER_NOT_IN_WORKSPACE", 400);
     }
+  }
+
+  private async isDeveloper(userId: string): Promise<boolean> {
+    const prisma = PrismaClientManager.getClient();
+    const assignment = await prisma.userWorkspaceRole.findFirst({
+      where: { user_id: userId, role: { key: "developer" } },
+      select: { id: true },
+    });
+    return assignment !== null;
+  }
+
+  private async isWorkspaceSuperuser(workspaceId: string, userId: string): Promise<boolean> {
+    const prisma = PrismaClientManager.getClient();
+    const assignment = await prisma.userWorkspaceRole.findFirst({
+      where: { workspace_id: workspaceId, user_id: userId, role: { key: "superuser" } },
+      select: { id: true },
+    });
+    return assignment !== null;
   }
 }

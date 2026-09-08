@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AuthSessionGuard } from "@/components/auth/auth-session-guard";
 import { FloatingAssistant } from "@/components/organisms/floating-assistant";
@@ -15,7 +15,7 @@ export interface AppShellProps {
     id: string;
     nome: string;
     ruolo: string;
-    isSuperadmin: boolean;
+    canManageWorkspace: boolean;
     workspaceId: string;
     enabledModuleKeys: string[];
   };
@@ -25,21 +25,34 @@ export function AppShell({ children, currentUser }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    const body = document.body;
+
+    root.classList.add("app-shell-scroll-lock");
+    body.classList.add("app-shell-scroll-lock");
+
+    return () => {
+      root.classList.remove("app-shell-scroll-lock");
+      body.classList.remove("app-shell-scroll-lock");
+    };
+  }, []);
+
   return (
-    <div className="flex min-h-screen bg-bg-page" data-workspace-id={currentUser.workspaceId}>
+    <div className="flex h-dvh overflow-hidden bg-bg-page" data-workspace-id={currentUser.workspaceId}>
       <AuthSessionGuard workspaceId={currentUser.workspaceId} />
       <Sidebar
         open={sidebarOpen}
         collapsed={sidebarCollapsed}
         enabledModuleKeys={currentUser.enabledModuleKeys}
-        isSuperadmin={currentUser.isSuperadmin}
+        canManageWorkspace={currentUser.canManageWorkspace}
         userName={currentUser.nome}
         onClose={() => setSidebarOpen(false)}
       />
 
       <main
         className={[
-          "flex min-w-0 flex-1 flex-col overflow-x-hidden transition-all duration-300",
+          "flex h-dvh min-w-0 flex-1 flex-col overflow-x-clip transition-all duration-300",
           sidebarCollapsed ? "lg:ml-20 lg:w-[calc(100%-5rem)] lg:flex-none" : "lg:ml-64 lg:w-[calc(100%-16rem)] lg:flex-none",
         ].join(" ")}
       >

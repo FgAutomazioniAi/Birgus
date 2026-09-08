@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/components/organisms";
+import { APP_VERSION } from "@/lib/app-version";
 import { AUTH_CONFIGURED_COOKIE_NAME } from "@/lib/auth/constants";
 import { APP_ROUTES } from "@/lib/routes";
 
@@ -28,5 +29,5 @@ export default async function LoginPage() {
     }
   }
 
-  return <LoginForm />;
+  return <LoginForm version={APP_VERSION} />;
 }
