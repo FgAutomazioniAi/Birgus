@@ -177,6 +177,7 @@ services:
       HOST: 0.0.0.0
       PORT: 3000
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/birgus?schema=public
+      BIRGUS_DEVELOPER_EMAIL: "${BIRGUS_DEVELOPER_EMAIL:-}"
       AUTH_PEPPER: "${AUTH_PEPPER:?AUTH_PEPPER is required}"
       AUTH_SESSION_HOURS: "${AUTH_SESSION_HOURS:-12}"
       AUTH_SESSION_REMEMBER_DAYS: "${AUTH_SESSION_REMEMBER_DAYS:-30}"

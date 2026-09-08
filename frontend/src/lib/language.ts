@@ -9,7 +9,7 @@ const messages: Record<string, Record<UiLanguage, string>> = {
   "language.switch": { it: "Lingua interfaccia", en: "Interface language" },
   "nav.projects": { it: "Progetti", en: "Projects" },
   "nav.clients": { it: "Clienti", en: "Clients" },
-  "nav.commissions": { it: "Anagrafica commesse", en: "Commission registry" },
+  "nav.commissions": { it: "Commesse", en: "Commission registry" },
   "nav.dataCollectionChecklists": { it: "Checklist raccolta dati", en: "Data collection checklists" },
   "nav.customerMap": { it: "Mappa clienti", en: "Customer map" },
   "nav.offerPriority": { it: "Priorità offerte", en: "Offer priorities" },

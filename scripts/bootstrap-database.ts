@@ -124,20 +124,60 @@ async function main(): Promise<void> {
   for (const key of ROLE_KEYS) await prisma.role.upsert({ where: { key }, update: { label: ROLE_LABELS[key], is_system: true }, create: { key, label: ROLE_LABELS[key], is_system: true } });
   const legacyRole = await prisma.role.findUnique({ where: { key: "superadmin" }, select: { id: true } });
   if (legacyRole) {
-    const legacyAssignments = await prisma.userWorkspaceRole.findMany({ where: { role_id: legacyRole.id }, select: { id: true, workspace_id: true, user_id: true } });
-    const legacyUsers = new Set(legacyAssignments.map((assignment) => assignment.user_id));
-    if (legacyUsers.size > 1) throw new Error("Legacy superadmin migration is ambiguous: assign the developer role manually before bootstrap.");
-    const developerRole = await prisma.role.findUniqueOrThrow({ where: { key: "developer" }, select: { id: true } });
-    for (const assignment of legacyAssignments) {
-      await prisma.userWorkspaceRole.upsert({
-        where: { workspace_id_user_id_role_id: { workspace_id: assignment.workspace_id, user_id: assignment.user_id, role_id: developerRole.id } },
-        update: {},
-        create: { workspace_id: assignment.workspace_id, user_id: assignment.user_id, role_id: developerRole.id },
-      });
+    const [legacyAssignments, developerRole, superuserRole, existingDeveloperAssignments] = await Promise.all([
+      prisma.userWorkspaceRole.findMany({
+        where: { role_id: legacyRole.id },
+        select: { workspace_id: true, user_id: true, user: { select: { email: true, two_factor_enabled: true } } },
+      }),
+      prisma.role.findUniqueOrThrow({ where: { key: "developer" }, select: { id: true } }),
+      prisma.role.findUniqueOrThrow({ where: { key: "superuser" }, select: { id: true } }),
+      prisma.userWorkspaceRole.findMany({ where: { role: { key: "developer" } }, select: { user_id: true } }),
+    ]);
+    const existingDeveloperUserIds = [...new Set(existingDeveloperAssignments.map((assignment) => assignment.user_id))];
+    if (existingDeveloperUserIds.length > 1) throw new Error("Multiple Developer accounts already exist. Resolve the assignments before bootstrap.");
+
+    const legacyUsers = [...new Map(legacyAssignments.map((assignment) => [assignment.user_id, assignment.user])).entries()];
+    const configuredDeveloperEmail = process.env.BIRGUS_DEVELOPER_EMAIL?.trim().toLowerCase() ?? "";
+    const configuredDeveloper = configuredDeveloperEmail
+      ? legacyUsers.find(([, user]) => user.email.toLowerCase() === configuredDeveloperEmail)
+      : null;
+    if (configuredDeveloperEmail && !configuredDeveloper) {
+      throw new Error(`BIRGUS_DEVELOPER_EMAIL '${configuredDeveloperEmail}' is not assigned to the legacy superadmin role.`);
     }
-    await prisma.userWorkspaceRole.deleteMany({ where: { role_id: legacyRole.id } });
-    await prisma.rolePermission.deleteMany({ where: { role_id: legacyRole.id } });
-    await prisma.role.delete({ where: { id: legacyRole.id } });
+    if (configuredDeveloper && existingDeveloperUserIds[0] && existingDeveloperUserIds[0] !== configuredDeveloper[0]) {
+      throw new Error("BIRGUS_DEVELOPER_EMAIL does not match the existing Developer account.");
+    }
+
+    const twoFactorCandidates = legacyUsers.filter(([, user]) => user.two_factor_enabled);
+    const developerUserId = configuredDeveloper?.[0]
+      ?? existingDeveloperUserIds[0]
+      ?? (twoFactorCandidates.length === 1 ? twoFactorCandidates[0][0] : undefined)
+      ?? (legacyUsers.length === 1 ? legacyUsers[0][0] : undefined);
+    if (!developerUserId) {
+      throw new Error("Legacy superadmin migration requires BIRGUS_DEVELOPER_EMAIL because multiple candidates exist.");
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const assignment of legacyAssignments) {
+        const targetRoleId = assignment.user_id === developerUserId ? developerRole.id : superuserRole.id;
+        await tx.userWorkspaceRole.deleteMany({
+          where: {
+            workspace_id: assignment.workspace_id,
+            user_id: assignment.user_id,
+            role_id: assignment.user_id === developerUserId ? superuserRole.id : developerRole.id,
+          },
+        });
+        await tx.userWorkspaceRole.upsert({
+          where: { workspace_id_user_id_role_id: { workspace_id: assignment.workspace_id, user_id: assignment.user_id, role_id: targetRoleId } },
+          update: {},
+          create: { workspace_id: assignment.workspace_id, user_id: assignment.user_id, role_id: targetRoleId },
+        });
+      }
+      await tx.userWorkspaceRole.deleteMany({ where: { role_id: legacyRole.id } });
+      await tx.rolePermission.deleteMany({ where: { role_id: legacyRole.id } });
+      await tx.role.delete({ where: { id: legacyRole.id } });
+    });
+    console.log(`Migrated ${legacyUsers.length} legacy superadmin account(s): 1 Developer, ${Math.max(legacyUsers.length - 1, 0)} Superuser.`);
   }
   for (const key of PERMISSION_KEYS) await prisma.permission.upsert({ where: { key }, update: { label: key }, create: { key, label: key } });
   const [roles, permissions] = await Promise.all([prisma.role.findMany({ where: { key: { in: [...ROLE_KEYS] } } }), prisma.permission.findMany({ where: { key: { in: [...PERMISSION_KEYS] } } })]);
