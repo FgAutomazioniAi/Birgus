@@ -35,4 +35,5 @@ export interface ClientRepository {
     notes: string;
   }): Promise<ClientEntity | null>;
   softDelete(workspaceId: string, clientId: string): Promise<boolean>;
+  hardDelete(workspaceId: string, clientId: string): Promise<boolean>;
 }

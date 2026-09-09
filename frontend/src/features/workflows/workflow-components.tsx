@@ -1,7 +1,7 @@
 "use client";
 
 import { cloneElement, isValidElement, useEffect, useId, useState, type DragEvent, type ReactElement, type ReactNode } from "react";
-import { Check, ChevronDown, Clock, Download, FileText, HelpCircle, Mail, MessageCircle, PanelRightClose, PanelRightOpen, Plus, Send, Settings, Sparkles, X } from "lucide-react";
+import { BrainCircuit, Check, ChevronDown, Clock, Download, FileText, HelpCircle, Mail, MessageCircle, PanelRightClose, PanelRightOpen, Plus, Send, Settings, Sparkles, X } from "lucide-react";
 
 import { Badge, Input, Text } from "@/components/atoms";
 import { useLanguage } from "@/components/organisms/language-provider";
@@ -527,6 +527,10 @@ export function ToolConfigurationForm({
 }) {
   const action = tool.handlerKey.split(".")[1] ?? tool.key;
 
+  if (tool.handlerKey === "brainyware.infer_stateless") {
+    return <BrainywareInferenceConfiguration configuration={configuration} onPatch={onPatch} />;
+  }
+
   if (tool.handlerKey.startsWith("langchain_orchestrator.")) {
     return (
       <div className="rounded-[var(--radius-md)] border border-border-default p-3">
@@ -738,6 +742,102 @@ export function ToolConfigurationForm({
         <Text className="font-bold">Configurazione</Text>
       </div>
       <Text variant="muted">Questo tool usa la configurazione predefinita del catalogo.</Text>
+    </div>
+  );
+}
+
+interface BrainywareCatalog {
+  configured: boolean;
+  models: Array<{ id: string }>;
+  databaseConnections: Array<{ id: string; name: string; dbType: string | null }>;
+}
+
+function BrainywareInferenceConfiguration({
+  configuration,
+  onPatch,
+}: {
+  configuration: Record<string, unknown>;
+  onPatch: (patch: Record<string, unknown>) => void;
+}) {
+  const [catalog, setCatalog] = useState<BrainywareCatalog | null>(null);
+  const [catalogError, setCatalogError] = useState("");
+  const mode = stringValue(configuration.mode) === "model" ? "model" : "database";
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const loadCatalog = async () => {
+      try {
+        const response = await fetch("/api/brainyware/catalog", { cache: "no-store", signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json() as BrainywareCatalog;
+        setCatalog(payload);
+        setCatalogError(payload.configured ? "" : "Brainyware non configurato.");
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") return;
+        setCatalogError("Catalogo Brainyware non disponibile.");
+      }
+    };
+    void loadCatalog();
+    return () => controller.abort();
+  }, []);
+
+  return (
+    <div className="rounded-[var(--radius-md)] border border-border-default p-3">
+      <div className="mb-3 flex items-center gap-2">
+        <BrainCircuit className="h-4 w-4 text-fuchsia-600 dark:text-fuchsia-300" />
+        <Text className="font-bold">Inferenza Brainyware</Text>
+      </div>
+      <Field label="Modalita">
+        <select
+          className="h-11 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-3 text-sm text-text-secondary"
+          value={mode}
+          onChange={(event) => onPatch({ mode: event.target.value })}
+        >
+          <option value="database">Database Brainyware</option>
+          <option value="model">Solo modello</option>
+        </select>
+      </Field>
+      {mode === "database" ? (
+        <Field label="Database">
+          <select
+            className="h-11 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-3 text-sm text-text-secondary"
+            value={stringValue(configuration.connection_id)}
+            onChange={(event) => onPatch({ connection_id: event.target.value })}
+          >
+            <option value="">Seleziona</option>
+            {(catalog?.databaseConnections ?? []).map((connection) => (
+              <option key={connection.id} value={connection.id}>
+                {connection.name}{connection.dbType ? ` (${connection.dbType})` : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : (
+        <>
+          <Field label="Modello">
+            <select
+              className="h-11 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-3 text-sm text-text-secondary"
+              value={stringValue(configuration.model)}
+              onChange={(event) => onPatch({ model: event.target.value })}
+            >
+              <option value="">Predefinito</option>
+              {(catalog?.models ?? []).map((model) => <option key={model.id} value={model.id}>{model.id}</option>)}
+            </select>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Temperatura">
+              <Input type="number" min="0" max="2" step="0.1" value={stringValue(configuration.temperature)} onChange={(event) => onPatch({ temperature: Number(event.target.value) })} />
+            </Field>
+            <Field label="Token massimi">
+              <Input type="number" min="1" max="32000" step="1" value={stringValue(configuration.max_tokens)} onChange={(event) => onPatch({ max_tokens: Number(event.target.value) })} />
+            </Field>
+          </div>
+        </>
+      )}
+      <Field label="Istruzioni">
+        <textarea className={textareaClassName} maxLength={4000} value={stringValue(configuration.instructions)} onChange={(event) => onPatch({ instructions: event.target.value })} />
+      </Field>
+      {catalogError ? <p className="text-xs text-status-danger-text">{catalogError}</p> : null}
     </div>
   );
 }

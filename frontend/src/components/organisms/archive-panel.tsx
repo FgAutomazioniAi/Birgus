@@ -10,7 +10,7 @@ import { PageHelpHint } from "@/components/molecules";
 import { useLanguage } from "@/components/organisms/language-provider";
 import { cn } from "@/lib/cn";
 
-type ArchivePackageKey = "complete" | "projects";
+type ArchivePackageKey = "complete" | "projects" | "registries";
 type ArchiveArea = "documents" | "trash";
 type ActiveDocumentContainer = "all" | "modules" | "playgrounds";
 
@@ -23,7 +23,7 @@ interface ArchivePackageSummary {
 
 interface ArchivedItemDto {
   id: string;
-  entityType: "project" | "project_version" | "document";
+  entityType: "project" | "project_version" | "document" | "company" | "client";
   entityId: string;
   archivedAt: string;
   title: string;
@@ -80,6 +80,12 @@ const DEFAULT_PACKAGES: ArchivePackageSummary[] = [
     description: "Archivio riferito ai progetti",
     count: 0,
   },
+  {
+    key: "registries",
+    label: "Anagrafiche",
+    description: "Aziende e clienti archiviati",
+    count: 0,
+  },
 ];
 const formatArchivedAt = (value: string) =>
   new Intl.DateTimeFormat("it-IT", {
@@ -111,6 +117,10 @@ const toEntityTypeLabel = (entityType: ArchivedItemDto["entityType"]): string =>
       return "Versione";
     case "document":
       return "Documento";
+    case "company":
+      return "Azienda";
+    case "client":
+      return "Cliente";
     default:
       return "Elemento";
   }
@@ -146,6 +156,17 @@ export function ArchivePanel() {
   const [isLoading, setIsLoading] = useState(true);
   const [processingItemId, setProcessingItemId] = useState<string | null>(null);
   const [isEmptyTrashDialogOpen, setIsEmptyTrashDialogOpen] = useState(false);
+  const [pendingPermanentDelete, setPendingPermanentDelete] = useState<ArchivedItemDto | null>(null);
+  const [roleKeys, setRoleKeys] = useState<string[]>([]);
+  const canManageArchive = roleKeys.some((role) => ["admin", "superuser", "developer"].includes(role));
+  const isDeveloper = roleKeys.includes("developer");
+
+  useEffect(() => {
+    void fetch("/api/auth/session", { cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() as Promise<{ user?: { roleKeys?: string[] } }> : null)
+      .then((payload) => setRoleKeys((payload?.user?.roleKeys ?? []).map((role) => role.trim().toLowerCase())))
+      .catch(() => setRoleKeys([]));
+  }, []);
 
   const loadArchive = async () => {
     setIsLoading(true);
@@ -232,6 +253,7 @@ export function ArchivePanel() {
         throw new Error(payload.message ?? "Eliminazione permanente non riuscita.");
       }
       toast.success("Elemento eliminato definitivamente.");
+      setPendingPermanentDelete(null);
       await loadArchive();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Eliminazione permanente non riuscita.");
@@ -321,7 +343,7 @@ export function ArchivePanel() {
       ) : (
         <>
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-3">
         {DEFAULT_PACKAGES.map((fallbackPackage) => {
           const entry = packageByKey.get(fallbackPackage.key) ?? fallbackPackage;
           const isSelected = selectedPackage === entry.key;
@@ -357,13 +379,17 @@ export function ArchivePanel() {
           <div className="flex items-center gap-2">
             <Package size={16} className="text-brand-primary" />
             <Text className="text-sm font-bold text-text-primary">
-              {selectedPackage === "projects" ? "Archivio Progetti" : "Archivio Completo"}
+              {selectedPackage === "projects"
+                ? "Archivio Progetti"
+                : selectedPackage === "registries"
+                  ? "Archivio Anagrafiche"
+                  : "Archivio Completo"}
             </Text>
           </div>
           <span className="rounded-full border border-border-default bg-bg-surface px-2 py-0.5 text-xs font-semibold text-text-secondary">
             {items.length}
           </span>
-          {items.length > 0 ? (
+          {items.length > 0 && isDeveloper ? (
             <Button
               variant="danger"
               size="sm"
@@ -426,22 +452,26 @@ export function ArchivePanel() {
                     <td className="px-4 py-3 text-text-secondary">{toDetails(item)}</td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void restoreItem(item)}
-                          disabled={processingItemId === item.id}
-                        >
-                          Ripristina
-                        </Button>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => void permanentlyDeleteItem(item)}
-                          disabled={processingItemId === item.id}
-                        >
-                          Elimina definitivo
-                        </Button>
+                        {canManageArchive ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void restoreItem(item)}
+                            disabled={processingItemId === item.id}
+                          >
+                            Ripristina
+                          </Button>
+                        ) : null}
+                        {isDeveloper ? (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => setPendingPermanentDelete(item)}
+                            disabled={processingItemId === item.id}
+                          >
+                            Elimina definitivo
+                          </Button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -461,6 +491,15 @@ export function ArchivePanel() {
         isBusy={processingItemId === "empty-trash"}
         onCancel={() => setIsEmptyTrashDialogOpen(false)}
         onConfirm={emptyTrash}
+      />
+      <ConfirmDeleteDialog
+        open={pendingPermanentDelete !== null}
+        expectedText="cancella"
+        title={`Elimina definitivamente ${pendingPermanentDelete?.title ?? "elemento"}`}
+        confirmLabel="Elimina definitivamente"
+        isBusy={pendingPermanentDelete !== null && processingItemId === pendingPermanentDelete.id}
+        onCancel={() => setPendingPermanentDelete(null)}
+        onConfirm={() => pendingPermanentDelete ? permanentlyDeleteItem(pendingPermanentDelete) : undefined}
       />
     </div>
   );

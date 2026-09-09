@@ -8,6 +8,7 @@ export class PermissionKey {
   public static readonly AGENTS_WRITE = "agents.write";
   public static readonly CLIENTS_READ = "clients.read";
   public static readonly CLIENTS_WRITE = "clients.write";
+  public static readonly CLIENTS_DELETE_PERMANENTLY = "clients.delete_permanently";
 
   public static readonly DOCUMENTS_READ = "documents.read";
   public static readonly DOCUMENTS_WRITE = "documents.write";

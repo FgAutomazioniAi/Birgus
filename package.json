@@ -1,6 +1,6 @@
 {
   "name": "birgus-platform",
-  "version": "0.1.0",
+  "version": "1.1.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -26,6 +26,11 @@
     "instance:initialize": "tsx scripts/initialize-instance.ts",
     "instance:snapshot": "tsx scripts/snapshot-installation-profile.ts",
     "workspace:provision": "tsx scripts/provision-workspace.ts",
+    "brainyware:configure": "tsx scripts/configure-brainyware.ts",
+    "brainyware:smoke": "docker compose exec -T app npm run brainyware:smoke:container",
+    "brainyware:smoke:container": "tsx scripts/smoke-brainyware.ts",
+    "brainyware:inference:smoke": "docker compose exec -T app npm run brainyware:inference:smoke:container",
+    "brainyware:inference:smoke:container": "tsx scripts/smoke-brainyware-inference.ts",
     "ops:backup": "powershell -ExecutionPolicy Bypass -File scripts/backup.ps1",
     "build:frontend": "npm --prefix frontend run build"
   },

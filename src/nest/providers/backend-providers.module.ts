@@ -3,6 +3,7 @@ import { Global, Module } from "@nestjs/common";
 import { WorkspaceMembershipPrismaReader } from "../../database/WorkspaceMembershipPrismaReader.js";
 import { WorkspacePermissionPrismaReader } from "../../database/WorkspacePermissionPrismaReader.js";
 import { OpenAiCompatibleToolChatClient } from "../../modules/ai-runtime/services/OpenAiCompatibleToolChatClient.js";
+import { BrainywareClient } from "../../modules/brainyware/services/BrainywareClient.js";
 import { PrismaModuleAgentRepository } from "../../modules/agents/infra/PrismaModuleAgentRepository.js";
 import { PrismaAuditLogRepository } from "../../modules/audit/infra/PrismaAuditLogRepository.js";
 import { PrismaClientRepository } from "../../modules/clients/infra/PrismaClientRepository.js";
@@ -29,6 +30,7 @@ const PROVIDERS = [
   PrismaAuditLogRepository,
   PrismaClientRepository,
   PrismaCompanyRepository,
+  BrainywareClient,
   PrismaAssistantSessionRepository,
   OpenAiCompatibleToolChatClient,
   PrismaDocumentArchiveRepository,

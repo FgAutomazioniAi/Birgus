@@ -233,6 +233,12 @@ services:
       GARAGE_S3_SECRET_ACCESS_KEY: "${GARAGE_S3_SECRET_ACCESS_KEY:?GARAGE_S3_SECRET_ACCESS_KEY is required}"
       GARAGE_S3_FORCE_PATH_STYLE: "${GARAGE_S3_FORCE_PATH_STYLE:-true}"
       GARAGE_STORAGE_PREFIX: "${GARAGE_STORAGE_PREFIX:-projects}"
+      BRAINYWARE_BASE_URL: "${BRAINYWARE_BASE_URL:-}"
+      BRAINYWARE_ACCESS_KEY_FILE: "/run/secrets/brainyware_access_key"
+      BRAINYWARE_SECRET_KEY_FILE: "/run/secrets/brainyware_secret_key"
+    secrets:
+      - brainyware_access_key
+      - brainyware_secret_key
     extra_hosts:
       - "host.docker.internal:host-gateway"
       - "internal-ai-vllm:host-gateway"
@@ -296,3 +302,9 @@ services:
         condition: service_healthy
 
 volumes: {}
+
+secrets:
+  brainyware_access_key:
+    file: "${BRAINYWARE_ACCESS_KEY_SECRET_FILE:-./config/empty-secret}"
+  brainyware_secret_key:
+    file: "${BRAINYWARE_SECRET_KEY_SECRET_FILE:-./config/empty-secret}"

@@ -58,6 +58,10 @@ const deleteCompanySchema = z.object({
   confirmText: z.string().min(1),
 });
 
+const permanentDeleteSchema = z.object({
+  confirmText: z.string().min(1),
+});
+
 const clientPayloadSchema = z.object({
   name: z.string().min(2),
   companyId: z.number().int().positive().nullable().optional(),
@@ -247,6 +251,24 @@ export class NestProjectCrudController {
     return { ok: true, id: companyId };
   }
 
+  @Delete("/api/companies/:companyId/permanent")
+  @HttpCode(200)
+  @RequirePermission(PermissionKey.CLIENTS_DELETE_PERMANENTLY)
+  public async permanentlyDeleteCompany(
+    @Param("companyId") companyIdRaw: string,
+    @Body() bodyRaw: unknown,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const body = permanentDeleteSchema.parse(bodyRaw);
+    if (body.confirmText.trim() !== "elimina definitivamente") {
+      throw new AppError("Conferma non valida: digita 'elimina definitivamente'.", "DELETE_CONFIRMATION_INVALID", 400);
+    }
+
+    const companyId = this.getCompanyId(companyIdRaw);
+    await this.companyService.permanentlyDelete(requestContext.workspace.workspaceId, companyId, requestContext.workspace.userId);
+    return { ok: true, id: companyId };
+  }
+
   @Get("/api/clients")
   @RequirePermission(PermissionKey.CLIENTS_READ)
   public async listClients(
@@ -356,6 +378,24 @@ export class NestProjectCrudController {
       requestContext.workspace.userId,
     );
 
+    return { ok: true, id: clientId };
+  }
+
+  @Delete("/api/clients/:clientId/permanent")
+  @HttpCode(200)
+  @RequirePermission(PermissionKey.CLIENTS_DELETE_PERMANENTLY)
+  public async permanentlyDeleteClient(
+    @Param("clientId") clientIdRaw: string,
+    @Body() bodyRaw: unknown,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const body = permanentDeleteSchema.parse(bodyRaw);
+    if (body.confirmText.trim() !== "elimina definitivamente") {
+      throw new AppError("Conferma non valida: digita 'elimina definitivamente'.", "DELETE_CONFIRMATION_INVALID", 400);
+    }
+
+    const clientId = this.getClientId(clientIdRaw);
+    await this.clientService.permanentlyDelete(requestContext.workspace.workspaceId, clientId, requestContext.workspace.userId);
     return { ok: true, id: clientId };
   }
 

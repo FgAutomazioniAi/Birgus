@@ -1,6 +1,7 @@
 import { Position, type Edge, type Node } from "@xyflow/react";
 import {
   Bot,
+  BrainCircuit,
   Braces,
   CheckCircle2,
   Clock,
@@ -33,6 +34,7 @@ export type FlowNodeType =
   | "input-file"
   | "input-knowledge"
   | "document-set-ai"
+  | "brainyware-inference"
   | "ocr"
   | "llm"
   | "structure-data"
@@ -175,6 +177,7 @@ export const NODE_KIND_ICONS: Record<FlowNodeType, typeof Type> = {
   "input-file": FileText,
   "input-knowledge": Database,
   "document-set-ai": FileSearch,
+  "brainyware-inference": BrainCircuit,
   ocr: FileSearch,
   llm: Sparkles,
   "structure-data": Braces,
@@ -199,6 +202,7 @@ export const NODE_KIND_LABELS: Record<FlowNodeType, string> = {
   "input-file": "Carica file",
   "input-knowledge": "Knowledge workspace",
   "document-set-ai": "Analizza documenti",
+  "brainyware-inference": "Inferenza Brainyware",
   ocr: "Text Recognition",
   llm: "Analizza con AI",
   "structure-data": "Struttura testo",
@@ -223,6 +227,7 @@ const NODE_KIND_LABELS_EN: Record<FlowNodeType, string> = {
   "input-file": "Upload file",
   "input-knowledge": "Workspace knowledge",
   "document-set-ai": "Analyze documents",
+  "brainyware-inference": "Brainyware inference",
   ocr: "Text recognition",
   llm: "Analyze with AI",
   "structure-data": "Structure text",
@@ -249,6 +254,7 @@ const NODE_KIND_DESCRIPTIONS: Record<FlowNodeType, Record<UiLanguage, string>> =
   "document-set-ai": { it: "Analizza uno o più documenti selezionati.", en: "Analyzes one or more selected documents." },
   ocr: { it: "Estrae testo da documenti e immagini.", en: "Extracts text from documents and images." },
   llm: { it: "Genera una risposta con l'agente AI.", en: "Generates an answer with the AI agent." },
+  "brainyware-inference": { it: "Interroga Brainyware senza creare una chat persistente.", en: "Queries Brainyware without creating a persistent chat." },
   "structure-data": { it: "Trasforma il testo in dati strutturati.", en: "Transforms text into structured data." },
   "generate-document": { it: "Crea un documento scaricabile.", en: "Creates a downloadable document." },
   "quotation-docx": { it: "Genera un preventivo in formato documento.", en: "Generates a quotation document." },
@@ -279,6 +285,7 @@ export const TOOLBAR_ORDER: FlowNodeType[] = [
   "input-file",
   "input-knowledge",
   "document-set-ai",
+  "brainyware-inference",
   "ocr",
   "llm",
   "structure-data",
@@ -300,7 +307,7 @@ export const TOOLBAR_GROUPS: Array<{ id: string; title: string; titleEn: string;
   { id: "agents", title: "Agenti", titleEn: "Agents", category: "AGENT", items: ["llm", "structure-data", "compose-email", "format-text-ai"] },
   { id: "tools", title: "Strumenti", titleEn: "Tools", category: "TOOL", items: ["ocr", "document-set-ai", "generate-document", "format-text-template", "verify-route", "request-decision"] },
   { id: "report", title: "Resoconto", titleEn: "Report", category: "REPORT", items: ["schedule", "send-email", "send-telegram", "send-whatsapp"] },
-  { id: "brainyware", title: "Brainyware", titleEn: "Brainyware", category: "BRAINYWARE", items: [] },
+  { id: "brainyware", title: "Brainyware", titleEn: "Brainyware", category: "BRAINYWARE", items: ["brainyware-inference"] },
 ];
 
 export const NODE_CATEGORY_BORDER: Record<CanvasNodeData["paletteKind"], string> = {
@@ -381,7 +388,7 @@ export function isAdvancedLangChainTool(tool: WorkflowTool): boolean {
 }
 
 export function isAiRequestFlowNodeType(kind: FlowNodeType): boolean {
-  return kind === "llm" || kind === "structure-data" || kind === "compose-email" || kind === "format-text-ai" || kind === "document-set-ai";
+  return kind === "llm" || kind === "structure-data" || kind === "compose-email" || kind === "format-text-ai" || kind === "document-set-ai" || kind === "brainyware-inference";
 }
 
 export function currentPromptFromConfiguration(configuration: Record<string, unknown>): string {
@@ -424,6 +431,9 @@ export function findToolForFlowNodeType(kind: FlowNodeType, tools: WorkflowTool[
 }
 
 export function flowNodeHandlerKey(kind: FlowNodeType): string | null {
+  if (kind === "brainyware-inference") {
+    return "brainyware.infer_stateless";
+  }
   if (kind === "ocr") {
     return "ocr_engine.extract_text_from_pdf_storage";
   }
@@ -491,6 +501,9 @@ export function inferFlowNodeType(node: DraftNode, tool: WorkflowTool | null): F
   if (tool?.handlerKey === "document_intelligence.analyze_document_set") {
     return "document-set-ai";
   }
+  if (tool?.handlerKey === "brainyware.infer_stateless") {
+    return "brainyware-inference";
+  }
   if (tool?.handlerKey === "ocr_engine.extract_text_from_pdf_storage") {
     return "ocr";
   }
@@ -543,6 +556,9 @@ export function inferFlowNodeType(node: DraftNode, tool: WorkflowTool | null): F
 }
 
 export function toolIcon(tool: WorkflowTool) {
+  if (tool.handlerKey.startsWith("brainyware.")) {
+    return <BrainCircuit className="h-4 w-4" />;
+  }
   if (tool.handlerKey.includes("telegram")) {
     return <Send className="h-4 w-4" />;
   }
@@ -562,6 +578,9 @@ export function toolIcon(tool: WorkflowTool) {
 }
 
 export function toolSubtitle(tool: WorkflowTool): string {
+  if (tool.handlerKey.startsWith("brainyware.")) {
+    return "Brainyware";
+  }
   if (tool.handlerKey.includes("ocr")) {
     return "OCR";
   }
@@ -678,9 +697,12 @@ export function toFlowNode(
   const agent = item.moduleAgentId ? agents.get(item.moduleAgentId) ?? null : null;
   const flowType = inferFlowNodeType(item, tool);
   const isReportNode = flowType === "schedule" || flowType === "send-email" || flowType === "send-telegram" || flowType === "send-whatsapp";
+  const isBrainywareNode = tool?.handlerKey.startsWith("brainyware.") === true;
   const paletteKind = isReportNode
     ? "REPORT"
-    : item.nodeKind === "AGENT" || (tool && isLangChainTool(tool)) ? "AGENT" : item.nodeKind === "TOOL" ? "TOOL" : item.nodeKind;
+    : isBrainywareNode
+      ? "BRAINYWARE"
+      : item.nodeKind === "AGENT" || (tool && isLangChainTool(tool)) ? "AGENT" : item.nodeKind === "TOOL" ? "TOOL" : item.nodeKind;
 
   return {
     id: item.clientId,

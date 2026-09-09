@@ -159,6 +159,13 @@ export class PrismaCompanyRepository implements CompanyRepository {
     return result.count > 0;
   }
 
+  public async hardDelete(workspaceId: string, companyId: number): Promise<boolean> {
+    const result = await PrismaClientManager.getClient().company.deleteMany({
+      where: { workspace_id: workspaceId, id: companyId },
+    });
+    return result.count > 0;
+  }
+
   private mapRow(row: {
     id: number;
     workspace_id: string;

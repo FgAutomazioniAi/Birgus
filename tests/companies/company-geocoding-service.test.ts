@@ -32,14 +32,45 @@ test("geocodes a company address and caches repeated requests", async () => {
 });
 
 test("rejects an address that cannot be geocoded", async () => {
+  let requestCount = 0;
   const service = new CompanyGeocodingService({
     endpoint: "https://geocoder.test/search",
     minimumIntervalMs: 0,
-    fetchImpl: async () => new Response("[]", { status: 200 }),
+    fetchImpl: async (input) => {
+      requestCount += 1;
+      const url = new URL(String(input));
+      if (requestCount === 2) {
+        assert.equal(url.searchParams.get("street"), "Via inesistente");
+        assert.equal(url.searchParams.get("city"), "Milano");
+      }
+      return new Response("[]", { status: 200 });
+    },
   });
 
   await assert.rejects(
     service.geocode({ address: "Via inesistente", postalCode: "", city: "Milano", province: "", country: "Italia" }),
-    (error: unknown) => error instanceof AppError && error.code === "COMPANY_ADDRESS_NOT_FOUND",
+    (error: unknown) => error instanceof AppError && error.code === "COMPANY_ADDRESS_NOT_FOUND" && error.statusCode === 422,
   );
+  assert.equal(requestCount, 2);
+});
+
+test("falls back to a less restrictive address query", async () => {
+  let requestCount = 0;
+  const service = new CompanyGeocodingService({
+    endpoint: "https://geocoder.test/search",
+    minimumIntervalMs: 0,
+    fetchImpl: async (input) => {
+      requestCount += 1;
+      const url = new URL(String(input));
+      if (requestCount < 3) return new Response("[]", { status: 200 });
+      assert.equal(url.searchParams.get("q"), "Via Roma 1, Milano, Italia");
+      return new Response(JSON.stringify([{ lat: "45.4642035", lon: "9.1899820" }]), { status: 200 });
+    },
+  });
+
+  const result = await service.geocode({ address: "Via Roma 1", postalCode: "00000", city: "Milano", province: "MI", country: "Italia" });
+
+  assert.equal(result.latitude, "45.4642035");
+  assert.equal(result.longitude, "9.1899820");
+  assert.equal(requestCount, 3);
 });

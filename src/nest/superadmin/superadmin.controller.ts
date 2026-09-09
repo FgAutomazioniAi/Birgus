@@ -81,7 +81,7 @@ const addUserWorkspaceSchema = z.object({
 });
 
 const archiveParamsSchema = z.object({
-  entityType: z.enum(["project", "project_version", "document"]),
+  entityType: z.enum(["project", "project_version", "document", "company", "client"]),
   entityId: z.string().min(1),
 });
 
@@ -473,6 +473,7 @@ export class NestSuperadminController {
     const params = archiveParamsSchema.parse(paramsRaw);
     const body = hardDeleteArchiveSchema.parse(bodyRaw);
     const scope = await this.managementScope(requestContext);
+    this.service.assertGlobalScope(scope);
     this.service.assertWorkspaceInScope(scope, requestContext.workspace.workspaceId, body.workspaceId);
 
     await this.service.permanentlyDeleteArchivedItem({

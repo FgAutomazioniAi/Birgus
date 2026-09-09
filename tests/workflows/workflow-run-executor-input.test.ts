@@ -4,6 +4,53 @@ import assert from "node:assert/strict";
 import { WorkflowRunExecutorService } from "../../src/modules/workflows/services/WorkflowRunExecutorService.js";
 import { ScheduledWorkflowDeliveryService } from "../../src/modules/workflows/services/ScheduledWorkflowDeliveryService.js";
 
+test("WorkflowRunExecutorService sends Brainyware database inference without a persistent session", async () => {
+  const requests: Array<Record<string, unknown>> = [];
+  const service = new WorkflowRunExecutorService({
+    documentArchiveService: {} as never,
+    documentIntelligenceService: {} as never,
+    quotationAnalyzer: {} as never,
+    ddtAnalyzer: {} as never,
+    measureReportAnalyzer: {} as never,
+    pythonModulesClient: {} as never,
+    runtimeAccessPolicy: {} as never,
+    brainywareClient: {
+      inferStateless: async (request: Record<string, unknown>) => {
+        requests.push(request);
+        return { reply: "Risposta", mode: "database", connectionId: "db-1", persistentSession: false, provider: "brainyware" };
+      },
+    } as never,
+  }) as unknown as {
+    executeBrainywareInferenceTool: (context: unknown, node: unknown) => Promise<Record<string, unknown>>;
+  };
+
+  const result = await service.executeBrainywareInferenceTool({
+    inputPayload: {},
+    nodeOutputs: new Map([["input", { text: "Dati collegati" }]]),
+    incomingNodeKeys: new Map([["brainy", ["input"]]]),
+    incomingFieldBindings: new Map([["brainy", new Map([["input_text", [{ sourceKey: "input", selectedOutputKey: "text" }]]])]]),
+  }, {
+    node_key: "brainy",
+    configuration: { mode: "database", connection_id: "db-1", instructions: "Sintetizza" },
+  });
+
+  assert.deepEqual(requests, [{
+    message: "Dati collegati",
+    mode: "database",
+    connectionId: "db-1",
+    model: undefined,
+    instructions: "Sintetizza",
+    locale: "italiano",
+    temperature: undefined,
+    maxTokens: undefined,
+  }]);
+  assert.equal(result.text, "Risposta");
+  assert.deepEqual(result.published_outputs, [
+    { key: "text", label: "Risposta Brainyware", kind: "text", value: "Risposta" },
+    { key: "metadata", label: "Metadati inferenza", kind: "data", value: { mode: "database", connectionId: "db-1", model: null, persistentSession: false } },
+  ]);
+});
+
 test("WorkflowRunExecutorService passes connected text input to LangChain chat nodes", async () => {
   const service = new WorkflowRunExecutorService({
     documentArchiveService: {} as never,

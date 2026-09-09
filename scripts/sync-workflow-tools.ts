@@ -4,6 +4,23 @@ const prisma = new PrismaClient();
 
 const tools = [
   {
+    key: "brainyware_inference",
+    name: "brainyware_inference",
+    label: "Inferenza Brainyware",
+    description: "Interroga un database Brainyware o un modello senza creare una sessione persistente.",
+    runtimeKind: WorkflowToolRuntimeKind.BACKEND,
+    handlerKey: "brainyware.infer_stateless",
+    configuration: {
+      mode: "database",
+      connection_id: "",
+      model: "",
+      instructions: "",
+      locale: "italiano",
+      temperature: 0,
+      max_tokens: 800,
+    },
+  },
+  {
     key: "langchain_chat",
     name: "langchain_chat",
     label: "AI Chat",

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Archive,
   ArrowRight,
   Building2,
   ChevronDown,
@@ -18,16 +19,14 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, CheckboxControl, Input, Text } from "@/components/atoms";
-import { PageHelpHint, SearchField, SelectDropdown } from "@/components/molecules";
+import { ConfirmDeleteDialog, PageHelpHint, SearchField, SelectDropdown } from "@/components/molecules";
 import { useLanguage } from "@/components/organisms/language-provider";
 import { cn } from "@/lib/cn";
 import { downloadTablePdf } from "@/lib/pdf-export";
-import { APP_ROUTES } from "@/lib/routes";
 import { scheduleUndoableAction } from "@/lib/undoable-action";
 import type { Client, Company } from "@/lib/types";
 
@@ -73,6 +72,10 @@ interface ClientFormState {
   country: string;
   notes: string;
 }
+
+type PermanentDeleteTarget =
+  | { kind: "company"; item: Company }
+  | { kind: "client"; item: Client };
 
 const EMPTY_COMPANY_FORM: CompanyFormState = {
   name: "",
@@ -179,7 +182,6 @@ export function ClientsTable() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [activeRegistry, setActiveRegistry] = useState<"companies" | "clients">("companies");
   const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [isColumnsMenuOpen, setIsColumnsMenuOpen] = useState(false);
   const [columnOrder, setColumnOrder] = useState<ClientColumnKey[]>(DEFAULT_CLIENT_COLUMN_ORDER);
@@ -192,13 +194,21 @@ export function ClientsTable() {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [isCompanyDialogOpen, setIsCompanyDialogOpen] = useState(false);
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
+  const [editingCompanyId, setEditingCompanyId] = useState<number | null>(null);
+  const [editingClientId, setEditingClientId] = useState<string | null>(null);
+  const [roleKeys, setRoleKeys] = useState<string[]>([]);
+  const [permanentDeleteTarget, setPermanentDeleteTarget] = useState<PermanentDeleteTarget | null>(null);
+  const [isPermanentlyDeleting, setIsPermanentlyDeleting] = useState(false);
   const [companyForm, setCompanyForm] = useState<CompanyFormState>(EMPTY_COMPANY_FORM);
   const [clientForm, setClientForm] = useState<ClientFormState>(EMPTY_CLIENT_FORM);
   const [isSavingCompany, setIsSavingCompany] = useState(false);
   const [isSavingClient, setIsSavingClient] = useState(false);
   const [isGeocodingCompany, setIsGeocodingCompany] = useState(false);
   const [geocodedAddress, setGeocodedAddress] = useState("");
+  const [geocodingError, setGeocodingError] = useState("");
   const columnsMenuRef = useRef<HTMLDivElement | null>(null);
+  const canManageRegistry = roleKeys.some((role) => ["admin", "superuser", "developer"].includes(role));
+  const isDeveloper = roleKeys.includes("developer");
 
   const loadClients = async () => {
     try {
@@ -234,6 +244,10 @@ export function ClientsTable() {
   useEffect(() => {
     void loadClients();
     void loadCompanies();
+    void fetch("/api/auth/session", { cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() as Promise<{ user?: { roleKeys?: string[] } }> : null)
+      .then((payload) => setRoleKeys((payload?.user?.roleKeys ?? []).map((role) => role.trim().toLowerCase())))
+      .catch(() => setRoleKeys([]));
   }, []);
 
   useEffect(() => {
@@ -401,9 +415,10 @@ export function ClientsTable() {
 
   const totalVisibleColumns = Math.max(visibleColumns.length, 1);
 
-  const handleDelete = (client: Client) => {
+  const archiveClient = (client: Client) => {
     const previousClients = clients;
     setClients((prev) => prev.filter((item) => item.id !== client.id));
+    setSelectedClient(null);
 
     scheduleUndoableAction({
       pendingMessage: `Cliente "${client.name}" in archiviazione...`,
@@ -422,6 +437,68 @@ export function ClientsTable() {
         }
       },
     });
+  };
+
+  const archiveCompany = (company: Company) => {
+    const previousCompanies = companies;
+    setCompanies((current) => current.filter((item) => item.id !== company.id));
+    setSelectedCompany(null);
+
+    scheduleUndoableAction({
+      pendingMessage: `Azienda "${company.name}" in archiviazione...`,
+      successMessage: "Azienda archiviata.",
+      errorMessage: "Archiviazione azienda non riuscita.",
+      rollback: () => setCompanies(previousCompanies),
+      commit: async () => {
+        const response = await fetch(`/api/companies/${company.id}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirmText: "cancella" }),
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({ message: "Errore archiviazione azienda" })) as { message?: string };
+          throw new Error(payload.message ?? "Errore archiviazione azienda");
+        }
+      },
+    });
+  };
+
+  const permanentlyDelete = async (confirmText: string) => {
+    if (!permanentDeleteTarget) return;
+
+    try {
+      setIsPermanentlyDeleting(true);
+      const target = permanentDeleteTarget;
+      const endpoint = target.kind === "company"
+        ? `/api/companies/${target.item.id}/permanent`
+        : `/api/clients/${target.item.id}/permanent`;
+      const response = await fetch(endpoint, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmText }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({ message: "Eliminazione definitiva non riuscita" })) as { message?: string };
+        throw new Error(payload.message ?? "Eliminazione definitiva non riuscita");
+      }
+
+      if (target.kind === "company") {
+        setCompanies((current) => current.filter((item) => item.id !== target.item.id));
+        setClients((current) => current.map((client) => client.companyId === target.item.id
+          ? { ...client, companyId: null, companyName: "" }
+          : client));
+        setSelectedCompany(null);
+      } else {
+        setClients((current) => current.filter((item) => item.id !== target.item.id));
+        setSelectedClient(null);
+      }
+      setPermanentDeleteTarget(null);
+      toast.success("Elemento eliminato definitivamente.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Eliminazione definitiva non riuscita.");
+    } finally {
+      setIsPermanentlyDeleting(false);
+    }
   };
 
   const toggleColumnVisibility = (key: ClientColumnKey) => {
@@ -492,6 +569,77 @@ export function ClientsTable() {
     }
   };
 
+  const openNewCompany = () => {
+    setEditingCompanyId(null);
+    setCompanyForm(EMPTY_COMPANY_FORM);
+    setGeocodedAddress("");
+    setGeocodingError("");
+    setIsCompanyDialogOpen(true);
+  };
+
+  const openCompanyEdit = (company: Company) => {
+    setEditingCompanyId(company.id);
+    setCompanyForm({
+      name: company.name,
+      isHeadquarters: company.isHeadquarters,
+      vatNumber: company.vatNumber,
+      taxCode: company.taxCode,
+      email: company.email,
+      phone: company.phone,
+      website: company.website,
+      address: company.address,
+      postalCode: company.postalCode,
+      city: company.city,
+      province: company.province,
+      country: company.country,
+      latitude: company.latitude,
+      longitude: company.longitude,
+      notes: company.notes,
+    });
+    setGeocodedAddress(company.latitude && company.longitude ? "Coordinate gia salvate." : "");
+    setGeocodingError("");
+    setSelectedCompany(null);
+    setIsCompanyDialogOpen(true);
+  };
+
+  const openNewClient = () => {
+    setEditingClientId(null);
+    setClientForm(EMPTY_CLIENT_FORM);
+    setIsClientDialogOpen(true);
+  };
+
+  const openClientEdit = (client: Client) => {
+    setEditingClientId(client.id);
+    setClientForm({
+      name: client.name,
+      companyId: client.companyId ? String(client.companyId) : "",
+      role: client.role ?? "",
+      department: client.department ?? "",
+      email: client.email ?? "",
+      phone: client.phone ?? "",
+      mobile: client.mobile ?? "",
+      address: client.address ?? "",
+      city: client.city ?? "",
+      province: client.province ?? "",
+      country: client.country ?? "Italia",
+      notes: client.notes ?? "",
+    });
+    setSelectedClient(null);
+    setIsClientDialogOpen(true);
+  };
+
+  const closeCompanyDialog = () => {
+    if (isSavingCompany) return;
+    setIsCompanyDialogOpen(false);
+    setEditingCompanyId(null);
+  };
+
+  const closeClientDialog = () => {
+    if (isSavingClient) return;
+    setIsClientDialogOpen(false);
+    setEditingClientId(null);
+  };
+
   const saveCompany = async () => {
     const normalizedName = companyForm.name.trim();
     if (normalizedName.length < 2) {
@@ -501,8 +649,8 @@ export function ClientsTable() {
 
     try {
       setIsSavingCompany(true);
-      const response = await fetch("/api/companies", {
-        method: "POST",
+      const response = await fetch(editingCompanyId ? `/api/companies/${editingCompanyId}` : "/api/companies", {
+        method: editingCompanyId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...companyForm, name: normalizedName }),
       });
@@ -510,11 +658,22 @@ export function ClientsTable() {
         const payload = await response.json().catch(() => ({ message: "Errore salvataggio azienda" })) as { message?: string };
         throw new Error(payload.message ?? "Errore salvataggio azienda");
       }
-      const created = await response.json() as Company;
-      setCompanies((current) => [...current, created].sort((a, b) => a.name.localeCompare(b.name)));
+      const saved = await response.json() as Company;
+      setCompanies((current) => {
+        const next = editingCompanyId
+          ? current.map((item) => item.id === saved.id ? saved : item)
+          : [...current, saved];
+        return next.sort((a, b) => a.name.localeCompare(b.name));
+      });
+      if (editingCompanyId) {
+        setClients((current) => current.map((client) => client.companyId === saved.id
+          ? { ...client, companyName: saved.name }
+          : client));
+      }
       setCompanyForm(EMPTY_COMPANY_FORM);
       setIsCompanyDialogOpen(false);
-      toast.success("Azienda creata.");
+      setEditingCompanyId(null);
+      toast.success(editingCompanyId ? "Azienda aggiornata." : "Azienda creata.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Salvataggio azienda non riuscito.");
     } finally {
@@ -532,6 +691,7 @@ export function ClientsTable() {
     }));
     if (["address", "postalCode", "city", "province", "country"].includes(key)) {
       setGeocodedAddress("");
+      setGeocodingError("");
     }
   };
 
@@ -543,6 +703,7 @@ export function ClientsTable() {
 
     try {
       setIsGeocodingCompany(true);
+      setGeocodingError("");
       const response = await fetch("/api/companies/geocode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -567,7 +728,9 @@ export function ClientsTable() {
       setGeocodedAddress(payload.displayName ?? "Posizione trovata");
       toast.success("Posizione trovata e pronta per il salvataggio.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Ricerca posizione non riuscita.");
+      const message = error instanceof Error ? error.message : "Ricerca posizione non riuscita.";
+      setGeocodingError(message);
+      toast.error(message);
     } finally {
       setIsGeocodingCompany(false);
     }
@@ -582,8 +745,8 @@ export function ClientsTable() {
 
     try {
       setIsSavingClient(true);
-      const response = await fetch("/api/clients", {
-        method: "POST",
+      const response = await fetch(editingClientId ? `/api/clients/${editingClientId}` : "/api/clients", {
+        method: editingClientId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...clientForm,
@@ -595,12 +758,18 @@ export function ClientsTable() {
         const payload = await response.json().catch(() => ({ message: "Errore salvataggio cliente" })) as { message?: string };
         throw new Error(payload.message ?? "Errore salvataggio cliente");
       }
-      const created = await response.json() as Client;
-      setClients((current) => [...current, created].sort((a, b) => a.name.localeCompare(b.name)));
+      const saved = await response.json() as Client;
+      setClients((current) => {
+        const next = editingClientId
+          ? current.map((item) => item.id === saved.id ? saved : item)
+          : [...current, saved];
+        return next.sort((a, b) => a.name.localeCompare(b.name));
+      });
       setClientForm(EMPTY_CLIENT_FORM);
       setIsClientDialogOpen(false);
+      setEditingClientId(null);
       setActiveRegistry("clients");
-      toast.success("Cliente creato.");
+      toast.success(editingClientId ? "Cliente aggiornato." : "Cliente creato.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Salvataggio cliente non riuscito.");
     } finally {
@@ -623,11 +792,11 @@ export function ClientsTable() {
           <Text variant="muted">{t("clients.subtitle")}</Text>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        {canManageRegistry ? <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             className="h-11 rounded-[var(--radius-md)] px-4 py-2.5"
-            onClick={() => setIsCompanyDialogOpen(true)}
+            onClick={openNewCompany}
           >
             <Building2 size={18} />
             Nuova azienda
@@ -635,12 +804,12 @@ export function ClientsTable() {
           <Button
             variant="primary"
             className="h-11 rounded-[var(--radius-md)] px-4 py-2.5"
-            onClick={() => setIsClientDialogOpen(true)}
+            onClick={openNewClient}
           >
             <UserPlus size={20} />
             {t("clients.new")}
           </Button>
-        </div>
+        </div> : null}
       </div>
 
       <Card className="overflow-visible">
@@ -772,6 +941,7 @@ export function ClientsTable() {
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-text-muted">Email</th>
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-text-muted">Telefono</th>
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-text-muted">Posizione</th>
+                  {canManageRegistry ? <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-text-muted">Azioni</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle">
@@ -793,11 +963,23 @@ export function ClientsTable() {
                     <td className="px-6 py-4 text-sm text-text-secondary">
                       {[company.city, company.province, company.country].filter(Boolean).join(", ") || "-"}
                     </td>
+                    {canManageRegistry ? (
+                      <td className="px-6 py-4">
+                        <div className="flex justify-end gap-2">
+                          <button type="button" title="Modifica azienda" onClick={(event) => { event.stopPropagation(); openCompanyEdit(company); }} className="rounded-[var(--radius-md)] p-1.5 text-brand-primary hover:bg-bg-subtle">
+                            <Pencil size={18} />
+                          </button>
+                          <button type="button" title="Archivia azienda" onClick={(event) => { event.stopPropagation(); archiveCompany(company); }} className="rounded-[var(--radius-md)] p-1.5 text-status-danger-text hover:bg-status-danger-bg">
+                            <Archive size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
                 {!filteredCompanies.length ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-text-muted">
+                    <td colSpan={canManageRegistry ? 6 : 5} className="px-6 py-12 text-center text-text-muted">
                       Nessuna azienda trovata.
                     </td>
                   </tr>
@@ -831,24 +1013,25 @@ export function ClientsTable() {
                     <td key={`${client.id}-${column.key}`} className={cn("px-6 py-4", column.cellClassName)}>
                       {column.key === "actions" ? (
                         <div className="flex items-center justify-end gap-2">
-                          <button
+                          {canManageRegistry ? <button
                             onClick={(event) => {
                               event.stopPropagation();
-                              router.push(APP_ROUTES.clientEdit(client.id));
+                              openClientEdit(client);
                             }}
                             className="rounded-lg p-1.5 text-brand-primary transition-colors hover:bg-bg-subtle"
                           >
                             <Pencil size={18} />
-                          </button>
-                          <button
+                          </button> : null}
+                          {canManageRegistry ? <button
                             onClick={(event) => {
                               event.stopPropagation();
-                              handleDelete(client);
+                              archiveClient(client);
                             }}
                             className="rounded-lg p-1.5 text-status-danger-text transition-colors hover:bg-status-danger-bg"
+                            title="Archivia cliente"
                           >
-                            <Trash2 size={18} />
-                          </button>
+                            <Archive size={18} />
+                          </button> : null}
                           <button
                             onClick={(event) => {
                               event.stopPropagation();
@@ -951,6 +1134,14 @@ export function ClientsTable() {
               ["Note", selectedClient.notes || "-"],
             ]}
           />
+          {canManageRegistry ? (
+            <RegistryActions
+              isDeveloper={isDeveloper}
+              onArchive={() => archiveClient(selectedClient)}
+              onEdit={() => openClientEdit(selectedClient)}
+              onPermanentDelete={() => setPermanentDeleteTarget({ kind: "client", item: selectedClient })}
+            />
+          ) : null}
         </RegistryDialog>
       ) : null}
       {selectedCompany ? (
@@ -992,10 +1183,18 @@ export function ClientsTable() {
               ) : null}
             </div>
           </div>
+          {canManageRegistry ? (
+            <RegistryActions
+              isDeveloper={isDeveloper}
+              onArchive={() => archiveCompany(selectedCompany)}
+              onEdit={() => openCompanyEdit(selectedCompany)}
+              onPermanentDelete={() => setPermanentDeleteTarget({ kind: "company", item: selectedCompany })}
+            />
+          ) : null}
         </RegistryDialog>
       ) : null}
       {isCompanyDialogOpen ? (
-        <RegistryDialog title="Nuova azienda" onClose={() => setIsCompanyDialogOpen(false)}>
+        <RegistryDialog title={editingCompanyId ? "Modifica azienda" : "Nuova azienda"} onClose={closeCompanyDialog}>
           <form
             className="space-y-4"
             onSubmit={(event) => {
@@ -1034,8 +1233,8 @@ export function ClientsTable() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-text-primary">Posizione sulla mappa</p>
-                  <p className="mt-1 truncate text-xs text-text-muted">
-                    {geocodedAddress || "Completa indirizzo e citta, poi cerca la posizione."}
+                  <p className={cn("mt-1 text-xs", geocodingError ? "text-status-danger-text" : "text-text-muted")}>
+                    {geocodingError || geocodedAddress || "Completa indirizzo e citta, poi cerca la posizione."}
                   </p>
                 </div>
                 <Button type="button" variant="outline" onClick={() => void geocodeCompany()} disabled={isGeocodingCompany || isSavingCompany}>
@@ -1045,18 +1244,18 @@ export function ClientsTable() {
               </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-border-subtle pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsCompanyDialogOpen(false)} disabled={isSavingCompany}>
+              <Button type="button" variant="outline" onClick={closeCompanyDialog} disabled={isSavingCompany}>
                 Annulla
               </Button>
               <Button type="submit" disabled={isSavingCompany}>
-                Salva azienda
+                {editingCompanyId ? "Salva modifiche" : "Salva azienda"}
               </Button>
             </div>
           </form>
         </RegistryDialog>
       ) : null}
       {isClientDialogOpen ? (
-        <RegistryDialog title="Nuovo cliente" onClose={() => setIsClientDialogOpen(false)}>
+        <RegistryDialog title={editingClientId ? "Modifica cliente" : "Nuovo cliente"} onClose={closeClientDialog}>
           <form
             className="space-y-4"
             onSubmit={(event) => {
@@ -1107,16 +1306,25 @@ export function ClientsTable() {
               ))}
             </div>
             <div className="flex justify-end gap-2 border-t border-border-subtle pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsClientDialogOpen(false)} disabled={isSavingClient}>
+              <Button type="button" variant="outline" onClick={closeClientDialog} disabled={isSavingClient}>
                 Annulla
               </Button>
               <Button type="submit" disabled={isSavingClient}>
-                Salva cliente
+                {editingClientId ? "Salva modifiche" : "Salva cliente"}
               </Button>
             </div>
           </form>
         </RegistryDialog>
       ) : null}
+      <ConfirmDeleteDialog
+        open={permanentDeleteTarget !== null}
+        expectedText="elimina definitivamente"
+        title="Eliminazione definitiva"
+        confirmLabel="Elimina definitivamente"
+        isBusy={isPermanentlyDeleting}
+        onCancel={() => setPermanentDeleteTarget(null)}
+        onConfirm={permanentlyDelete}
+      />
     </div>
   );
 }
@@ -1192,6 +1400,37 @@ function DetailGrid({ items }: { items: Array<[string, string]> }) {
           <p className="mt-1 whitespace-pre-wrap text-sm font-semibold text-text-primary">{value}</p>
         </div>
       ))}
+    </div>
+  );
+}
+
+function RegistryActions({
+  isDeveloper,
+  onArchive,
+  onEdit,
+  onPermanentDelete,
+}: {
+  isDeveloper: boolean;
+  onArchive: () => void;
+  onEdit: () => void;
+  onPermanentDelete: () => void;
+}) {
+  return (
+    <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-border-subtle pt-4">
+      {isDeveloper ? (
+        <Button type="button" variant="danger" onClick={onPermanentDelete}>
+          <Trash2 size={16} />
+          Elimina definitivamente
+        </Button>
+      ) : null}
+      <Button type="button" variant="outline" onClick={onArchive}>
+        <Archive size={16} />
+        Archivia
+      </Button>
+      <Button type="button" onClick={onEdit}>
+        <Pencil size={16} />
+        Modifica
+      </Button>
     </div>
   );
 }
