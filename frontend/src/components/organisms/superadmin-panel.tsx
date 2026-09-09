@@ -755,8 +755,8 @@ export function SuperadminPanel() {
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-text-muted">
-          <span>{loading ? t("common.loading") : t("superadmin.updated")}</span>
-          {selectedWorkspace ? <span>Workspace: {selectedWorkspace.organizationCode}/{selectedWorkspace.code}</span> : <span>{t("superadmin.allWorkspaces")}</span>}
+          <span>{loading ? t("common.loading") : t("")}</span>
+          {selectedWorkspace ? <span>Workspace: {selectedWorkspace.organizationCode}</span> : <span>{t("superadmin.allWorkspaces")}</span>}
         </div>
       </Card>
 
@@ -778,8 +778,8 @@ export function SuperadminPanel() {
                   <StatePill tone={workspace.isActive ? "success" : "danger"}>{workspace.isActive ? t("superadmin.active") : t("superadmin.inactive")}</StatePill>
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
-                  <span>{workspace.organizationCode}/{workspace.code}</span>
-                  <span>{workspace.organizationName}</span>
+                  {/* <span>{workspace.organizationCode}/{workspace.code}</span>
+                  <span>{workspace.organizationName}</span> */}
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 lg:justify-end">
