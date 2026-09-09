@@ -133,7 +133,8 @@ function isAiRequestTool(tool: WorkflowTool | null): boolean {
     return false;
   }
   return tool.handlerKey.startsWith("langchain_orchestrator.")
-    || tool.handlerKey === "document_intelligence.analyze_document_set";
+    || tool.handlerKey === "document_intelligence.analyze_document_set"
+    || tool.handlerKey === "brainyware.infer_stateless";
 }
 
 function defaultPromptForTool(tool: WorkflowTool | null): string {
@@ -154,6 +155,9 @@ function defaultPromptForTool(tool: WorkflowTool | null): string {
   }
   if (tool.handlerKey === "langchain_orchestrator.chat") {
     return "Rispondi in modo chiaro, operativo e coerente con l'input ricevuto dal workflow.";
+  }
+  if (tool.handlerKey === "brainyware.infer_stateless") {
+    return "Rispondi in modo chiaro usando la fonte Brainyware selezionata.";
   }
   return "";
 }
@@ -180,6 +184,7 @@ function publicOutputOptions(source: DraftNode | undefined, sourceType: FlowNode
     "input-text": [{ key: "text", label: "Testo inserito" }],
     ocr: [{ key: "text", label: "Testo estratto" }],
     llm: [{ key: "text", label: "Risposta IA" }],
+    "brainyware-inference": [{ key: "text", label: "Risposta Brainyware" }, { key: "metadata", label: "Metadati inferenza" }],
     "structure-data": [{ key: "structured_data", label: "Dati estratti" }, { key: "text", label: "Testo elaborato" }],
     "document-set-ai": [{ key: "text", label: "Risposta IA" }],
     "format-text-ai": [{ key: "text", label: "Testo formattato" }],
@@ -205,7 +210,7 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
   const [defaultPromptDraft, setDefaultPromptDraft] = useState("");
   const [isConfirmingDefaultPrompt, setIsConfirmingDefaultPrompt] = useState(false);
   const Icon = NODE_KIND_ICONS[data.type] ?? (data.paletteKind === "AGENT" ? Bot : data.paletteKind === "TOOL" ? Wrench : nodeKindIcon[data.kind]);
-  const hasFieldTargets = data.type === "llm" || data.type === "generate-document" || ["format-text-ai", "format-text-template", "send-email", "send-telegram", "send-whatsapp", "verify-route"].includes(data.type);
+  const hasFieldTargets = data.type === "llm" || data.type === "brainyware-inference" || data.type === "generate-document" || ["format-text-ai", "format-text-template", "send-email", "send-telegram", "send-whatsapp", "verify-route"].includes(data.type);
   const hasTarget = data.type !== "input-text" && data.type !== "schedule" && !hasFieldTargets;
   const hasSource = data.type !== "output";
   const config = data.configuration;
@@ -401,6 +406,35 @@ function FlowNodeCard({ data, selected }: NodeProps<Node<CanvasNodeData>>) {
             label="Self-Discover"
             help="Aggiunge una fase di ragionamento strutturato prima della risposta. Di solito migliora analisi complesse, ma impiega piu tempo."
             onChange={(checked) => data.onConfigChange?.({ use_deep_reasoning: checked })}
+          />
+        </div>
+      ) : null}
+
+      {data.type === "brainyware-inference" ? (
+        <div className="nodrag flex flex-col gap-2">
+          <div className="relative">
+            <Handle type="target" id="field:input_text" position={Position.Left} className={textHandleClassName} title="Collega il testo da elaborare" />
+            <label className="mb-1 block text-xs font-medium text-text-secondary">Testo{connectedFieldCount("input_text") > 0 ? ` (${connectedFieldCount("input_text")})` : ""}</label>
+            <textarea
+              id={fieldId("input_text")}
+              name={fieldId("input_text")}
+              value={stringConfig("input_text")}
+              onChange={(event) => patchConfig("input_text", event.target.value)}
+              placeholder={isFieldConnected("input_text") ? "Testo collegato" : "Testo da elaborare"}
+              rows={2}
+              disabled={isFieldConnected("input_text")}
+              className={fieldInputClassName("input_text")}
+            />
+          </div>
+          <textarea
+            id={fieldId("instructions")}
+            name={fieldId("instructions")}
+            value={currentPrompt}
+            onChange={(event) => patchCurrentPrompt(event.target.value)}
+            placeholder={t("workflow.instructions")}
+            rows={3}
+            maxLength={4000}
+            className="w-full rounded-md border border-border-default bg-bg-page px-2 py-1 text-xs text-text-primary outline-none focus:ring-2 focus:ring-ring-primary"
           />
         </div>
       ) : null}
@@ -2027,7 +2061,7 @@ export function WorkflowCanvasPanel() {
             onClick={() => workflowImportInputRef.current?.click()}
             className="flex items-center gap-1.5 rounded-md border border-border-default bg-bg-page px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-muted"
           >
-            <Upload className="h-4 w-4" />
+            <Download className="h-4 w-4" />
             {t("workflow.import")}
           </button>
           <button
@@ -2036,7 +2070,7 @@ export function WorkflowCanvasPanel() {
             disabled={!workflow}
             className="flex items-center gap-1.5 rounded-md border border-border-default bg-bg-page px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-muted disabled:opacity-40"
           >
-            <Download className="h-4 w-4" />
+            <Upload className="h-4 w-4" />
             {t("workflow.export")}
           </button>
           <button
@@ -2091,12 +2125,7 @@ export function WorkflowCanvasPanel() {
 
       <div className="border-b border-border-default bg-bg-surface px-6 py-3" role="tabpanel">
         <div className="flex h-[66px] items-stretch gap-2 overflow-hidden">
-          {activeToolbarGroup.id === "brainyware" ? (
-            <div className="flex min-w-0 flex-1 items-center gap-3 rounded-md border border-dashed border-fuchsia-400/70 bg-fuchsia-500/5 px-4 text-sm text-text-secondary">
-              <img src="/brainyware-logo.png" alt="Brainyware" className="h-10 w-10 shrink-0 rounded-md object-cover object-top" />
-              <span className="font-medium">{t("workflow.brainywareComingSoon")}</span>
-            </div>
-          ) : featuredToolbarItems.map((kind) => {
+          {featuredToolbarItems.map((kind) => {
             const Icon = NODE_KIND_ICONS[kind];
             return (
               <PaletteButton

@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Query, Us
 import { z } from "zod";
 
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
+import { PermissionPolicy } from "../../core/authorization/PermissionPolicy.js";
 import { AppError } from "../../core/errors/AppError.js";
 import { ModuleKey } from "../../core/module-access/ModuleKey.js";
 import { RequestContext } from "../../core/tenancy/RequestContext.js";
@@ -17,7 +18,7 @@ import { RequireModule } from "../common/decorators/require-module.decorator.js"
 import { RequirePermission } from "../common/decorators/require-permission.decorator.js";
 
 const listArchiveQuerySchema = z.object({
-  package: z.enum(["complete", "projects"]).optional(),
+  package: z.enum(["complete", "projects", "registries"]).optional(),
 });
 
 const listDocumentsQuerySchema = z.object({
@@ -31,7 +32,7 @@ const documentParamsSchema = z.object({
 });
 
 const archiveParamsSchema = z.object({
-  entityType: z.enum(["project", "project_version", "document"]),
+  entityType: z.enum(["project", "project_version", "document", "company", "client"]),
   entityId: z.string().min(1),
 });
 
@@ -52,6 +53,8 @@ export class NestDocumentArchiveController {
     private readonly service: ArchivedItemsService,
     @Inject(ActiveDocumentsService)
     private readonly activeDocumentsService: ActiveDocumentsService,
+    @Inject(PermissionPolicy)
+    private readonly permissionPolicy: PermissionPolicy,
   ) {}
 
   @Get("documents")
@@ -86,7 +89,7 @@ export class NestDocumentArchiveController {
 
   @Delete("empty")
   @HttpCode(200)
-  @RequirePermission(PermissionKey.DOCUMENTS_WRITE)
+  @RequirePermission(PermissionKey.CLIENTS_DELETE_PERMANENTLY)
   public async emptyTrash(
     @Body() bodyRaw: unknown,
     @CurrentRequestContext() requestContext: RequestContext,
@@ -124,6 +127,13 @@ export class NestDocumentArchiveController {
   ): Promise<{ ok: true }> {
     const params = archiveParamsSchema.parse(paramsRaw);
     const workspaceId = requestContext.workspace.workspaceId;
+    if (params.entityType === "company" || params.entityType === "client") {
+      await this.permissionPolicy.ensureAllowed(
+        workspaceId,
+        requestContext.workspace.userId,
+        PermissionKey.CLIENTS_WRITE,
+      );
+    }
 
     await this.service.restoreArchivedItem({
       workspaceId,
@@ -136,7 +146,7 @@ export class NestDocumentArchiveController {
 
   @Delete(":entityType/:entityId/permanent")
   @HttpCode(200)
-  @RequirePermission(PermissionKey.DOCUMENTS_WRITE)
+  @RequirePermission(PermissionKey.CLIENTS_DELETE_PERMANENTLY)
   public async permanentlyDeleteItem(
     @Param() paramsRaw: unknown,
     @Body() bodyRaw: unknown,

@@ -4,7 +4,7 @@ import { GaragePath } from "../../../storage/GaragePath.js";
 import { ProjectBinaryStorage } from "../../../storage/ProjectBinaryStorage.js";
 import { Prisma } from "@prisma/client";
 
-export type ArchivePackageKey = "complete" | "projects";
+export type ArchivePackageKey = "complete" | "projects" | "registries";
 
 export interface ArchivePackageSummary {
   key: ArchivePackageKey;
@@ -15,7 +15,7 @@ export interface ArchivePackageSummary {
 
 export interface ArchivedItemDto {
   id: string;
-  entityType: "project" | "project_version" | "document";
+  entityType: "project" | "project_version" | "document" | "company" | "client";
   entityId: string;
   archivedAt: string;
   title: string;
@@ -46,7 +46,7 @@ export class ArchivedItemsService {
   }): Promise<ArchivedItemsView> {
     const prisma = PrismaClientManager.getClient();
 
-    const [projects, versions, documents] = await Promise.all([
+    const [projects, versions, documents, companies, clients] = await Promise.all([
       prisma.project.findMany({
         where: {
           workspace_id: params.workspaceId,
@@ -100,6 +100,14 @@ export class ArchivedItemsService {
             },
           },
         },
+      }),
+      prisma.company.findMany({
+        where: { workspace_id: params.workspaceId, deleted_at: { not: null } },
+        select: { id: true, name: true, city: true, deleted_at: true },
+      }),
+      prisma.client.findMany({
+        where: { workspace_id: params.workspaceId, deleted_at: { not: null } },
+        select: { id: true, first_name: true, last_name: true, deleted_at: true, company: { select: { name: true } } },
       }),
     ]);
 
@@ -161,6 +169,39 @@ export class ArchivedItemsService {
       });
     }
 
+    for (const company of companies) {
+      allItems.push({
+        id: `company:${company.id}`,
+        entityType: "company",
+        entityId: String(company.id),
+        archivedAt: company.deleted_at?.toISOString() ?? new Date(0).toISOString(),
+        title: company.name,
+        description: company.city ? `Azienda - ${company.city}` : "Azienda archiviata",
+        projectId: null,
+        projectName: null,
+        versionLabel: null,
+        fileName: null,
+        scope: null,
+      });
+    }
+
+    for (const client of clients) {
+      const name = [client.first_name, client.last_name ?? ""].join(" ").trim();
+      allItems.push({
+        id: `client:${client.id}`,
+        entityType: "client",
+        entityId: client.id,
+        archivedAt: client.deleted_at?.toISOString() ?? new Date(0).toISOString(),
+        title: name,
+        description: client.company?.name ? `Cliente - ${client.company.name}` : "Cliente archiviato",
+        projectId: null,
+        projectName: null,
+        versionLabel: null,
+        fileName: null,
+        scope: null,
+      });
+    }
+
     for (const version of versions) {
       const versionLabel = version.version_label.trim().toUpperCase();
       allItems.push({
@@ -203,7 +244,8 @@ export class ArchivedItemsService {
     });
 
     const projectItems = allItems.filter((item) => item.projectId !== null);
-    const filteredItems = params.packageKey === "projects" ? projectItems : allItems;
+    const registryItems = allItems.filter((item) => item.entityType === "company" || item.entityType === "client");
+    const filteredItems = params.packageKey === "projects" ? projectItems : params.packageKey === "registries" ? registryItems : allItems;
 
     return {
       selectedPackage: params.packageKey,
@@ -219,6 +261,12 @@ export class ArchivedItemsService {
           label: "Progetti",
           description: "Archivio riferito ai progetti",
           count: projectItems.length,
+        },
+        {
+          key: "registries",
+          label: "Anagrafiche",
+          description: "Aziende e clienti archiviati",
+          count: registryItems.length,
         },
       ],
       items: filteredItems,
@@ -240,6 +288,12 @@ export class ArchivedItemsService {
       case "document":
         await this.restoreDocument(params.workspaceId, params.entityId);
         return;
+      case "company":
+        await this.restoreCompany(params.workspaceId, params.entityId);
+        return;
+      case "client":
+        await this.restoreClient(params.workspaceId, params.entityId);
+        return;
       default:
         throw new AppError("Tipo archivio non supportato.", "ARCHIVE_ENTITY_TYPE_INVALID", 400);
     }
@@ -260,6 +314,12 @@ export class ArchivedItemsService {
       case "document":
         await this.permanentlyDeleteDocument(params.workspaceId, params.entityId);
         return;
+      case "company":
+        await this.permanentlyDeleteCompany(params.workspaceId, params.entityId);
+        return;
+      case "client":
+        await this.permanentlyDeleteClient(params.workspaceId, params.entityId);
+        return;
       default:
         throw new AppError("Tipo archivio non supportato.", "ARCHIVE_ENTITY_TYPE_INVALID", 400);
     }
@@ -271,6 +331,8 @@ export class ArchivedItemsService {
       project: 0,
       project_version: 1,
       document: 2,
+      client: 3,
+      company: 4,
     };
     const items = [...archived.items].sort((left, right) => priority[left.entityType] - priority[right.entityType]);
 
@@ -759,6 +821,44 @@ export class ArchivedItemsService {
           in: ddtIds,
         },
       },
+    });
+  }
+
+  private async restoreCompany(workspaceId: string, entityId: string): Promise<void> {
+    const companyId = this.parseNumericId(entityId, "ARCHIVE_ENTITY_ID_INVALID");
+    const result = await PrismaClientManager.getClient().company.updateMany({
+      where: { workspace_id: workspaceId, id: companyId, deleted_at: { not: null } },
+      data: { deleted_at: null },
+    });
+    if (result.count === 0) throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
+  }
+
+  private async restoreClient(workspaceId: string, clientId: string): Promise<void> {
+    const result = await PrismaClientManager.getClient().client.updateMany({
+      where: { workspace_id: workspaceId, id: clientId, deleted_at: { not: null } },
+      data: { deleted_at: null },
+    });
+    if (result.count === 0) throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
+  }
+
+  private async permanentlyDeleteCompany(workspaceId: string, entityId: string): Promise<void> {
+    const companyId = this.parseNumericId(entityId, "ARCHIVE_ENTITY_ID_INVALID");
+    const result = await PrismaClientManager.getClient().company.deleteMany({
+      where: { workspace_id: workspaceId, id: companyId, deleted_at: { not: null } },
+    });
+    if (result.count === 0) throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
+  }
+
+  private async permanentlyDeleteClient(workspaceId: string, clientId: string): Promise<void> {
+    const prisma = PrismaClientManager.getClient();
+    await prisma.$transaction(async (tx) => {
+      const client = await tx.client.findFirst({
+        where: { workspace_id: workspaceId, id: clientId, deleted_at: { not: null } },
+        select: { id: true },
+      });
+      if (!client) throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
+      await tx.projectClient.deleteMany({ where: { workspace_id: workspaceId, client_id: clientId } });
+      await tx.client.delete({ where: { id: clientId } });
     });
   }
 

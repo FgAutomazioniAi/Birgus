@@ -96,6 +96,30 @@ Per modificare successivamente il provider, aggiornare le variabili `AI_PROVIDER
 docker compose up -d --force-recreate app python_modules
 ```
 
+## Collegamento Brainyware
+
+Su un'installazione gia avviata configurare il service account con:
+
+```bash
+npm run brainyware:configure
+```
+
+Il comando richiede l'URL base della piattaforma, l'Access Key e la Secret Key. Le chiavi non sono mostrate nel terminale e vengono salvate in `secrets/`, esclusa da Git e dal contesto di build Docker. Il servizio `app` le riceve come file montati in `/run/secrets`, poi il comando verifica autenticazione e identita del service account senza stampare il token.
+
+Per ripetere soltanto la verifica:
+
+```bash
+npm run brainyware:smoke
+```
+
+Per verificare anche catalogo, inferenza modello e inferenza database stateless:
+
+```bash
+npm run brainyware:inference:smoke
+```
+
+Nel canvas workflow il nodo `Inferenza Brainyware` usa di default un database gestito da Brainyware. Ogni esecuzione invia cronologia vuota e non crea una sessione di chat persistente; dalla configurazione del nodo e' possibile selezionare `Solo modello`.
+
 ## vLLM sullo stesso server
 
 Compilare `vllm/runtime.env`, impostare `VLLM_LIFECYCLE_TOKEN` in `.env` e avviare il profilo dedicato:

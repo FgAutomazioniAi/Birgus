@@ -45,4 +45,5 @@ export interface CompanyRepository {
     notes: string;
   }): Promise<CompanyEntity | null>;
   softDelete(workspaceId: string, companyId: number): Promise<boolean>;
+  hardDelete(workspaceId: string, companyId: number): Promise<boolean>;
 }

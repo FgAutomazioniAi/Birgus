@@ -195,6 +195,21 @@ export class PrismaClientRepository implements ClientRepository {
     return result.count > 0;
   }
 
+  public async hardDelete(workspaceId: string, clientId: string): Promise<boolean> {
+    const prisma = PrismaClientManager.getClient();
+    return prisma.$transaction(async (tx) => {
+      const existing = await tx.client.findFirst({
+        where: { workspace_id: workspaceId, id: clientId },
+        select: { id: true },
+      });
+      if (!existing) return false;
+
+      await tx.projectClient.deleteMany({ where: { workspace_id: workspaceId, client_id: clientId } });
+      await tx.client.delete({ where: { id: clientId } });
+      return true;
+    });
+  }
+
   private mapRowToEntity(row: {
     id: string;
     workspace_id: string;

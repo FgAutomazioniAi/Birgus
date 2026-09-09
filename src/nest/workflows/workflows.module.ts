@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 
 import { AiProviderSettingsService } from "../../modules/ai-runtime/services/AiProviderSettingsService.js";
+import { BrainywareClient } from "../../modules/brainyware/services/BrainywareClient.js";
 import { DocumentArchiveService } from "../../modules/document-archive/services/DocumentArchiveService.js";
 import { BackendPythonModulesClient } from "../../modules/document-intelligence/services/BackendPythonModulesClient.js";
 import { DocumentIntelligenceService } from "../../modules/document-intelligence/services/DocumentIntelligenceService.js";
@@ -91,6 +92,7 @@ import { NestWorkflowsController } from "./workflows.controller.js";
         connectedAppsService: ConnectedAppsService,
         runtimeAccessPolicy: WorkflowRuntimeAccessPolicy,
         humanInterventionService: HumanInterventionService,
+        brainywareClient: BrainywareClient,
       ) => new WorkflowRunExecutorService({
         documentArchiveService,
         documentIntelligenceService,
@@ -106,6 +108,7 @@ import { NestWorkflowsController } from "./workflows.controller.js";
         connectedAppsService,
         runtimeAccessPolicy,
         humanInterventionService,
+        brainywareClient,
       }),
       inject: [
         DocumentArchiveService,
@@ -122,6 +125,7 @@ import { NestWorkflowsController } from "./workflows.controller.js";
         ConnectedAppsService,
         WorkflowRuntimeAccessPolicy,
         HumanInterventionService,
+        BrainywareClient,
       ],
     },
   ],

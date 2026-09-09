@@ -11,6 +11,7 @@ import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { GaragePath } from "../../../storage/GaragePath.js";
 import { StorageSelector } from "../../../storage/StorageSelector.js";
 import { AiProviderSettingsService } from "../../ai-runtime/services/AiProviderSettingsService.js";
+import { BrainywareClient, type BrainywareInferenceMode } from "../../brainyware/services/BrainywareClient.js";
 import { FileKind } from "../../document-archive/domain/FileKind.js";
 import { PutProjectFileCommand } from "../../document-archive/dto/PutProjectFileCommand.js";
 import { DocumentArchiveService } from "../../document-archive/services/DocumentArchiveService.js";
@@ -134,6 +135,7 @@ export class WorkflowRunExecutorService {
   private readonly graphPlanner = new WorkflowGraphPlanner();
   private readonly ruleEngine = new WorkflowRuleEngine();
   private readonly humanInterventionService: HumanInterventionService | null;
+  private readonly brainywareClient: BrainywareClient | null;
 
   public constructor(params: {
     documentArchiveService: DocumentArchiveService;
@@ -149,6 +151,7 @@ export class WorkflowRunExecutorService {
     notificationService?: NotificationService | null;
     scheduledWorkflowDeliveryService?: ScheduledWorkflowDeliveryService | null;
     humanInterventionService?: HumanInterventionService | null;
+    brainywareClient?: BrainywareClient | null;
     runtimeAccessPolicy: WorkflowRuntimeAccessPolicy;
   }) {
     this.documentArchiveService = params.documentArchiveService;
@@ -164,6 +167,7 @@ export class WorkflowRunExecutorService {
     this.notificationService = params.notificationService ?? null;
     this.scheduledWorkflowDeliveryService = params.scheduledWorkflowDeliveryService ?? null;
     this.humanInterventionService = params.humanInterventionService ?? null;
+    this.brainywareClient = params.brainywareClient ?? null;
     this.runtimeAccessPolicy = params.runtimeAccessPolicy;
   }
 
@@ -1706,6 +1710,10 @@ export class WorkflowRunExecutorService {
     node: WorkflowNodeRow,
     handlerKey: string,
   ): Promise<unknown> {
+    if (handlerKey === "brainyware.infer_stateless") {
+      return this.executeBrainywareInferenceTool(context, node);
+    }
+
     if (handlerKey === "workflow_scheduler.schedule_report_delivery") {
       return this.executeScheduleTool(context, node);
     }
@@ -1759,6 +1767,61 @@ export class WorkflowRunExecutorService {
     }
 
     throw new Error(`Backend handler non supportato: ${handlerKey}`);
+  }
+
+  private async executeBrainywareInferenceTool(
+    context: StepExecutionContext,
+    node: WorkflowNodeRow,
+  ): Promise<Record<string, unknown>> {
+    if (!this.brainywareClient) throw new Error("Client Brainyware non disponibile.");
+    const configuration = this.toRecord(node.configuration);
+    const incoming = this.findIncomingNodeOutputs(context, node.node_key);
+    const latest = this.toRecord(this.findLatestNodeOutput(context));
+    const input = context.inputPayload ?? {};
+    const message = this.firstString(
+      this.toRecord(incoming.byTargetHandle.input_text).value,
+      this.toRecord(incoming.byTargetHandle.input_text).text,
+      configuration.input_text,
+      input.input_text,
+      input.inputText,
+      input.prompt,
+      input.text,
+      latest.reply,
+      latest.text,
+      latest.raw_output,
+    ) || this.formatIncomingText(incoming.items);
+    if (!message) throw new Error("Collegare o inserire un testo per l'inferenza Brainyware.");
+
+    const requestedMode = this.firstString(configuration.mode);
+    const mode: BrainywareInferenceMode = requestedMode === "model" ? "model" : "database";
+    const result = await this.brainywareClient.inferStateless({
+      message,
+      mode,
+      connectionId: this.firstString(configuration.connection_id, configuration.connectionId) || undefined,
+      model: this.firstString(configuration.model) || undefined,
+      instructions: this.firstString(configuration.instructions) || undefined,
+      locale: this.firstString(configuration.locale) || "italiano",
+      temperature: this.numberValue(configuration.temperature),
+      maxTokens: this.numberValue(configuration.max_tokens, configuration.maxTokens),
+    });
+    return {
+      ...result,
+      text: result.reply,
+      published_outputs: [
+        { key: "text", label: "Risposta Brainyware", kind: "text" as const, value: result.reply },
+        {
+          key: "metadata",
+          label: "Metadati inferenza",
+          kind: "data" as const,
+          value: {
+            mode: result.mode,
+            connectionId: result.connectionId ?? null,
+            model: result.model ?? null,
+            persistentSession: false,
+          },
+        },
+      ],
+    };
   }
 
   private executeVerifyAndRouteTool(context: StepExecutionContext, node: WorkflowNodeRow): Record<string, unknown> {
@@ -2610,6 +2673,17 @@ export class WorkflowRunExecutorService {
       }
     }
     return "";
+  }
+
+  private numberValue(...values: unknown[]): number | undefined {
+    for (const value of values) {
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+      if (typeof value === "string" && value.trim()) {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+    }
+    return undefined;
   }
 
   private resolveKnowledgeMode(inputPayloadRaw: unknown, workflowConfigurationRaw: unknown): KnowledgeMode {

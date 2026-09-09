@@ -129,7 +129,22 @@ export class ClientService {
       workspaceId,
       userId: actorUserId ?? null,
       moduleKey: ModuleKey.PROJECT_MANAGEMENT,
-      action: "client.delete",
+      action: "client.archive",
+      entityType: "Client",
+      entityId: clientId,
+      payload: null,
+    });
+  }
+
+  public async permanentlyDelete(workspaceId: string, clientId: string, actorUserId?: string | null): Promise<void> {
+    const removed = await this.repository.hardDelete(workspaceId, clientId);
+    if (!removed) throw new AppError("Client not found.", "CLIENT_NOT_FOUND", 404);
+
+    await this.auditLogService?.record({
+      workspaceId,
+      userId: actorUserId ?? null,
+      moduleKey: ModuleKey.PROJECT_MANAGEMENT,
+      action: "client.delete_permanently",
       entityType: "Client",
       entityId: clientId,
       payload: null,

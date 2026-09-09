@@ -114,7 +114,22 @@ export class CompanyService {
       workspaceId,
       userId: actorUserId ?? null,
       moduleKey: ModuleKey.PROJECT_MANAGEMENT,
-      action: "company.delete",
+      action: "company.archive",
+      entityType: "Company",
+      entityId: null,
+      payload: { companyId },
+    });
+  }
+
+  public async permanentlyDelete(workspaceId: string, companyId: number, actorUserId?: string | null): Promise<void> {
+    const removed = await this.repository.hardDelete(workspaceId, companyId);
+    if (!removed) throw new AppError("Company not found.", "COMPANY_NOT_FOUND", 404);
+
+    await this.auditLogService?.record({
+      workspaceId,
+      userId: actorUserId ?? null,
+      moduleKey: ModuleKey.PROJECT_MANAGEMENT,
+      action: "company.delete_permanently",
       entityType: "Company",
       entityId: null,
       payload: { companyId },
