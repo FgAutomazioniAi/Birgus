@@ -48,7 +48,7 @@ export class BrainyWorkspaceAgentsController {
 
   @Delete(":id")
   @HttpCode(204)
-  public async archive(@Param("id") id: string, @CurrentRequestContext() context: RequestContext): Promise<void> {
-    await this.service.archive(context.workspace.workspaceId, context.workspace.userId, id);
+  public async remove(@Param("id") id: string, @CurrentRequestContext() context: RequestContext): Promise<void> {
+    await this.service.remove(context.workspace.workspaceId, context.workspace.userId, id);
   }
 }

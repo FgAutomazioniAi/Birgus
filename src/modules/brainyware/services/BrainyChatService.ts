@@ -25,7 +25,7 @@ export class BrainyChatService {
   }
 
   public async listDatabaseConnections(workspaceId: string) {
-    const rows = await this.prisma.brainyWorkspaceDatabaseConnection.findMany({ where: { workspace_id: workspaceId, deleted_at: null }, orderBy: { label: "asc" } });
+    const rows = await this.prisma.brainyWorkspaceDatabaseConnection.findMany({ where: { workspace_id: workspaceId, deleted_at: null, is_enabled: true }, orderBy: { label: "asc" } });
     return rows.map((row) => ({ id: row.id, label: row.label }));
   }
 
@@ -36,15 +36,18 @@ export class BrainyChatService {
 
   public async listChats(workspaceId: string, userId: string): Promise<BrainyChatView[]> {
     const rows = await this.prisma.brainyChat.findMany({ where: { workspace_id: workspaceId, deleted_at: null, OR: [{ created_by_user_id: userId }, { shares: { some: { user_id: userId } } }] }, include: { workspace_database_connection: true, shares: { where: { user_id: userId }, select: { access_level: true } } }, orderBy: { updated_at: "desc" } });
-    const agents = await this.prisma.brainyWorkspaceAgent.findMany({ where: { workspace_id: workspaceId }, select: { id: true, label: true } });
-    return rows.map((row) => this.toView(row, userId, new Map(agents.map((agent) => [agent.id, agent.label]))));
+    const agents = await this.prisma.brainyWorkspaceAgent.findMany({ where: { workspace_id: workspaceId, deleted_at: null }, select: { id: true, label: true } });
+    const activeAgentIds = new Set(agents.map((agent) => agent.id));
+    return rows
+      .filter((row) => row.kind !== "AGENT" || (row.workspace_agent_id !== null && activeAgentIds.has(row.workspace_agent_id)))
+      .map((row) => this.toView(row, userId, new Map(agents.map((agent) => [agent.id, agent.label]))));
   }
 
   public async createChat(params: { workspaceId: string; userId: string; kind: ChatKind; workspaceAgentId?: string; workspaceDatabaseConnectionId?: string; title: string }): Promise<BrainyChatView> {
     const title = params.title.trim() || "Nuova chat";
     if (title.length > 160) throw new AppError("Il nome della chat supera 160 caratteri.", "BRAINY_CHAT_TITLE_INVALID", 400);
     if (params.kind === "DATABASE") {
-      const database = await this.prisma.brainyWorkspaceDatabaseConnection.findFirst({ where: { id: params.workspaceDatabaseConnectionId, workspace_id: params.workspaceId, deleted_at: null } });
+      const database = await this.prisma.brainyWorkspaceDatabaseConnection.findFirst({ where: { id: params.workspaceDatabaseConnectionId, workspace_id: params.workspaceId, deleted_at: null, is_enabled: true } });
       if (!database) throw new AppError("Selezionare una connessione database Brainy abilitata.", "BRAINY_DATABASE_REQUIRED", 409);
       const row = await this.prisma.brainyChat.create({ data: { workspace_id: params.workspaceId, kind: "DATABASE", workspace_database_connection_id: database.id, title, created_by_user_id: params.userId }, include: { workspace_database_connection: true, shares: true } });
       return this.toView(row, params.userId);

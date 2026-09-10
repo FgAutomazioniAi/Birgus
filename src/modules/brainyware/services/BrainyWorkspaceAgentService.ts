@@ -51,6 +51,21 @@ export class BrainyWorkspaceAgentService {
           data: { is_default: false, updated_by_user_id: userId },
         });
       }
+      const existing = await tx.brainyWorkspaceAgent.findUnique({
+        where: { workspace_id_brainyware_agent_id: { workspace_id: workspaceId, brainyware_agent_id: value.brainywareAgentId } },
+      });
+      if (existing) {
+        return tx.brainyWorkspaceAgent.update({
+          where: { id: existing.id },
+          data: {
+            label: value.label,
+            is_enabled: value.isEnabled,
+            is_default: value.isDefault,
+            deleted_at: null,
+            updated_by_user_id: userId,
+          },
+        });
+      }
       return tx.brainyWorkspaceAgent.create({
         data: {
           workspace_id: workspaceId,
@@ -93,7 +108,7 @@ export class BrainyWorkspaceAgentService {
     return this.toView(row);
   }
 
-  public async archive(workspaceId: string, userId: string, id: string): Promise<void> {
+  public async remove(workspaceId: string, userId: string, id: string): Promise<void> {
     const result = await this.prisma.brainyWorkspaceAgent.updateMany({
       where: { id, workspace_id: workspaceId, deleted_at: null },
       data: { deleted_at: new Date(), is_default: false, updated_by_user_id: userId },

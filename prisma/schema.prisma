@@ -2141,6 +2141,7 @@ model BrainyWorkspaceDatabaseConnection {
   workspace_id             String   @db.Uuid
   brainyware_connection_id String
   label                    String
+  is_enabled               Boolean  @default(true)
   created_by_user_id       String?  @db.Uuid
   created_at               DateTime @default(now())
   updated_at               DateTime @updatedAt
@@ -2150,6 +2151,7 @@ model BrainyWorkspaceDatabaseConnection {
   chats     BrainyChat[]
 
   @@unique([workspace_id, brainyware_connection_id])
+  @@index([workspace_id, is_enabled])
   @@index([workspace_id, deleted_at])
   @@map("brainy_workspace_database_connections")
 }
