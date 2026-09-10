@@ -10,6 +10,88 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+test("agent session creation accepts the documented loaded-session response", async () => {
+  const client = new BrainywareClient({
+    baseUrl: "https://brainyware.example",
+    accessKey: "access-test",
+    secretKey: "secret-test",
+    fetchImpl: async (input) => {
+      const url = String(input);
+      if (url.endsWith("/brainy/api/auth/service")) return jsonResponse({ token: "brainy-token" });
+      if (url.endsWith("/brainy/api/ai/agents/agent-1/sessions")) return jsonResponse({ session: { id: "session-1" } });
+      throw new Error(`Unexpected request: ${url}`);
+    },
+  });
+
+  const session = await client.createAgentSession("agent-1", "Nuova chat");
+
+  assert.equal(session.id, "session-1");
+});
+
+test("agent run creates and returns the Brainyware session from the SSE begin event", async () => {
+  const client = new BrainywareClient({
+    baseUrl: "https://brainyware.example",
+    accessKey: "access-test",
+    secretKey: "secret-test",
+    fetchImpl: async (input) => {
+      const url = String(input);
+      if (url.endsWith("/brainy/api/auth/service")) return jsonResponse({ token: "brainy-token" });
+      if (url.endsWith("/brainy/api/ai/agents/agent-1/run")) {
+        return new Response([
+          "event: BEGIN",
+          'data: {"session_id":"session-1","role":"user","content":"Ciao"}',
+          "",
+          "event: CHUNK",
+          'data: {"role":"agent","content":"Risposta"}',
+          "",
+          "event: END",
+          'data: {"session_id":"session-1","role":"agent","content":"Risposta"}',
+          "",
+        ].join("\n"), { headers: { "Content-Type": "text/event-stream" } });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    },
+  });
+
+  const result = await client.runAgent({ agentId: "agent-1", sessionId: "", sessionName: "Nuova chat", message: "Ciao" });
+
+  assert.equal(result.sessionId, "session-1");
+  assert.equal(result.reply, "Risposta");
+});
+
+test("agent stream forwards chunks without duplicating the final SSE event", async () => {
+  const client = new BrainywareClient({
+    baseUrl: "https://brainyware.example",
+    accessKey: "access-test",
+    secretKey: "secret-test",
+    fetchImpl: async (input) => {
+      const url = String(input);
+      if (url.endsWith("/brainy/api/auth/service")) return jsonResponse({ token: "brainy-token" });
+      if (url.endsWith("/brainy/api/ai/agents/agent-1/run")) {
+        return new Response([
+          "event: CHUNK",
+          'data: {"role":"agent","content":"Risposta "}',
+          "",
+          "event: CHUNK",
+          'data: {"role":"agent","content":"in streaming"}',
+          "",
+          "event: END",
+          'data: {"role":"agent","content":"Risposta in streaming"}',
+          "",
+        ].join("\n"), { headers: { "Content-Type": "text/event-stream" } });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    },
+  });
+
+  const chunks: string[] = [];
+  for await (const chunk of client.runAgentStream({ agentId: "agent-1", sessionId: "", sessionName: "Nuova chat", message: "Ciao" })) {
+    chunks.push(chunk);
+  }
+
+  assert.deepEqual(chunks, ["Risposta ", "in streaming"]);
+});
+
 test("database inference uses the stateless Langflow bridge with empty history", async () => {
   const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
   const client = new BrainywareClient({

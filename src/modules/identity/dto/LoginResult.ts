@@ -11,6 +11,8 @@ export class LoginResult {
   public readonly twoFactorSetupRequired: boolean;
   public readonly twoFactorSetupSecret: string | null;
   public readonly twoFactorSetupUri: string | null;
+  public readonly isDeveloper: boolean;
+  public readonly trustedDeviceToken: string | null;
 
   public constructor(params: {
     sessionId?: string | null;
@@ -25,6 +27,8 @@ export class LoginResult {
     twoFactorSetupRequired?: boolean;
     twoFactorSetupSecret?: string | null;
     twoFactorSetupUri?: string | null;
+    isDeveloper?: boolean;
+    trustedDeviceToken?: string | null;
   }) {
     this.sessionId = params.sessionId ?? null;
     this.token = params.token ?? null;
@@ -38,5 +42,7 @@ export class LoginResult {
     this.twoFactorSetupRequired = params.twoFactorSetupRequired ?? false;
     this.twoFactorSetupSecret = params.twoFactorSetupSecret ?? null;
     this.twoFactorSetupUri = params.twoFactorSetupUri ?? null;
+    this.isDeveloper = params.isDeveloper ?? false;
+    this.trustedDeviceToken = params.trustedDeviceToken ?? null;
   }
 }

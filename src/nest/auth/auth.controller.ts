@@ -21,6 +21,7 @@ const loginSchema = z.object({
 const login2faSchema = z.object({
   challengeToken: z.string().min(1),
   otpCode: z.string().min(6).max(10),
+  rememberTrustedDevice: z.boolean().optional(),
 });
 
 const forgotPasswordSchema = z.object({
@@ -63,6 +64,7 @@ export class NestAuthController {
         email: body.email,
         password: body.password,
         rememberMe: body.rememberMe,
+        trustedDeviceToken: this.getCookie(request, this.sessionCookieFactory.getTrustedDeviceCookieName()),
         ipAddress: this.getIpAddress(request),
         userAgent: this.getUserAgent(request),
       }),
@@ -73,6 +75,7 @@ export class NestAuthController {
       return {
         ok: true,
         twoFactorRequired: true,
+        isDeveloper: result.isDeveloper,
         challengeToken: result.twoFactorChallengeToken,
         setupRequired: result.twoFactorSetupRequired,
         setup: result.twoFactorSetupRequired
@@ -94,10 +97,7 @@ export class NestAuthController {
     }
 
     const cookieMaxAgeSeconds = Math.max(1, Math.floor((result.expiresAt.getTime() - Date.now()) / 1000));
-    reply.header(
-      "Set-Cookie",
-      this.sessionCookieFactory.createSessionCookie(result.token, cookieMaxAgeSeconds),
-    );
+    reply.header("Set-Cookie", this.createLoginCookies(result.token, cookieMaxAgeSeconds, result.trustedDeviceToken));
 
     return {
       ok: true,
@@ -127,6 +127,7 @@ export class NestAuthController {
       otpCode: body.otpCode,
       ipAddress: this.getIpAddress(request),
       userAgent: this.getUserAgent(request),
+      rememberTrustedDevice: body.rememberTrustedDevice,
     });
 
     if (!result.token || !result.expiresAt || !result.sessionId) {
@@ -134,10 +135,7 @@ export class NestAuthController {
     }
 
     const cookieMaxAgeSeconds = Math.max(1, Math.floor((result.expiresAt.getTime() - Date.now()) / 1000));
-    reply.header(
-      "Set-Cookie",
-      this.sessionCookieFactory.createSessionCookie(result.token, cookieMaxAgeSeconds),
-    );
+    reply.header("Set-Cookie", this.createLoginCookies(result.token, cookieMaxAgeSeconds, result.trustedDeviceToken));
 
     return {
       ok: true,
@@ -330,5 +328,29 @@ export class NestAuthController {
     });
 
     return rows.map((row) => row.role.key);
+  }
+
+  private createLoginCookies(sessionToken: string, sessionMaxAgeSeconds: number, trustedDeviceToken: string | null): string[] {
+    const cookies = [this.sessionCookieFactory.createSessionCookie(sessionToken, sessionMaxAgeSeconds)];
+    if (trustedDeviceToken) {
+      cookies.push(this.sessionCookieFactory.createTrustedDeviceCookie(trustedDeviceToken, 30 * 24 * 60 * 60));
+    }
+    return cookies;
+  }
+
+  private getCookie(request: FastifyRequest, name: string): string | null {
+    const header = request.headers.cookie;
+    if (!header) return null;
+    for (const item of header.split(";")) {
+      const [key, ...parts] = item.trim().split("=");
+      if (key === name) {
+        try {
+          return decodeURIComponent(parts.join("="));
+        } catch {
+          return null;
+        }
+      }
+    }
+    return null;
   }
 }

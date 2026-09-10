@@ -24,7 +24,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Label, Text } from "@/components/atoms";
-import { PageHelpHint, SelectDropdown } from "@/components/molecules";
+import { ConfirmDeleteDialog, PageHelpHint, SelectDropdown } from "@/components/molecules";
 import { useLanguage } from "@/components/organisms/language-provider";
 import { cn } from "@/lib/cn";
 
@@ -189,6 +189,7 @@ export function SuperadminPanel() {
   const [selectedUserId, setSelectedUserId] = useState("");
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false);
+  const [workspaceDeleteConfirmationOpen, setWorkspaceDeleteConfirmationOpen] = useState(false);
 
   const [memberships, setMemberships] = useState<MembershipDto[]>([]);
   const [userModules, setUserModules] = useState<UserModuleStateDto[]>([]);
@@ -596,14 +597,9 @@ export function SuperadminPanel() {
     }
   };
 
-  const handleDeleteWorkspace = async () => {
+  const handleDeleteWorkspace = async (confirmText: string) => {
     if (!managedWorkspace) {
       toast.error(t("superadmin.selectWorkspace"));
-      return;
-    }
-
-    const confirmed = window.prompt(t("superadmin.deleteWorkspacePrompt", { code: managedWorkspace.code }));
-    if (confirmed === null) {
       return;
     }
 
@@ -611,7 +607,7 @@ export function SuperadminPanel() {
       setIsSaving(true);
       await fetchJson(`/api/superadmin/workspaces/${encodeURIComponent(managedWorkspace.id)}`, {
         method: "DELETE",
-        body: JSON.stringify({ confirmText: confirmed.trim() }),
+        body: JSON.stringify({ confirmText: confirmText.trim() }),
       });
       setWorkspaceModalOpen(false);
       setManagedWorkspaceId("");
@@ -755,8 +751,8 @@ export function SuperadminPanel() {
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-text-muted">
-          <span>{loading ? t("common.loading") : t("superadmin.updated")}</span>
-          {selectedWorkspace ? <span>Workspace: {selectedWorkspace.organizationCode}/{selectedWorkspace.code}</span> : <span>{t("superadmin.allWorkspaces")}</span>}
+          <span>{loading ? t("common.loading") : t("")}</span>
+          {selectedWorkspace ? <span>Workspace: {selectedWorkspace.organizationCode}</span> : <span>{t("superadmin.allWorkspaces")}</span>}
         </div>
       </Card>
 
@@ -778,8 +774,8 @@ export function SuperadminPanel() {
                   <StatePill tone={workspace.isActive ? "success" : "danger"}>{workspace.isActive ? t("superadmin.active") : t("superadmin.inactive")}</StatePill>
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
-                  <span>{workspace.organizationCode}/{workspace.code}</span>
-                  <span>{workspace.organizationName}</span>
+                  {/* <span>{workspace.organizationCode}/{workspace.code}</span>
+                  <span>{workspace.organizationName}</span> */}
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 lg:justify-end">
@@ -964,7 +960,7 @@ export function SuperadminPanel() {
               </div>
               <div className="flex items-center gap-2 self-end lg:self-auto">
                 {managementScope === "GLOBAL" ? (
-                  <Button size="sm" variant="danger" onClick={() => void handleDeleteWorkspace()} disabled={isSaving}>
+                  <Button size="sm" variant="danger" onClick={() => setWorkspaceDeleteConfirmationOpen(true)} disabled={isSaving}>
                     <Trash2 size={16} />
                     {t("superadmin.deleteWorkspace")}
                   </Button>
@@ -1261,6 +1257,7 @@ export function SuperadminPanel() {
           </section>
         </div>
       ) : null}
+      <ConfirmDeleteDialog open={workspaceDeleteConfirmationOpen} expectedText={managedWorkspace?.code ?? ""} isBusy={isSaving} title={t("superadmin.deleteWorkspacePrompt", { code: managedWorkspace?.code ?? "" })} onCancel={() => setWorkspaceDeleteConfirmationOpen(false)} onConfirm={async (typedText) => { setWorkspaceDeleteConfirmationOpen(false); await handleDeleteWorkspace(typedText); }} />
     </div>
   );
 }

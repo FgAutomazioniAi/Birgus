@@ -199,6 +199,16 @@ enum AssistantToolCallStatus {
   CANCELED
 }
 
+enum BrainyChatKind {
+  AGENT
+  DATABASE
+}
+
+enum BrainyChatAccessLevel {
+  READ
+  WRITE
+}
+
 enum KnowledgeDocumentStatus {
   PENDING
   PROCESSING
@@ -408,6 +418,9 @@ model Workspace {
   commission_import_mappings    CommissionImportMapping[]
   commission_import_runs        CommissionImportRun[]
   commission_import_items       CommissionImportItem[]
+  brainy_workspace_database_connections BrainyWorkspaceDatabaseConnection[]
+  brainy_chats                  BrainyChat[]
+  brainy_chat_shares            BrainyChatShare[]
 
   @@unique([organization_id, code])
   @@index([organization_id])
@@ -436,6 +449,7 @@ model User {
   user_workspace_roles                 UserWorkspaceRole[]
   auth_sessions                        AuthSession[]
   auth_login_challenges                AuthLoginChallenge[]
+  auth_trusted_devices                 AuthTrustedDevice[]
   password_reset_codes                 PasswordResetCode[]
   user_preferences                     UserPreference[]
   messaging_channels                   UserMessagingChannel[]
@@ -481,6 +495,9 @@ model User {
   commission_signatures_signed         CommissionSignature[]      @relation("commission_signature_signed_by")
   commission_import_sources_created    CommissionImportSource[]   @relation("commission_import_source_created_by")
   commission_import_runs_requested     CommissionImportRun[]      @relation("commission_import_run_requested_by")
+  brainy_chats_created                 BrainyChat[]               @relation("brainy_chat_created_by")
+  brainy_chat_shares_received          BrainyChatShare[]          @relation("brainy_chat_share_user")
+  brainy_chat_shares_granted           BrainyChatShare[]          @relation("brainy_chat_share_granted_by")
 
   @@index([deleted_at])
   @@map("users")
@@ -658,6 +675,26 @@ model AuthLoginChallenge {
   @@index([consumed_at])
   @@index([user_id, consumed_at, expires_at])
   @@map("auth_login_challenges")
+}
+
+model AuthTrustedDevice {
+  id           String    @id @default(uuid()) @db.Uuid
+  user_id      String    @db.Uuid
+  token_hash   String    @unique
+  user_agent   String?
+  expires_at   DateTime
+  last_used_at DateTime?
+  revoked_at   DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([expires_at])
+  @@index([revoked_at])
+  @@index([user_id, revoked_at, expires_at])
+  @@map("auth_trusted_devices")
 }
 
 model UserPreference {
@@ -2077,6 +2114,108 @@ model AssistantMemorySnapshot {
   @@index([workspace_id])
   @@index([generated_at])
   @@map("assistant_memory_snapshots")
+}
+
+model BrainyWorkspaceAgent {
+  id                  String   @id @default(uuid()) @db.Uuid
+  workspace_id        String   @db.Uuid
+  brainyware_agent_id String
+  label               String
+  is_enabled          Boolean  @default(true)
+  is_default          Boolean  @default(false)
+  created_by_user_id  String?  @db.Uuid
+  updated_by_user_id  String?  @db.Uuid
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+  deleted_at          DateTime?
+
+  @@unique([workspace_id, brainyware_agent_id])
+  @@index([workspace_id, is_enabled])
+  @@index([workspace_id, is_default])
+  @@index([deleted_at])
+  @@map("brainy_workspace_agents")
+}
+
+model BrainyWorkspaceDatabaseConnection {
+  id                       String   @id @default(uuid()) @db.Uuid
+  workspace_id             String   @db.Uuid
+  brainyware_connection_id String
+  label                    String
+  created_by_user_id       String?  @db.Uuid
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+  deleted_at               DateTime?
+
+  workspace Workspace    @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  chats     BrainyChat[]
+
+  @@unique([workspace_id, brainyware_connection_id])
+  @@index([workspace_id, deleted_at])
+  @@map("brainy_workspace_database_connections")
+}
+
+model BrainyChat {
+  id                    String   @id @default(uuid()) @db.Uuid
+  workspace_id          String   @db.Uuid
+  kind                  BrainyChatKind @default(AGENT)
+  workspace_agent_id    String?  @db.Uuid
+  workspace_database_connection_id String? @db.Uuid
+  brainyware_agent_id   String?
+  brainyware_session_id String?  @unique
+  title                 String
+  rag_enabled           Boolean  @default(false)
+  database_memory_enabled Boolean @default(true)
+  created_by_user_id    String?  @db.Uuid
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+  deleted_at            DateTime?
+  messages              BrainyChatMessage[]
+  shares                BrainyChatShare[]
+  workspace             Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  workspace_database_connection BrainyWorkspaceDatabaseConnection? @relation(fields: [workspace_database_connection_id], references: [id], onDelete: Restrict)
+  created_by            User? @relation("brainy_chat_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+
+  @@index([workspace_id, updated_at])
+  @@index([workspace_agent_id])
+  @@index([workspace_database_connection_id])
+  @@index([workspace_id, created_by_user_id])
+  @@index([deleted_at])
+  @@map("brainy_chats")
+}
+
+model BrainyChatShare {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  chat_id            String                 @db.Uuid
+  workspace_id       String                 @db.Uuid
+  user_id            String                 @db.Uuid
+  access_level       BrainyChatAccessLevel
+  granted_by_user_id String?                @db.Uuid
+  created_at         DateTime               @default(now())
+  updated_at         DateTime               @updatedAt
+
+  chat       BrainyChat @relation(fields: [chat_id], references: [id], onDelete: Cascade)
+  workspace  Workspace  @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  user       User       @relation("brainy_chat_share_user", fields: [user_id], references: [id], onDelete: Cascade)
+  granted_by User?      @relation("brainy_chat_share_granted_by", fields: [granted_by_user_id], references: [id], onDelete: SetNull)
+
+  @@unique([chat_id, user_id])
+  @@index([workspace_id, user_id])
+  @@map("brainy_chat_shares")
+}
+
+model BrainyChatMessage {
+  id                String   @id @default(uuid()) @db.Uuid
+  chat_id           String   @db.Uuid
+  workspace_id      String   @db.Uuid
+  author_user_id    String?  @db.Uuid
+  role              String
+  content_text      String   @db.Text
+  created_at        DateTime @default(now())
+  chat              BrainyChat @relation(fields: [chat_id], references: [id], onDelete: Cascade)
+
+  @@index([chat_id, created_at])
+  @@index([workspace_id])
+  @@map("brainy_chat_messages")
 }
 
 model KnowledgeDocument {

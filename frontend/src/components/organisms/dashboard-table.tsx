@@ -502,7 +502,7 @@ export function DashboardTable() {
                           </button>
                           <button
                             onClick={() => router.push(APP_ROUTES.projectEdit(project.id))}
-                            className="rounded-lg p-1.5 text-blue-600 transition-colors hover:bg-status-info-bg"
+                            className="rounded-lg p-1.5 text-brand-primary transition-colors hover:bg-status-info-bg"
                             title="Modifica dati progetto"
                           >
                             <Pencil size={18} />
@@ -579,7 +579,7 @@ export function DashboardTable() {
                 "rounded-lg border px-3 py-1 text-xs font-medium",
                 canGoPrevious
                   ? "border-border-default text-text-secondary hover:bg-bg-subtle"
-                  : "cursor-not-allowed border-border-default bg-bg-muted text-slate-400",
+                  : "cursor-not-allowed border-border-default bg-bg-muted text-text-muted",
               )}
             >
               Precedente
@@ -591,7 +591,7 @@ export function DashboardTable() {
                 "rounded-lg border px-3 py-1 text-xs font-medium",
                 canGoNext
                   ? "border-brand-primary text-brand-primary hover:bg-status-info-bg"
-                  : "cursor-not-allowed border-border-default bg-bg-muted text-slate-400",
+                  : "cursor-not-allowed border-border-default bg-bg-muted text-text-muted",
               )}
             >
               Successivo

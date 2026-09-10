@@ -8,7 +8,7 @@ import { LanguageProvider, ThemeProvider, ToasterProvider } from "@/components/o
 import { CORNER_STYLE_STORAGE_KEY, DEFAULT_CORNER_STYLE, DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/themes";
 
 export const metadata: Metadata = {
-  title: "Project Manager FG",
+  title: "Birgus",
   description: "Interfaccia frontend per la gestione progetti Birgus",
 };
 

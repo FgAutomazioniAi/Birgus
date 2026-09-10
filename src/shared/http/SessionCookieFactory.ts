@@ -6,6 +6,7 @@ export type SessionCookieFactoryOptions = {
   path?: string;
   secure?: boolean;
   sameSite?: SameSiteMode;
+  trustedDeviceCookieName?: string;
 };
 
 export class SessionCookieFactory {
@@ -14,6 +15,7 @@ export class SessionCookieFactory {
   private readonly path: string;
   private readonly secure: boolean;
   private readonly sameSite: SameSiteMode;
+  private readonly trustedDeviceCookieName: string;
 
   public constructor(options?: SessionCookieFactoryOptions) {
     this.cookieName = options?.cookieName ?? "vl_session";
@@ -21,6 +23,11 @@ export class SessionCookieFactory {
     this.path = options?.path?.trim() ? options.path.trim() : "/";
     this.secure = options?.secure ?? false;
     this.sameSite = options?.sameSite ?? "Lax";
+    this.trustedDeviceCookieName = options?.trustedDeviceCookieName?.trim() || `${this.cookieName}_trusted_device`;
+  }
+
+  public getTrustedDeviceCookieName(): string {
+    return this.trustedDeviceCookieName;
   }
 
   public createSessionCookie(token: string, maxAgeSeconds: number): string {
@@ -60,6 +67,27 @@ export class SessionCookieFactory {
       parts.push(`Domain=${this.domain}`);
     }
 
+    return parts.join("; ");
+  }
+
+  public createTrustedDeviceCookie(token: string, maxAgeSeconds: number): string {
+    return this.createCookie(this.trustedDeviceCookieName, token, maxAgeSeconds);
+  }
+
+  public createExpiredTrustedDeviceCookie(): string {
+    return this.createCookie(this.trustedDeviceCookieName, "", 0);
+  }
+
+  private createCookie(name: string, value: string, maxAgeSeconds: number): string {
+    const parts = [
+      `${name}=${encodeURIComponent(value)}`,
+      `Path=${this.path}`,
+      "HttpOnly",
+      `SameSite=${this.sameSite}`,
+      `Max-Age=${maxAgeSeconds}`,
+    ];
+    if (this.secure) parts.push("Secure");
+    if (this.domain) parts.push(`Domain=${this.domain}`);
     return parts.join("; ");
   }
 }

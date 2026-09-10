@@ -410,7 +410,6 @@ const messages: Record<string, Record<UiLanguage, string>> = {
   "superadmin.operatingWorkspace": { it: "Workspace operativo", en: "Operating workspace" },
   "superadmin.allWorkspaces": { it: "Tutti i workspace", en: "All workspaces" },
   "superadmin.refresh": { it: "Aggiorna", en: "Refresh" },
-  "superadmin.updated": { it: "Vista aggiornata", en: "View updated" },
   "superadmin.workspacesTitle": { it: "Workspace", en: "Workspaces" },
   "superadmin.noWorkspaces": { it: "Nessun workspace presente.", en: "No workspaces found." },
   "superadmin.workspaceManagement": { it: "Gestione workspace", en: "Workspace management" },

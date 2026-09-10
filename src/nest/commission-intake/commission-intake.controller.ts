@@ -12,6 +12,7 @@ import { ModuleKey } from "../../core/module-access/ModuleKey.js";
 import { RequestContext } from "../../core/tenancy/RequestContext.js";
 import { CommissionRecordEntity } from "../../modules/commission-intake/domain/CommissionRecordEntity.js";
 import { CommissionIntakeService } from "../../modules/commission-intake/services/CommissionIntakeService.js";
+import { CommissionVendorListService } from "../../modules/commission-intake/services/CommissionVendorListService.js";
 import { MultipartFormReader } from "../../shared/http/MultipartFormReader.js";
 import { AccessPolicyGuard } from "../auth/access-policy.guard.js";
 import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
@@ -73,13 +74,48 @@ const signChecklistSchema = z.object({
   statement: z.string().trim().max(2000).optional().nullable(),
 });
 
+const vendorListSchema = z.object({
+  categories: z.array(z.object({
+    name: z.string().trim().min(1).max(240),
+    note: z.string().trim().max(2000).optional().default(""),
+    items: z.array(z.object({
+      component: z.string().trim().min(1).max(2000),
+      brands: z.string().trim().max(2000).optional().default(""),
+    })).max(200),
+  })).min(1).max(80),
+});
+
 @Controller("/api/commission-intake")
 @UseGuards(RequestContextAuthGuard, AccessPolicyGuard)
 export class CommissionIntakeController {
   public constructor(
     @Inject(CommissionIntakeService)
     private readonly service: CommissionIntakeService,
+    @Inject(CommissionVendorListService)
+    private readonly vendorListService: CommissionVendorListService,
   ) {}
+
+  @Get("vendor-list")
+  @RequireModule(ModuleKey.COMMISSION_INTAKE)
+  @RequirePermission(PermissionKey.COMMISSION_INTAKE_CONFIGURE)
+  public async getVendorList(@CurrentRequestContext() requestContext: RequestContext): Promise<Record<string, unknown>> {
+    return { vendorList: await this.vendorListService.get(requestContext.workspace.workspaceId) };
+  }
+
+  @Put("vendor-list")
+  @RequireModule(ModuleKey.COMMISSION_INTAKE)
+  @RequirePermission(PermissionKey.COMMISSION_INTAKE_CONFIGURE)
+  public async saveVendorList(@Body() bodyRaw: unknown, @CurrentRequestContext() requestContext: RequestContext): Promise<Record<string, unknown>> {
+    const body = vendorListSchema.parse(bodyRaw);
+    return { vendorList: await this.vendorListService.save(requestContext.workspace.workspaceId, body.categories) };
+  }
+
+  @Delete("vendor-list")
+  @RequireModule(ModuleKey.COMMISSION_INTAKE)
+  @RequirePermission(PermissionKey.COMMISSION_INTAKE_CONFIGURE)
+  public async resetVendorList(@CurrentRequestContext() requestContext: RequestContext): Promise<Record<string, unknown>> {
+    return { vendorList: await this.vendorListService.reset(requestContext.workspace.workspaceId) };
+  }
 
   @Get("records")
   @RequireModule(ModuleKey.COMMISSION_REGISTRY)

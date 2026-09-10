@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Text } from "@/components/atoms";
-import { PageHelpHint, SelectDropdown } from "@/components/molecules";
+import { BirgusDialog, PageHelpHint, SelectDropdown } from "@/components/molecules";
 import { APP_ROUTES } from "@/lib/routes";
 import { appendWorkspaceId } from "@/lib/workspace";
 
@@ -140,6 +140,7 @@ export function MeasureReportPanel() {
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
+  const [documentToDelete, setDocumentToDelete] = useState<MeasureReportDocument | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const previewObjectUrlRef = useRef("");
@@ -403,10 +404,6 @@ export function MeasureReportPanel() {
   };
 
   const deleteDocument = async (document: MeasureReportDocument) => {
-    if (!window.confirm(`Eliminare "${document.original_filename}"?`)) {
-      return;
-    }
-
     setDeletingDocId(document.id);
     setFeedback("");
     setError("");
@@ -543,7 +540,7 @@ export function MeasureReportPanel() {
                       disabled={deletingDocId === document.id}
                       onClick={(event) => {
                         event.stopPropagation();
-                        void deleteDocument(document);
+                        setDocumentToDelete(document);
                       }}
                     >
                       {deletingDocId === document.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -626,6 +623,7 @@ export function MeasureReportPanel() {
           )}
         </Card>
       </div>
+      <BirgusDialog open={documentToDelete !== null} message={documentToDelete ? `Eliminare "${documentToDelete.original_filename}"?` : ""} confirmLabel="Elimina" onCancel={() => setDocumentToDelete(null)} onConfirm={() => { const document = documentToDelete; setDocumentToDelete(null); if (document) void deleteDocument(document); }} />
     </div>
   );
 }

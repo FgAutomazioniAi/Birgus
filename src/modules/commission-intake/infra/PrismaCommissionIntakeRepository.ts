@@ -164,6 +164,9 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
               status: CommissionChecklistStatus.DRAFT,
               created_by_user_id: params.actorUserId,
               updated_by_user_id: params.actorUserId,
+              metadata: this.toNullableJson({
+                vendorList: await this.resolveVendorListSnapshot(tx, params.workspaceId, version.id),
+              }),
             },
           });
           currentChecklistId = checklist.id;
@@ -412,11 +415,12 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         current_page_number: true,
         signed_at: true,
         form_version_id: true,
+        metadata: true,
       },
     });
 
     if (!checklist) {
-      return { record, currentUser: { ...currentUser, canReopenSignedChecklist }, checklist: null, pages: [], values: [], tableRows: [], attachments: [], signatures: [] };
+      return { record, currentUser: { ...currentUser, canReopenSignedChecklist, canConfigureVendorList: canReopenSignedChecklist }, checklist: null, pages: [], values: [], tableRows: [], attachments: [], signatures: [] };
     }
 
     const pages = await prisma.commissionFormPage.findMany({
@@ -503,7 +507,7 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
 
     return {
       record,
-      currentUser: { ...currentUser, canReopenSignedChecklist },
+      currentUser: { ...currentUser, canReopenSignedChecklist, canConfigureVendorList: canReopenSignedChecklist },
       checklist: {
         id: checklist.id,
         title: checklist.title,
@@ -521,7 +525,7 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
           title: section.title,
           description: section.description,
           sortOrder: section.sort_order,
-          fields: (fieldsBySection.get(section.id) ?? []).map((field) => this.mapFormField(field)),
+          fields: (fieldsBySection.get(section.id) ?? []).map((field) => this.mapFormField(field, this.vendorListRowsFromChecklistMetadata(checklist.metadata))),
         }));
         const unsectionedFields = fieldsByPageWithoutSection.get(page.id) ?? [];
         return {
@@ -540,14 +544,14 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
                 title: page.title,
                 description: null,
                 sortOrder: Number.MAX_SAFE_INTEGER,
-                fields: unsectionedFields.map((field) => this.mapFormField(field)),
+                fields: unsectionedFields.map((field) => this.mapFormField(field, this.vendorListRowsFromChecklistMetadata(checklist.metadata))),
               },
             ]
             : mappedSections,
         };
       }),
       values: values.map((value) => this.mapFieldValue(value)),
-      tableRows: tableRows.map((row) => this.mapTableRow(row)),
+      tableRows: tableRows.map((row) => this.mapTableRow(row, this.vendorListContextFromChecklistMetadata(checklist.metadata))),
       attachments: attachments.map((attachment) => this.mapAttachment(attachment)),
       signatures: signatures.map((signature) => this.mapSignature(signature)),
     };
@@ -885,10 +889,7 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       this.ensureChecklistEditable(checklist.status);
       await this.ensureNoBlockingLock(tx, params.workspaceId, params.recordId, params.actorUserId);
       await this.ensureOwnActiveChecklistLock(tx, params.workspaceId, params.recordId, params.checklistId, params.actorUserId);
-      const progressPercent = await this.updateChecklistProgress(tx, params.workspaceId, params.recordId, params.checklistId);
-      if (progressPercent < 100) {
-        throw new AppError("Completa tutti i campi obbligatori prima della firma definitiva.", "COMMISSION_CHECKLIST_INCOMPLETE", 400);
-      }
+      await this.updateChecklistProgress(tx, params.workspaceId, params.recordId, params.checklistId);
       const signer = await this.resolveCurrentUser(tx, params.actorUserId);
       await tx.commissionSignature.deleteMany({
         where: {
@@ -1191,6 +1192,9 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         status: params.status ?? CommissionChecklistStatus.DRAFT,
         created_by_user_id: params.actorUserId,
         updated_by_user_id: params.actorUserId,
+        metadata: this.toNullableJson({
+          vendorList: await this.resolveVendorListSnapshot(prisma, params.workspaceId, params.formVersionId),
+        }),
       },
     });
 
@@ -1830,7 +1834,7 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       options: true;
       table_definition: { include: { columns: true } };
     };
-  }>) {
+  }>, vendorListRows?: Array<Record<string, unknown>> | null) {
     return {
       id: field.id,
       key: field.key,
@@ -1860,7 +1864,9 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
           minRows: field.table_definition.min_rows,
           maxRows: field.table_definition.max_rows,
           allowAddRows: field.table_definition.allow_add_rows,
-          defaultRows: this.extractTableDefaultRows(field.table_definition.metadata),
+          defaultRows: field.table_definition.key.includes("vendor_list") && vendorListRows
+            ? vendorListRows
+            : this.extractTableDefaultRows(field.table_definition.metadata),
           columns: field.table_definition.columns.map((column) => ({
             id: column.id,
             key: column.key,
@@ -1889,6 +1895,84 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     return defaultRows.filter((row): row is Record<string, unknown> => (
       Boolean(row) && typeof row === "object" && !Array.isArray(row)
     ));
+  }
+
+  private async resolveVendorListSnapshot(
+    prisma: Prisma.TransactionClient | ReturnType<typeof PrismaClientManager.getClient>,
+    workspaceId: string,
+    formVersionId: string,
+  ): Promise<{ revision: number; categories: Array<{ name: string; note: string; items: Array<{ component: string; brands: string }> }> }> {
+    const configured = await prisma.commissionCatalog.findFirst({
+      where: { workspace_id: workspaceId, key: "commission_vendor_list", deleted_at: null },
+      select: { metadata: true },
+    });
+    const parsed = this.parseVendorListMetadata(configured?.metadata);
+    if (parsed) return parsed;
+
+    const table = await prisma.commissionTableDefinition.findFirst({
+      where: { key: { contains: "vendor_list" }, field: { version_id: formVersionId } },
+      select: { metadata: true },
+    });
+    return { revision: 0, categories: this.vendorListCategoriesFromRows(this.extractTableDefaultRows(table?.metadata ?? null)) };
+  }
+
+  private vendorListRowsFromChecklistMetadata(metadata: Prisma.JsonValue | null): Array<Record<string, unknown>> | null {
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+    const snapshot = this.parseVendorListMetadata((metadata as { vendorList?: Prisma.JsonValue }).vendorList);
+    if (!snapshot) return null;
+    return [
+      ...snapshot.categories.flatMap((category) => category.items.map((item) => ({
+        col_1_categoria: category.name,
+        _vendor_category_note: category.note,
+        col_2_componente: item.component,
+        col_3_marche_di_riferimento: "",
+        _placeholder_col_3_marche_di_riferimento: item.brands || "Marca o fornitore di riferimento",
+        col_4_confermato: "",
+        col_5_altro: "",
+      }))),
+      { col_1_categoria: "Altro", col_2_componente: "", col_3_marche_di_riferimento: "", _placeholder_col_3_marche_di_riferimento: "Marca o fornitore di riferimento", col_4_confermato: "", col_5_altro: "" },
+    ];
+  }
+
+  private vendorListContextFromChecklistMetadata(metadata: Prisma.JsonValue | null): Map<string, { note: string; brands: string }> {
+    const snapshot = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      ? this.parseVendorListMetadata((metadata as { vendorList?: Prisma.JsonValue }).vendorList)
+      : null;
+    return new Map((snapshot?.categories ?? []).flatMap((category) => category.items.map((item) => [
+      `${category.name}\u0000${item.component}`,
+      { note: category.note, brands: item.brands },
+    ])));
+  }
+
+  private parseVendorListMetadata(metadata: Prisma.JsonValue | null | undefined): { revision: number; categories: Array<{ name: string; note: string; items: Array<{ component: string; brands: string }> }> } | null {
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+    const value = metadata as { revision?: unknown; categories?: unknown };
+    if (!Array.isArray(value.categories)) return null;
+    const categories = value.categories.map((category) => {
+      const source = category as { name?: unknown; note?: unknown; items?: unknown };
+      return {
+        name: typeof source.name === "string" ? source.name.trim() : "",
+        note: typeof source.note === "string" ? source.note.trim() : "",
+        items: Array.isArray(source.items) ? source.items.map((item) => {
+          const sourceItem = item as { component?: unknown; brands?: unknown };
+          return { component: typeof sourceItem.component === "string" ? sourceItem.component.trim() : "", brands: typeof sourceItem.brands === "string" ? sourceItem.brands.trim() : "" };
+        }).filter((item) => item.component.length > 0) : [],
+      };
+    }).filter((category) => category.name.length > 0);
+    return { revision: typeof value.revision === "number" ? value.revision : 0, categories };
+  }
+
+  private vendorListCategoriesFromRows(rows: Array<Record<string, unknown>>): Array<{ name: string; note: string; items: Array<{ component: string; brands: string }> }> {
+    const groups = new Map<string, { name: string; note: string; items: Array<{ component: string; brands: string }> }>();
+    for (const row of rows) {
+      const name = typeof row.col_1_categoria === "string" ? row.col_1_categoria.trim() : "";
+      if (!name || name.toLowerCase() === "altro") continue;
+      const group = groups.get(name) ?? { name, note: "", items: [] };
+      const component = typeof row.col_2_componente === "string" ? row.col_2_componente.trim() : "";
+      if (component) group.items.push({ component, brands: typeof row._placeholder_col_3_marche_di_riferimento === "string" ? row._placeholder_col_3_marche_di_riferimento.trim() : typeof row.col_3_marche_di_riferimento === "string" ? row.col_3_marche_di_riferimento.trim() : "" });
+      groups.set(name, group);
+    }
+    return [...groups.values()];
   }
 
   private mapFieldValue(value: {
@@ -1928,18 +2012,26 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       value_json: Prisma.JsonValue | null;
       display_value: string | null;
     }>;
-  }): CommissionTableRowItem {
+  }, vendorListContext = new Map<string, { note: string; brands: string }>()): CommissionTableRowItem {
+    const cells = row.cells.map((cell) => ({
+      columnId: cell.column_id,
+      columnKey: cell.column_key,
+      value: this.unpackStoredValue(cell),
+      displayValue: cell.display_value,
+    }));
+    const category = cells.find((cell) => cell.columnKey === "col_1_categoria")?.value;
+    const component = cells.find((cell) => cell.columnKey === "col_2_componente")?.value;
+    const context = typeof category === "string" && typeof component === "string" ? vendorListContext.get(`${category}\u0000${component}`) : null;
+    if (context) {
+      cells.push({ columnId: "vendor-category-note", columnKey: "_vendor_category_note", value: context.note, displayValue: context.note });
+      cells.push({ columnId: "vendor-reference-brands", columnKey: "_vendor_reference_brands", value: context.brands, displayValue: context.brands });
+    }
     return {
       id: row.id,
       tableDefinitionId: row.table_definition_id,
       rowIndex: row.row_index,
       rowKey: row.row_key,
-      cells: row.cells.map((cell) => ({
-        columnId: cell.column_id,
-        columnKey: cell.column_key,
-        value: this.unpackStoredValue(cell),
-        displayValue: cell.display_value,
-      })),
+      cells,
     };
   }
 

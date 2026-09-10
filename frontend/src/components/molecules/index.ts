@@ -1,4 +1,5 @@
 export * from "./birgus-logo";
+export * from "./birgus-dialog";
 export * from "./confirm-delete-dialog";
 export * from "./form-field";
 export * from "./nav-item";

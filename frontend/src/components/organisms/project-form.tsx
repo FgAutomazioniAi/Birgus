@@ -871,7 +871,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
         </div>
 
         {isEdit && (
-          <div className="hidden items-center gap-2 rounded-lg border border-blue-100 bg-status-info-bg px-3 py-1 text-xs font-bold text-status-info-text sm:flex">
+          <div className="hidden items-center gap-2 rounded-lg border border-status-info-text/20 bg-status-info-bg px-3 py-1 text-xs font-bold text-status-info-text sm:flex">
             UUID: <span className="font-mono text-[10px]">{id}</span>
           </div>
         )}
@@ -1099,13 +1099,13 @@ export function ProjectForm({ id }: ProjectFormProps) {
                       }
                     />
                     <div className="flex flex-col items-center">
-                      <div className="mb-3 rounded-[var(--radius-md)] bg-bg-subtle p-3 transition-colors group-hover:bg-blue-100">
+                      <div className="mb-3 rounded-[var(--radius-md)] bg-bg-subtle p-3 transition-colors group-hover:bg-status-info-bg">
                         {file.name === "quotationPdf" && isUploadingQuotation ? (
                           <Loader2 size={24} className="animate-spin text-brand-primary" />
                         ) : file.name === "quotationPdf" && quotationFileName ? (
                           <CheckCircle2 size={24} className="text-status-success-text" />
                         ) : (
-                          <Upload size={24} className="text-slate-400 group-hover:text-blue-600" />
+                          <Upload size={24} className="text-text-muted group-hover:text-brand-primary" />
                         )}
                       </div>
                       <span className="text-sm font-bold text-text-secondary">{file.label}</span>

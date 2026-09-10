@@ -1,13 +1,14 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, CheckCircle2, ClipboardList, Lock, Paperclip, Plus, RefreshCw, Save, Signature, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardList, Download, Lock, Paperclip, Pencil, Plus, RefreshCw, Save, Signature, Trash2, X } from "lucide-react";
 import Link from "next/link";
-import type { InputHTMLAttributes } from "react";
+import { useRouter } from "next/navigation";
+import type { InputHTMLAttributes, MouseEvent as ReactMouseEvent } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Checkbox, CheckboxControl, Input, Text } from "@/components/atoms";
-import { SelectDropdown } from "@/components/molecules";
+import { BirgusLogo, SelectDropdown } from "@/components/molecules";
 import { useLanguage } from "@/components/organisms/language-provider";
 import { cn } from "@/lib/cn";
 import { APP_ROUTES } from "@/lib/routes";
@@ -132,6 +133,7 @@ interface CommissionChecklistView {
     id: string;
     fullName: string;
     canReopenSignedChecklist: boolean;
+    canConfigureVendorList: boolean;
   };
   checklist: {
     id: string;
@@ -168,6 +170,7 @@ interface CommissionDetailPanelProps {
 
 export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
   const { t } = useLanguage();
+  const router = useRouter();
   const [view, setView] = useState<CommissionChecklistView | null>(null);
   const [activePageId, setActivePageId] = useState<string | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, unknown>>({});
@@ -180,6 +183,9 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
   const [isReopening, setIsReopening] = useState(false);
   const [uploadingFieldKey, setUploadingFieldKey] = useState<string | null>(null);
   const [completionIssues, setCompletionIssues] = useState<CompletionIssue[] | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const [leaveConfirmationOpen, setLeaveConfirmationOpen] = useState(false);
+  const [leaveTarget, setLeaveTarget] = useState<string | null>(null);
 
   const loadView = useCallback(async () => {
     setIsLoading(true);
@@ -194,6 +200,7 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
       setActivePageId((current) => current ?? payload.view?.pages[0]?.id ?? null);
       setFieldValues(Object.fromEntries(payload.view.values.map((value) => [value.fieldId, value.value])));
       setTableValues(buildTableState(payload.view.tableRows));
+      setIsDirty(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("commissions.detailLoadFailed"));
     } finally {
@@ -204,6 +211,32 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
   useEffect(() => {
     void loadView();
   }, [loadView]);
+
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [isDirty]);
+
+  useEffect(() => {
+    const interceptNavigation = (event: MouseEvent) => {
+      if (!isDirty || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (!anchor || anchor.target || anchor.hasAttribute("download")) return;
+      const destination = new URL(anchor.href, window.location.href);
+      if (destination.origin !== window.location.origin || destination.pathname === window.location.pathname) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setLeaveTarget(`${destination.pathname}${destination.search}${destination.hash}`);
+      setLeaveConfirmationOpen(true);
+    };
+    document.addEventListener("click", interceptNavigation, true);
+    return () => document.removeEventListener("click", interceptNavigation, true);
+  }, [isDirty]);
 
   useEffect(() => {
     if (!view?.checklist) {
@@ -281,9 +314,9 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
   const isReadOnly = isFinalized || Boolean(readOnlyReason) || !lockInfo;
 
   const savePage = async (options?: { silent?: boolean }): Promise<boolean> => {
-    if (!view?.checklist || !activePage) return false;
+    if (!view?.checklist) return false;
 
-    const fields = activePage.sections.flatMap((section) => section.fields);
+    const fields = view.pages.flatMap((page) => page.sections.flatMap((section) => section.fields));
     const plainFields = fields.filter((field) => field.fieldType !== "TABLE" && field.fieldType !== "SIGNATURE");
     const tableFields = fields.filter((field) => field.fieldType === "TABLE" && field.table);
 
@@ -317,7 +350,6 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
 
       if (!options?.silent) {
         toast.success(t("commissions.saveSuccess"));
-        setCompletionIssues(getCompletionIssues(activePage, fieldValues, tableValues, view.attachments));
       }
       await loadView();
       return true;
@@ -358,8 +390,6 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
 
   const deleteAttachment = async (attachmentId: string): Promise<void> => {
     if (!view) return;
-    const confirmed = window.confirm(t("commissions.deleteAttachmentConfirm"));
-    if (!confirmed) return;
     try {
       const response = await fetch(`/api/commission-intake/records/${view.record.id}/attachments/${attachmentId}`, {
         method: "DELETE",
@@ -381,16 +411,32 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
     }
   };
 
+  const requestLeave = (event: ReactMouseEvent<HTMLAnchorElement>, target: string) => {
+    if (!isDirty) return;
+    event.preventDefault();
+    setLeaveTarget(target);
+    setLeaveConfirmationOpen(true);
+  };
+
+  const leaveChecklist = () => {
+    if (!leaveTarget) return;
+    setIsDirty(false);
+    setLeaveConfirmationOpen(false);
+    router.push(leaveTarget);
+  };
+
+  const saveAndLeaveChecklist = async () => {
+    if (!leaveTarget) return;
+    const saved = await savePage({ silent: true });
+    if (!saved) return;
+    setLeaveConfirmationOpen(false);
+    router.push(leaveTarget);
+  };
+
   const signChecklist = async () => {
     if (!view?.checklist) return;
-    if (signatureName.trim().length < 2) {
-      toast.error(t("commissions.signerRequired"));
-      return;
-    }
-    if (activePage) {
-      const saved = await savePage({ silent: true });
-      if (!saved) return;
-    }
+    const saved = await savePage({ silent: true });
+    if (!saved) return;
 
     setIsSaving(true);
     try {
@@ -447,7 +493,7 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
     <div className="min-w-0 space-y-5 overflow-x-clip">
       <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-2">
-          <Link href={APP_ROUTES.dataCollectionChecklists} className="inline-flex h-9 items-center gap-2 rounded-[var(--radius-md)] px-0 text-sm font-bold text-text-secondary transition-colors hover:text-text-primary">
+          <Link href={APP_ROUTES.dataCollectionChecklists} onClick={(event) => requestLeave(event, APP_ROUTES.dataCollectionChecklists)} className="inline-flex h-9 items-center gap-2 rounded-[var(--radius-md)] px-0 text-sm font-bold text-text-secondary transition-colors hover:text-text-primary">
             <ArrowLeft size={16} />
             {t("commissions.back")}
           </Link>
@@ -461,7 +507,7 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
             <RefreshCw size={16} />
             {t("commissions.refresh")}
           </Button>
-          <Link href={APP_ROUTES.dataCollectionChecklists} className="inline-flex h-11 items-center justify-center rounded-[var(--radius-md)] border border-border-default bg-bg-page px-4 text-sm font-bold text-text-secondary transition-colors hover:bg-bg-subtle">
+          <Link href={APP_ROUTES.dataCollectionChecklists} onClick={(event) => requestLeave(event, APP_ROUTES.dataCollectionChecklists)} className="inline-flex h-11 items-center justify-center rounded-[var(--radius-md)] border border-border-default bg-bg-page px-4 text-sm font-bold text-text-secondary transition-colors hover:bg-bg-subtle">
             {t("checklists.list")}
           </Link>
         </div>
@@ -522,6 +568,7 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
                               key={field.id}
                               attachments={view.attachments}
                               disabled={isReadOnly || isSaving}
+                              canConfigureVendorList={view.currentUser.canConfigureVendorList}
                               field={field}
                               showInlineAttachment={isDocumentationPage && isDocumentUploadSlotField(field)}
                               uploadingFieldKey={uploadingFieldKey}
@@ -529,9 +576,10 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
                               tableRows={tableId ? tableValues[tableId] ?? [] : []}
                               onDeleteAttachment={(attachmentId) => void deleteAttachment(attachmentId)}
                               onUploadAttachments={(targetField, files) => void uploadAttachments(targetField, files)}
-                              onValueChange={(value) => setFieldValues((current) => ({ ...current, [field.id]: value }))}
+                              onValueChange={(value) => { setIsDirty(true); setFieldValues((current) => ({ ...current, [field.id]: value })); }}
                               onTableChange={(rows) => {
                                 if (!tableId) return;
+                                setIsDirty(true);
                                 setTableValues((current) => ({ ...current, [tableId]: rows }));
                               }}
                             />
@@ -589,7 +637,7 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
               </Button>
               <Button variant="outline" onClick={() => void savePage()} disabled={isReadOnly || isSaving}>
                 <Save size={16} />
-                {t("commissions.savePage")}
+                Salva tutto
               </Button>
               {isFinalized && view.currentUser.canReopenSignedChecklist ? (
                 <Button variant="outline" onClick={() => void reopenChecklist()} disabled={isReopening}>
@@ -637,7 +685,7 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
               </label>
               <textarea
                 value={signatureStatement}
-                onChange={(event) => setSignatureStatement(event.target.value)}
+                onChange={(event) => { setIsDirty(true); setSignatureStatement(event.target.value); }}
                 placeholder={t("commissions.signatureStatement")}
                 disabled={isReadOnly || isSaving}
                 className="min-h-24 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-4 py-3 text-sm text-text-secondary placeholder:text-text-muted focus-visible:border-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary disabled:opacity-60"
@@ -663,12 +711,24 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
       {completionIssues ? (
         <CompletionIssuesDialog issues={completionIssues} onClose={() => setCompletionIssues(null)} />
       ) : null}
+      {leaveConfirmationOpen ? (
+        <ChecklistLeaveDialog
+          isSaving={isSaving}
+          onCancel={() => {
+            setLeaveConfirmationOpen(false);
+            setLeaveTarget(null);
+          }}
+          onDiscard={leaveChecklist}
+          onSave={saveAndLeaveChecklist}
+        />
+      ) : null}
     </div>
   );
 }
 
 function FieldEditor({
   attachments = [],
+  canConfigureVendorList = false,
   disabled,
   field,
   onDeleteAttachment,
@@ -681,6 +741,7 @@ function FieldEditor({
   value,
 }: {
   attachments?: CommissionAttachment[];
+  canConfigureVendorList?: boolean;
   disabled: boolean;
   field: CommissionFormField;
   onDeleteAttachment?: (attachmentId: string) => void;
@@ -707,10 +768,6 @@ function FieldEditor({
     const deleteLastRow = () => {
       if (rowsForEdit.length <= (field.table?.minRows ?? 0)) return;
       const lastRow = rowsForEdit[rowsForEdit.length - 1];
-      if (hasWrittenTableRowContent(lastRow, field.table?.columns ?? [])) {
-        const confirmed = window.confirm(t("commissions.deleteLastWrittenRowConfirm"));
-        if (!confirmed) return;
-      }
       onTableChange(rowsForEdit.slice(0, -1));
     };
     return (
@@ -733,8 +790,10 @@ function FieldEditor({
             </div>
           ) : null}
         </div>
-        {isGroupedTable ? (
-          <GroupedChecklistTable disabled={disabled} field={field} onTableChange={onTableChange} rows={rowsForEdit} />
+        {isVendorListTable(field) ? (
+          <VendorChecklistTable canConfigureVendorList={canConfigureVendorList} disabled={disabled} field={field} onTableChange={onTableChange} rows={rowsForEdit} />
+        ) : isGroupedTable ? (
+          <GroupedChecklistTable canConfigureVendorList={canConfigureVendorList} disabled={disabled} field={field} onTableChange={onTableChange} rows={rowsForEdit} />
         ) : (
         <div className="min-w-0 overflow-x-auto">
           <div className="min-w-0 space-y-2">
@@ -780,7 +839,8 @@ function FieldEditor({
                       column={column}
                       placeholder={column.placeholder ?? undefined}
                       value={unknownToInputValue(row.cells[column.key])}
-                      disabled={disabled}
+                      disabled={disabled || (isVendorListTable(field) && !isOtherCategory(unknownToInputValue(row.cells.col_1_categoria)) && column.key === "col_2_componente")}
+                      className={isVendorListTable(field) && column.key === "col_3_marche_di_riferimento" ? "placeholder:opacity-40" : undefined}
                       onChange={(event) => {
                         const nextRows = rowsForEdit.map((editableRow) => ({ ...editableRow, cells: { ...editableRow.cells } }));
                         nextRows[rowIndex] = {
@@ -1093,6 +1153,38 @@ function CompletionIssuesDialog({ issues, onClose }: { issues: CompletionIssue[]
   );
 }
 
+function ChecklistLeaveDialog({
+  isSaving,
+  onCancel,
+  onDiscard,
+  onSave,
+}: {
+  isSaving: boolean;
+  onCancel: () => void;
+  onDiscard: () => void;
+  onSave: () => Promise<void>;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="checklist-leave-title" onMouseDown={onCancel}>
+      <div className="w-full max-w-md overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-bg-surface shadow-elevated" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="flex items-center gap-3 border-b border-border-subtle p-4">
+          <BirgusLogo className="h-9 w-9 shrink-0" />
+          <div>
+            <p className="text-sm font-bold text-brand-primary">Birgus dice:</p>
+            <h2 id="checklist-leave-title" className="text-lg font-bold text-text-primary">Modifiche non salvate</h2>
+          </div>
+        </div>
+        <p className="p-4 text-sm text-text-secondary">Salva le modifiche prima di uscire oppure scartale definitivamente.</p>
+        <div className="flex flex-wrap justify-end gap-2 border-t border-border-subtle p-4">
+          <Button variant="outline" disabled={isSaving} onClick={onCancel}>Continua modifica</Button>
+          <Button variant="danger" disabled={isSaving} onClick={onDiscard}>Scarta</Button>
+          <Button disabled={isSaving} onClick={() => void onSave()}><Save size={16} />Salva e esci</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function renderControl({
   disabled,
   field,
@@ -1119,6 +1211,10 @@ function renderControl({
     return <CheckboxControl checked={value === true} disabled={disabled} onChange={(event) => onValueChange(event.target.checked)} />;
   }
 
+  if (isYesNoOptionSet(field)) {
+    return <YesNoChoiceControl disabled={disabled} field={field} value={value} onValueChange={onValueChange} />;
+  }
+
   if (field.fieldType === "SELECT") {
     return (
       <SelectDropdown
@@ -1127,20 +1223,6 @@ function renderControl({
         value={unknownToInputValue(value)}
         placeholder="Seleziona"
         onChange={(nextValue) => onValueChange(nextValue || null)}
-        options={field.options.map((option) => ({ label: option.label, value: option.value }))}
-      />
-    );
-  }
-
-  if ((field.fieldType === "MULTI_SELECT" || field.fieldType === "CHECKBOX_GROUP" || field.fieldType === "DOCUMENT_CHECKLIST") && isYesNoOptionSet(field)) {
-    const selectedValues = Array.isArray(value) ? value.map(String) : [];
-    return (
-      <SelectDropdown
-        allowEmpty
-        disabled={disabled}
-        value={selectedValues[0] ?? ""}
-        placeholder="Seleziona"
-        onChange={(nextValue) => onValueChange(nextValue ? [nextValue] : [])}
         options={field.options.map((option) => ({ label: option.label, value: option.value }))}
       />
     );
@@ -1193,6 +1275,19 @@ function UnitInput({ unit, className, ...props }: InputHTMLAttributes<HTMLInputE
       </span>
     </div>
   );
+}
+
+function YesNoChoiceControl({ disabled, field, onValueChange, value }: { disabled: boolean; field: CommissionFormField; onValueChange: (value: unknown) => void; value: unknown }) {
+  const selected = selectedChoiceValue(value);
+  const quantitySelected = isQuantityChoice(selected);
+  const quantity = quantityValue(value);
+  const storesArray = field.fieldType !== "SELECT";
+  const setSelection = (next: string) => {
+    if (!next) return onValueChange(storesArray ? [] : null);
+    if (isQuantityChoice(next)) return onValueChange({ selection: next, quantity: quantity || "" });
+    onValueChange(storesArray ? [next] : next);
+  };
+  return <div className="flex flex-wrap items-end gap-2"><div className="inline-flex overflow-hidden rounded-[var(--radius-md)] border border-border-default">{field.options.map((option) => <button key={option.id} type="button" disabled={disabled} aria-pressed={selected === option.value} onClick={() => setSelection(option.value)} className={cn("h-10 border-r border-border-default px-3 text-sm font-semibold last:border-r-0 disabled:cursor-not-allowed disabled:opacity-60", selected === option.value ? "bg-brand-primary text-text-inverse" : "bg-bg-page text-text-secondary hover:bg-bg-subtle")}>{option.label}</button>)}</div>{quantitySelected ? <label className="block min-w-32 text-xs font-semibold text-text-muted">Quantità<Input type="number" min="0" step="1" disabled={disabled} value={quantity} onChange={(event) => onValueChange({ selection: selected, quantity: event.target.value })} className="mt-1" /></label> : null}</div>;
 }
 
 function TableCellInput({ column, className, placeholder, ...props }: InputHTMLAttributes<HTMLInputElement> & { column: CommissionTableColumn }) {
@@ -1329,21 +1424,112 @@ function getVisibleTableColumns(field: CommissionFormField): CommissionTableColu
     .map((column) => column.key === "col_5_altro" ? { ...column, label: "Note", placeholder: column.placeholder ?? "Note" } : column);
 }
 
-function groupChecklistRows(rows: EditableTableRow[]): Array<{ category: string; items: Array<{ row: EditableTableRow; rowIndex: number }> }> {
-  const groups = new Map<string, Array<{ row: EditableTableRow; rowIndex: number }>>();
+function groupChecklistRows(rows: EditableTableRow[]): Array<{ category: string; note: string; items: Array<{ row: EditableTableRow; rowIndex: number }> }> {
+  const groups = new Map<string, { note: string; items: Array<{ row: EditableTableRow; rowIndex: number }> }>();
   rows.forEach((row, rowIndex) => {
     const category = unknownToInputValue(row.cells.col_1_categoria) || "Da classificare";
-    groups.set(category, [...(groups.get(category) ?? []), { row, rowIndex }]);
+    const current = groups.get(category) ?? { note: unknownToInputValue(row.cells._vendor_category_note), items: [] };
+    groups.set(category, { ...current, items: [...current.items, { row, rowIndex }] });
   });
-  return [...groups.entries()].map(([category, items]) => ({ category, items }));
+  return [...groups.entries()].map(([category, group]) => ({ category, note: group.note, items: group.items }));
 }
 
-function GroupedChecklistTable({
+function VendorChecklistTable({
+  canConfigureVendorList,
   disabled,
   field,
   onTableChange,
   rows,
 }: {
+  canConfigureVendorList: boolean;
+  disabled: boolean;
+  field: CommissionFormField;
+  onTableChange: (rows: EditableTableRow[]) => void;
+  rows: EditableTableRow[];
+}) {
+  const [isVendorEditorOpen, setIsVendorEditorOpen] = useState(false);
+  const groups = ensureOtherGroup(groupChecklistRows(rows));
+  const updateRow = (rowIndex: number, patch: Record<string, unknown>) => onTableChange(rows.map((row, index) => index === rowIndex ? { ...row, cells: { ...row.cells, ...patch } } : row));
+
+  return <div className="min-w-0 space-y-4">
+    <div className="flex flex-wrap justify-end gap-2">
+      <Button size="sm" variant="outline" onClick={() => downloadVendorListHtml(groups)}><Download size={14} />Esporta HTML</Button>
+      {canConfigureVendorList ? <Button size="sm" variant="outline" onClick={() => setIsVendorEditorOpen(true)}><Pencil size={14} />Modifica Vendor List</Button> : null}
+    </div>
+    {groups.map((group) => <section key={group.category} className="min-w-0 overflow-hidden rounded-[var(--radius-md)] border border-border-subtle bg-bg-surface">
+      <div className="border-b border-border-subtle bg-bg-muted/50 px-3 py-2"><span className="text-xs font-bold uppercase text-brand-primary">{group.category}</span></div>
+      <div className="min-w-0 overflow-x-auto"><div className="min-w-[760px]">
+        <div className="grid grid-cols-[52px_minmax(180px,0.9fr)_minmax(220px,1.1fr)_minmax(260px,1.2fr)] gap-3 border-b border-border-subtle bg-bg-muted/30 px-3 py-2 text-xs font-bold uppercase text-text-muted"><span className="text-center" title="Componente presente"><Check size={15} className="mx-auto" /></span><span>Componente</span><span>Marche di riferimento</span><span>Selezione cliente</span></div>
+        {group.items.map(({ row, rowIndex }) => {
+          const isOther = isOtherCategory(group.category);
+          const brandsText = unknownToInputValue(row.cells._vendor_reference_brands) || unknownToInputValue(row.cells.col_3_marche_di_riferimento) || getTableCellPlaceholder(row, field.table!.columns.find((column) => column.key === "col_3_marche_di_riferimento")! ) || "";
+          const brands = splitVendorBrands(brandsText);
+          const present = isConfirmedValue(row.cells.col_4_confermato);
+          const selection = parseVendorSelection(row.cells.col_5_altro);
+          const selectBrand = (brand: string | null) => updateRow(rowIndex, { col_4_confermato: brand ? "true" : "", col_5_altro: brand ? JSON.stringify({ brand, otherBrand: brand === "__other__" ? selection.otherBrand : "" }) : "" });
+          return <div key={`${field.id}-${rowIndex}`} className="grid grid-cols-[52px_minmax(180px,0.9fr)_minmax(220px,1.1fr)_minmax(260px,1.2fr)] gap-3 border-b border-border-subtle px-3 py-3 last:border-b-0">
+            <button type="button" disabled={disabled} title={present ? "Componente presente" : "Componente non presente"} aria-label={present ? "Componente presente" : "Componente non presente"} aria-pressed={present} onClick={() => updateRow(rowIndex, { col_4_confermato: present ? "" : "true", col_5_altro: present ? "" : row.cells.col_5_altro })} className={cn("mx-auto flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] border transition-colors disabled:opacity-60", present ? "border-status-success-text bg-status-success-bg text-status-success-text" : "border-border-default bg-bg-page text-transparent hover:border-brand-primary")}><Check size={16} strokeWidth={3} /></button>
+            {isOther ? <Input disabled={disabled} value={unknownToInputValue(row.cells.col_2_componente)} placeholder="Componente" onChange={(event) => updateRow(rowIndex, { col_2_componente: event.target.value })} /> : <span className="pt-2 text-sm font-semibold text-text-primary">{unknownToInputValue(row.cells.col_2_componente)}</span>}
+            {isOther ? <Input disabled={disabled} value={brandsText} placeholder="Marche di riferimento" onChange={(event) => updateRow(rowIndex, { col_3_marche_di_riferimento: event.target.value })} /> : <span className="pt-2 text-sm leading-5 text-text-secondary">{brandsText}</span>}
+            <div className="space-y-1.5">{brands.map((brand) => <button key={brand} type="button" disabled={disabled} role="checkbox" aria-checked={selection.brand === brand} onClick={() => selectBrand(selection.brand === brand ? null : brand)} className="flex w-full items-start gap-2 text-left text-xs text-text-secondary disabled:opacity-60"><span className={cn("mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border", selection.brand === brand ? "border-brand-primary bg-brand-primary text-text-inverse" : "border-border-default bg-bg-page text-transparent")}><Check size={12} strokeWidth={3} /></span><span>{brand}</span></button>)}<div className="mt-2 border-t border-dashed border-border-default pt-2"><label className="flex items-center gap-2 text-xs text-text-secondary"><button type="button" disabled={disabled} role="checkbox" aria-checked={selection.brand === "__other__"} onClick={() => selectBrand(selection.brand === "__other__" ? null : "__other__")} className={cn("flex h-4 w-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border", selection.brand === "__other__" ? "border-brand-primary bg-brand-primary text-text-inverse" : "border-border-default bg-bg-page text-transparent")}><Check size={12} strokeWidth={3} /></button>Altro</label><Input className="mt-1 h-9" disabled={disabled || selection.brand !== "__other__"} value={selection.otherBrand} placeholder="Marca non in elenco" onChange={(event) => updateRow(rowIndex, { col_4_confermato: "true", col_5_altro: JSON.stringify({ brand: "__other__", otherBrand: event.target.value }) })} /></div></div>
+          </div>;
+        })}
+      </div></div>
+    </section>)}
+    {isVendorEditorOpen ? <VendorListEditorDialog onClose={() => setIsVendorEditorOpen(false)} /> : null}
+  </div>;
+}
+
+function splitVendorBrands(value: string): string[] {
+  const result: string[] = []; let current = ""; let depth = 0;
+  for (const character of value) { if (character === "(") depth += 1; if (character === ")") depth = Math.max(0, depth - 1); if (character === "," && depth === 0) { if (current.trim()) result.push(current.trim()); current = ""; } else current += character; }
+  if (current.trim()) result.push(current.trim());
+  return result;
+}
+
+function parseVendorSelection(value: unknown): { brand: string | null; otherBrand: string } {
+  const raw = unknownToInputValue(value); if (!raw) return { brand: null, otherBrand: "" };
+  try { const parsed = JSON.parse(raw) as { brand?: unknown; otherBrand?: unknown }; return { brand: typeof parsed.brand === "string" ? parsed.brand : null, otherBrand: typeof parsed.otherBrand === "string" ? parsed.otherBrand : "" }; } catch { return { brand: "__other__", otherBrand: raw }; }
+}
+
+function downloadVendorListHtml(groups: Array<{ category: string; note: string; items: Array<{ row: EditableTableRow; rowIndex: number }> }>): void {
+  const sections = groups.map((group) => {
+    const rows = group.items.map(({ row }) => {
+      const component = unknownToInputValue(row.cells.col_2_componente).trim();
+      const present = isConfirmedValue(row.cells.col_4_confermato);
+      const selection = parseVendorSelection(row.cells.col_5_altro);
+      const brand = selection.brand === "__other__" ? selection.otherBrand.trim() : selection.brand;
+      if (!component || (!present && !brand)) return "";
+      const detail = brand ? `: ${escapeHtml(brand)}` : "";
+      const status = present ? "" : " <span>(non presente)</span>";
+      return `<li><strong>${escapeHtml(component)}</strong>${detail}${status}</li>`;
+    }).filter(Boolean).join("\n");
+    return rows ? `<section><h2>${escapeHtml(group.category)}</h2><ul>${rows}</ul></section>` : "";
+  }).filter(Boolean).join("\n");
+  const html = `<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Vendor List</title><style>body{font-family:Arial,sans-serif;color:#172033;max-width:900px;margin:40px auto;padding:0 24px}h1{font-size:24px;margin:0 0 28px}h2{font-size:16px;margin:26px 0 8px;padding-bottom:6px;border-bottom:1px solid #d9dee8}ul{margin:0;padding-left:22px}li{margin:7px 0}span{color:#667085;font-size:13px}</style></head><body><h1>Vendor List</h1>${sections || "<p>Nessuna selezione compilata.</p>"}</body></html>`;
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "vendor-list.html";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
+}
+
+function GroupedChecklistTable({
+  canConfigureVendorList,
+  disabled,
+  field,
+  onTableChange,
+  rows,
+}: {
+  canConfigureVendorList: boolean;
   disabled: boolean;
   field: CommissionFormField;
   onTableChange: (rows: EditableTableRow[]) => void;
@@ -1352,6 +1538,7 @@ function GroupedChecklistTable({
   const { t } = useLanguage();
   const columns = getVisibleTableColumns(field);
   const groups = ensureOtherGroup(groupChecklistRows(rows));
+  const [isVendorEditorOpen, setIsVendorEditorOpen] = useState(false);
   const addOtherRow = () => {
     onTableChange([...rows, { rowKey: null, cells: buildOtherTableRowCells(field) }]);
   };
@@ -1359,19 +1546,23 @@ function GroupedChecklistTable({
     const lastOtherIndex = findLastOtherRowIndex(rows);
     if (lastOtherIndex < 0) return;
     const lastRow = rows[lastOtherIndex];
-    if (hasWrittenTableRowContent(lastRow, field.table?.columns ?? [])) {
-      const confirmed = window.confirm(t("commissions.deleteLastWrittenRowConfirm"));
-      if (!confirmed) return;
-    }
     onTableChange(rows.filter((_, rowIndex) => rowIndex !== lastOtherIndex));
   };
 
   return (
     <div className="min-w-0 space-y-4">
+      {isVendorListTable(field) && canConfigureVendorList ? (
+        <div className="flex justify-end">
+          <Button size="sm" variant="outline" onClick={() => setIsVendorEditorOpen(true)}>
+            <Pencil size={14} />
+            Modifica Vendor List
+          </Button>
+        </div>
+      ) : null}
       {groups.map((group) => (
         <div key={group.category} className="min-w-0 overflow-hidden rounded-[var(--radius-md)] border border-border-subtle bg-bg-surface">
           <div className="flex items-center justify-between gap-3 border-b border-border-subtle bg-bg-muted/50 px-3 py-2">
-            <span className="text-xs font-bold uppercase text-brand-primary">{group.category}</span>
+            <div className="min-w-0"><span className="text-xs font-bold uppercase text-brand-primary">{group.category}</span>{group.note ? <p className="mt-1 text-xs text-text-muted">{group.note}</p> : null}</div>
             {isOtherCategory(group.category) ? (
               <div className="flex shrink-0 items-center gap-2">
                 <Button size="sm" variant="outline" disabled={disabled || findLastOtherRowIndex(rows) < 0} onClick={deleteLastOtherRow}>
@@ -1432,7 +1623,8 @@ function GroupedChecklistTable({
                           column={column}
                           placeholder={getTableCellPlaceholder(row, column)}
                           value={unknownToInputValue(row.cells[column.key])}
-                          disabled={disabled}
+                          disabled={disabled || (isVendorListTable(field) && !isOtherCategory(group.category) && column.key === "col_2_componente")}
+                          className={isVendorListTable(field) && column.key === "col_3_marche_di_riferimento" ? "placeholder:opacity-40" : undefined}
                           onChange={(event) => {
                             const nextRows = rows.map((editableRow) => ({ ...editableRow, cells: { ...editableRow.cells } }));
                             nextRows[rowIndex] = {
@@ -1455,13 +1647,87 @@ function GroupedChecklistTable({
           </div>
         </div>
       ))}
+      {isVendorEditorOpen ? <VendorListEditorDialog onClose={() => setIsVendorEditorOpen(false)} /> : null}
     </div>
   );
 }
 
+interface VendorListCategoryDraft {
+  name: string;
+  note: string;
+  items: Array<{ component: string; brands: string }>;
+}
+
+function VendorListEditorDialog({ onClose }: { onClose: () => void }) {
+  const [categories, setCategories] = useState<VendorListCategoryDraft[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isCustomized, setIsCustomized] = useState(false);
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/commission-intake/vendor-list", { cache: "no-store" });
+      const payload = await response.json().catch(() => ({})) as { vendorList?: { categories?: VendorListCategoryDraft[]; isCustomized?: boolean }; message?: string };
+      if (!response.ok || !payload.vendorList?.categories) throw new Error(payload.message ?? "Impossibile caricare la Vendor List.");
+      setCategories(payload.vendorList.categories);
+      setIsCustomized(payload.vendorList.isCustomized === true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossibile caricare la Vendor List.");
+      onClose();
+    } finally {
+      setIsLoading(false);
+    }
+  }, [onClose]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const updateCategory = (index: number, patch: Partial<VendorListCategoryDraft>) => setCategories((current) => current.map((category, currentIndex) => currentIndex === index ? { ...category, ...patch } : category));
+  const updateItem = (categoryIndex: number, itemIndex: number, patch: Partial<VendorListCategoryDraft["items"][number]>) => setCategories((current) => current.map((category, currentIndex) => currentIndex === categoryIndex ? { ...category, items: category.items.map((item, currentItemIndex) => currentItemIndex === itemIndex ? { ...item, ...patch } : item) } : category));
+  const moveCategory = (index: number, direction: -1 | 1) => setCategories((current) => {
+    const target = index + direction;
+    if (target < 0 || target >= current.length) return current;
+    const next = [...current]; [next[index], next[target]] = [next[target], next[index]]; return next;
+  });
+  const save = async () => {
+    setIsSaving(true);
+    try {
+      const response = await fetch("/api/commission-intake/vendor-list", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ categories }) });
+      const payload = await response.json().catch(() => ({})) as { message?: string };
+      if (!response.ok) throw new Error(payload.message ?? "Impossibile salvare la Vendor List.");
+      toast.success("Vendor List aggiornata per le nuove checklist.");
+      onClose();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Impossibile salvare la Vendor List."); }
+    finally { setIsSaving(false); }
+  };
+  const reset = async () => {
+    setIsSaving(true);
+    try {
+      const response = await fetch("/api/commission-intake/vendor-list", { method: "DELETE" });
+      const payload = await response.json().catch(() => ({})) as { vendorList?: { categories?: VendorListCategoryDraft[] }; message?: string };
+      if (!response.ok || !payload.vendorList?.categories) throw new Error(payload.message ?? "Impossibile ripristinare la Vendor List.");
+      setCategories(payload.vendorList.categories); setIsCustomized(false);
+      toast.success("Ripristinata la Vendor List standard.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Impossibile ripristinare la Vendor List."); }
+    finally { setIsSaving(false); }
+  };
+
+  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-labelledby="vendor-list-editor-title" onMouseDown={(event) => { if (event.target === event.currentTarget && !isSaving) onClose(); }}>
+    <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-bg-surface shadow-elevated">
+      <header className="flex items-start gap-3 border-b border-border-default px-5 py-4"><BirgusLogo className="h-9 w-9 shrink-0" /><div className="min-w-0 flex-1"><h2 id="vendor-list-editor-title" className="text-base font-bold text-text-primary">Birgus dice:</h2><p className="mt-1 text-sm text-text-secondary">Modifica Vendor List</p><p className="mt-1 text-xs text-text-muted">Le modifiche saranno usate dalle nuove checklist; quelle esistenti mantengono la loro lista.</p></div><Button variant="ghost" size="sm" className="h-8 w-8 shrink-0 px-0" title="Chiudi" disabled={isSaving} onClick={onClose}><X size={16} /></Button></header>
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
+        {isLoading ? <p className="text-sm text-text-muted">Caricamento Vendor List...</p> : categories.map((category, categoryIndex) => <section key={`${categoryIndex}-${category.name}`} className="rounded-[var(--radius-md)] border border-border-default bg-bg-page p-3"><div className="flex flex-col gap-2 md:flex-row md:items-center"><Input value={category.name} onChange={(event) => updateCategory(categoryIndex, { name: event.target.value })} placeholder="Nome categoria" /><div className="flex shrink-0 gap-1"><Button size="sm" variant="outline" title="Sposta su" disabled={categoryIndex === 0 || isSaving} onClick={() => moveCategory(categoryIndex, -1)}><ChevronUp size={16} /></Button><Button size="sm" variant="outline" title="Sposta giù" disabled={categoryIndex === categories.length - 1 || isSaving} onClick={() => moveCategory(categoryIndex, 1)}><ChevronDown size={16} /></Button><Button size="sm" variant="danger" title="Elimina categoria" disabled={isSaving} onClick={() => setCategories((current) => current.filter((_, index) => index !== categoryIndex))}><Trash2 size={16} /></Button></div></div><textarea value={category.note} onChange={(event) => updateCategory(categoryIndex, { note: event.target.value })} placeholder="Nota categoria (facoltativa)" className="mt-2 min-h-20 w-full resize-y rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-3 text-sm text-text-secondary placeholder:text-text-muted focus-visible:border-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary" />
+          <div className="mt-3 space-y-2">{category.items.map((item, itemIndex) => <div key={`${categoryIndex}-${itemIndex}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"><Input value={item.component} onChange={(event) => updateItem(categoryIndex, itemIndex, { component: event.target.value })} placeholder="Componente" /><Input value={item.brands} onChange={(event) => updateItem(categoryIndex, itemIndex, { brands: event.target.value })} placeholder="Marche di riferimento" /><Button size="sm" variant="danger" title="Elimina voce" disabled={isSaving} onClick={() => updateCategory(categoryIndex, { items: category.items.filter((_, index) => index !== itemIndex) })}><Trash2 size={16} /></Button></div>)}</div><Button className="mt-3" size="sm" variant="outline" disabled={isSaving} onClick={() => updateCategory(categoryIndex, { items: [...category.items, { component: "", brands: "" }] })}><Plus size={14} />Aggiungi voce</Button></section>)}
+        {!isLoading ? <Button variant="outline" disabled={isSaving} onClick={() => setCategories((current) => [...current, { name: "Nuova categoria", note: "", items: [] }])}><Plus size={16} />Aggiungi categoria</Button> : null}
+      </div>
+      <footer className="flex flex-wrap justify-end gap-2 border-t border-border-default px-5 py-4"><Button variant="outline" disabled={isSaving} onClick={onClose}>Chiudi</Button>{isCustomized ? <Button variant="outline" disabled={isSaving} onClick={() => void reset()}>Ripristina standard</Button> : null}<Button disabled={isLoading || isSaving || !categories.length} onClick={() => void save()}>{isSaving ? "Salvataggio..." : "Salva Vendor List"}</Button></footer>
+    </div>
+  </div>;
+}
+
 function ensureOtherGroup(groups: ReturnType<typeof groupChecklistRows>): ReturnType<typeof groupChecklistRows> {
   if (groups.some((group) => isOtherCategory(group.category))) return groups;
-  return [...groups, { category: "Altro", items: [] }];
+  return [...groups, { category: "Altro", note: "", items: [] }];
 }
 
 function findLastOtherRowIndex(rows: EditableTableRow[]): number {
@@ -1510,7 +1776,25 @@ function isDocumentUploadSlotField(field: CommissionFormField): boolean {
 
 function isYesNoOptionSet(field: CommissionFormField): boolean {
   const optionValues = field.options.map((option) => normalizeLoose(option.label || option.value));
-  return optionValues.includes("si") && optionValues.includes("no");
+  return optionValues.some((value) => value === "si" || value.startsWith("siquantita")) && optionValues.includes("no");
+}
+
+function selectedChoiceValue(value: unknown): string {
+  if (Array.isArray(value)) return typeof value[0] === "string" ? value[0] : "";
+  if (value && typeof value === "object" && typeof (value as { selection?: unknown }).selection === "string") return (value as { selection: string }).selection;
+  return typeof value === "string" ? value : "";
+}
+
+function quantityValue(value: unknown): string {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const quantity = (value as { quantity?: unknown }).quantity;
+    return typeof quantity === "string" || typeof quantity === "number" ? String(quantity) : "";
+  }
+  return "";
+}
+
+function isQuantityChoice(value: string): boolean {
+  return normalizeLoose(value).includes("quantita");
 }
 
 function isAffirmativeValue(value: unknown): boolean {
@@ -1551,6 +1835,10 @@ function getCompletionIssues(
         continue;
       }
 
+      if (isQuantityChoice(selectedChoiceValue(fieldValues[field.id])) && !hasFieldValue(quantityValue(fieldValues[field.id]))) {
+        issues.push({ pageNumber: page.pageNumber, sectionTitle: section.title, label: `${getUnitMeta(field.label).label}: quantità` });
+        continue;
+      }
       if (!hasFieldValue(fieldValues[field.id]) && !isIgnorableEmptyField(field)) {
         issues.push({ pageNumber: page.pageNumber, sectionTitle: section.title, label: getUnitMeta(field.label).label });
       }

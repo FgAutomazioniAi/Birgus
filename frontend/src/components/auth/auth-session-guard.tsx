@@ -79,7 +79,7 @@ const inspectUnauthorizedResponse = async (response: Response): Promise<void> =>
 
   try {
     const payload = (await response.clone().json()) as { code?: string };
-    if (!payload.code || AUTH_ERROR_CODES.has(payload.code)) {
+    if (payload.code && AUTH_ERROR_CODES.has(payload.code)) {
       redirectToLogin();
     }
   } catch {

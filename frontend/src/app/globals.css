@@ -16,7 +16,7 @@
 
 *::-webkit-scrollbar-thumb {
   border: 3px solid var(--color-bg-page);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--color-border-default);
 }
 
@@ -330,6 +330,12 @@
   --token-radius-md: 0;
   --token-radius-lg: 0;
   --token-radius-xl: 0;
+}
+
+/* Some legacy feature views still use Tailwind's fixed rounded utilities.
+   Keep the personal corner preference authoritative for framed UI elements. */
+[data-corners="square"] :is(.rounded, .rounded-sm, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl) {
+  border-radius: 0;
 }
 
 @theme inline {

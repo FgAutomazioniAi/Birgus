@@ -3,7 +3,7 @@
 import { ChevronRight, Eye, EyeOff, KeyRound, Lock, LogIn, Mail, RefreshCw, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -15,7 +15,6 @@ import { APP_ROUTES } from "@/lib/routes";
 interface LoginFormValues {
   email: string;
   password: string;
-  rememberMe: boolean;
 }
 
 interface LoginApiSuccessPayload {
@@ -23,13 +22,14 @@ interface LoginApiSuccessPayload {
   mustChangePassword?: boolean;
   challengeToken?: string;
   setupRequired?: boolean;
+  isDeveloper?: boolean;
   setup?: {
     secret?: string;
     otpauthUri?: string;
   } | null;
 }
 
-export function LoginForm({ version }: { version: string }) {
+export function LoginForm({ version, embedded = false, focusEmailToken = 0 }: { version: string; embedded?: boolean; focusEmailToken?: number }) {
   const { t } = useLanguage();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,6 +46,8 @@ export function LoginForm({ version }: { version: string }) {
   const [twoFactorSetupUri, setTwoFactorSetupUri] = useState<string | null>(null);
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [isVerifyingTwoFactor, setIsVerifyingTwoFactor] = useState(false);
+  const [canRememberTrustedDevice, setCanRememberTrustedDevice] = useState(false);
+  const [rememberTrustedDevice, setRememberTrustedDevice] = useState(false);
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
   const [forcedCurrentPassword, setForcedCurrentPassword] = useState("");
   const [forcedNewPassword, setForcedNewPassword] = useState("");
@@ -58,20 +60,26 @@ export function LoginForm({ version }: { version: string }) {
     register,
     handleSubmit,
     getValues,
+    setFocus,
     formState: { errors },
   } = useForm<LoginFormValues>({
     defaultValues: {
       email: "",
       password: "",
-      rememberMe: false,
     },
   });
+
+  useEffect(() => {
+    if (embedded && focusEmailToken > 0) setFocus("email");
+  }, [embedded, focusEmailToken, setFocus]);
 
   const resetTwoFactorState = () => {
     setTwoFactorChallengeToken(null);
     setTwoFactorSetupSecret(null);
     setTwoFactorSetupUri(null);
     setTwoFactorCode("");
+    setCanRememberTrustedDevice(false);
+    setRememberTrustedDevice(false);
   };
 
   const passwordMeetsPolicy = (value: string) => value.length >= 8 && /[A-Z]/.test(value) && /\d/.test(value);
@@ -110,7 +118,6 @@ export function LoginForm({ version }: { version: string }) {
         body: JSON.stringify({
           email: data.email,
           password: data.password,
-          rememberMe: data.rememberMe,
         }),
       });
 
@@ -132,6 +139,8 @@ export function LoginForm({ version }: { version: string }) {
         setTwoFactorSetupSecret(payload.setupRequired ? payload.setup?.secret ?? null : null);
         setTwoFactorSetupUri(payload.setupRequired ? payload.setup?.otpauthUri ?? null : null);
         setTwoFactorCode("");
+        setCanRememberTrustedDevice(payload.isDeveloper === true);
+        setRememberTrustedDevice(false);
         toast.info(t("auth.enterAuthenticatorCode"));
         return;
       }
@@ -176,8 +185,9 @@ export function LoginForm({ version }: { version: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          challengeToken: twoFactorChallengeToken,
-          otpCode: normalizedCode,
+        challengeToken: twoFactorChallengeToken,
+        otpCode: normalizedCode,
+        rememberTrustedDevice: canRememberTrustedDevice && rememberTrustedDevice,
         }),
       });
 
@@ -251,11 +261,6 @@ export function LoginForm({ version }: { version: string }) {
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { message?: string; code?: string } | null;
-        if (payload?.code === "AUTH_PASSWORD_RESET_EMAIL_FAILED") {
-          window.alert(
-            "Invio email non riuscito.\nAvvisa il tuo amministratore oppure contatta support.ai@fgautomazioni.it.",
-          );
-        }
         throw new Error(payload?.message ?? "Invio codice non riuscito.");
       }
 
@@ -393,22 +398,34 @@ export function LoginForm({ version }: { version: string }) {
               {isVerifyingTwoFactor ? t("auth.verifying") : t("auth.verify")}
             </Button>
           </div>
+          {canRememberTrustedDevice ? (
+            <Checkbox
+              id="remember-trusted-device"
+              label="Ricorda questo dispositivo per 30 giorni"
+              checked={rememberTrustedDevice}
+              disabled={isVerifyingTwoFactor}
+              onChange={(event) => setRememberTrustedDevice(event.target.checked)}
+            />
+          ) : null}
         </div>
       </div>
     )
     : null;
 
   return (
-    <div className="flex min-h-screen flex-col justify-center bg-bg-page px-4 py-12 sm:px-6 lg:px-8">
-      <div className="text-center sm:mx-auto sm:w-full sm:max-w-md">
+    <div data-theme={embedded ? "dark" : undefined} className={embedded ? "w-full" : "flex min-h-screen flex-col justify-center bg-bg-page px-4 py-12 sm:px-6 lg:px-8"}>
+      {!embedded && <div className="text-center sm:mx-auto sm:w-full sm:max-w-md">
         <BirgusLogo className="mb-10 mx-auto h-14 w-auto" />
         <h2 className="mt-6 text-3xl font-extrabold tracking-tight text-brand-primary">
           {t("auth.title")}
         </h2>
-      </div>
+      </div>}
 
-      <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-md">
-        <Card className="border border-border-subtle px-4 py-10 shadow-elevated sm:px-10">
+      <div className={embedded ? "mx-auto w-full max-w-md" : "mt-10 sm:mx-auto sm:w-full sm:max-w-md"}>
+        <Card
+          className={embedded ? "border-cyan-200/20 px-4 py-10 shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop-blur-xs sm:px-10" : "border border-border-subtle px-4 py-10 shadow-elevated sm:px-10"}
+          style={embedded ? { backgroundColor: "rgba(7, 16, 29, 0.48)" } : undefined}
+        >
           {forcePasswordChange ? (
             <div className="space-y-5">
               <div>
@@ -438,7 +455,7 @@ export function LoginForm({ version }: { version: string }) {
               <Label htmlFor="email">{t("auth.email")}</Label>
               <div className="relative mt-1">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                  <Mail className="h-5 w-5 text-slate-400" />
+                  <Mail className="h-5 w-5 text-text-muted" />
                 </div>
                 <Input
                   id="email"
@@ -457,7 +474,7 @@ export function LoginForm({ version }: { version: string }) {
               <Label htmlFor="password">{t("auth.password")}</Label>
               <div className="relative mt-1">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                  <Lock className="h-5 w-5 text-slate-400" />
+                  <Lock className="h-5 w-5 text-text-muted" />
                 </div>
                 <Input
                   id="password"
@@ -475,7 +492,7 @@ export function LoginForm({ version }: { version: string }) {
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
                   disabled={isSubmitting || !!twoFactorChallengeToken || isVerifyingTwoFactor}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 transition-colors hover:text-blue-600"
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-text-muted transition-colors hover:text-brand-primary"
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
@@ -485,19 +502,12 @@ export function LoginForm({ version }: { version: string }) {
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <Checkbox
-                id="remember-me"
-                disabled={isSubmitting || !!twoFactorChallengeToken || isVerifyingTwoFactor}
-                label={t("auth.remember")}
-                {...register("rememberMe")}
-              />
-
+            <div className="flex items-center justify-end">
               <div className="text-sm">
                 <button
                   type="button"
                   onClick={() => setIsRecoveryOpen((prev) => !prev)}
-                  className="font-semibold text-brand-accent transition-colors hover:text-brand-accent-hover"
+                  className="font-semibold text-brand-accent hover:text-brand-accent-hover"
                   disabled={!!twoFactorChallengeToken}
                 >
                   {t("auth.forgot")}
@@ -615,9 +625,9 @@ export function LoginForm({ version }: { version: string }) {
           )}
           </>}
         </Card>
-        <p className="mt-4 text-right text-xs font-medium text-text-muted">
+        {!embedded && <p className="mt-4 text-right text-xs font-medium text-text-muted">
           Versione: {version}
-        </p>
+        </p>}
       </div>
     </div>
   );

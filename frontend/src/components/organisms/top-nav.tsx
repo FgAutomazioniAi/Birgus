@@ -1,11 +1,12 @@
 "use client";
 
-import { Bell, Menu, PanelLeft, PanelLeftClose } from "lucide-react";
+import { Bell, Bug, Loader2, Menu, PanelLeft, PanelLeftClose, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { IconButton } from "@/components/atoms";
+import { Button, IconButton, Input } from "@/components/atoms";
+import { BirgusLogo } from "@/components/molecules/birgus-logo";
 import { useLanguage } from "@/components/organisms/language-provider";
 import { APP_ROUTES } from "@/lib/routes";
 
@@ -59,6 +60,10 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
   const [operations, setOperations] = useState<QueuedOperation[]>([]);
   const [openInterventionsCount, setOpenInterventionsCount] = useState(0);
+  const [showBugReport, setShowBugReport] = useState(false);
+  const [bugTitle, setBugTitle] = useState("");
+  const [bugDescription, setBugDescription] = useState("");
+  const [sendingBugReport, setSendingBugReport] = useState(false);
   const notificationRef = useRef<HTMLDivElement | null>(null);
   const notificationsEnabled = currentUser.enabledModuleKeys.includes("notification_center");
 
@@ -220,6 +225,19 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
     if (status === "RUNNING") return "text-brand-primary";
     return "text-text-muted";
   };
+
+  const handleSubmitBugReport = async () => {
+    if (bugTitle.trim().length < 3 || bugDescription.trim().length < 10 || sendingBugReport) return;
+    setSendingBugReport(true);
+    try {
+      const response = await fetch("/api/bug-reports", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: bugTitle.trim(), description: bugDescription.trim(), pageUrl: window.location.href }) });
+      const payload = await response.json().catch(() => ({})) as { message?: string };
+      if (!response.ok) throw new Error(payload.message ?? "Invio della segnalazione non riuscito.");
+      setShowBugReport(false); setBugTitle(""); setBugDescription("");
+      toast.success("Segnalazione inviata.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Invio della segnalazione non riuscito."); }
+    finally { setSendingBugReport(false); }
+  };
   const operationTime = (operation: QueuedOperation) => new Date(operation.startedAt ?? operation.queuedAt).toLocaleTimeString(language === "it" ? "it-IT" : "en-GB", { hour: "2-digit", minute: "2-digit" });
 
   return (
@@ -236,9 +254,9 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
             className="group hidden items-center gap-2 rounded-lg px-3 py-2 text-text-muted transition-all hover:bg-status-info-bg hover:text-brand-primary lg:flex"
           >
             {collapsed ? (
-              <PanelLeft size={20} className="group-hover:text-blue-600" />
+              <PanelLeft size={20} className="group-hover:text-brand-primary" />
             ) : (
-              <PanelLeftClose size={20} className="group-hover:text-blue-600" />
+              <PanelLeftClose size={20} className="group-hover:text-brand-primary" />
             )}
           </button>
         </div>
@@ -327,12 +345,41 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
                   </div>
                 )}
               </div>
-
+              <div className="h-8 w-px bg-border-default" aria-hidden="true" />
             </>
           ) : null}
+          <IconButton title="Segnala un problema" onClick={() => setShowBugReport(true)}>
+            <Bug size={20} />
+          </IconButton>
 
         </div>
       </div>
+      {showBugReport ? <div className="fixed inset-0 z-[100] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-labelledby="bug-report-title" onMouseDown={(event) => { if (event.target === event.currentTarget && !sendingBugReport) setShowBugReport(false); }}>
+        <div className="w-full max-w-lg rounded-[var(--radius-md)] border border-border-default bg-bg-surface shadow-elevated">
+          <div className="flex items-start gap-3 border-b border-border-default px-5 py-4">
+            <BirgusLogo className="h-9 w-9 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <h2 id="bug-report-title" className="text-base font-bold text-text-primary">Birgus dice:</h2>
+              <p className="mt-1 text-sm text-text-secondary">Segnala un problema</p>
+            </div>
+            <IconButton title="Chiudi" disabled={sendingBugReport} onClick={() => setShowBugReport(false)}><X size={18} /></IconButton>
+          </div>
+          <div className="space-y-4 p-5">
+            <label className="block text-sm font-semibold text-text-primary" htmlFor="bug-report-title-input">
+              Titolo
+              <Input id="bug-report-title-input" className="mt-1 h-10 bg-bg-page" maxLength={160} value={bugTitle} onChange={(event) => setBugTitle(event.target.value)} autoFocus />
+            </label>
+            <label className="block text-sm font-semibold text-text-primary" htmlFor="bug-report-description">
+              Descrizione
+              <textarea id="bug-report-description" className="mt-1 min-h-36 w-full resize-y rounded-[var(--radius-md)] border border-border-default bg-bg-page p-3 text-sm text-text-primary outline-none focus-visible:border-brand-primary focus-visible:ring-2 focus-visible:ring-ring-primary" maxLength={10_000} value={bugDescription} onChange={(event) => setBugDescription(event.target.value)} />
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-border-default px-5 py-4">
+            <Button type="button" variant="outline" disabled={sendingBugReport} onClick={() => setShowBugReport(false)}>Annulla</Button>
+            <Button type="button" disabled={sendingBugReport || bugTitle.trim().length < 3 || bugDescription.trim().length < 10} onClick={() => void handleSubmitBugReport()}>{sendingBugReport ? <Loader2 size={16} className="animate-spin" /> : null}Invia</Button>
+          </div>
+        </div>
+      </div> : null}
     </header>
   );
 }
