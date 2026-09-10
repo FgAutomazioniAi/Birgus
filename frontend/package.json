@@ -1,7 +1,7 @@
 {
   "name": "birgus",
   "private": true,
-  "version": "1.1.2",
+  "version": "1.2.5",
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 --port 3100",
     "build": "next build",
