@@ -52,6 +52,7 @@ const formatNotificationDate = (isoDate: string, language: "it" | "en") =>
     minute: "2-digit",
     month: "2-digit",
   });
+
 export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }: TopNavProps) {
   const router = useRouter();
   const { language, setLanguage, t } = useLanguage();
@@ -360,17 +361,17 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
             <BirgusLogo className="h-9 w-9 shrink-0" />
             <div className="min-w-0 flex-1">
               <h2 id="bug-report-title" className="text-base font-bold text-text-primary">Birgus dice:</h2>
-              <p className="mt-1 text-sm text-text-secondary">Segnala un problema</p>
+              <p className="mt-1 text-sm text-text-secondary">Segnala un problema, lo risolveremo appena possibile.</p>
             </div>
             <IconButton title="Chiudi" disabled={sendingBugReport} onClick={() => setShowBugReport(false)}><X size={18} /></IconButton>
           </div>
           <div className="space-y-4 p-5">
             <label className="block text-sm font-semibold text-text-primary" htmlFor="bug-report-title-input">
-              Titolo
+              Argomento
               <Input id="bug-report-title-input" className="mt-1 h-10 bg-bg-page" maxLength={160} value={bugTitle} onChange={(event) => setBugTitle(event.target.value)} autoFocus />
             </label>
             <label className="block text-sm font-semibold text-text-primary" htmlFor="bug-report-description">
-              Descrizione
+              Problema
               <textarea id="bug-report-description" className="mt-1 min-h-36 w-full resize-y rounded-[var(--radius-md)] border border-border-default bg-bg-page p-3 text-sm text-text-primary outline-none focus-visible:border-brand-primary focus-visible:ring-2 focus-visible:ring-ring-primary" maxLength={10_000} value={bugDescription} onChange={(event) => setBugDescription(event.target.value)} />
             </label>
           </div>

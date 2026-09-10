@@ -10,7 +10,7 @@ export class BrainyWorkspaceDatabaseConnectionService {
 
   public async list(workspaceId: string) {
     const rows = await this.prisma.brainyWorkspaceDatabaseConnection.findMany({ where: { workspace_id: workspaceId, deleted_at: null }, orderBy: { label: "asc" } });
-    return rows.map((row) => ({ id: row.id, brainywareConnectionId: row.brainyware_connection_id, label: row.label }));
+    return rows.map((row) => ({ id: row.id, brainywareConnectionId: row.brainyware_connection_id, label: row.label, isEnabled: row.is_enabled }));
   }
 
   public async listAvailable() {
@@ -25,10 +25,18 @@ export class BrainyWorkspaceDatabaseConnectionService {
     if (connection.accessMode?.toUpperCase() !== "READ_ONLY") throw new AppError("Birgus consente esclusivamente connessioni Brainyware READ_ONLY.", "BRAINY_DATABASE_READ_ONLY_REQUIRED", 409);
     const row = await this.prisma.brainyWorkspaceDatabaseConnection.upsert({
       where: { workspace_id_brainyware_connection_id: { workspace_id: workspaceId, brainyware_connection_id: id } },
-      create: { workspace_id: workspaceId, brainyware_connection_id: id, label: connection.name, created_by_user_id: userId },
-      update: { label: connection.name, deleted_at: null },
+      create: { workspace_id: workspaceId, brainyware_connection_id: id, label: connection.name, is_enabled: true, created_by_user_id: userId },
+      update: { label: connection.name, is_enabled: true, deleted_at: null },
     });
-    return { id: row.id, brainywareConnectionId: row.brainyware_connection_id, label: row.label };
+    return { id: row.id, brainywareConnectionId: row.brainyware_connection_id, label: row.label, isEnabled: row.is_enabled };
+  }
+
+  public async setEnabled(workspaceId: string, id: string, isEnabled: boolean) {
+    const result = await this.prisma.brainyWorkspaceDatabaseConnection.updateMany({
+      where: { id, workspace_id: workspaceId, deleted_at: null },
+      data: { is_enabled: isEnabled },
+    });
+    if (!result.count) throw new AppError("Connessione database Brainy non trovata.", "BRAINY_DATABASE_NOT_FOUND", 404);
   }
 
   public async archive(workspaceId: string, id: string) {

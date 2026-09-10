@@ -14,9 +14,9 @@ export class BugReportService {
     const config = await this.mailSettings.getRuntimeConfig();
     const subject = `[Birgus bug] ${params.title}`;
     const text = [
-      `Titolo: ${params.title}`,
+      `Argomento: ${params.title}`,
       "",
-      params.description,
+      `Problema:\n${params.description}`,
       "",
       `Utente: ${params.userName} <${params.userEmail}>`,
       `Workspace: ${params.workspaceName}`,

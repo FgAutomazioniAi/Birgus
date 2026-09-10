@@ -100,6 +100,7 @@ interface BrainyDatabaseConnection {
   brainywareConnectionId?: string;
   label: string;
   dbType?: string | null;
+  isEnabled?: boolean;
 }
 
 interface OcrModuleToggleResponse {
@@ -187,9 +188,14 @@ export function SettingsPanel() {
   const [brainyDatabaseConnections, setBrainyDatabaseConnections] = useState<BrainyDatabaseConnection[]>([]);
   const [availableBrainyDatabaseConnections, setAvailableBrainyDatabaseConnections] = useState<BrainyDatabaseConnection[]>([]);
   const [brainyDatabaseError, setBrainyDatabaseError] = useState<string | null>(null);
+  const [brainyDatabaseToArchive, setBrainyDatabaseToArchive] = useState<BrainyDatabaseConnection | null>(null);
+  const [savingBrainyDatabaseId, setSavingBrainyDatabaseId] = useState<string | null>(null);
+  const [selectedBrainyDatabaseId, setSelectedBrainyDatabaseId] = useState("");
   const [activeSettingsTab, setActiveSettingsTab] = useState<"ai" | "general">("ai");
   const [isGenerationOpen, setIsGenerationOpen] = useState(false);
   const [isRuntimeOpen, setIsRuntimeOpen] = useState(false);
+  const [isBrainyAgentsOpen, setIsBrainyAgentsOpen] = useState(true);
+  const [isBrainyDatabasesOpen, setIsBrainyDatabasesOpen] = useState(true);
 
   const describeAiProviderError = (error: unknown) => {
     if (error instanceof ApiRequestError) {
@@ -556,14 +562,14 @@ export function SettingsPanel() {
     }
   };
 
-  const handleArchiveBrainyAgent = async (agent: BrainyWorkspaceAgent) => {
+  const handleRemoveBrainyAgent = async (agent: BrainyWorkspaceAgent) => {
     setBrainyAgentError(null);
     try {
       await fetchJson(`/api/brainy/settings/agents/${encodeURIComponent(agent.id)}`, { method: "DELETE" });
       await loadBrainyAgents();
       if (brainyAgentDraft.id === agent.id) resetBrainyAgentDraft();
     } catch (error) {
-      setBrainyAgentError(error instanceof Error ? error.message : "Impossibile archiviare l'agente Brainy.");
+      setBrainyAgentError(error instanceof Error ? error.message : "Impossibile eliminare l'agente Brainy.");
     }
   };
 
@@ -592,17 +598,29 @@ export function SettingsPanel() {
   };
 
   const handleEnableBrainyDatabaseConnection = async (connection: BrainyDatabaseConnection) => {
+    setSavingBrainyDatabaseId(connection.id);
     try {
       await fetchJson("/api/brainy/settings/database-connections", { method: "POST", body: JSON.stringify({ brainywareConnectionId: connection.id }) });
       await loadBrainyDatabaseConnections();
-    } catch (error) { setBrainyDatabaseError(error instanceof Error ? error.message : "Impossibile abilitare la connessione database."); }
+      setSelectedBrainyDatabaseId("");
+    } catch (error) { setBrainyDatabaseError(error instanceof Error ? error.message : "Impossibile abilitare la connessione database."); } finally { setSavingBrainyDatabaseId(null); }
+  };
+
+  const handleToggleBrainyDatabaseConnection = async (connection: BrainyDatabaseConnection) => {
+    setSavingBrainyDatabaseId(connection.id);
+    setBrainyDatabaseError(null);
+    try {
+      await fetchJson(`/api/brainy/settings/database-connections/${encodeURIComponent(connection.id)}`, { method: "PATCH", body: JSON.stringify({ isEnabled: !connection.isEnabled }) });
+      await loadBrainyDatabaseConnections();
+    } catch (error) { setBrainyDatabaseError(error instanceof Error ? error.message : "Impossibile aggiornare lo stato della connessione database."); } finally { setSavingBrainyDatabaseId(null); }
   };
 
   const handleArchiveBrainyDatabaseConnection = async (connection: BrainyDatabaseConnection) => {
+    setSavingBrainyDatabaseId(connection.id);
     try {
       await fetchJson(`/api/brainy/settings/database-connections/${encodeURIComponent(connection.id)}`, { method: "DELETE" });
       await loadBrainyDatabaseConnections();
-    } catch (error) { setBrainyDatabaseError(error instanceof Error ? error.message : "Impossibile disabilitare la connessione database."); }
+    } catch (error) { setBrainyDatabaseError(error instanceof Error ? error.message : "Impossibile archiviare la connessione database."); } finally { setSavingBrainyDatabaseId(null); }
   };
 
   const handleTestOcrModule = async () => {
@@ -678,33 +696,24 @@ export function SettingsPanel() {
             </div>
           </div>
           {brainyAgentError ? <div className="rounded-[var(--radius-md)] border border-status-danger-border bg-status-danger-bg px-3 py-2 text-sm font-semibold text-status-danger-text">{brainyAgentError}</div> : null}
-          <div className="space-y-2">
-            {brainyAgents.map((agent) => (
-              <div key={agent.id} className="flex items-center gap-2 border-b border-border-subtle pb-2 last:border-0 last:pb-0">
-                <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setBrainyAgentDraft({ id: agent.id, brainywareAgentId: agent.brainywareAgentId, label: agent.label, isEnabled: agent.isEnabled, isDefault: agent.isDefault })}>
-                  <span className="block truncate text-sm font-semibold text-text-primary">{agent.label}{agent.isDefault ? " (predefinito)" : ""}</span>
-                  <span className="block truncate text-xs text-text-muted">{agent.brainywareAgentId}{agent.isEnabled ? "" : " - disattivato"}</span>
-                </button>
-                <Button size="sm" variant="outline" className="shrink-0" disabled={savingBrainyAgent} onClick={() => void handleToggleBrainyAgent(agent)}>{agent.isEnabled ? "Disabilita" : "Riattiva"}</Button>
-                <Button size="sm" variant="ghost" className="h-8 w-8 shrink-0 px-0 text-status-danger-text" title="Archivia agente" onClick={() => setBrainyAgentToArchive(agent)}><Trash2 size={15} /></Button>
-              </div>
-            ))}
-            {!loadingBrainyAgents && brainyAgents.length === 0 && !brainyAgentError ? <Text variant="caption">Nessun agente configurato.</Text> : null}
-          </div>
-          <div className="space-y-2 border-t border-border-subtle pt-3">
-            <div><Text as="h3" variant="h2" className="text-sm">Database</Text><Text variant="caption">Sono selezionabili solo connessioni Brainyware in sola lettura.</Text></div>
-            {brainyDatabaseError ? <div className="text-sm font-semibold text-status-danger-text">{brainyDatabaseError}</div> : null}
-            {availableBrainyDatabaseConnections.map((connection) => {
-              const configured = brainyDatabaseConnections.find((item) => item.brainywareConnectionId === connection.id);
-              return <div key={connection.id} className="flex items-center gap-2 border-b border-border-subtle pb-2 last:border-0"><div className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{connection.label}</span><span className="block text-xs text-text-muted">{connection.dbType ?? "Database"}</span></div>{configured ? <Button size="sm" variant="outline" onClick={() => void handleArchiveBrainyDatabaseConnection(configured)}>Disabilita</Button> : <Button size="sm" variant="outline" onClick={() => void handleEnableBrainyDatabaseConnection(connection)}>Abilita</Button>}</div>;
-            })}
-            {!availableBrainyDatabaseConnections.length && !brainyDatabaseError ? <Text variant="caption">Nessuna connessione READ_ONLY accessibile al service account.</Text> : null}
-          </div>
-          <div className="grid gap-2 border-t border-border-subtle pt-3 sm:grid-cols-2">
-            <div className="space-y-1 sm:col-span-2"><Label className="text-xs" htmlFor="brainy-agent-select">Agente Brainyware</Label><SelectDropdown id="brainy-agent-select" value={brainyAgentDraft.brainywareAgentId} options={availableBrainyAgents.map((agent) => ({ value: agent.id, label: agent.label }))} onChange={(value) => { const agent = availableBrainyAgents.find((item) => item.id === value); if (agent) setBrainyAgentDraft((draft) => ({ ...draft, brainywareAgentId: agent.id, label: agent.label })); }} placeholder="Seleziona agente" /></div>
-            <div className="flex flex-wrap gap-x-4 gap-y-2 sm:col-span-2"><Checkbox id="brainy-agent-enabled" label="Agente attivo" checked={brainyAgentDraft.isEnabled} onChange={(event) => setBrainyAgentDraft((draft) => ({ ...draft, isEnabled: event.target.checked, isDefault: event.target.checked ? draft.isDefault : false }))} /><Checkbox id="brainy-agent-default" label="Predefinito per le nuove chat" checked={brainyAgentDraft.isDefault} disabled={!brainyAgentDraft.isEnabled} onChange={(event) => setBrainyAgentDraft((draft) => ({ ...draft, isDefault: event.target.checked }))} /></div>
-          </div>
-          <Button size="sm" onClick={() => void handleSaveBrainyAgent()} disabled={savingBrainyAgent || !brainyAgentDraft.label.trim() || !brainyAgentDraft.brainywareAgentId.trim()}>{savingBrainyAgent ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}{brainyAgentDraft.id ? "Aggiorna agente" : "Aggiungi agente"}</Button>
+          <section className="border-t border-border-subtle pt-3">
+            <button type="button" onClick={() => setIsBrainyAgentsOpen((open) => !open)} className="flex w-full items-center justify-between gap-3 text-left"><div><Text as="h3" variant="h2" className="text-sm">Agenti</Text><Text variant="caption">Seleziona un agente Brainyware da rendere disponibile nel workspace.</Text></div>{isBrainyAgentsOpen ? <ChevronDown size={17} /> : <ChevronDown size={17} className="-rotate-90" />}</button>
+            {isBrainyAgentsOpen ? <div className="mt-3 space-y-3">
+              <div className="flex gap-2"><SelectDropdown id="brainy-agent-select" value={brainyAgentDraft.brainywareAgentId} options={availableBrainyAgents.filter((agent) => !brainyAgents.some((configured) => configured.brainywareAgentId === agent.id)).map((agent) => ({ value: agent.id, label: agent.label }))} onChange={(value) => { const agent = availableBrainyAgents.find((item) => item.id === value); if (agent) setBrainyAgentDraft((draft) => ({ ...draft, id: "", brainywareAgentId: agent.id, label: agent.label, isEnabled: true, isDefault: brainyAgents.length === 0 })); }} placeholder="Seleziona agente" /><Button size="sm" className="shrink-0" onClick={() => void handleSaveBrainyAgent()} disabled={savingBrainyAgent || !brainyAgentDraft.brainywareAgentId.trim()}>{savingBrainyAgent ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}Aggiungi</Button></div>
+              {brainyAgents.map((agent) => <div key={agent.id} className="flex items-center gap-2 border-b border-border-subtle pb-2 last:border-0 last:pb-0"><div className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-text-primary">{agent.label}{agent.isDefault ? " (predefinito)" : ""}</span><span className="block truncate text-xs text-text-muted">{agent.brainywareAgentId}</span></div><BrainyEnableSwitch checked={agent.isEnabled} disabled={savingBrainyAgent} label={`Stato agente ${agent.label}`} onChange={() => void handleToggleBrainyAgent(agent)} /><Button size="sm" variant="ghost" className="h-8 w-8 shrink-0 px-0 text-status-danger-text" title="Elimina agente" onClick={() => setBrainyAgentToArchive(agent)}><Trash2 size={15} /></Button></div>)}
+              {!loadingBrainyAgents && brainyAgents.length === 0 && !brainyAgentError ? <Text variant="caption">Nessun agente configurato.</Text> : null}
+            </div> : null}
+          </section>
+          <section className="border-t border-border-subtle pt-3">
+            <button type="button" onClick={() => setIsBrainyDatabasesOpen((open) => !open)} className="flex w-full items-center justify-between gap-3 text-left"><div><Text as="h3" variant="h2" className="text-sm">Database</Text><Text variant="caption">Sono selezionabili solo connessioni Brainyware in sola lettura.</Text></div>{isBrainyDatabasesOpen ? <ChevronDown size={17} /> : <ChevronDown size={17} className="-rotate-90" />}</button>
+            {isBrainyDatabasesOpen ? <div className="mt-3 space-y-3">
+              {brainyDatabaseError ? <div className="text-sm font-semibold text-status-danger-text">{brainyDatabaseError}</div> : null}
+              <div className="flex gap-2"><SelectDropdown id="brainy-database-select" value={selectedBrainyDatabaseId} options={availableBrainyDatabaseConnections.filter((connection) => !brainyDatabaseConnections.some((configured) => configured.brainywareConnectionId === connection.id)).map((connection) => ({ value: connection.id, label: connection.label }))} onChange={setSelectedBrainyDatabaseId} placeholder="Seleziona database" /><Button size="sm" className="shrink-0" disabled={!selectedBrainyDatabaseId || savingBrainyDatabaseId !== null} onClick={() => { const connection = availableBrainyDatabaseConnections.find((item) => item.id === selectedBrainyDatabaseId); if (connection) void handleEnableBrainyDatabaseConnection(connection); }}><Save size={16} />Aggiungi</Button></div>
+              {brainyDatabaseConnections.map((connection) => <div key={connection.id} className="flex items-center gap-2 border-b border-border-subtle pb-2 last:border-0 last:pb-0"><div className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-text-primary">{connection.label}</span><span className="block truncate text-xs text-text-muted">{connection.dbType ?? "Database"}</span></div><BrainyEnableSwitch checked={connection.isEnabled !== false} disabled={savingBrainyDatabaseId === connection.id} label={`Stato database ${connection.label}`} onChange={() => void handleToggleBrainyDatabaseConnection(connection)} /><Button size="sm" variant="ghost" className="h-8 w-8 shrink-0 px-0 text-status-danger-text" title="Archivia database" disabled={savingBrainyDatabaseId === connection.id} onClick={() => setBrainyDatabaseToArchive(connection)}><Trash2 size={15} /></Button></div>)}
+              {!availableBrainyDatabaseConnections.length && !brainyDatabaseError ? <Text variant="caption">Nessuna connessione READ_ONLY accessibile al service account.</Text> : null}
+              {!loadingBrainyAgents && brainyDatabaseConnections.length === 0 && availableBrainyDatabaseConnections.length > 0 ? <Text variant="caption">Nessun database configurato.</Text> : null}
+            </div> : null}
+          </section>
         </Card>
       ) : null}
       {activeSettingsTab === "general" && !loadingOcrModule && ocrModuleEnabled !== null ? (
@@ -1130,7 +1139,35 @@ export function SettingsPanel() {
       </Card>
       ) : null}
       </div>
-    <BirgusDialog open={brainyAgentToArchive !== null} message={brainyAgentToArchive ? `Archiviare l'agente "${brainyAgentToArchive.label}"?` : ""} confirmLabel="Archivia" onCancel={() => setBrainyAgentToArchive(null)} onConfirm={() => { const agent = brainyAgentToArchive; setBrainyAgentToArchive(null); if (agent) void handleArchiveBrainyAgent(agent); }} />
+    <BirgusDialog open={brainyAgentToArchive !== null} message={brainyAgentToArchive ? `Eliminare l'agente "${brainyAgentToArchive.label}"? Le relative chat saranno nascoste finche' non verra' aggiunto nuovamente.` : ""} confirmLabel="Elimina" onCancel={() => setBrainyAgentToArchive(null)} onConfirm={() => { const agent = brainyAgentToArchive; setBrainyAgentToArchive(null); if (agent) void handleRemoveBrainyAgent(agent); }} />
+    <BirgusDialog open={brainyDatabaseToArchive !== null} message={brainyDatabaseToArchive ? `Archiviare il database "${brainyDatabaseToArchive.label}"?` : ""} confirmLabel="Archivia" onCancel={() => setBrainyDatabaseToArchive(null)} onConfirm={() => { const connection = brainyDatabaseToArchive; setBrainyDatabaseToArchive(null); if (connection) void handleArchiveBrainyDatabaseConnection(connection); }} />
     </div>
+  );
+}
+
+function BrainyEnableSwitch({
+  checked,
+  disabled,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onChange: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      title={checked ? "Disabilita" : "Abilita"}
+      disabled={disabled}
+      onClick={onChange}
+      className={cn("relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60", checked ? "border-brand-primary bg-brand-primary" : "border-border-default bg-bg-muted")}
+    >
+      <span className={cn("h-4 w-4 rounded-full bg-white shadow-sm transition-transform", checked ? "translate-x-5" : "translate-x-0")} />
+    </button>
   );
 }

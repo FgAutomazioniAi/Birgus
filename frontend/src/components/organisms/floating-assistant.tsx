@@ -372,7 +372,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
                 <div key={message.id} className={cn("flex", isUser ? "justify-end" : "justify-start")}>
                   <div
                     className={cn(
-                      "max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm leading-relaxed",
+                      "w-fit max-w-[85%] break-words whitespace-pre-wrap rounded-lg px-3 py-2 text-sm leading-relaxed",
                       isUser
                         ? "bg-brand-primary text-text-inverse"
                         : "border border-border-default bg-bg-surface text-text-primary",
