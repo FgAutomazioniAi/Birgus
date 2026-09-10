@@ -83,6 +83,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
   const assistantLogoSrc = assistantLogoByTheme[theme] ?? assistantLogoByTheme.predefinito;
   const assistantLogoSurface = assistantLogoSurfaceByTheme[theme] ?? assistantLogoSurfaceByTheme.predefinito;
   const assistantLogoImage = assistantLogoImageByTheme[theme] ?? assistantLogoImageByTheme.predefinito;
@@ -226,6 +227,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
       contentText: "",
     };
     setMessages((current) => [...current, optimisticMessage]);
+    let receivedResponse = false;
 
     try {
       const activeSessionId = await ensureSession();
@@ -276,11 +278,13 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
         for (const event of events) handleEvent(event);
       }
       if (buffer.trim()) handleEvent(buffer);
+      receivedResponse = true;
     } catch {
       setMessages((current) => current.filter((message) => message.id !== optimisticMessage.id && message.id !== streamingMessage.id));
       setInput(content);
     } finally {
       setIsSending(false);
+      if (receivedResponse && isOpen) requestAnimationFrame(() => messageInputRef.current?.focus());
     }
   };
 
@@ -402,6 +406,7 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
               onChange={(event) => void uploadDocument(event.target.files?.[0] ?? null)}
             />
             <textarea
+              ref={messageInputRef}
               id="floating-assistant-message"
               name="floating-assistant-message"
               value={input}

@@ -10,6 +10,7 @@ import { AppConfigModule } from "./config/app-config.module.js";
 import { AgentsNestModule } from "./agents/agents.module.js";
 import { BackendProvidersModule } from "./providers/backend-providers.module.js";
 import { BrainywareNestModule } from "./brainyware/brainyware.module.js";
+import { BugReportsNestModule } from "./bug-reports/bug-reports.module.js";
 import { CommissionIntakeNestModule } from "./commission-intake/commission-intake.module.js";
 import { ConnectedAppsNestModule } from "./connected-apps/connected-apps.module.js";
 import { DdtReaderNestModule } from "./ddt-reader/ddt-reader.module.js";
@@ -44,6 +45,7 @@ import { WorkflowsNestModule } from "./workflows/workflows.module.js";
     AgentsNestModule,
     AssistantNestModule,
     BrainywareNestModule,
+    BugReportsNestModule,
     CommissionIntakeNestModule,
     ConnectedAppsNestModule,
     DdtReaderNestModule,

@@ -3,6 +3,7 @@ import { LoginCommand } from "../dto/LoginCommand.js";
 import { LoginResult } from "../dto/LoginResult.js";
 import { AuthSessionRepository } from "../repositories/AuthSessionRepository.js";
 import { AuthLoginChallengeRepository } from "../repositories/AuthLoginChallengeRepository.js";
+import { AuthTrustedDeviceRepository } from "../repositories/AuthTrustedDeviceRepository.js";
 import { UserAccountRepository } from "../repositories/UserAccountRepository.js";
 import { PasswordHasher } from "./PasswordHasher.js";
 import { SessionTokenService } from "./SessionTokenService.js";
@@ -23,6 +24,8 @@ export class AuthService {
   private readonly sessionHours: number;
   private readonly rememberDays: number;
   private readonly twoFactorChallengeMinutes: number;
+  private readonly trustedDeviceRepository: AuthTrustedDeviceRepository | null;
+  private readonly trustedDeviceDays: number;
 
   public constructor(
     userRepository: UserAccountRepository,
@@ -37,6 +40,8 @@ export class AuthService {
     sessionHours = 12,
     rememberDays = 30,
     twoFactorChallengeMinutes = 5,
+    trustedDeviceRepository: AuthTrustedDeviceRepository | null = null,
+    trustedDeviceDays = 30,
   ) {
     this.userRepository = userRepository;
     this.sessionRepository = sessionRepository;
@@ -50,6 +55,8 @@ export class AuthService {
     this.sessionHours = sessionHours;
     this.rememberDays = rememberDays;
     this.twoFactorChallengeMinutes = twoFactorChallengeMinutes;
+    this.trustedDeviceRepository = trustedDeviceRepository;
+    this.trustedDeviceDays = trustedDeviceDays;
   }
 
   public async login(command: LoginCommand): Promise<LoginResult> {
@@ -66,7 +73,8 @@ export class AuthService {
 
     const fullName = [user.firstName, user.lastName ?? ""].join(" ").trim();
     const isDeveloper = await this.userRepository.isDeveloper(user.id);
-    const requiresTwoFactor = isDeveloper || user.twoFactorEnabled;
+    const hasTrustedDevice = isDeveloper && await this.hasTrustedDevice(user.id, command.trustedDeviceToken);
+    const requiresTwoFactor = isDeveloper ? !hasTrustedDevice : user.twoFactorEnabled;
 
     if (requiresTwoFactor) {
       const challengeToken = this.tokenService.generateToken();
@@ -102,6 +110,7 @@ export class AuthService {
         twoFactorSetupRequired: setupRequired,
         twoFactorSetupSecret: setupSecret,
         twoFactorSetupUri: setupUri,
+        isDeveloper,
       });
     }
 
@@ -113,6 +122,7 @@ export class AuthService {
       rememberMe: command.rememberMe,
       ipAddress: command.ipAddress,
       userAgent: command.userAgent,
+      isDeveloper,
     });
   }
 
@@ -121,6 +131,7 @@ export class AuthService {
     otpCode: string;
     ipAddress?: string | null;
     userAgent?: string | null;
+    rememberTrustedDevice?: boolean;
   }): Promise<LoginResult> {
     await this.authLoginChallengeRepository.deleteExpired(new Date());
     const challengeHash = this.tokenService.hashToken(params.challengeToken.trim());
@@ -136,6 +147,7 @@ export class AuthService {
     }
 
     const fullName = [user.firstName, user.lastName ?? ""].join(" ").trim();
+    const isDeveloper = await this.userRepository.isDeveloper(user.id);
 
     let effectiveSecret: string;
     if (challenge.requiresTotpSetup) {
@@ -168,6 +180,10 @@ export class AuthService {
 
     await this.authLoginChallengeRepository.consumeById(challenge.id);
 
+    const trustedDeviceToken = isDeveloper && params.rememberTrustedDevice
+      ? await this.createTrustedDevice(user.id, params.userAgent ?? challenge.userAgent)
+      : null;
+
     return this.createSessionLoginResult({
       userId: user.id,
       email: user.email,
@@ -176,6 +192,8 @@ export class AuthService {
       rememberMe: challenge.rememberMe,
       ipAddress: params.ipAddress ?? challenge.ipAddress,
       userAgent: params.userAgent ?? challenge.userAgent,
+      isDeveloper,
+      trustedDeviceToken,
     });
   }
 
@@ -187,6 +205,8 @@ export class AuthService {
     rememberMe: boolean;
     ipAddress?: string | null;
     userAgent?: string | null;
+    isDeveloper?: boolean;
+    trustedDeviceToken?: string | null;
   }): Promise<LoginResult> {
     const token = this.tokenService.generateToken();
     const tokenHash = this.tokenService.hashToken(token);
@@ -208,6 +228,8 @@ export class AuthService {
       email: params.email,
       fullName: params.fullName,
       mustChangePassword: params.mustChangePassword,
+      isDeveloper: params.isDeveloper,
+      trustedDeviceToken: params.trustedDeviceToken,
     });
   }
 
@@ -273,6 +295,7 @@ export class AuthService {
     const nextHash = await this.passwordHasher.hashPassword(normalizedPassword);
     await this.userRepository.updatePassword(user.id, nextHash);
     await this.sessionRepository.revokeAllForUserExceptSession(user.id, params.currentSessionId);
+    await this.trustedDeviceRepository?.revokeAllForUser(user.id, new Date());
   }
 
   private resolveExpiration(rememberMe: boolean): Date {
@@ -281,5 +304,25 @@ export class AuthService {
       : this.sessionHours * 60 * 60 * 1000;
 
     return new Date(Date.now() + milliseconds);
+  }
+
+  private async hasTrustedDevice(userId: string, token: string | null): Promise<boolean> {
+    if (!this.trustedDeviceRepository || !token) return false;
+    const device = await this.trustedDeviceRepository.findUsableByTokenHash(this.tokenService.hashToken(token), new Date());
+    if (!device || device.userId !== userId) return false;
+    await this.trustedDeviceRepository.touch(device.id, new Date());
+    return true;
+  }
+
+  private async createTrustedDevice(userId: string, userAgent: string | null | undefined): Promise<string | null> {
+    if (!this.trustedDeviceRepository) return null;
+    const token = this.tokenService.generateToken();
+    await this.trustedDeviceRepository.create({
+      userId,
+      tokenHash: this.tokenService.hashToken(token),
+      userAgent: userAgent ?? null,
+      expiresAt: new Date(Date.now() + this.trustedDeviceDays * 24 * 60 * 60 * 1000),
+    });
+    return token;
   }
 }

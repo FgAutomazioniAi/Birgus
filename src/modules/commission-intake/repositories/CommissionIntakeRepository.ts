@@ -188,6 +188,7 @@ export interface CommissionChecklistView {
     id: string;
     fullName: string;
     canReopenSignedChecklist: boolean;
+    canConfigureVendorList: boolean;
   };
   checklist: {
     id: string;

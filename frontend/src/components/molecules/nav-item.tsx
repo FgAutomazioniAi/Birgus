@@ -26,7 +26,7 @@ export function NavItem({ collapsed, icon: Icon, isActive, label, onClick, href 
         collapsed && "lg:justify-center",
       )}
     >
-      <Icon size={20} className={cn(isActive ? "text-brand-accent" : "text-slate-400")} />
+      <Icon size={20} className={cn(isActive ? "text-brand-accent" : "text-text-muted")} />
       {!collapsed && <span>{label}</span>}
     </Link>
   );

@@ -13,7 +13,7 @@ export interface SearchFieldProps {
 export function SearchField({ className, onChange, placeholder, value }: SearchFieldProps) {
   return (
     <div className={cn("relative", className)}>
-      <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+      <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
       <Input
         value={value}
         onChange={(event) => onChange?.(event.target.value)}

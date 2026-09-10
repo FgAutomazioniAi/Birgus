@@ -4,6 +4,7 @@ import { AppError } from "../../../core/errors/AppError.js";
 import { PasswordResetCodeRepository } from "../repositories/PasswordResetCodeRepository.js";
 import { UserAccountRepository } from "../repositories/UserAccountRepository.js";
 import { AuthSessionRepository } from "../repositories/AuthSessionRepository.js";
+import { AuthTrustedDeviceRepository } from "../repositories/AuthTrustedDeviceRepository.js";
 import { PasswordHasher } from "./PasswordHasher.js";
 import { PasswordResetNotifier } from "./PasswordResetNotifier.js";
 import { PasswordPolicy } from "./PasswordPolicy.js";
@@ -16,6 +17,7 @@ export class PasswordResetService {
   private readonly notifier: PasswordResetNotifier;
   private readonly passwordPolicy: PasswordPolicy;
   private readonly ttlMinutes: number;
+  private readonly trustedDeviceRepository: AuthTrustedDeviceRepository | null;
 
   public constructor(
     userRepository: UserAccountRepository,
@@ -25,6 +27,7 @@ export class PasswordResetService {
     notifier: PasswordResetNotifier,
     passwordPolicy: PasswordPolicy,
     ttlMinutes: number,
+    trustedDeviceRepository: AuthTrustedDeviceRepository | null = null,
   ) {
     this.userRepository = userRepository;
     this.codeRepository = codeRepository;
@@ -33,6 +36,7 @@ export class PasswordResetService {
     this.notifier = notifier;
     this.passwordPolicy = passwordPolicy;
     this.ttlMinutes = ttlMinutes;
+    this.trustedDeviceRepository = trustedDeviceRepository;
   }
 
   public async requestReset(email: string): Promise<{ expiresAt: Date; debugCode: string | null } | null> {
@@ -79,6 +83,7 @@ export class PasswordResetService {
     const passwordHash = await this.passwordHasher.hashPassword(normalizedPassword);
     await this.userRepository.updatePassword(user.id, passwordHash);
     await this.sessionRepository.revokeAllForUser(user.id);
+    await this.trustedDeviceRepository?.revokeAllForUser(user.id, new Date());
     await this.codeRepository.markCodeUsed(record.id);
     await this.codeRepository.invalidateActiveCodesForUser(user.id);
   }

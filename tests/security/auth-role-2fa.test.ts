@@ -6,6 +6,7 @@ import type { AuthSessionEntity } from "../../src/modules/identity/domain/AuthSe
 import { UserAccount } from "../../src/modules/identity/domain/UserAccount.js";
 import type { AuthLoginChallengeRepository } from "../../src/modules/identity/repositories/AuthLoginChallengeRepository.js";
 import type { AuthSessionRepository } from "../../src/modules/identity/repositories/AuthSessionRepository.js";
+import type { AuthTrustedDeviceRepository } from "../../src/modules/identity/repositories/AuthTrustedDeviceRepository.js";
 import type { UserAccountRepository } from "../../src/modules/identity/repositories/UserAccountRepository.js";
 import { AuthService } from "../../src/modules/identity/services/AuthService.js";
 import { PasswordHasher } from "../../src/modules/identity/services/PasswordHasher.js";
@@ -42,7 +43,25 @@ test("Optional 2FA remains enforced when enabled", async () => {
   assert.equal(result.twoFactorSetupRequired, false);
 });
 
-async function createService(params: { isDeveloper: boolean; twoFactorEnabled: boolean }) {
+test("Developer can skip 2FA only on a valid trusted device", async () => {
+  const { service, sessions, trustedDevices } = await createService({
+    isDeveloper: true,
+    twoFactorEnabled: true,
+    trustedDeviceToken: "trusted-device-token",
+  });
+  const result = await service.login({
+    email: "developer@example.test",
+    password,
+    rememberMe: false,
+    trustedDeviceToken: "trusted-device-token",
+  });
+
+  assert.equal(result.requiresTwoFactor, false);
+  assert.equal(sessions.created, 1);
+  assert.equal(trustedDevices.touched, 1);
+});
+
+async function createService(params: { isDeveloper: boolean; twoFactorEnabled: boolean; trustedDeviceToken?: string }) {
   const hasher = new PasswordHasher("test-pepper");
   const passwordHash = await hasher.hashPassword(password);
   const user = new UserAccount({
@@ -59,17 +78,26 @@ async function createService(params: { isDeveloper: boolean; twoFactorEnabled: b
   const users = new StaticUserRepository(user, params.isDeveloper);
   const sessions = new CapturingSessionRepository();
   const challenges = new CapturingChallengeRepository();
+  const tokenService = new SessionTokenService();
+  const trustedDevices = new CapturingTrustedDeviceRepository(
+    params.trustedDeviceToken ? tokenService.hashToken(params.trustedDeviceToken) : null,
+  );
   const service = new AuthService(
     users,
     sessions,
     challenges,
     hasher,
-    new SessionTokenService(),
+    tokenService,
     new TotpService(),
     new TotpSecretCipherService("test-cipher-key"),
     new PasswordPolicy(),
+    "Birgus",
+    12,
+    30,
+    5,
+    trustedDevices,
   );
-  return { service, sessions, challenges };
+  return { service, sessions, challenges, trustedDevices };
 }
 
 class StaticUserRepository implements UserAccountRepository {
@@ -104,4 +132,22 @@ class CapturingChallengeRepository implements AuthLoginChallengeRepository {
   public async findByChallengeHash() { return null; }
   public async consumeById() {}
   public async deleteExpired() {}
+}
+
+class CapturingTrustedDeviceRepository implements AuthTrustedDeviceRepository {
+  public touched = 0;
+
+  public constructor(private readonly tokenHash: string | null) {}
+
+  public async create(): Promise<void> {}
+
+  public async findUsableByTokenHash(tokenHash: string): Promise<{ id: string; userId: string } | null> {
+    return this.tokenHash === tokenHash ? { id: "trusted-device-1", userId: "user-1" } : null;
+  }
+
+  public async touch(): Promise<void> {
+    this.touched += 1;
+  }
+
+  public async revokeAllForUser(): Promise<void> {}
 }

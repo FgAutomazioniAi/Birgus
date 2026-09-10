@@ -4,6 +4,7 @@ import { cloneElement, isValidElement, useEffect, useId, useState, type DragEven
 import { BrainCircuit, Check, ChevronDown, Clock, Download, FileText, HelpCircle, Mail, MessageCircle, PanelRightClose, PanelRightOpen, Plus, Send, Settings, Sparkles, X } from "lucide-react";
 
 import { Badge, Input, Text } from "@/components/atoms";
+import { MarkdownContent } from "@/components/molecules/markdown-content";
 import { useLanguage } from "@/components/organisms/language-provider";
 import { cn } from "@/lib/cn";
 import type { WorkflowRun, WorkflowTool } from "./types";
@@ -62,7 +63,7 @@ function finalOutputsFrom(value: unknown): PublishedOutput[] {
 function OutputValue({ output }: { output: PublishedOutput }) {
   const { t } = useLanguage();
   const value = recordValue(output.value);
-  if (output.kind === "text") return <p className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap text-sm leading-6 text-text-secondary">{stringValue(output.value) || t("workflow.noText")}</p>;
+  if (output.kind === "text") return <MarkdownContent className="mt-2" content={stringValue(output.value) || t("workflow.noText")} />;
   if (output.kind === "file") {
     const downloadBase64 = stringValue(value.downloadBase64);
     const downloadFile = () => {
@@ -105,7 +106,7 @@ export function WorkflowOutputDialog({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-labelledby="workflow-output-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <div className="w-full max-w-2xl overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-bg-surface shadow-elevated">
+      <div className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-bg-surface shadow-elevated">
         <div className="flex items-start justify-between gap-4 border-b border-border-default px-5 py-4">
           <div className="min-w-0">
             <h2 id="workflow-output-title" className="truncate text-base font-semibold text-text-primary">{nodeLabel}</h2>
@@ -115,7 +116,7 @@ export function WorkflowOutputDialog({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="max-h-[70vh] overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {!latestRun ? <p className="text-sm text-text-muted">{t("workflow.runToView")}</p> : null}
           {latestRun && outputs.length === 0 ? <p className="text-sm text-text-muted">{t("workflow.outputEmpty")}</p> : null}
           {outputs.map((output, index) => (

@@ -1,5 +1,5 @@
 export const APP_ROUTES = {
-  dashboard: "/",
+  dashboard: "/dashboard",
   personalDashboard: "/home",
   projects: "/projects",
   projectNew: "/projects/new",
@@ -21,5 +21,6 @@ export const APP_ROUTES = {
   archive: "/archivio",
   superadmin: "/superadmin",
   settings: "/settings",
+  brainy: "/brainy",
   login: "/login",
 } as const;

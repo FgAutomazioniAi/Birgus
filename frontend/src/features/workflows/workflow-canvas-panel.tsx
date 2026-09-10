@@ -46,7 +46,7 @@ import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
 
 import { Badge, Button, Card, Text } from "@/components/atoms";
-import { PageHelpHint } from "@/components/molecules";
+import { BirgusDialog, PageHelpHint } from "@/components/molecules";
 import { useLanguage } from "@/components/organisms/language-provider";
 import { useModuleAccess } from "@/lib/module-access";
 import { cn } from "@/lib/cn";
@@ -755,6 +755,7 @@ export function WorkflowCanvasPanel() {
   const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
   const [isCreateWorkflowOpen, setIsCreateWorkflowOpen] = useState(false);
   const [newWorkflowLabel, setNewWorkflowLabel] = useState("Nuovo workflow");
+  const [workflowToDelete, setWorkflowToDelete] = useState<WorkflowSummary | null>(null);
   const [latestRun, setLatestRun] = useState<WorkflowRun | null>(null);
   const [workflowRuns, setWorkflowRuns] = useState<WorkflowRun[]>([]);
   const [isLoadingRuns, setIsLoadingRuns] = useState(false);
@@ -1307,7 +1308,6 @@ export function WorkflowCanvasPanel() {
   };
 
   const deletePersonalWorkflow = async (item: WorkflowSummary) => {
-    if (!window.confirm(t("workflow.deleteConfirm"))) return;
     try {
       const response = await fetch(`/api/workflows/${item.id}`, { method: "DELETE" });
       if (!response.ok) throw new Error("Eliminazione workflow non riuscita.");
@@ -1939,7 +1939,7 @@ export function WorkflowCanvasPanel() {
                 {playgroundCard.workflow ? (
                   <div className="flex gap-1">
                     <button type="button" title={t("workflow.copy")} aria-label={t("workflow.copy")} onClick={() => void copyPersonalWorkflow(playgroundCard.workflow!)} className="p-1.5 text-text-muted hover:bg-bg-muted hover:text-brand-primary"><Copy className="h-4 w-4" /></button>
-                    <button type="button" title={t("workflow.delete")} aria-label={t("workflow.delete")} onClick={() => void deletePersonalWorkflow(playgroundCard.workflow!)} className="p-1.5 text-text-muted hover:bg-bg-muted hover:text-status-danger-text"><Trash2 className="h-4 w-4" /></button>
+                    <button type="button" title={t("workflow.delete")} aria-label={t("workflow.delete")} onClick={() => setWorkflowToDelete(playgroundCard.workflow!)} className="p-1.5 text-text-muted hover:bg-bg-muted hover:text-status-danger-text"><Trash2 className="h-4 w-4" /></button>
                   </div>
                 ) : null}
               </div>
@@ -1954,7 +1954,7 @@ export function WorkflowCanvasPanel() {
                   </button>
                   <div className="flex gap-1">
                     <button type="button" title={t("workflow.copy")} aria-label={t("workflow.copy")} onClick={() => void copyPersonalWorkflow(item)} className="p-1.5 text-text-muted hover:bg-bg-muted hover:text-brand-primary"><Copy className="h-4 w-4" /></button>
-                    <button type="button" title={t("workflow.delete")} aria-label={t("workflow.delete")} onClick={() => void deletePersonalWorkflow(item)} className="p-1.5 text-text-muted hover:bg-bg-muted hover:text-status-danger-text"><Trash2 className="h-4 w-4" /></button>
+                    <button type="button" title={t("workflow.delete")} aria-label={t("workflow.delete")} onClick={() => setWorkflowToDelete(item)} className="p-1.5 text-text-muted hover:bg-bg-muted hover:text-status-danger-text"><Trash2 className="h-4 w-4" /></button>
                   </div>
                 </div>
               </div>
@@ -2282,6 +2282,7 @@ export function WorkflowCanvasPanel() {
         nodeLabel={draftNodes.find((node) => node.clientId === outputPreviewNodeId)?.label ?? flowNodeLabel("output", language)}
         onClose={() => setOutputPreviewNodeId(null)}
       />
+      <BirgusDialog open={workflowToDelete !== null} message={t("workflow.deleteConfirm")} confirmLabel={t("common.delete")} onCancel={() => setWorkflowToDelete(null)} onConfirm={() => { const workflow = workflowToDelete; setWorkflowToDelete(null); if (workflow) void deletePersonalWorkflow(workflow); }} />
       {nodePickerGroup ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-labelledby="workflow-node-picker-title" onMouseDown={(event) => { if (event.target === event.currentTarget) setNodePickerGroupId(null); }}>
           <Card className="flex max-h-[80vh] w-full max-w-5xl flex-col p-5 shadow-elevated">

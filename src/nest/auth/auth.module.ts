@@ -6,6 +6,7 @@ import { PermissionPolicy } from "../../core/authorization/PermissionPolicy.js";
 import { TenancyGuard } from "../../core/tenancy/TenancyGuard.js";
 import { PrismaAuthLoginChallengeRepository } from "../../modules/identity/infra/PrismaAuthLoginChallengeRepository.js";
 import { PrismaAuthSessionRepository } from "../../modules/identity/infra/PrismaAuthSessionRepository.js";
+import { PrismaAuthTrustedDeviceRepository } from "../../modules/identity/infra/PrismaAuthTrustedDeviceRepository.js";
 import { PrismaPasswordResetCodeRepository } from "../../modules/identity/infra/PrismaPasswordResetCodeRepository.js";
 import { PrismaUserAccountRepository } from "../../modules/identity/infra/PrismaUserAccountRepository.js";
 import { AuthService } from "../../modules/identity/services/AuthService.js";
@@ -89,6 +90,7 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
         totpService: TotpService,
         totpSecretCipherService: TotpSecretCipherService,
         passwordPolicy: PasswordPolicy,
+        trustedDeviceRepository: PrismaAuthTrustedDeviceRepository,
         configService: AppConfigService,
       ) => new AuthService(
         userRepository,
@@ -103,6 +105,8 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
         configService.getNumber("AUTH_SESSION_HOURS", 12),
         configService.getNumber("AUTH_SESSION_REMEMBER_DAYS", 30),
         configService.getNumber("AUTH_2FA_CHALLENGE_TTL_MINUTES", 5),
+        trustedDeviceRepository,
+        configService.getNumber("AUTH_TRUSTED_DEVICE_DAYS", 30),
       ),
       inject: [
         PrismaUserAccountRepository,
@@ -113,6 +117,7 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
         TotpService,
         TotpSecretCipherService,
         PasswordPolicy,
+        PrismaAuthTrustedDeviceRepository,
         AppConfigService,
       ],
     },
@@ -126,6 +131,7 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
         notifier: SmtpPasswordResetNotifier,
         passwordPolicy: PasswordPolicy,
         configService: AppConfigService,
+        trustedDeviceRepository: PrismaAuthTrustedDeviceRepository,
       ) => new PasswordResetService(
         userRepository,
         passwordResetCodeRepository,
@@ -134,6 +140,7 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
         notifier,
         passwordPolicy,
         configService.getNumber("AUTH_PASSWORD_RESET_CODE_TTL_MINUTES", 15),
+        trustedDeviceRepository,
       ),
       inject: [
         PrismaUserAccountRepository,
@@ -143,8 +150,10 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
         SmtpPasswordResetNotifier,
         PasswordPolicy,
         AppConfigService,
+        PrismaAuthTrustedDeviceRepository,
       ],
     },
+    PrismaAuthTrustedDeviceRepository,
     {
       provide: RequestContextAuthGuard,
       useFactory: (authService: AuthService, tenancyGuard: TenancyGuard) => new RequestContextAuthGuard(authService, tenancyGuard),

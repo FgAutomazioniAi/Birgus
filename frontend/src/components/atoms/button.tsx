@@ -13,7 +13,7 @@ const variantClasses: Record<ButtonVariant, string> = {
   ghost: "bg-transparent text-text-secondary hover:bg-bg-subtle",
   outline: "border border-border-default bg-bg-page text-text-secondary hover:bg-bg-subtle",
   danger:
-    "bg-status-danger-text text-text-inverse hover:bg-red-700 shadow-[0_10px_24px_rgba(220,38,38,0.25)]",
+    "bg-status-danger-text text-text-inverse hover:brightness-90 shadow-card",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

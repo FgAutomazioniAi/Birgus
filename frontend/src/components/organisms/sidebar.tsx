@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, CalendarDays, ChevronDown, ClipboardList, FileSearch, FolderKanban, GitBranch, LogOut, Map, Ruler, Settings, ShieldCheck, TrendingUp, UserRound, Users, Wrench } from "lucide-react";
+import { Archive, BrainCircuit, CalendarDays, ChevronDown, ClipboardList, FileSearch, FolderKanban, GitBranch, LogOut, Map, Ruler, Settings, ShieldCheck, TrendingUp, UserRound, Users, Wrench } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -54,6 +54,7 @@ export function Sidebar({ collapsed, enabledModuleKeys, canManageWorkspace, onCl
     ...(canManageWorkspace && enabledModuleKeys.includes("superadmin_center") ? [{ icon: ShieldCheck, label: "Gestione workspace", path: APP_ROUTES.superadmin }] : []),
     ...(enabledModuleKeys.includes("workflow_management") ? [{ icon: GitBranch, label: "Workflow", path: APP_ROUTES.workflows }] : []),
     ...(enabledModuleKeys.includes("document_archive") ? [{ icon: Archive, label: "Archivio", path: APP_ROUTES.archive }] : []),
+    ...(enabledModuleKeys.includes("brainy") ? [{ icon: BrainCircuit, label: "Brainy", path: APP_ROUTES.brainy }] : []),
   ];
   const isActive = (path: string) => path === APP_ROUTES.projects ? pathname === path || pathname.startsWith("/projects") : pathname === path || pathname.startsWith(`${path}/`);
 
