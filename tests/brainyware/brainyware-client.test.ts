@@ -92,6 +92,32 @@ test("agent stream forwards chunks without duplicating the final SSE event", asy
   assert.deepEqual(chunks, ["Risposta ", "in streaming"]);
 });
 
+test("single-shot agent inference removes the temporary Brainyware session", async () => {
+  const requests: string[] = [];
+  const client = new BrainywareClient({
+    baseUrl: "https://brainyware.example",
+    accessKey: "access-test",
+    secretKey: "secret-test",
+    fetchImpl: async (input, init) => {
+      const url = String(input); requests.push(url);
+      if (url.endsWith("/brainy/api/auth/service")) return jsonResponse({ token: "brainy-token" });
+      if (url.endsWith("/brainy/api/ai/agents/agent-1/run")) {
+        const body = JSON.parse(String(init?.body)) as { session_id?: string };
+        assert.equal(body.session_id, "");
+        return new Response(["event: END", 'data: {"session_id":"temporary-1","role":"agent","content":"Risposta"}', ""].join("\n"), { headers: { "Content-Type": "text/event-stream" } });
+      }
+      if (url.endsWith("/brainy/api/ai/agents/agent-1/sessions/temporary-1")) return new Response(null, { status: 204 });
+      throw new Error(`Unexpected request: ${url}`);
+    },
+  });
+
+  const result = await client.runAgentSingleShot({ agentId: "agent-1", message: "Ciao" });
+
+  assert.equal(result.reply, "Risposta");
+  assert.equal(result.persistentSession, false);
+  assert.ok(requests.some((url) => url.endsWith("/brainy/api/ai/agents/agent-1/sessions/temporary-1")));
+});
+
 test("database inference uses the stateless Langflow bridge with empty history", async () => {
   const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
   const client = new BrainywareClient({
@@ -103,6 +129,7 @@ test("database inference uses the stateless Langflow bridge with empty history",
       const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
       requests.push({ url, body });
       if (url.endsWith("/brainy/api/auth/service")) return jsonResponse({ token: "token-test" });
+      if (url.endsWith("/brainy/api/database/connections/lf/list")) return jsonResponse({ rows: [{ id: "42", name: "ERP", access_mode: "READ_ONLY" }] });
       return jsonResponse({ answer: "Risposta dal database" });
     },
   });
@@ -116,10 +143,10 @@ test("database inference uses the stateless Langflow bridge with empty history",
   assert.equal(result.reply, "Risposta dal database");
   assert.equal(result.mode, "database");
   assert.equal(result.persistentSession, false);
-  assert.equal(requests[1].url, "https://brainyware.example/brainy/api/database/connections/lf/42/chat");
-  assert.deepEqual(requests[1].body.history, []);
-  assert.equal("session_id" in requests[1].body, false);
-  assert.equal("sessionId" in requests[1].body, false);
+  assert.equal(requests[2].url, "https://brainyware.example/brainy/api/database/connections/lf/42/chat");
+  assert.deepEqual(requests[2].body.history, []);
+  assert.equal("session_id" in requests[2].body, false);
+  assert.equal("sessionId" in requests[2].body, false);
 });
 
 test("model inference uses the OpenAI-compatible endpoint without sessions", async () => {

@@ -19,6 +19,7 @@ import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
 import { CurrentRequestContext } from "../common/decorators/request-context.decorator.js";
 import { RequireModule } from "../common/decorators/require-module.decorator.js";
 import { RequirePermission } from "../common/decorators/require-permission.decorator.js";
+import { PrismaService } from "../prisma/prisma.service.js";
 
 const uuidSchema = z.string().uuid();
 
@@ -34,6 +35,7 @@ const createRecordSchema = z.object({
   code: z.string().trim().min(1).max(80).optional().nullable(),
   description: z.string().trim().max(8000).optional().nullable(),
   status: z.nativeEnum(CommissionRecordStatus).optional().nullable(),
+  statusLabel: z.string().trim().max(120).optional().nullable(),
   priority: z.nativeEnum(CommissionRecordPriority).optional().nullable(),
   companyId: z.number().int().positive().optional().nullable(),
   companyName: z.string().trim().min(2).max(240).optional().nullable(),
@@ -93,6 +95,8 @@ export class CommissionIntakeController {
     private readonly service: CommissionIntakeService,
     @Inject(CommissionVendorListService)
     private readonly vendorListService: CommissionVendorListService,
+    @Inject(PrismaService)
+    private readonly prisma: PrismaService,
   ) {}
 
   @Get("vendor-list")
@@ -143,6 +147,7 @@ export class CommissionIntakeController {
     @Body() bodyRaw: unknown,
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Record<string, unknown>> {
+    await this.ensureRegistryManagementRole(requestContext);
     const body = createRecordSchema.parse(bodyRaw);
     const record = await this.service.createRecord({
       workspaceId: requestContext.workspace.workspaceId,
@@ -212,13 +217,15 @@ export class CommissionIntakeController {
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Record<string, unknown>> {
     const body = updateRecordSchema.parse(bodyRaw);
-    const { status, priority, ...rest } = body;
+    await this.ensureRegistryManagementRole(requestContext);
+    const { status, statusLabel, priority, ...rest } = body;
     const record = await this.service.updateRecord({
       workspaceId: requestContext.workspace.workspaceId,
       actorUserId: requestContext.workspace.userId,
       recordId: uuidSchema.parse(recordIdRaw),
       ...rest,
       status: status ?? undefined,
+      statusLabel: statusLabel ?? undefined,
       priority: priority ?? undefined,
     });
 
@@ -234,6 +241,7 @@ export class CommissionIntakeController {
     @Body() bodyRaw: unknown,
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Record<string, unknown>> {
+    await this.ensureRegistryManagementRole(requestContext);
     const body = deleteRecordSchema.parse(bodyRaw);
     const recordId = uuidSchema.parse(recordIdRaw);
     const record = await this.service.getRecord({
@@ -473,6 +481,7 @@ export class CommissionIntakeController {
       title: record.title,
       description: record.description,
       status: record.status,
+      statusLabel: record.statusLabel,
       priority: record.priority,
       companyId: record.companyId,
       clientId: record.clientId,
@@ -491,5 +500,19 @@ export class CommissionIntakeController {
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     };
+  }
+
+  private async ensureRegistryManagementRole(context: RequestContext): Promise<void> {
+    const assignment = await this.prisma.userWorkspaceRole.findFirst({
+      where: {
+        workspace_id: context.workspace.workspaceId,
+        user_id: context.workspace.userId,
+        role: { key: { in: ["admin", "superuser", "developer"] } },
+      },
+      select: { id: true },
+    });
+    if (!assignment) {
+      throw new AppError("Solo Admin, Superuser e Developer possono gestire le commesse.", "COMMISSION_REGISTRY_MANAGEMENT_REQUIRED", 403);
+    }
   }
 }

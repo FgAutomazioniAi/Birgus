@@ -3,6 +3,8 @@ import { Inject, Injectable } from "@nestjs/common";
 import { AppError } from "../../../core/errors/AppError.js";
 import { PrismaService } from "../../../nest/prisma/prisma.service.js";
 import { BrainywareClient, BrainywareHttpError } from "./BrainywareClient.js";
+import { BrainyWorkspaceAgentService } from "./BrainyWorkspaceAgentService.js";
+import { BrainyWorkspaceDatabaseConnectionService } from "./BrainyWorkspaceDatabaseConnectionService.js";
 
 type ChatKind = "AGENT" | "DATABASE";
 type AccessLevel = "READ" | "WRITE";
@@ -17,16 +19,14 @@ export interface BrainyChatView {
 
 @Injectable()
 export class BrainyChatService {
-  public constructor(@Inject(PrismaService) private readonly prisma: PrismaService, @Inject(BrainywareClient) private readonly client: BrainywareClient) {}
+  public constructor(@Inject(PrismaService) private readonly prisma: PrismaService, @Inject(BrainywareClient) private readonly client: BrainywareClient, @Inject(BrainyWorkspaceAgentService) private readonly workspaceAgentService: BrainyWorkspaceAgentService, @Inject(BrainyWorkspaceDatabaseConnectionService) private readonly workspaceDatabaseConnectionService: BrainyWorkspaceDatabaseConnectionService) {}
 
-  public async listAgents(workspaceId: string) {
-    const rows = await this.prisma.brainyWorkspaceAgent.findMany({ where: { workspace_id: workspaceId, deleted_at: null, is_enabled: true }, select: { id: true, label: true, is_default: true }, orderBy: [{ is_default: "desc" }, { label: "asc" }] });
-    return rows.map((row) => ({ id: row.id, label: row.label, isDefault: row.is_default }));
+  public async listAgents(workspaceId: string, userId: string) {
+    return this.workspaceAgentService.listForUser(workspaceId, userId);
   }
 
-  public async listDatabaseConnections(workspaceId: string) {
-    const rows = await this.prisma.brainyWorkspaceDatabaseConnection.findMany({ where: { workspace_id: workspaceId, deleted_at: null, is_enabled: true }, orderBy: { label: "asc" } });
-    return rows.map((row) => ({ id: row.id, label: row.label }));
+  public async listDatabaseConnections(workspaceId: string, userId: string) {
+    return (await this.workspaceDatabaseConnectionService.listForUser(workspaceId, userId)).map((row) => ({ id: row.id, label: row.label }));
   }
 
   public async listWorkspaceUsers(workspaceId: string) {
@@ -37,9 +37,10 @@ export class BrainyChatService {
   public async listChats(workspaceId: string, userId: string): Promise<BrainyChatView[]> {
     const rows = await this.prisma.brainyChat.findMany({ where: { workspace_id: workspaceId, deleted_at: null, OR: [{ created_by_user_id: userId }, { shares: { some: { user_id: userId } } }] }, include: { workspace_database_connection: true, shares: { where: { user_id: userId }, select: { access_level: true } } }, orderBy: { updated_at: "desc" } });
     const agents = await this.prisma.brainyWorkspaceAgent.findMany({ where: { workspace_id: workspaceId, deleted_at: null }, select: { id: true, label: true } });
-    const activeAgentIds = new Set(agents.map((agent) => agent.id));
+    const activeAgentIds = new Set((await this.workspaceAgentService.listForUser(workspaceId, userId)).map((agent) => agent.id));
+    const activeDatabaseIds = new Set((await this.workspaceDatabaseConnectionService.listForUser(workspaceId, userId)).map((connection) => connection.id));
     return rows
-      .filter((row) => row.kind !== "AGENT" || (row.workspace_agent_id !== null && activeAgentIds.has(row.workspace_agent_id)))
+      .filter((row) => (row.kind !== "AGENT" || (row.workspace_agent_id !== null && activeAgentIds.has(row.workspace_agent_id))) && (row.kind !== "DATABASE" || (row.workspace_database_connection_id !== null && activeDatabaseIds.has(row.workspace_database_connection_id))))
       .map((row) => this.toView(row, userId, new Map(agents.map((agent) => [agent.id, agent.label]))));
   }
 
@@ -47,12 +48,14 @@ export class BrainyChatService {
     const title = params.title.trim() || "Nuova chat";
     if (title.length > 160) throw new AppError("Il nome della chat supera 160 caratteri.", "BRAINY_CHAT_TITLE_INVALID", 400);
     if (params.kind === "DATABASE") {
-      const database = await this.prisma.brainyWorkspaceDatabaseConnection.findFirst({ where: { id: params.workspaceDatabaseConnectionId, workspace_id: params.workspaceId, deleted_at: null, is_enabled: true } });
-      if (!database) throw new AppError("Selezionare una connessione database Brainy abilitata.", "BRAINY_DATABASE_REQUIRED", 409);
+      const database = await this.workspaceDatabaseConnectionService.requireForUser(params.workspaceId, params.userId, params.workspaceDatabaseConnectionId ?? "");
       const row = await this.prisma.brainyChat.create({ data: { workspace_id: params.workspaceId, kind: "DATABASE", workspace_database_connection_id: database.id, title, created_by_user_id: params.userId }, include: { workspace_database_connection: true, shares: true } });
       return this.toView(row, params.userId);
     }
-    const agent = await this.prisma.brainyWorkspaceAgent.findFirst({ where: { id: params.workspaceAgentId, workspace_id: params.workspaceId, deleted_at: null, is_enabled: true } }) ?? await this.prisma.brainyWorkspaceAgent.findFirst({ where: { workspace_id: params.workspaceId, deleted_at: null, is_enabled: true, is_default: true } });
+    const availableAgents = await this.workspaceAgentService.listForUser(params.workspaceId, params.userId);
+    const selectedAgentId = params.workspaceAgentId ?? availableAgents.find((agent) => agent.isDefault)?.id ?? availableAgents[0]?.id;
+    if (params.workspaceAgentId && !availableAgents.some((agent) => agent.id === params.workspaceAgentId)) throw new AppError("Non hai accesso all'agente Brainy selezionato.", "BRAINY_AGENT_ACCESS_DENIED", 403);
+    const agent = selectedAgentId ? await this.prisma.brainyWorkspaceAgent.findFirst({ where: { id: selectedAgentId, workspace_id: params.workspaceId, deleted_at: null, is_enabled: true } }) : null;
     if (!agent) throw new AppError("Configurare e attivare almeno un agente Brainy.", "BRAINY_AGENT_REQUIRED", 409);
     const row = await this.prisma.brainyChat.create({ data: { workspace_id: params.workspaceId, kind: "AGENT", workspace_agent_id: agent.id, brainyware_agent_id: agent.brainyware_agent_id, title, created_by_user_id: params.userId }, include: { workspace_database_connection: true, shares: true } });
     return this.toView(row, params.userId, new Map([[agent.id, agent.label]]));
@@ -67,6 +70,7 @@ export class BrainyChatService {
     const title = params.title.trim();
     if (!title || title.length > 160) throw new AppError("Il nome della chat deve contenere da 1 a 160 caratteri.", "BRAINY_CHAT_TITLE_INVALID", 400);
     const { chat } = await this.requireAccess(params.workspaceId, params.userId, params.chatId, "WRITE");
+    await this.ensureAgentAvailableToUser(chat, params.workspaceId, params.userId);
     return this.toView(await this.prisma.brainyChat.update({ where: { id: chat.id }, data: { title }, include: { workspace_database_connection: true, shares: { where: { user_id: params.userId }, select: { access_level: true } } } }), params.userId);
   }
 
@@ -130,7 +134,20 @@ export class BrainyChatService {
     if (!chat) throw new AppError("Chat Brainy non trovata.", "BRAINY_CHAT_NOT_FOUND", 404);
     const access: "OWNER" | AccessLevel | null = chat.created_by_user_id === userId ? "OWNER" : chat.shares[0]?.access_level ?? null;
     if (!access || (required === "WRITE" && access === "READ")) throw new AppError("Non hai accesso a questa chat Brainy.", "BRAINY_CHAT_ACCESS_DENIED", 403);
+    await this.ensureAgentAvailableToUser(chat, workspaceId, userId);
+    await this.ensureDatabaseAvailableToUser(chat, workspaceId, userId);
     return { chat, access };
+  }
+
+  private async ensureAgentAvailableToUser(chat: { kind: ChatKind; workspace_agent_id: string | null }, workspaceId: string, userId: string): Promise<void> {
+    if (chat.kind !== "AGENT") return;
+    const agents = await this.workspaceAgentService.listForUser(workspaceId, userId);
+    if (!chat.workspace_agent_id || !agents.some((agent) => agent.id === chat.workspace_agent_id)) throw new AppError("Non hai accesso all'agente Brainy associato a questa chat.", "BRAINY_AGENT_ACCESS_DENIED", 403);
+  }
+
+  private async ensureDatabaseAvailableToUser(chat: { kind: ChatKind; workspace_database_connection_id: string | null }, workspaceId: string, userId: string): Promise<void> {
+    if (chat.kind !== "DATABASE") return;
+    await this.workspaceDatabaseConnectionService.requireForUser(workspaceId, userId, chat.workspace_database_connection_id ?? "");
   }
 
   private async requireOwner(workspaceId: string, userId: string, chatId: string) { const chat = await this.prisma.brainyChat.findFirst({ where: { id: chatId, workspace_id: workspaceId, deleted_at: null, created_by_user_id: userId } }); if (!chat) throw new AppError("Solo il proprietario puo' gestire le condivisioni o archiviare la chat.", "BRAINY_CHAT_OWNER_REQUIRED", 403); return chat; }

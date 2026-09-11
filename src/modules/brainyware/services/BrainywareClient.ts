@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-export type BrainywareInferenceMode = "database" | "model";
+export type BrainywareInferenceMode = "agent" | "database" | "model";
 
 export interface BrainywareModel {
   id: string;
@@ -129,7 +129,7 @@ export class BrainywareClient {
 
   public async inferStateless(params: {
     message: string;
-    mode?: BrainywareInferenceMode;
+    mode?: Exclude<BrainywareInferenceMode, "agent">;
     connectionId?: string;
     model?: string;
     instructions?: string;
@@ -228,6 +228,12 @@ export class BrainywareClient {
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  public async runAgentSingleShot(params: { agentId: string; message: string; sessionName?: string }): Promise<BrainywareInferenceResult> {
+    const result = await this.runAgent({ agentId: params.agentId, sessionId: "", sessionName: params.sessionName ?? "Workflow Birgus", message: params.message });
+    if (result.sessionId) await this.deleteAgentSession(params.agentId, result.sessionId);
+    return { reply: result.reply, mode: "agent", model: params.agentId, persistentSession: false, provider: "brainyware" };
   }
 
   public async *runAgentStream(params: { agentId: string; sessionId: string; sessionName?: string; message: string }): AsyncGenerator<string> {
@@ -378,6 +384,7 @@ export class BrainywareClient {
       if (connections.length > 1) throw new Error("Selezionare il database Brainyware da interrogare.");
       connectionId = connections[0].id;
     }
+    await this.assertReadOnlyDatabaseConnection(connectionId);
     const payload = await this.request(`/brainy/api/database/connections/lf/${encodeURIComponent(connectionId)}/chat`, {
       method: "POST",
       body: {

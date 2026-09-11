@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 
 import { AiProviderSettingsService } from "../../modules/ai-runtime/services/AiProviderSettingsService.js";
 import { BrainywareClient } from "../../modules/brainyware/services/BrainywareClient.js";
+import { BrainyWorkspaceAgentService } from "../../modules/brainyware/services/BrainyWorkspaceAgentService.js";
+import { BrainyWorkspaceDatabaseConnectionService } from "../../modules/brainyware/services/BrainyWorkspaceDatabaseConnectionService.js";
 import { DocumentArchiveService } from "../../modules/document-archive/services/DocumentArchiveService.js";
 import { BackendPythonModulesClient } from "../../modules/document-intelligence/services/BackendPythonModulesClient.js";
 import { DocumentIntelligenceService } from "../../modules/document-intelligence/services/DocumentIntelligenceService.js";
@@ -42,6 +44,8 @@ import { NestWorkflowsController } from "./workflows.controller.js";
   controllers: [NestWorkflowsController],
   providers: [
     HumanInterventionService,
+    BrainyWorkspaceAgentService,
+    BrainyWorkspaceDatabaseConnectionService,
     {
       provide: WorkflowRuntimeAccessPolicy,
       useFactory: (moduleAccessPolicy: ModuleAccessPolicy) => new WorkflowRuntimeAccessPolicy(moduleAccessPolicy),
@@ -93,6 +97,8 @@ import { NestWorkflowsController } from "./workflows.controller.js";
         runtimeAccessPolicy: WorkflowRuntimeAccessPolicy,
         humanInterventionService: HumanInterventionService,
         brainywareClient: BrainywareClient,
+        brainyWorkspaceAgentService: BrainyWorkspaceAgentService,
+        brainyWorkspaceDatabaseConnectionService: BrainyWorkspaceDatabaseConnectionService,
       ) => new WorkflowRunExecutorService({
         documentArchiveService,
         documentIntelligenceService,
@@ -109,6 +115,8 @@ import { NestWorkflowsController } from "./workflows.controller.js";
         runtimeAccessPolicy,
         humanInterventionService,
         brainywareClient,
+        brainyWorkspaceAgentService,
+        brainyWorkspaceDatabaseConnectionService,
       }),
       inject: [
         DocumentArchiveService,
@@ -126,6 +134,8 @@ import { NestWorkflowsController } from "./workflows.controller.js";
         WorkflowRuntimeAccessPolicy,
         HumanInterventionService,
         BrainywareClient,
+        BrainyWorkspaceAgentService,
+        BrainyWorkspaceDatabaseConnectionService,
       ],
     },
   ],

@@ -20,11 +20,20 @@ test("WorkflowRunExecutorService sends Brainyware database inference without a p
         return { reply: "Risposta", mode: "database", connectionId: "db-1", persistentSession: false, provider: "brainyware" };
       },
     } as never,
+    brainyWorkspaceDatabaseConnectionService: {
+      requireBrainywareConnectionForWorkflowUser: async () => ({
+        id: "workspace-db-1",
+        brainywareConnectionId: "db-1",
+        label: "Database",
+      }),
+    } as never,
   }) as unknown as {
     executeBrainywareInferenceTool: (context: unknown, node: unknown) => Promise<Record<string, unknown>>;
   };
 
   const result = await service.executeBrainywareInferenceTool({
+    workspaceId: "workspace-1",
+    userId: "user-1",
     inputPayload: {},
     nodeOutputs: new Map([["input", { text: "Dati collegati" }]]),
     incomingNodeKeys: new Map([["brainy", ["input"]]]),

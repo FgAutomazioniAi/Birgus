@@ -12,6 +12,8 @@ import { GaragePath } from "../../../storage/GaragePath.js";
 import { StorageSelector } from "../../../storage/StorageSelector.js";
 import { AiProviderSettingsService } from "../../ai-runtime/services/AiProviderSettingsService.js";
 import { BrainywareClient, type BrainywareInferenceMode } from "../../brainyware/services/BrainywareClient.js";
+import { BrainyWorkspaceAgentService } from "../../brainyware/services/BrainyWorkspaceAgentService.js";
+import { BrainyWorkspaceDatabaseConnectionService } from "../../brainyware/services/BrainyWorkspaceDatabaseConnectionService.js";
 import { FileKind } from "../../document-archive/domain/FileKind.js";
 import { PutProjectFileCommand } from "../../document-archive/dto/PutProjectFileCommand.js";
 import { DocumentArchiveService } from "../../document-archive/services/DocumentArchiveService.js";
@@ -136,6 +138,8 @@ export class WorkflowRunExecutorService {
   private readonly ruleEngine = new WorkflowRuleEngine();
   private readonly humanInterventionService: HumanInterventionService | null;
   private readonly brainywareClient: BrainywareClient | null;
+  private readonly brainyWorkspaceAgentService: BrainyWorkspaceAgentService | null;
+  private readonly brainyWorkspaceDatabaseConnectionService: BrainyWorkspaceDatabaseConnectionService | null;
 
   public constructor(params: {
     documentArchiveService: DocumentArchiveService;
@@ -152,6 +156,8 @@ export class WorkflowRunExecutorService {
     scheduledWorkflowDeliveryService?: ScheduledWorkflowDeliveryService | null;
     humanInterventionService?: HumanInterventionService | null;
     brainywareClient?: BrainywareClient | null;
+    brainyWorkspaceAgentService?: BrainyWorkspaceAgentService | null;
+    brainyWorkspaceDatabaseConnectionService?: BrainyWorkspaceDatabaseConnectionService | null;
     runtimeAccessPolicy: WorkflowRuntimeAccessPolicy;
   }) {
     this.documentArchiveService = params.documentArchiveService;
@@ -168,6 +174,8 @@ export class WorkflowRunExecutorService {
     this.scheduledWorkflowDeliveryService = params.scheduledWorkflowDeliveryService ?? null;
     this.humanInterventionService = params.humanInterventionService ?? null;
     this.brainywareClient = params.brainywareClient ?? null;
+    this.brainyWorkspaceAgentService = params.brainyWorkspaceAgentService ?? null;
+    this.brainyWorkspaceDatabaseConnectionService = params.brainyWorkspaceDatabaseConnectionService ?? null;
     this.runtimeAccessPolicy = params.runtimeAccessPolicy;
   }
 
@@ -1793,17 +1801,9 @@ export class WorkflowRunExecutorService {
     if (!message) throw new Error("Collegare o inserire un testo per l'inferenza Brainyware.");
 
     const requestedMode = this.firstString(configuration.mode);
-    const mode: BrainywareInferenceMode = requestedMode === "model" ? "model" : "database";
-    const result = await this.brainywareClient.inferStateless({
-      message,
-      mode,
-      connectionId: this.firstString(configuration.connection_id, configuration.connectionId) || undefined,
-      model: this.firstString(configuration.model) || undefined,
-      instructions: this.firstString(configuration.instructions) || undefined,
-      locale: this.firstString(configuration.locale) || "italiano",
-      temperature: this.numberValue(configuration.temperature),
-      maxTokens: this.numberValue(configuration.max_tokens, configuration.maxTokens),
-    });
+    const result = requestedMode === "agent"
+      ? await this.executeBrainywareAgentSingleShot(context, configuration, message)
+      : await this.executeBrainywareStatelessInference(context, configuration, message, requestedMode);
     return {
       ...result,
       text: result.reply,
@@ -1822,6 +1822,42 @@ export class WorkflowRunExecutorService {
         },
       ],
     };
+  }
+
+  private async executeBrainywareStatelessInference(context: StepExecutionContext, configuration: Record<string, unknown>, message: string, requestedMode: string) {
+    if (!this.brainywareClient) throw new Error("Client Brainyware non disponibile.");
+    const mode = (requestedMode === "model" ? "model" : "database") as Exclude<BrainywareInferenceMode, "agent">;
+    const connectionId = this.firstString(configuration.connection_id, configuration.connectionId) || undefined;
+    if (mode === "database") {
+      if (!context.userId || !this.brainyWorkspaceDatabaseConnectionService) throw new Error("Un workflow con database Brainy deve essere avviato da un utente del workspace.");
+      if (!connectionId) throw new Error("Selezionare il database Brainy per il workflow.");
+      await this.brainyWorkspaceDatabaseConnectionService.requireBrainywareConnectionForWorkflowUser(
+        context.workspaceId,
+        context.userId,
+        connectionId,
+      );
+    }
+    return this.brainywareClient.inferStateless({
+      message,
+      mode,
+      connectionId,
+      model: this.firstString(configuration.model) || undefined,
+      instructions: this.firstString(configuration.instructions) || undefined,
+      locale: this.firstString(configuration.locale) || "italiano",
+      temperature: this.numberValue(configuration.temperature),
+      maxTokens: this.numberValue(configuration.max_tokens, configuration.maxTokens),
+    });
+  }
+
+  private async executeBrainywareAgentSingleShot(context: StepExecutionContext, configuration: Record<string, unknown>, message: string) {
+    if (!this.brainywareClient || !this.brainyWorkspaceAgentService) throw new Error("Client Brainyware non disponibile.");
+    if (!context.userId) throw new Error("Un workflow con agente Brainy deve essere avviato da un utente del workspace.");
+    const workspaceAgentId = this.firstString(configuration.agent_id, configuration.agentId);
+    if (!workspaceAgentId) throw new Error("Selezionare un agente Brainy per il workflow.");
+    const agent = await this.brainyWorkspaceAgentService.requireWorkflowAgentForUser(context.workspaceId, context.userId, workspaceAgentId);
+    const instructions = this.firstString(configuration.instructions);
+    const completeMessage = instructions ? `${instructions}\n\n${message}` : message;
+    return this.brainywareClient.runAgentSingleShot({ agentId: agent.brainywareAgentId, message: completeMessage, sessionName: `Workflow ${context.workflowLabel}` });
   }
 
   private executeVerifyAndRouteTool(context: StepExecutionContext, node: WorkflowNodeRow): Record<string, unknown> {

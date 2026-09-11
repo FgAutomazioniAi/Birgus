@@ -17,6 +17,7 @@ export interface CommissionRecordWriteParams {
   code?: string | null;
   description?: string | null;
   status?: CommissionRecordStatus;
+  statusLabel?: string | null;
   priority?: CommissionRecordPriority;
   companyId?: number | null;
   companyName?: string | null;
@@ -40,6 +41,8 @@ export interface CommissionRecordUpdateParams {
   title?: string;
   description?: string | null;
   status?: CommissionRecordStatus;
+  statusLabel?: string | null;
+  code?: string;
   priority?: CommissionRecordPriority;
   companyId?: number | null;
   clientId?: string | null;

@@ -16,6 +16,9 @@ const agentSchema = z.object({
   label: z.string().trim().min(1).max(120),
   isEnabled: z.boolean().optional(),
   isDefault: z.boolean().optional(),
+  isWorkflowEnabled: z.boolean().optional(),
+  accessMode: z.enum(["ALL", "ASSIGNED"]).optional(),
+  roleIds: z.array(z.number().int().positive()).max(32).optional(),
 });
 
 @Controller("/api/brainy/settings/agents")
@@ -35,6 +38,11 @@ export class BrainyWorkspaceAgentsController {
 
   @Get("available")
   public async available() { return { agents: await this.service.listAvailable() }; }
+
+  @Get("access-options")
+  public async accessOptions(@CurrentRequestContext() context: RequestContext) {
+    return this.service.accessOptions(context.workspace.workspaceId);
+  }
 
   @Post()
   public async create(@Body() body: unknown, @CurrentRequestContext() context: RequestContext) {

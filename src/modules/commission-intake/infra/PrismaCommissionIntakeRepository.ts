@@ -115,6 +115,7 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
             title: params.title,
             description: params.description ?? null,
             status: params.status ?? CommissionRecordStatus.DRAFT,
+            status_label: params.statusLabel ?? null,
             priority: params.priority,
             company_id: companyId,
             client_id: params.clientId ?? null,
@@ -221,6 +222,7 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
           code: true,
           title: true,
           description: true,
+          status_label: true,
           source_system: true,
           external_reference: true,
         },
@@ -230,10 +232,30 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       }
       await this.ensureNoBlockingLock(tx, params.workspaceId, params.recordId, params.actorUserId);
 
+      if (params.code !== undefined && params.code !== existing.code) {
+        const duplicate = await tx.commissionRecord.findFirst({
+          where: {
+            workspace_id: params.workspaceId,
+            code: params.code,
+            id: { not: params.recordId },
+          },
+          select: { id: true },
+        });
+        if (duplicate) {
+          throw new AppError(
+            "Esiste gia' una commessa con questo codice.",
+            "COMMISSION_CODE_ALREADY_EXISTS",
+            409,
+          );
+        }
+      }
+
       const data: Prisma.CommissionRecordUncheckedUpdateInput = {
+        ...(params.code !== undefined ? { code: params.code } : {}),
         ...(params.title !== undefined ? { title: params.title } : {}),
         ...(params.description !== undefined ? { description: params.description } : {}),
         ...(params.status !== undefined ? { status: params.status } : {}),
+        ...(params.statusLabel !== undefined ? { status_label: params.statusLabel } : {}),
         ...(params.priority !== undefined ? { priority: params.priority } : {}),
         ...(params.companyId !== undefined ? { company_id: params.companyId } : {}),
         ...(params.clientId !== undefined ? { client_id: params.clientId } : {}),
@@ -247,13 +269,14 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         updated_by_user_id: params.actorUserId,
       };
       if (
-        params.title !== undefined
+        params.code !== undefined
+        || params.title !== undefined
         || params.description !== undefined
         || params.sourceSystem !== undefined
         || params.externalReference !== undefined
       ) {
         data.search_text = this.buildSearchText({
-          code: existing.code,
+          code: params.code ?? existing.code,
           title: params.title ?? existing.title,
           description: params.description === undefined ? existing.description : params.description,
           sourceSystem: params.sourceSystem === undefined ? existing.source_system : params.sourceSystem,
@@ -2162,6 +2185,7 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       title: row.title,
       description: row.description,
       status: row.status,
+      statusLabel: row.status_label,
       priority: row.priority,
       companyId: row.company_id,
       clientId: row.client_id,
