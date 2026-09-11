@@ -9,6 +9,7 @@ export const APP_ROUTES = {
   clientNew: "/clients/new",
   clientEdit: (id: number | string) => `/clients/edit/${id}`,
   commissions: "/commesse",
+  commissionRecord: (id: string) => `/commesse/${id}`,
   dataCollectionChecklists: "/checklist-raccolta-dati",
   dataCollectionChecklist: (id: string) => `/checklist-raccolta-dati/${id}`,
   ddtReader: "/ddt-reader",

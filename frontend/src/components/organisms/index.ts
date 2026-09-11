@@ -1,6 +1,7 @@
 export * from "./client-form";
 export * from "./clients-table";
 export * from "./commission-records-panel";
+export * from "./commission-record-detail-panel";
 export * from "./commission-detail-panel";
 export * from "./dashboard-table";
 export * from "./data-collection-checklist-panel";

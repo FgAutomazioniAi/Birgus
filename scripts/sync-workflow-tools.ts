@@ -13,6 +13,7 @@ const tools = [
     configuration: {
       mode: "database",
       connection_id: "",
+      agent_id: "",
       model: "",
       instructions: "",
       locale: "italiano",

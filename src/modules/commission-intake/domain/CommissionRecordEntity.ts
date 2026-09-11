@@ -10,6 +10,7 @@ export class CommissionRecordEntity {
   public readonly title: string;
   public readonly description: string | null;
   public readonly status: CommissionRecordStatus;
+  public readonly statusLabel: string | null;
   public readonly priority: CommissionRecordPriority;
   public readonly companyId: number | null;
   public readonly clientId: string | null;
@@ -35,6 +36,7 @@ export class CommissionRecordEntity {
     title: string;
     description: string | null;
     status: CommissionRecordStatus;
+    statusLabel?: string | null;
     priority: CommissionRecordPriority;
     companyId: number | null;
     clientId: string | null;
@@ -59,6 +61,7 @@ export class CommissionRecordEntity {
     this.title = params.title;
     this.description = params.description;
     this.status = params.status;
+    this.statusLabel = params.statusLabel ?? null;
     this.priority = params.priority;
     this.companyId = params.companyId;
     this.clientId = params.clientId;

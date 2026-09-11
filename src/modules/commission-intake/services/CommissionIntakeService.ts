@@ -71,6 +71,7 @@ export class CommissionIntakeService {
     code?: string | null;
     description?: string | null;
     status?: CommissionRecordStatus | null;
+    statusLabel?: string | null;
     priority?: CommissionRecordPriority | null;
     companyId?: number | null;
     companyName?: string | null;
@@ -96,6 +97,7 @@ export class CommissionIntakeService {
       code: this.normalizeOptional(params.code) ?? this.generateRecordCode(),
       description: this.normalizeOptional(params.description),
       status: params.status ?? CommissionRecordStatus.DRAFT,
+      statusLabel: this.normalizeOptional(params.statusLabel),
       priority: params.priority ?? CommissionRecordPriority.NORMAL,
       companyId: params.companyId ?? null,
       companyName: this.normalizeDisplayName(params.companyName),
@@ -140,9 +142,11 @@ export class CommissionIntakeService {
     workspaceId: string;
     actorUserId: string;
     recordId: string;
+    code?: string | null;
     title?: string;
     description?: string | null;
     status?: CommissionRecordStatus;
+    statusLabel?: string | null;
     priority?: CommissionRecordPriority;
     companyId?: number | null;
     clientId?: string | null;
@@ -156,8 +160,10 @@ export class CommissionIntakeService {
   }): Promise<CommissionRecordEntity> {
     const record = await this.repository.updateRecord({
       ...params,
+      code: params.code === undefined ? undefined : this.normalizeOptional(params.code) ?? undefined,
       title: params.title === undefined ? undefined : this.normalizeTitle(params.title),
       description: params.description === undefined ? undefined : this.normalizeOptional(params.description),
+      statusLabel: params.statusLabel === undefined ? undefined : this.normalizeOptional(params.statusLabel),
       sourceSystem: params.sourceSystem === undefined ? undefined : this.normalizeOptional(params.sourceSystem),
       externalReference: params.externalReference === undefined ? undefined : this.normalizeOptional(params.externalReference),
       estimatedBudgetAmount: params.estimatedBudgetAmount === undefined ? undefined : this.normalizeOptional(params.estimatedBudgetAmount),

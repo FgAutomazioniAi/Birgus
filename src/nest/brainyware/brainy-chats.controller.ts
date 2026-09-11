@@ -26,11 +26,11 @@ export class BrainyChatsController {
 
   @Get("agents") @RequirePermission(PermissionKey.BRAINY_READ)
   public async agents(@CurrentRequestContext() context: RequestContext) {
-    return { agents: await this.service.listAgents(context.workspace.workspaceId) };
+    return { agents: await this.service.listAgents(context.workspace.workspaceId, context.workspace.userId) };
   }
 
   @Get("database-connections") @RequirePermission(PermissionKey.BRAINY_READ)
-  public async databaseConnections(@CurrentRequestContext() context: RequestContext) { return { connections: await this.service.listDatabaseConnections(context.workspace.workspaceId) }; }
+  public async databaseConnections(@CurrentRequestContext() context: RequestContext) { return { connections: await this.service.listDatabaseConnections(context.workspace.workspaceId, context.workspace.userId) }; }
 
   @Get("workspace-users") @RequirePermission(PermissionKey.BRAINY_READ)
   public async workspaceUsers(@CurrentRequestContext() context: RequestContext) { return { users: await this.service.listWorkspaceUsers(context.workspace.workspaceId) }; }

@@ -1889,7 +1889,7 @@ export function WorkflowCanvasPanel() {
             <Text variant="caption">{t("workflow.activeModules", { count: moduleCards.length })}</Text>
           </div>
           {moduleCards.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {moduleCards.map((card) => (
                 <button
                   key={card.cardKey}
@@ -1923,7 +1923,7 @@ export function WorkflowCanvasPanel() {
               {t("workflow.new")}
             </Button>
           </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div className="min-h-32 rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-4 shadow-card transition hover:border-brand-primary">
               <div className="flex items-start justify-between gap-3">
                 <button

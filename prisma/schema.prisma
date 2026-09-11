@@ -209,6 +209,11 @@ enum BrainyChatAccessLevel {
   WRITE
 }
 
+enum BrainyAgentAccessMode {
+  ALL
+  ASSIGNED
+}
+
 enum KnowledgeDocumentStatus {
   PENDING
   PROCESSING
@@ -498,6 +503,7 @@ model User {
   brainy_chats_created                 BrainyChat[]               @relation("brainy_chat_created_by")
   brainy_chat_shares_received          BrainyChatShare[]          @relation("brainy_chat_share_user")
   brainy_chat_shares_granted           BrainyChatShare[]          @relation("brainy_chat_share_granted_by")
+  brainy_agent_assignments             BrainyWorkspaceAgentAssignment[] @relation("brainy_agent_assignment_user")
 
   @@index([deleted_at])
   @@map("users")
@@ -569,6 +575,8 @@ model Role {
   is_system            Boolean             @default(false)
   role_permissions     RolePermission[]
   user_workspace_roles UserWorkspaceRole[]
+  brainy_agent_assignments BrainyWorkspaceAgentAssignment[]
+  brainy_database_role_accesses BrainyWorkspaceDatabaseConnectionRoleAccess[]
 
   @@map("roles")
 }
@@ -2123,11 +2131,14 @@ model BrainyWorkspaceAgent {
   label               String
   is_enabled          Boolean  @default(true)
   is_default          Boolean  @default(false)
+  is_workflow_enabled Boolean  @default(false)
+  access_mode         BrainyAgentAccessMode @default(ALL)
   created_by_user_id  String?  @db.Uuid
   updated_by_user_id  String?  @db.Uuid
   created_at          DateTime @default(now())
   updated_at          DateTime @updatedAt
   deleted_at          DateTime?
+  assignments         BrainyWorkspaceAgentAssignment[]
 
   @@unique([workspace_id, brainyware_agent_id])
   @@index([workspace_id, is_enabled])
@@ -2136,12 +2147,33 @@ model BrainyWorkspaceAgent {
   @@map("brainy_workspace_agents")
 }
 
+model BrainyWorkspaceAgentAssignment {
+  id                  String   @id @default(uuid()) @db.Uuid
+  workspace_agent_id  String   @db.Uuid
+  workspace_id        String   @db.Uuid
+  role_id             Int?
+  user_id             String?  @db.Uuid
+  created_at          DateTime @default(now())
+
+  workspace_agent BrainyWorkspaceAgent @relation(fields: [workspace_agent_id], references: [id], onDelete: Cascade)
+  role            Role?                 @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  user            User?                 @relation("brainy_agent_assignment_user", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([workspace_agent_id, role_id])
+  @@unique([workspace_agent_id, user_id])
+  @@index([workspace_id, role_id])
+  @@index([workspace_id, user_id])
+  @@map("brainy_workspace_agent_assignments")
+}
+
 model BrainyWorkspaceDatabaseConnection {
   id                       String   @id @default(uuid()) @db.Uuid
   workspace_id             String   @db.Uuid
   brainyware_connection_id String
   label                    String
   is_enabled               Boolean  @default(true)
+  is_workflow_enabled      Boolean  @default(false)
+  access_mode              BrainyAgentAccessMode @default(ALL)
   created_by_user_id       String?  @db.Uuid
   created_at               DateTime @default(now())
   updated_at               DateTime @updatedAt
@@ -2149,11 +2181,27 @@ model BrainyWorkspaceDatabaseConnection {
 
   workspace Workspace    @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
   chats     BrainyChat[]
+  role_accesses BrainyWorkspaceDatabaseConnectionRoleAccess[]
 
   @@unique([workspace_id, brainyware_connection_id])
   @@index([workspace_id, is_enabled])
   @@index([workspace_id, deleted_at])
   @@map("brainy_workspace_database_connections")
+}
+
+model BrainyWorkspaceDatabaseConnectionRoleAccess {
+  id                              String   @id @default(uuid()) @db.Uuid
+  workspace_database_connection_id String  @db.Uuid
+  workspace_id                    String  @db.Uuid
+  role_id                         Int
+  created_at                      DateTime @default(now())
+
+  workspace_database_connection BrainyWorkspaceDatabaseConnection @relation(fields: [workspace_database_connection_id], references: [id], onDelete: Cascade)
+  role                          Role                                     @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@unique([workspace_database_connection_id, role_id])
+  @@index([workspace_id, role_id])
+  @@map("brainy_workspace_database_connection_role_accesses")
 }
 
 model BrainyChat {
@@ -2291,6 +2339,7 @@ model CommissionRecord {
   title                   String
   description             String?                  @db.Text
   status                  CommissionRecordStatus   @default(DRAFT)
+  status_label            String?                  @db.VarChar(120)
   priority                CommissionRecordPriority @default(NORMAL)
   company_id              Int?
   client_id               String?                  @db.Uuid

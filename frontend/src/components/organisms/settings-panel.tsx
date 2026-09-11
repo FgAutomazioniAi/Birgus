@@ -93,6 +93,13 @@ interface BrainyWorkspaceAgent {
   label: string;
   isEnabled: boolean;
   isDefault: boolean;
+  isWorkflowEnabled: boolean;
+  accessMode: "ALL" | "ASSIGNED";
+  assignments: Array<{ id: number; label: string }>;
+}
+
+interface BrainyAgentAccessOptions {
+  roles: Array<{ id: number; label: string }>;
 }
 
 interface BrainyDatabaseConnection {
@@ -101,6 +108,10 @@ interface BrainyDatabaseConnection {
   label: string;
   dbType?: string | null;
   isEnabled?: boolean;
+  isWorkflowEnabled?: boolean;
+  accessMode?: "ALL" | "ASSIGNED";
+  roleIds?: number[];
+  roles?: Array<{ id: number; label: string }>;
 }
 
 interface OcrModuleToggleResponse {
@@ -180,7 +191,11 @@ export function SettingsPanel() {
   const [vllmRuntimeError, setVllmRuntimeError] = useState<string | null>(null);
   const [brainyAgents, setBrainyAgents] = useState<BrainyWorkspaceAgent[]>([]);
   const [availableBrainyAgents, setAvailableBrainyAgents] = useState<Array<{ id: string; label: string }>>([]);
-  const [brainyAgentDraft, setBrainyAgentDraft] = useState({ id: "", brainywareAgentId: "", label: "", isEnabled: true, isDefault: false });
+  const [brainyAgentDraft, setBrainyAgentDraft] = useState({ id: "", brainywareAgentId: "", label: "", isEnabled: true, isDefault: false, isWorkflowEnabled: false, accessMode: "ALL" as const, roleIds: [] as number[] });
+  const [brainyAgentAccessOptions, setBrainyAgentAccessOptions] = useState<BrainyAgentAccessOptions>({ roles: [] });
+  const [brainyDatabaseAccessOptions, setBrainyDatabaseAccessOptions] = useState<BrainyAgentAccessOptions>({ roles: [] });
+  const [brainyAgentAccessTarget, setBrainyAgentAccessTarget] = useState<BrainyWorkspaceAgent | null>(null);
+  const [brainyDatabaseAccessTarget, setBrainyDatabaseAccessTarget] = useState<BrainyDatabaseConnection | null>(null);
   const [loadingBrainyAgents, setLoadingBrainyAgents] = useState(false);
   const [savingBrainyAgent, setSavingBrainyAgent] = useState(false);
   const [brainyAgentError, setBrainyAgentError] = useState<string | null>(null);
@@ -264,6 +279,16 @@ export function SettingsPanel() {
     } catch (error) { setBrainyAgentError(error instanceof Error ? error.message : "Impossibile leggere gli agenti Brainyware."); }
   };
 
+  const loadBrainyAgentAccessOptions = async () => {
+    try { setBrainyAgentAccessOptions(await fetchJson<BrainyAgentAccessOptions>("/api/brainy/settings/agents/access-options")); }
+    catch (error) { setBrainyAgentError(error instanceof Error ? error.message : "Impossibile leggere ruoli e utenti del workspace."); }
+  };
+
+  const loadBrainyDatabaseAccessOptions = async () => {
+    try { setBrainyDatabaseAccessOptions(await fetchJson<BrainyAgentAccessOptions>("/api/brainy/settings/database-connections/access-options")); }
+    catch (error) { setBrainyDatabaseError(error instanceof Error ? error.message : "Impossibile leggere i ruoli del workspace."); }
+  };
+
   const loadBrainyDatabaseConnections = async () => {
     try {
       const [configured, available] = await Promise.all([
@@ -280,6 +305,8 @@ export function SettingsPanel() {
     if (!canConfigureBrainy) return;
     void loadBrainyAgents();
     void loadAvailableBrainyAgents();
+    void loadBrainyAgentAccessOptions();
+    void loadBrainyDatabaseAccessOptions();
     void loadBrainyDatabaseConnections();
   }, [canConfigureBrainy]);
 
@@ -541,7 +568,7 @@ export function SettingsPanel() {
     }
   };
 
-  const resetBrainyAgentDraft = () => setBrainyAgentDraft({ id: "", brainywareAgentId: "", label: "", isEnabled: true, isDefault: brainyAgents.length === 0 });
+  const resetBrainyAgentDraft = () => setBrainyAgentDraft({ id: "", brainywareAgentId: "", label: "", isEnabled: true, isDefault: brainyAgents.length === 0, isWorkflowEnabled: false, accessMode: "ALL", roleIds: [] });
 
   const handleSaveBrainyAgent = async () => {
     setSavingBrainyAgent(true);
@@ -584,6 +611,9 @@ export function SettingsPanel() {
           label: agent.label,
           isEnabled: !agent.isEnabled,
           isDefault: agent.isEnabled ? false : agent.isDefault,
+          isWorkflowEnabled: agent.isEnabled ? false : agent.isWorkflowEnabled,
+          accessMode: agent.accessMode,
+          roleIds: agent.assignments.map((assignment) => assignment.id),
         }),
       });
       await loadBrainyAgents();
@@ -595,6 +625,38 @@ export function SettingsPanel() {
     } finally {
       setSavingBrainyAgent(false);
     }
+  };
+
+  const handleSaveBrainyAgentAccess = async (
+    agent: BrainyWorkspaceAgent,
+    accessMode: "ALL" | "ASSIGNED",
+    roleIds: number[],
+    isWorkflowEnabled: boolean,
+  ) => {
+    setSavingBrainyAgent(true);
+    setBrainyAgentError(null);
+    try {
+      await fetchJson(`/api/brainy/settings/agents/${encodeURIComponent(agent.id)}`, { method: "PATCH", body: JSON.stringify({ brainywareAgentId: agent.brainywareAgentId, label: agent.label, isEnabled: agent.isEnabled, isDefault: agent.isDefault, isWorkflowEnabled, accessMode, roleIds }) });
+      await loadBrainyAgents();
+      toast.success("Accessi agente Brainy aggiornati.");
+    } catch (error) { setBrainyAgentError(error instanceof Error ? error.message : "Impossibile aggiornare gli accessi dell'agente Brainy."); }
+    finally { setSavingBrainyAgent(false); }
+  };
+
+  const handleSaveBrainyDatabaseAccess = async (
+    connection: BrainyDatabaseConnection,
+    accessMode: "ALL" | "ASSIGNED",
+    roleIds: number[],
+    isWorkflowEnabled: boolean,
+  ) => {
+    setSavingBrainyDatabaseId(connection.id);
+    setBrainyDatabaseError(null);
+    try {
+      await fetchJson(`/api/brainy/settings/database-connections/${encodeURIComponent(connection.id)}/access`, { method: "PATCH", body: JSON.stringify({ accessMode, roleIds, isWorkflowEnabled }) });
+      await loadBrainyDatabaseConnections();
+      toast.success("Accessi database Brainy aggiornati.");
+    } catch (error) { setBrainyDatabaseError(error instanceof Error ? error.message : "Impossibile aggiornare gli accessi del database Brainy."); }
+    finally { setSavingBrainyDatabaseId(null); }
   };
 
   const handleEnableBrainyDatabaseConnection = async (connection: BrainyDatabaseConnection) => {
@@ -685,7 +747,7 @@ export function SettingsPanel() {
 
       <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-[minmax(240px,0.62fr)_minmax(360px,1fr)_minmax(420px,1.1fr)]">
       {activeSettingsTab === "ai" && canConfigureBrainy ? (
-        <Card id="brainy" className="self-start space-y-3 p-3 md:col-span-2 xl:col-span-1 [&_input]:h-9">
+        <Card id="brainy" className="self-start space-y-3 p-3 md:col-span-2 xl:col-span-2 [&_input]:h-9">
           <div>
             <div>
               <div className="flex items-center gap-2">
@@ -700,7 +762,22 @@ export function SettingsPanel() {
             <button type="button" onClick={() => setIsBrainyAgentsOpen((open) => !open)} className="flex w-full items-center justify-between gap-3 text-left"><div><Text as="h3" variant="h2" className="text-sm">Agenti</Text><Text variant="caption">Seleziona un agente Brainyware da rendere disponibile nel workspace.</Text></div>{isBrainyAgentsOpen ? <ChevronDown size={17} /> : <ChevronDown size={17} className="-rotate-90" />}</button>
             {isBrainyAgentsOpen ? <div className="mt-3 space-y-3">
               <div className="flex gap-2"><SelectDropdown id="brainy-agent-select" value={brainyAgentDraft.brainywareAgentId} options={availableBrainyAgents.filter((agent) => !brainyAgents.some((configured) => configured.brainywareAgentId === agent.id)).map((agent) => ({ value: agent.id, label: agent.label }))} onChange={(value) => { const agent = availableBrainyAgents.find((item) => item.id === value); if (agent) setBrainyAgentDraft((draft) => ({ ...draft, id: "", brainywareAgentId: agent.id, label: agent.label, isEnabled: true, isDefault: brainyAgents.length === 0 })); }} placeholder="Seleziona agente" /><Button size="sm" className="shrink-0" onClick={() => void handleSaveBrainyAgent()} disabled={savingBrainyAgent || !brainyAgentDraft.brainywareAgentId.trim()}>{savingBrainyAgent ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}Aggiungi</Button></div>
-              {brainyAgents.map((agent) => <div key={agent.id} className="flex items-center gap-2 border-b border-border-subtle pb-2 last:border-0 last:pb-0"><div className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-text-primary">{agent.label}{agent.isDefault ? " (predefinito)" : ""}</span><span className="block truncate text-xs text-text-muted">{agent.brainywareAgentId}</span></div><BrainyEnableSwitch checked={agent.isEnabled} disabled={savingBrainyAgent} label={`Stato agente ${agent.label}`} onChange={() => void handleToggleBrainyAgent(agent)} /><Button size="sm" variant="ghost" className="h-8 w-8 shrink-0 px-0 text-status-danger-text" title="Elimina agente" onClick={() => setBrainyAgentToArchive(agent)}><Trash2 size={15} /></Button></div>)}
+              {brainyAgents.map((agent) => (
+                <div key={agent.id} className="flex items-center gap-2 border-b border-border-subtle pb-2 last:border-0 last:pb-0">
+                  <div className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-text-primary">
+                      {agent.label}{agent.isDefault ? " (predefinito)" : ""}
+                    </span>
+                  </div>
+                  <Button size="sm" variant="outline" disabled={savingBrainyAgent} onClick={() => setBrainyAgentAccessTarget(agent)}>
+                    Accessi
+                  </Button>
+                  <BrainyEnableSwitch checked={agent.isEnabled} disabled={savingBrainyAgent} label={`Stato agente ${agent.label}`} onChange={() => void handleToggleBrainyAgent(agent)} />
+                  <Button size="sm" variant="ghost" className="h-8 w-8 shrink-0 px-0 text-status-danger-text" title="Elimina agente" onClick={() => setBrainyAgentToArchive(agent)}>
+                    <Trash2 size={15} />
+                  </Button>
+                </div>
+              ))}
               {!loadingBrainyAgents && brainyAgents.length === 0 && !brainyAgentError ? <Text variant="caption">Nessun agente configurato.</Text> : null}
             </div> : null}
           </section>
@@ -709,7 +786,20 @@ export function SettingsPanel() {
             {isBrainyDatabasesOpen ? <div className="mt-3 space-y-3">
               {brainyDatabaseError ? <div className="text-sm font-semibold text-status-danger-text">{brainyDatabaseError}</div> : null}
               <div className="flex gap-2"><SelectDropdown id="brainy-database-select" value={selectedBrainyDatabaseId} options={availableBrainyDatabaseConnections.filter((connection) => !brainyDatabaseConnections.some((configured) => configured.brainywareConnectionId === connection.id)).map((connection) => ({ value: connection.id, label: connection.label }))} onChange={setSelectedBrainyDatabaseId} placeholder="Seleziona database" /><Button size="sm" className="shrink-0" disabled={!selectedBrainyDatabaseId || savingBrainyDatabaseId !== null} onClick={() => { const connection = availableBrainyDatabaseConnections.find((item) => item.id === selectedBrainyDatabaseId); if (connection) void handleEnableBrainyDatabaseConnection(connection); }}><Save size={16} />Aggiungi</Button></div>
-              {brainyDatabaseConnections.map((connection) => <div key={connection.id} className="flex items-center gap-2 border-b border-border-subtle pb-2 last:border-0 last:pb-0"><div className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-text-primary">{connection.label}</span><span className="block truncate text-xs text-text-muted">{connection.dbType ?? "Database"}</span></div><BrainyEnableSwitch checked={connection.isEnabled !== false} disabled={savingBrainyDatabaseId === connection.id} label={`Stato database ${connection.label}`} onChange={() => void handleToggleBrainyDatabaseConnection(connection)} /><Button size="sm" variant="ghost" className="h-8 w-8 shrink-0 px-0 text-status-danger-text" title="Archivia database" disabled={savingBrainyDatabaseId === connection.id} onClick={() => setBrainyDatabaseToArchive(connection)}><Trash2 size={15} /></Button></div>)}
+              {brainyDatabaseConnections.map((connection) => (
+                <div key={connection.id} className="flex items-center gap-2 border-b border-border-subtle pb-2 last:border-0 last:pb-0">
+                  <div className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-text-primary">{connection.label}</span>
+                  </div>
+                  <Button size="sm" variant="outline" disabled={savingBrainyDatabaseId === connection.id} onClick={() => setBrainyDatabaseAccessTarget(connection)}>
+                    Accessi
+                  </Button>
+                  <BrainyEnableSwitch checked={connection.isEnabled !== false} disabled={savingBrainyDatabaseId === connection.id} label={`Stato database ${connection.label}`} onChange={() => void handleToggleBrainyDatabaseConnection(connection)} />
+                  <Button size="sm" variant="ghost" className="h-8 w-8 shrink-0 px-0 text-status-danger-text" title="Archivia database" disabled={savingBrainyDatabaseId === connection.id} onClick={() => setBrainyDatabaseToArchive(connection)}>
+                    <Trash2 size={15} />
+                  </Button>
+                </div>
+              ))}
               {!availableBrainyDatabaseConnections.length && !brainyDatabaseError ? <Text variant="caption">Nessuna connessione READ_ONLY accessibile al service account.</Text> : null}
               {!loadingBrainyAgents && brainyDatabaseConnections.length === 0 && availableBrainyDatabaseConnections.length > 0 ? <Text variant="caption">Nessun database configurato.</Text> : null}
             </div> : null}
@@ -1141,6 +1231,126 @@ export function SettingsPanel() {
       </div>
     <BirgusDialog open={brainyAgentToArchive !== null} message={brainyAgentToArchive ? `Eliminare l'agente "${brainyAgentToArchive.label}"? Le relative chat saranno nascoste finche' non verra' aggiunto nuovamente.` : ""} confirmLabel="Elimina" onCancel={() => setBrainyAgentToArchive(null)} onConfirm={() => { const agent = brainyAgentToArchive; setBrainyAgentToArchive(null); if (agent) void handleRemoveBrainyAgent(agent); }} />
     <BirgusDialog open={brainyDatabaseToArchive !== null} message={brainyDatabaseToArchive ? `Archiviare il database "${brainyDatabaseToArchive.label}"?` : ""} confirmLabel="Archivia" onCancel={() => setBrainyDatabaseToArchive(null)} onConfirm={() => { const connection = brainyDatabaseToArchive; setBrainyDatabaseToArchive(null); if (connection) void handleArchiveBrainyDatabaseConnection(connection); }} />
+    {brainyAgentAccessTarget ? (
+      <BrainyRoleAccessDialog
+        resourceLabel={`agente ${brainyAgentAccessTarget.label}`}
+        accessMode={brainyAgentAccessTarget.accessMode}
+        roleIds={brainyAgentAccessTarget.assignments.map((assignment) => assignment.id)}
+        isWorkflowEnabled={brainyAgentAccessTarget.isWorkflowEnabled}
+        options={brainyAgentAccessOptions}
+        disabled={savingBrainyAgent}
+        onCancel={() => setBrainyAgentAccessTarget(null)}
+        onSave={(accessMode, roleIds, isWorkflowEnabled) => {
+          void handleSaveBrainyAgentAccess(brainyAgentAccessTarget, accessMode, roleIds, isWorkflowEnabled);
+          setBrainyAgentAccessTarget(null);
+        }}
+      />
+    ) : null}
+    {brainyDatabaseAccessTarget ? (
+      <BrainyRoleAccessDialog
+        resourceLabel={`database ${brainyDatabaseAccessTarget.label}`}
+        accessMode={brainyDatabaseAccessTarget.accessMode ?? "ALL"}
+        roleIds={brainyDatabaseAccessTarget.roleIds ?? []}
+        isWorkflowEnabled={brainyDatabaseAccessTarget.isWorkflowEnabled === true}
+        options={brainyDatabaseAccessOptions}
+        disabled={savingBrainyDatabaseId === brainyDatabaseAccessTarget.id}
+        onCancel={() => setBrainyDatabaseAccessTarget(null)}
+        onSave={(accessMode, roleIds, isWorkflowEnabled) => {
+          void handleSaveBrainyDatabaseAccess(brainyDatabaseAccessTarget, accessMode, roleIds, isWorkflowEnabled);
+          setBrainyDatabaseAccessTarget(null);
+        }}
+      />
+    ) : null}
+    </div>
+  );
+}
+
+function BrainyRoleAccessDialog({
+  resourceLabel,
+  accessMode: initialAccessMode,
+  roleIds: initialRoleIds,
+  isWorkflowEnabled: initialWorkflowEnabled,
+  options,
+  disabled,
+  onCancel,
+  onSave,
+}: {
+  resourceLabel: string;
+  accessMode: "ALL" | "ASSIGNED";
+  roleIds: number[];
+  isWorkflowEnabled: boolean;
+  options: BrainyAgentAccessOptions;
+  disabled: boolean;
+  onCancel: () => void;
+  onSave: (accessMode: "ALL" | "ASSIGNED", roleIds: number[], isWorkflowEnabled: boolean) => void;
+}) {
+  const [accessMode, setAccessMode] = useState<"ALL" | "ASSIGNED">(initialAccessMode);
+  const [roleIds, setRoleIds] = useState<number[]>(initialRoleIds);
+  const [isWorkflowEnabled, setIsWorkflowEnabled] = useState(initialWorkflowEnabled);
+  useEffect(() => {
+    setAccessMode(initialAccessMode);
+    setRoleIds(initialRoleIds);
+    setIsWorkflowEnabled(initialWorkflowEnabled);
+  }, [initialAccessMode, initialRoleIds, initialWorkflowEnabled]);
+
+  const toggleRole = (roleId: number) => {
+    setRoleIds((current) =>
+      current.includes(roleId)
+        ? current.filter((id) => id !== roleId)
+        : [...current, roleId],
+    );
+  };
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-label={`Accessi ${resourceLabel}`}>
+      <Card className="w-full max-w-lg p-0 shadow-elevated">
+        <div className="border-b border-border-subtle p-4">
+          <Text as="h2" variant="h2">Birgus dice:</Text>
+          <p className="mt-1 text-sm text-text-secondary">Configura gli accessi per {resourceLabel}.</p>
+        </div>
+        <div className="space-y-4 p-4">
+          <SelectDropdown
+            value={accessMode}
+            options={[{ value: "ALL", label: "Tutti gli utenti Brainy" }, { value: "ASSIGNED", label: "Solo ruoli selezionati" }]}
+            disabled={disabled}
+            onChange={(value) => setAccessMode(value as "ALL" | "ASSIGNED")}
+          />
+          {accessMode === "ASSIGNED" ? (
+            <div className="space-y-2">
+              <Text variant="caption" className="block">Ruoli autorizzati</Text>
+              {options.roles.map((role) => (
+                <Checkbox
+                  key={role.id}
+                  id={`brainy-access-${resourceLabel.replace(/\s+/g, "-")}-${role.id}`}
+                  checked={roleIds.includes(role.id)}
+                  disabled={disabled}
+                  onChange={() => toggleRole(role.id)}
+                  label={role.label}
+                  labelClassName="font-semibold"
+                />
+              ))}
+            </div>
+          ) : null}
+          <div className="flex items-center justify-between gap-4 border-t border-border-subtle pt-4">
+            <div>
+              <Text className="text-sm font-semibold">Workflow</Text>
+              <Text variant="caption" className="block">Rende la risorsa selezionabile nei workflow.</Text>
+            </div>
+            <BrainyEnableSwitch
+              checked={isWorkflowEnabled}
+              disabled={disabled}
+              label={`Disponibilita workflow ${resourceLabel}`}
+              onChange={() => setIsWorkflowEnabled((enabled) => !enabled)}
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-border-subtle p-4">
+          <Button variant="outline" disabled={disabled} onClick={onCancel}>Annulla</Button>
+          <Button disabled={disabled} onClick={() => onSave(accessMode, roleIds, isWorkflowEnabled)}>
+            <Save size={16} />
+            Salva accessi
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }

@@ -751,6 +751,7 @@ interface BrainywareCatalog {
   configured: boolean;
   models: Array<{ id: string }>;
   databaseConnections: Array<{ id: string; name: string; dbType: string | null }>;
+  agents: Array<{ id: string; label: string }>;
 }
 
 function BrainywareInferenceConfiguration({
@@ -762,7 +763,8 @@ function BrainywareInferenceConfiguration({
 }) {
   const [catalog, setCatalog] = useState<BrainywareCatalog | null>(null);
   const [catalogError, setCatalogError] = useState("");
-  const mode = stringValue(configuration.mode) === "model" ? "model" : "database";
+  const configuredMode = stringValue(configuration.mode);
+  const mode = configuredMode === "agent" || configuredMode === "model" ? configuredMode : "database";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -795,6 +797,7 @@ function BrainywareInferenceConfiguration({
           onChange={(event) => onPatch({ mode: event.target.value })}
         >
           <option value="database">Database Brainyware</option>
+          <option value="agent">Agente Brainyware</option>
           <option value="model">Solo modello</option>
         </select>
       </Field>
@@ -812,6 +815,18 @@ function BrainywareInferenceConfiguration({
               </option>
             ))}
           </select>
+        </Field>
+      ) : mode === "agent" ? (
+        <Field label="Agente">
+          <select
+            className="h-11 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-3 text-sm text-text-secondary"
+            value={stringValue(configuration.agent_id)}
+            onChange={(event) => onPatch({ agent_id: event.target.value })}
+          >
+            <option value="">Seleziona</option>
+            {(catalog?.agents ?? []).map((agent) => <option key={agent.id} value={agent.id}>{agent.label}</option>)}
+          </select>
+          {!catalogError && catalog && catalog.agents.length === 0 ? <p className="mt-1 text-xs text-text-muted">Nessun agente abilitato per i workflow.</p> : null}
         </Field>
       ) : (
         <>
