@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { ensureCommissionIntakeSystemTemplate } from "../prisma/commission-intake-template.js";
 
 const prisma = new PrismaClient();
-const MODULE_KEYS = ["project_management", "agent_management", "ddt_processing", "measure_report", "document_archive", "document_intelligence", "conversational_assistant", "brainy", "ai_runtime_control", "workflow_management", "commission_registry", "commission_intake", "customer_map", "offer_priority", "maintenance_proposals", "maintenance_calendar", "notification_center", "audit_center", "superadmin_center"] as const;
+const MODULE_KEYS = ["project_management", "agent_management", "ddt_processing", "measure_report", "document_archive", "document_intelligence", "conversational_assistant", "brainy", "ai_runtime_control", "workflow_management", "commission_registry", "commission_intake", "customer_map", "offer_priority", "maintenance_proposals", "maintenance_calendar", "notification_center", "bug_reports", "audit_center", "superadmin_center"] as const;
 const ROLE_KEYS = ["developer", "superuser", "admin", "operator"] as const;
 const PERMISSION_KEYS = ["modules.read", "modules.configure", "projects.read", "projects.write", "agents.read", "agents.write", "clients.read", "clients.write", "clients.delete_permanently", "documents.read", "documents.write", "ddt.read", "ddt.process", "measure_report.read", "measure_report.process", "knowledge.read", "knowledge.write", "assistant.read", "assistant.write", "assistant.configure", "brainy.read", "brainy.write", "brainy.configure", "workflows.read", "workflows.write", "workflows.configure", "commission_registry.read", "commission_registry.write", "commission_registry.configure", "commission_intake.read", "commission_intake.write", "commission_intake.configure", "customer_map.read", "customer_map.write", "offer_priority.read", "offer_priority.write", "maintenance_proposals.read", "maintenance_proposals.write", "maintenance_calendar.read", "maintenance_calendar.write", "notifications.read", "notifications.write", "audit.read"] as const;
 const ROLE_PERMISSIONS: Record<(typeof ROLE_KEYS)[number], readonly (typeof PERMISSION_KEYS)[number][]> = {
@@ -36,6 +36,7 @@ const MODULE_LABELS: Record<(typeof MODULE_KEYS)[number], string> = {
   maintenance_proposals: "Proposte manutenzione",
   maintenance_calendar: "Calendario manutenzioni",
   notification_center: "Notifiche",
+  bug_reports: "Segnalazione bug",
   audit_center: "Audit",
   superadmin_center: "Gestione workspace",
 };

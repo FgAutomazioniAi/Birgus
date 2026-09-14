@@ -4,14 +4,17 @@ import { ModuleWorkflowEntity } from "../domain/ModuleWorkflowEntity.js";
 import { ModuleWorkflowRunEntity } from "../domain/ModuleWorkflowRunEntity.js";
 import { WorkflowRepository } from "../repositories/WorkflowRepository.js";
 import { WorkflowRunDispatcher } from "./WorkflowRunDispatcher.js";
+import { WorkflowLockService } from "./WorkflowLockService.js";
 
 export class WorkflowService {
   private readonly repository: WorkflowRepository;
   private readonly runDispatcher: WorkflowRunDispatcher | null;
+  private readonly lockService: WorkflowLockService;
 
-  public constructor(repository: WorkflowRepository, runDispatcher?: WorkflowRunDispatcher | null) {
+  public constructor(repository: WorkflowRepository, runDispatcher?: WorkflowRunDispatcher | null, lockService?: WorkflowLockService) {
     this.repository = repository;
     this.runDispatcher = runDispatcher ?? null;
+    this.lockService = lockService ?? new WorkflowLockService();
   }
 
   public async listModuleTools(workspaceId: string, moduleKey?: string): Promise<ModuleToolEntity[]> {
@@ -44,7 +47,22 @@ export class WorkflowService {
     if (input.nodes.length === 0) {
       throw new AppError("Workflow must contain at least one node.", "WORKFLOW_NODES_REQUIRED", 400);
     }
+    if (input.workflowId && input.actorUserId) {
+      await this.lockService.heartbeat(input.workspaceId, input.workflowId, input.actorUserId);
+    }
     return this.repository.saveWorkflowDefinition(input);
+  }
+
+  public acquireWorkflowLock(workspaceId: string, workflowId: string, userId: string) {
+    return this.lockService.acquire(workspaceId, workflowId, userId);
+  }
+
+  public heartbeatWorkflowLock(workspaceId: string, workflowId: string, userId: string) {
+    return this.lockService.heartbeat(workspaceId, workflowId, userId);
+  }
+
+  public releaseWorkflowLock(workspaceId: string, workflowId: string, userId: string) {
+    return this.lockService.release(workspaceId, workflowId, userId);
   }
 
   public async listWorkflowRuns(workspaceId: string, workflowId?: string): Promise<ModuleWorkflowRunEntity[]> {

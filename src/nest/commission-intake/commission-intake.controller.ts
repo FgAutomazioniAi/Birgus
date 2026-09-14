@@ -473,6 +473,30 @@ export class CommissionIntakeController {
     return { ok: true };
   }
 
+  @Post("records/:recordId/checklist/lock/heartbeat")
+  @HttpCode(200)
+  @RequireModule(ModuleKey.COMMISSION_INTAKE)
+  @RequirePermission(PermissionKey.COMMISSION_INTAKE_WRITE)
+  public async renewOwnChecklistLock(
+    @Param("recordId") recordIdRaw: string,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const lock = await this.service.renewOwnChecklistLock({
+      workspaceId: requestContext.workspace.workspaceId,
+      recordId: uuidSchema.parse(recordIdRaw),
+      userId: requestContext.workspace.userId,
+    });
+
+    return {
+      lock: {
+        id: lock.id,
+        resourceType: lock.resourceType,
+        resourceId: lock.resourceId,
+        expiresAt: lock.expiresAt,
+      },
+    };
+  }
+
   private serializeRecord(record: CommissionRecordEntity): Record<string, unknown> {
     return {
       id: record.id,

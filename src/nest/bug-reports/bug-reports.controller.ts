@@ -2,15 +2,19 @@ import { Body, Controller, Inject, Post, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 
 import { RequestContext } from "../../core/tenancy/RequestContext.js";
+import { ModuleKey } from "../../core/module-access/ModuleKey.js";
 import { BugReportService } from "../../modules/bug-reports/services/BugReportService.js";
+import { AccessPolicyGuard } from "../auth/access-policy.guard.js";
 import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
 import { CurrentRequestContext } from "../common/decorators/request-context.decorator.js";
+import { RequireModule } from "../common/decorators/require-module.decorator.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 
 const reportSchema = z.object({ title: z.string().trim().min(3).max(160), description: z.string().trim().min(10).max(10_000), pageUrl: z.string().trim().max(2_000).optional() });
 
 @Controller("/api/bug-reports")
-@UseGuards(RequestContextAuthGuard)
+@UseGuards(RequestContextAuthGuard, AccessPolicyGuard)
+@RequireModule(ModuleKey.BUG_REPORTS)
 export class BugReportsController {
   public constructor(@Inject(BugReportService) private readonly service: BugReportService, @Inject(PrismaService) private readonly prisma: PrismaService) {}
 

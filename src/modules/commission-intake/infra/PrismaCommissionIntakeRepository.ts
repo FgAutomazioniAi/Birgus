@@ -21,6 +21,7 @@ import {
   CommissionChecklistView,
   CommissionFieldValueItem,
   CommissionIntakeRepository,
+  CommissionLockHeartbeatResult,
   CommissionLockResult,
   CommissionRecordUpdateParams,
   CommissionRecordWriteParams,
@@ -1154,6 +1155,56 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     });
 
     return true;
+  }
+
+  public async renewOwnActiveLock(params: {
+    workspaceId: string;
+    recordId: string;
+    userId: string;
+    resourceType: CommissionLockResourceType;
+    ttlSeconds: number;
+  }): Promise<CommissionLockHeartbeatResult | null> {
+    const prisma = PrismaClientManager.getClient();
+    const now = new Date();
+    const lock = await prisma.commissionResourceLock.findFirst({
+      where: {
+        workspace_id: params.workspaceId,
+        record_id: params.recordId,
+        locked_by_user_id: params.userId,
+        resource_type: params.resourceType,
+        released_at: null,
+        expires_at: { gt: now },
+      },
+      orderBy: { heartbeat_at: "desc" },
+    });
+
+    if (!lock) {
+      return null;
+    }
+
+    const expiresAt = new Date(now.getTime() + Math.min(Math.max(params.ttlSeconds, 30), 1800) * 1000);
+    const renewed = await prisma.commissionResourceLock.updateMany({
+      where: {
+        id: lock.id,
+        released_at: null,
+        expires_at: { gt: now },
+      },
+      data: {
+        expires_at: expiresAt,
+        heartbeat_at: now,
+      },
+    });
+
+    if (renewed.count !== 1) {
+      return null;
+    }
+
+    return {
+      id: lock.id,
+      resourceType: lock.resource_type,
+      resourceId: lock.resource_id,
+      expiresAt,
+    };
   }
 
   public async resolvePublishedTemplateVersion(params: {

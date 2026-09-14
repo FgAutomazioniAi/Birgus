@@ -67,6 +67,7 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
   const [sendingBugReport, setSendingBugReport] = useState(false);
   const notificationRef = useRef<HTMLDivElement | null>(null);
   const notificationsEnabled = currentUser.enabledModuleKeys.includes("notification_center");
+  const bugReportsEnabled = currentUser.enabledModuleKeys.includes("bug_reports");
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
@@ -264,14 +265,14 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
 
         <div className="flex items-center gap-2 lg:gap-4">
           {operations.length > 0 ? (
-            <div className="hidden h-9 items-stretch gap-1 2xl:flex" aria-label={t("operations.queue.title")}>
-              {operations.map((operation) => (
+            <div className="hidden h-9 items-stretch gap-1 lg:flex" aria-label={t("operations.queue.title")}>
+              {operations.map((operation, index) => (
                 <button
                   key={operation.id}
                   type="button"
                   title={operation.label}
                   onClick={() => handleOpenOperation(operation)}
-                  className="flex w-40 min-w-0 items-center gap-2 border border-border-subtle bg-bg-page px-2 text-left transition-colors hover:border-brand-primary hover:bg-bg-muted"
+                  className={`${index >= 2 ? "hidden 2xl:flex" : "flex"} w-32 min-w-0 items-center gap-2 border border-border-subtle bg-bg-page px-2 text-left transition-colors hover:border-brand-primary hover:bg-bg-muted 2xl:w-40`}
                 >
                   <span className={`h-2 w-2 shrink-0 rounded-full ${operation.status === "COMPLETED" ? "bg-status-success-text" : operation.status === "FAILED" || operation.status === "CANCELED" ? "bg-status-danger-text" : operation.status === "RUNNING" ? "bg-brand-primary" : "bg-text-muted"}`} />
                   <div className="min-w-0 leading-tight">
@@ -283,7 +284,7 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
             </div>
           ) : null}
 
-          {operations.length > 0 ? <div className="hidden h-8 w-px bg-border-default 2xl:block" /> : null}
+          {operations.length > 0 ? <div className="hidden h-8 w-px bg-border-default lg:block" /> : null}
 
           <div className="inline-flex overflow-hidden rounded-[var(--radius-md)] border border-border-default" role="group" aria-label={t("language.switch")}>
             <button
@@ -346,12 +347,16 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
                   </div>
                 )}
               </div>
-              <div className="h-8 w-px bg-border-default" aria-hidden="true" />
             </>
           ) : null}
-          <IconButton title="Segnala un problema" onClick={() => setShowBugReport(true)}>
-            <Bug size={20} />
-          </IconButton>
+          {bugReportsEnabled ? (
+            <>
+              <div className="h-8 w-px bg-border-default" aria-hidden="true" />
+              <IconButton title="Segnala un problema" onClick={() => setShowBugReport(true)}>
+                <Bug size={20} />
+              </IconButton>
+            </>
+          ) : null}
 
         </div>
       </div>

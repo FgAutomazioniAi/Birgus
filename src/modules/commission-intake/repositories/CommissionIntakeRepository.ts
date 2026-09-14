@@ -63,6 +63,13 @@ export interface CommissionLockResult {
   expiresAt: Date;
 }
 
+export interface CommissionLockHeartbeatResult {
+  id: string;
+  resourceType: CommissionLockResourceType;
+  resourceId: string;
+  expiresAt: Date;
+}
+
 export interface CommissionEventListItem {
   id: string;
   eventType: CommissionEventType;
@@ -326,6 +333,14 @@ export interface CommissionIntakeRepository {
     resourceId?: string | null;
     reason?: string | null;
   }): Promise<boolean>;
+
+  renewOwnActiveLock(params: {
+    workspaceId: string;
+    recordId: string;
+    userId: string;
+    resourceType: CommissionLockResourceType;
+    ttlSeconds: number;
+  }): Promise<CommissionLockHeartbeatResult | null>;
 
   resolvePublishedTemplateVersion(params: {
     workspaceId: string;

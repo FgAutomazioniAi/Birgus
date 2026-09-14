@@ -1,12 +1,15 @@
 import nodemailer from "nodemailer";
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 
 import { AppError } from "../../../core/errors/AppError.js";
 import { MailProviderSettingsService } from "../../mail-runtime/services/MailProviderSettingsService.js";
 
 @Injectable()
 export class BugReportService {
-  public constructor(private readonly mailSettings: MailProviderSettingsService) {}
+  public constructor(
+    @Inject(MailProviderSettingsService)
+    private readonly mailSettings: MailProviderSettingsService,
+  ) {}
 
   public async submit(params: { title: string; description: string; userName: string; userEmail: string; workspaceName: string; pageUrl: string }): Promise<void> {
     const recipient = process.env.BUG_REPORT_EMAIL?.trim();

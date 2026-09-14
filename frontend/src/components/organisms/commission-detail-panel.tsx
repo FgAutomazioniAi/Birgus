@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Cli
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { InputHTMLAttributes, MouseEvent as ReactMouseEvent } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Checkbox, CheckboxControl, Input, Text } from "@/components/atoms";
@@ -157,6 +157,7 @@ interface CompletionIssue {
 
 interface LockInfo {
   id: string;
+  expiresAt?: string;
 }
 
 interface EditableTableRow {
@@ -167,6 +168,8 @@ interface EditableTableRow {
 interface CommissionDetailPanelProps {
   id: string;
 }
+
+const CHECKLIST_AUTO_EXIT_AFTER_MS = 20 * 60 * 1000;
 
 export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
   const { t } = useLanguage();
@@ -186,6 +189,10 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
   const [isDirty, setIsDirty] = useState(false);
   const [leaveConfirmationOpen, setLeaveConfirmationOpen] = useState(false);
   const [leaveTarget, setLeaveTarget] = useState<string | null>(null);
+  const [inactivityResetToken, setInactivityResetToken] = useState(0);
+  const autoExitStartedRef = useRef(false);
+  const savePageRef = useRef<((options?: { silent?: boolean }) => Promise<boolean>) | null>(null);
+  const saveInFlightRef = useRef<Promise<boolean> | null>(null);
 
   const loadView = useCallback(async () => {
     setIsLoading(true);
@@ -250,6 +257,45 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
 
     let cancelled = false;
     let acquiredLock: LockInfo | null = null;
+    let lockLostNotified = false;
+    let heartbeatFailures = 0;
+    let heartbeatTimer: number | null = null;
+
+    const markLockLost = (message: string) => {
+      if (cancelled || lockLostNotified) return;
+      lockLostNotified = true;
+      setLockInfo(null);
+      setReadOnlyReason(message);
+      toast.warning(message);
+    };
+
+    const heartbeat = async () => {
+      if (!acquiredLock || cancelled) return;
+      try {
+        const response = await fetch(`/api/commission-intake/records/${view.record.id}/checklist/lock/heartbeat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+        const payload = await response.json().catch(() => ({})) as { lock?: LockInfo; message?: string };
+        if (!response.ok || !payload.lock) {
+          heartbeatFailures += 1;
+          if (heartbeatFailures >= 3) {
+            markLockLost(payload.message ?? t("commissions.lockUnavailable"));
+          }
+          return;
+        }
+        heartbeatFailures = 0;
+        if (!cancelled) {
+          setLockInfo(payload.lock);
+        }
+      } catch {
+        heartbeatFailures += 1;
+        if (heartbeatFailures >= 3) {
+          markLockLost(t("commissions.lockUnavailable"));
+        }
+      }
+    };
 
     const acquire = async () => {
       try {
@@ -266,6 +312,7 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
         if (!cancelled) {
           setLockInfo(payload.lock);
           setReadOnlyReason(null);
+          heartbeatTimer = window.setInterval(() => void heartbeat(), 30_000);
         }
       } catch (error) {
         if (!cancelled) {
@@ -278,8 +325,19 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
 
     void acquire();
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void heartbeat();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       cancelled = true;
+      if (heartbeatTimer !== null) {
+        window.clearInterval(heartbeatTimer);
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (acquiredLock) {
         void fetch(`/api/commission-intake/records/${view.record.id}/checklist/lock/release`, {
           method: "POST",
@@ -312,9 +370,30 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
   const isDocumentationPage = activePage ? isDocumentationAttachmentsPage(activePage) : false;
 
   const isReadOnly = isFinalized || Boolean(readOnlyReason) || !lockInfo;
+  const registerDataChange = () => {
+    setInactivityResetToken((current) => current + 1);
+  };
 
   const savePage = async (options?: { silent?: boolean }): Promise<boolean> => {
+    if (saveInFlightRef.current) {
+      return saveInFlightRef.current;
+    }
+
+    const savePromise = savePageInternal(options);
+    saveInFlightRef.current = savePromise;
+    try {
+      return await savePromise;
+    } finally {
+      saveInFlightRef.current = null;
+    }
+  };
+
+  const savePageInternal = async (options?: { silent?: boolean }): Promise<boolean> => {
     if (!view?.checklist) return false;
+    if (isReadOnly) {
+      if (!options?.silent) toast.warning(readOnlyReason ?? t("commissions.lockUnavailable"));
+      return false;
+    }
 
     const fields = view.pages.flatMap((page) => page.sections.flatMap((section) => section.fields));
     const plainFields = fields.filter((field) => field.fieldType !== "TABLE" && field.fieldType !== "SIGNATURE");
@@ -361,8 +440,46 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
     }
   };
 
+  savePageRef.current = savePage;
+
+  const refreshView = async () => {
+    if (isDirty) {
+      toast.warning(t("commissions.unsavedChanges"));
+      return;
+    }
+    await loadView();
+  };
+
+  useEffect(() => {
+    if (!view?.checklist || !lockInfo || isFinalized || readOnlyReason) {
+      return;
+    }
+
+    const timeout = window.setTimeout(async () => {
+      if (autoExitStartedRef.current || !savePageRef.current) return;
+      autoExitStartedRef.current = true;
+
+      toast.info(t("commissions.autoExitSaving"));
+      const saved = await savePageRef.current({ silent: true });
+      if (!saved) {
+        autoExitStartedRef.current = false;
+        return;
+      }
+
+      setIsDirty(false);
+      toast.success(t("commissions.autoExitCompleted"));
+      router.push(APP_ROUTES.dataCollectionChecklists);
+    }, CHECKLIST_AUTO_EXIT_AFTER_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [inactivityResetToken, isFinalized, lockInfo?.id, readOnlyReason, router, t, view?.checklist?.id]);
+
   const uploadAttachments = async (field: CommissionFormField, files: File[]): Promise<void> => {
     if (!view?.checklist) return;
+    if (isReadOnly) {
+      toast.warning(readOnlyReason ?? t("commissions.lockUnavailable"));
+      return;
+    }
     if (!files.length) return;
     setUploadingFieldKey(field.key);
     try {
@@ -380,6 +497,7 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
         if (!response.ok) throw new Error(payload.message ?? t("commissions.attachmentUploadFailed"));
       }
       toast.success(files.length > 1 ? t("commissions.attachmentUploadManySuccess") : t("commissions.attachmentUploadSuccess"));
+      registerDataChange();
       await loadView();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("commissions.attachmentUploadFailed"));
@@ -390,6 +508,10 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
 
   const deleteAttachment = async (attachmentId: string): Promise<void> => {
     if (!view) return;
+    if (isReadOnly) {
+      toast.warning(readOnlyReason ?? t("commissions.lockUnavailable"));
+      return;
+    }
     try {
       const response = await fetch(`/api/commission-intake/records/${view.record.id}/attachments/${attachmentId}`, {
         method: "DELETE",
@@ -397,6 +519,7 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
       const payload = await response.json().catch(() => ({})) as { message?: string };
       if (!response.ok) throw new Error(payload.message ?? t("commissions.attachmentDeleteFailed"));
       toast.success(t("commissions.attachmentDeleteSuccess"));
+      registerDataChange();
       await loadView();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("commissions.attachmentDeleteFailed"));
@@ -503,7 +626,7 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => void loadView()} disabled={isLoading}>
+          <Button variant="outline" onClick={() => void refreshView()} disabled={isLoading}>
             <RefreshCw size={16} />
             {t("commissions.refresh")}
           </Button>
@@ -576,9 +699,10 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
                               tableRows={tableId ? tableValues[tableId] ?? [] : []}
                               onDeleteAttachment={(attachmentId) => void deleteAttachment(attachmentId)}
                               onUploadAttachments={(targetField, files) => void uploadAttachments(targetField, files)}
-                              onValueChange={(value) => { setIsDirty(true); setFieldValues((current) => ({ ...current, [field.id]: value })); }}
+                              onValueChange={(value) => { registerDataChange(); setIsDirty(true); setFieldValues((current) => ({ ...current, [field.id]: value })); }}
                               onTableChange={(rows) => {
                                 if (!tableId) return;
+                                registerDataChange();
                                 setIsDirty(true);
                                 setTableValues((current) => ({ ...current, [tableId]: rows }));
                               }}
@@ -685,7 +809,7 @@ export function CommissionDetailPanel({ id }: CommissionDetailPanelProps) {
               </label>
               <textarea
                 value={signatureStatement}
-                onChange={(event) => { setIsDirty(true); setSignatureStatement(event.target.value); }}
+                onChange={(event) => { registerDataChange(); setIsDirty(true); setSignatureStatement(event.target.value); }}
                 placeholder={t("commissions.signatureStatement")}
                 disabled={isReadOnly || isSaving}
                 className="min-h-24 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-4 py-3 text-sm text-text-secondary placeholder:text-text-muted focus-visible:border-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary disabled:opacity-60"

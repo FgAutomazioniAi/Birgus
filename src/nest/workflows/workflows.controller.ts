@@ -339,6 +339,51 @@ export class NestWorkflowsController {
     return this.serializeWorkflow(workflow);
   }
 
+  @Post("workflows/:workflowId/lock")
+  @HttpCode(201)
+  @RequirePermission(PermissionKey.WORKFLOWS_CONFIGURE)
+  public async acquireWorkflowLock(
+    @Param("workflowId") workflowIdRaw: string,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const lock = await this.service.acquireWorkflowLock(
+      requestContext.workspace.workspaceId,
+      this.getPathId(workflowIdRaw, "workflowId"),
+      requestContext.workspace.userId,
+    );
+    return { lock };
+  }
+
+  @Post("workflows/:workflowId/lock/heartbeat")
+  @HttpCode(200)
+  @RequirePermission(PermissionKey.WORKFLOWS_CONFIGURE)
+  public async heartbeatWorkflowLock(
+    @Param("workflowId") workflowIdRaw: string,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const lock = await this.service.heartbeatWorkflowLock(
+      requestContext.workspace.workspaceId,
+      this.getPathId(workflowIdRaw, "workflowId"),
+      requestContext.workspace.userId,
+    );
+    return { lock };
+  }
+
+  @Post("workflows/:workflowId/lock/release")
+  @HttpCode(200)
+  @RequirePermission(PermissionKey.WORKFLOWS_CONFIGURE)
+  public async releaseWorkflowLock(
+    @Param("workflowId") workflowIdRaw: string,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    await this.service.releaseWorkflowLock(
+      requestContext.workspace.workspaceId,
+      this.getPathId(workflowIdRaw, "workflowId"),
+      requestContext.workspace.userId,
+    );
+    return { ok: true };
+  }
+
   @Patch("workflows/:workflowId")
   @HttpCode(200)
   @RequirePermission(PermissionKey.WORKFLOWS_CONFIGURE)
