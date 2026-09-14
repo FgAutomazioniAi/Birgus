@@ -21,6 +21,7 @@ import { WorkflowRuntimeAccessPolicy } from "../../modules/workflows/services/Wo
 import { HumanInterventionService } from "../../modules/workflows/services/HumanInterventionService.js";
 import { ModuleAccessPolicy } from "../../core/module-access/ModuleAccessPolicy.js";
 import { WorkflowService } from "../../modules/workflows/services/WorkflowService.js";
+import { WorkflowLockService } from "../../modules/workflows/services/WorkflowLockService.js";
 import { WorkflowTransferService } from "../../modules/workflows/services/WorkflowTransferService.js";
 import { JobQueue } from "../../worker/queue/JobQueue.js";
 import { AuthModule } from "../auth/auth.module.js";
@@ -44,6 +45,7 @@ import { NestWorkflowsController } from "./workflows.controller.js";
   controllers: [NestWorkflowsController],
   providers: [
     HumanInterventionService,
+    WorkflowLockService,
     BrainyWorkspaceAgentService,
     BrainyWorkspaceDatabaseConnectionService,
     {
@@ -61,11 +63,13 @@ import { NestWorkflowsController } from "./workflows.controller.js";
       useFactory: (
         repository: PrismaWorkflowRepository,
         runDispatcher: QueueWorkflowRunDispatcher,
+        lockService: WorkflowLockService,
       ) => new WorkflowService(
         repository,
         runDispatcher,
+        lockService,
       ),
-      inject: [PrismaWorkflowRepository, QueueWorkflowRunDispatcher],
+      inject: [PrismaWorkflowRepository, QueueWorkflowRunDispatcher, WorkflowLockService],
     },
     {
       provide: WorkflowTransferService,

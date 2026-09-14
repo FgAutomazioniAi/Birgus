@@ -101,6 +101,7 @@ enum CommissionLockResourceType {
   RECORD
   CHECKLIST
   PAGE
+  WORKFLOW
 }
 
 enum CommissionEventType {

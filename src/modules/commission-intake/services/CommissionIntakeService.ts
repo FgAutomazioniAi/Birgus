@@ -18,6 +18,7 @@ import {
   CommissionEventListItem,
   CommissionAttachmentItem,
   CommissionIntakeRepository,
+  CommissionLockHeartbeatResult,
   CommissionLockResult,
   CommissionSavedFieldValue,
   CommissionSignatureItem,
@@ -423,6 +424,26 @@ export class CommissionIntakeService {
     if (!released) {
       return;
     }
+  }
+
+  public async renewOwnChecklistLock(params: {
+    workspaceId: string;
+    recordId: string;
+    userId: string;
+  }): Promise<CommissionLockHeartbeatResult> {
+    const lock = await this.repository.renewOwnActiveLock({
+      workspaceId: params.workspaceId,
+      recordId: params.recordId,
+      userId: params.userId,
+      resourceType: CommissionLockResourceType.CHECKLIST,
+      ttlSeconds: 600,
+    });
+
+    if (!lock) {
+      throw new AppError("Il blocco della checklist non è più attivo.", "COMMISSION_LOCK_LOST", 409);
+    }
+
+    return lock;
   }
 
   private async acquireLock(params: {

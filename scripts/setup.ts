@@ -37,6 +37,7 @@ const MODULE_KEYS = [
   "maintenance_proposals",
   "maintenance_calendar",
   "notification_center",
+  "bug_reports",
   "audit_center",
   "superadmin_center",
 ] as const;

@@ -752,6 +752,8 @@ export function WorkflowCanvasPanel() {
   const [isCreatingPlayground, setIsCreatingPlayground] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+  const [workflowLock, setWorkflowLock] = useState<{ id: string } | null>(null);
+  const [workflowLockError, setWorkflowLockError] = useState<string | null>(null);
   const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
   const [isCreateWorkflowOpen, setIsCreateWorkflowOpen] = useState(false);
   const [newWorkflowLabel, setNewWorkflowLabel] = useState("Nuovo workflow");
@@ -776,6 +778,7 @@ export function WorkflowCanvasPanel() {
   const [edges, setEdges, onEdgesChangeBase] = useEdgesState<Edge>([]);
   const openedRunReference = useRef<string | null>(null);
   const workflowImportInputRef = useRef<HTMLInputElement | null>(null);
+  const workflowLockFailureCountRef = useRef(0);
 
   const selectedNode = useMemo(
     () => draftNodes.find((item) => item.clientId === selectedNodeId) ?? null,
@@ -881,6 +884,7 @@ export function WorkflowCanvasPanel() {
     ));
   }, [isPlaygroundWorkflow, tools, workflow]);
   const canEditSelectedAgentPrompt = Boolean(selectedAgent && workflow && !isPlaygroundWorkflow && selectedAgent.moduleKey === workflow.moduleKey);
+  const workflowReadOnly = Boolean(workflow && (!workflowLock || workflowLockError));
 
   useEffect(() => {
     setExpandedResultCard(null);
@@ -994,6 +998,69 @@ export function WorkflowCanvasPanel() {
     setScreen("canvas");
     void loadWorkflowRuns(detail.id);
   }, [agents, loadWorkflowRuns, setEdges, setNodes, tools]);
+
+  useEffect(() => {
+    if (!workflow?.id) {
+      setWorkflowLock(null);
+      setWorkflowLockError(null);
+      return;
+    }
+
+    let cancelled = false;
+    let timer: number | null = null;
+    workflowLockFailureCountRef.current = 0;
+    const reportLockLoss = (message: string) => {
+      if (cancelled) return;
+      setWorkflowLock(null);
+      setWorkflowLockError(message);
+      toast.warning(message);
+    };
+    const heartbeat = async () => {
+      try {
+        const response = await fetch(`/api/workflows/${workflow.id}/lock/heartbeat`, { method: "POST" });
+        const payload = await response.json().catch(() => ({})) as { lock?: { id: string }; message?: string };
+        if (!response.ok || !payload.lock) {
+          workflowLockFailureCountRef.current += 1;
+          if (workflowLockFailureCountRef.current >= 3) reportLockLoss(payload.message ?? "Il workflow è ora in sola lettura.");
+          return;
+        }
+        workflowLockFailureCountRef.current = 0;
+        if (!cancelled) setWorkflowLock(payload.lock);
+      } catch {
+        workflowLockFailureCountRef.current += 1;
+        if (workflowLockFailureCountRef.current >= 3) reportLockLoss("Il workflow è ora in sola lettura.");
+      }
+    };
+    const acquire = async () => {
+      try {
+        const response = await fetch(`/api/workflows/${workflow.id}/lock`, { method: "POST" });
+        const payload = await response.json().catch(() => ({})) as { lock?: { id: string }; message?: string };
+        if (!response.ok || !payload.lock) throw new Error(payload.message ?? "Workflow in modifica da un altro utente.");
+        if (!cancelled) {
+          setWorkflowLock(payload.lock);
+          setWorkflowLockError(null);
+          timer = window.setInterval(() => void heartbeat(), 30_000);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : "Workflow in sola lettura.";
+          setWorkflowLockError(message);
+          toast.warning(message);
+        }
+      }
+    };
+    void acquire();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void heartbeat();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      cancelled = true;
+      if (timer !== null) window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      void fetch(`/api/workflows/${workflow.id}/lock/release`, { method: "POST", keepalive: true });
+    };
+  }, [workflow?.id]);
 
   useEffect(() => {
     void loadCatalog();
@@ -1518,6 +1585,10 @@ export function WorkflowCanvasPanel() {
     if (!workflow) {
       return null;
     }
+    if (workflowReadOnly) {
+      toast.warning(workflowLockError ?? "Il workflow è in sola lettura.");
+      return null;
+    }
     setIsSaving(true);
     try {
       const payloadNodes = draftNodes.map((node) => ({
@@ -1685,6 +1756,10 @@ export function WorkflowCanvasPanel() {
     if (!workflow) {
       return;
     }
+    if (workflowReadOnly) {
+      toast.warning(workflowLockError ?? "Il workflow è in sola lettura.");
+      return;
+    }
     setIsRunning(true);
     try {
       const savedWorkflow = await saveWorkflow({ quiet: true });
@@ -1752,6 +1827,7 @@ export function WorkflowCanvasPanel() {
   };
 
   const onNodesChange = useCallback((changes: NodeChange<Node<CanvasNodeData>>[]) => {
+    if (workflowReadOnly) return;
     onNodesChangeBase(changes);
     const removedIds = new Set(changes.filter((change) => change.type === "remove").map((change) => change.id));
     if (removedIds.size > 0) {
@@ -1760,9 +1836,10 @@ export function WorkflowCanvasPanel() {
       setSelectedNodeId((current) => current && removedIds.has(current) ? null : current);
       return;
     }
-  }, [onNodesChangeBase]);
+  }, [onNodesChangeBase, workflowReadOnly]);
 
   const onNodeDragStop = useCallback<OnNodeDrag<Node<CanvasNodeData>>>((_, node) => {
+    if (workflowReadOnly) return;
     commitHistory();
     setDraftNodes((current) =>
       current.map((draft) =>
@@ -1771,9 +1848,10 @@ export function WorkflowCanvasPanel() {
           : draft,
       ),
     );
-  }, [commitHistory]);
+  }, [commitHistory, workflowReadOnly]);
 
   const onConnect = useCallback((connection: Connection) => {
+    if (workflowReadOnly) return;
     if (!connection.source || !connection.target) {
       return;
     }
@@ -1834,12 +1912,13 @@ export function WorkflowCanvasPanel() {
   }, [draftNodes, toolById]);
 
   const onEdgesChange = useCallback((changes: EdgeChange<Edge>[]) => {
+    if (workflowReadOnly) return;
     onEdgesChangeBase(changes);
     const removedIds = new Set(changes.filter((change) => change.type === "remove").map((change) => change.id));
     if (removedIds.size > 0) {
       setDraftEdges((current) => current.filter((edge) => !removedIds.has(edge.clientId)));
     }
-  }, [onEdgesChangeBase]);
+  }, [onEdgesChangeBase, workflowReadOnly]);
 
   const onPaletteDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
