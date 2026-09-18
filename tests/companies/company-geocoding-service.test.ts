@@ -12,12 +12,30 @@ test("geocodes a company address and caches repeated requests", async () => {
     fetchImpl: async (input) => {
       requestCount += 1;
       const url = new URL(String(input));
-      assert.equal(url.searchParams.get("q"), "Via Roma 1, 20100, Milano, MI, Italia");
-      return new Response(JSON.stringify([{ lat: "45.4642035", lon: "9.1899820", display_name: "Via Roma 1, Milano" }]), { status: 200 });
+      assert.equal(
+        url.searchParams.get("q"),
+        "Via Roma 1, 20100, Milano, MI, Italia",
+      );
+      return new Response(
+        JSON.stringify([
+          {
+            lat: "45.4642035",
+            lon: "9.1899820",
+            display_name: "Via Roma 1, Milano",
+          },
+        ]),
+        { status: 200 },
+      );
     },
   });
 
-  const address = { address: "Via Roma 1", postalCode: "20100", city: "Milano", province: "MI", country: "Italia" };
+  const address = {
+    address: "Via Roma 1",
+    postalCode: "20100",
+    city: "Milano",
+    province: "MI",
+    country: "Italia",
+  };
   const first = await service.geocode(address);
   const second = await service.geocode(address);
 
@@ -48,8 +66,17 @@ test("rejects an address that cannot be geocoded", async () => {
   });
 
   await assert.rejects(
-    service.geocode({ address: "Via inesistente", postalCode: "", city: "Milano", province: "", country: "Italia" }),
-    (error: unknown) => error instanceof AppError && error.code === "COMPANY_ADDRESS_NOT_FOUND" && error.statusCode === 422,
+    service.geocode({
+      address: "Via inesistente",
+      postalCode: "",
+      city: "Milano",
+      province: "",
+      country: "Italia",
+    }),
+    (error: unknown) =>
+      error instanceof AppError &&
+      error.code === "COMPANY_ADDRESS_NOT_FOUND" &&
+      error.statusCode === 422,
   );
   assert.equal(requestCount, 2);
 });
@@ -64,11 +91,20 @@ test("falls back to a less restrictive address query", async () => {
       const url = new URL(String(input));
       if (requestCount < 3) return new Response("[]", { status: 200 });
       assert.equal(url.searchParams.get("q"), "Via Roma 1, Milano, Italia");
-      return new Response(JSON.stringify([{ lat: "45.4642035", lon: "9.1899820" }]), { status: 200 });
+      return new Response(
+        JSON.stringify([{ lat: "45.4642035", lon: "9.1899820" }]),
+        { status: 200 },
+      );
     },
   });
 
-  const result = await service.geocode({ address: "Via Roma 1", postalCode: "00000", city: "Milano", province: "MI", country: "Italia" });
+  const result = await service.geocode({
+    address: "Via Roma 1",
+    postalCode: "00000",
+    city: "Milano",
+    province: "MI",
+    country: "Italia",
+  });
 
   assert.equal(result.latitude, "45.4642035");
   assert.equal(result.longitude, "9.1899820");

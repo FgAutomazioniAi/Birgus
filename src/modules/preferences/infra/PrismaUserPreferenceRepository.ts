@@ -2,10 +2,18 @@ import { Prisma } from "@prisma/client";
 
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { UserPreferenceEntity } from "../domain/UserPreferenceEntity.js";
-import { UserPreferencePatch, UserPreferenceRepository } from "../repositories/UserPreferenceRepository.js";
+import {
+  UserPreferencePatch,
+  UserPreferenceRepository,
+} from "../repositories/UserPreferenceRepository.js";
 
-export class PrismaUserPreferenceRepository implements UserPreferenceRepository {
-  public async getByUserAndWorkspace(userId: string, workspaceId: string): Promise<UserPreferenceEntity | null> {
+export class PrismaUserPreferenceRepository
+  implements UserPreferenceRepository
+{
+  public async getByUserAndWorkspace(
+    userId: string,
+    workspaceId: string,
+  ): Promise<UserPreferenceEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.userPreference.findFirst({
       where: {
@@ -38,7 +46,9 @@ export class PrismaUserPreferenceRepository implements UserPreferenceRepository 
         language_code: patch.languageCode,
         rows_projects: patch.rowsProjects,
         rows_clients: patch.rowsClients,
-        columns_projects: this.toInputJsonValueOrUndefined(patch.columnsProjects),
+        columns_projects: this.toInputJsonValueOrUndefined(
+          patch.columnsProjects,
+        ),
         columns_clients: this.toInputJsonValueOrUndefined(patch.columnsClients),
       },
       create: {
@@ -51,7 +61,9 @@ export class PrismaUserPreferenceRepository implements UserPreferenceRepository 
         language_code: patch.languageCode ?? "it",
         rows_projects: patch.rowsProjects ?? 10,
         rows_clients: patch.rowsClients ?? 10,
-        columns_projects: this.toInputJsonValueOrUndefined(patch.columnsProjects),
+        columns_projects: this.toInputJsonValueOrUndefined(
+          patch.columnsProjects,
+        ),
         columns_clients: this.toInputJsonValueOrUndefined(patch.columnsClients),
       },
     });

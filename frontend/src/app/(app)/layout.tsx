@@ -7,7 +7,10 @@ import { AUTH_CONFIGURED_COOKIE_NAME } from "@/lib/auth/constants";
 import { APP_ROUTES } from "@/lib/routes";
 
 const getApiBaseUrl = () =>
-  (process.env.BIRGUS_API_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  (process.env.BIRGUS_API_BASE_URL ?? "http://localhost:3000").replace(
+    /\/$/,
+    "",
+  );
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const cookieStore = await cookies();
@@ -46,7 +49,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
     currentWorkspaceId = payload.workspaceId?.trim() ?? "";
 
-    const normalizedRoleKeys = (payload.user?.roleKeys ?? []).map((item) => item.trim().toLowerCase());
+    const normalizedRoleKeys = (payload.user?.roleKeys ?? []).map((item) =>
+      item.trim().toLowerCase(),
+    );
     if (normalizedRoleKeys.includes("developer")) {
       currentUserRole = "Developer";
       canManageWorkspace = true;
@@ -62,13 +67,18 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     currentUserId = payload.userId?.trim() ?? "";
 
     if (currentUserId) {
-      const modulesResponse = await fetch(`${getApiBaseUrl()}/api/modules/users/${encodeURIComponent(currentUserId)}`, {
-        cache: "no-store",
-        headers: {
-          cookie: `${AUTH_CONFIGURED_COOKIE_NAME}=${encodeURIComponent(token)}`,
-          ...(currentWorkspaceId ? { "x-workspace-id": currentWorkspaceId } : {}),
+      const modulesResponse = await fetch(
+        `${getApiBaseUrl()}/api/modules/users/${encodeURIComponent(currentUserId)}`,
+        {
+          cache: "no-store",
+          headers: {
+            cookie: `${AUTH_CONFIGURED_COOKIE_NAME}=${encodeURIComponent(token)}`,
+            ...(currentWorkspaceId
+              ? { "x-workspace-id": currentWorkspaceId }
+              : {}),
+          },
         },
-      });
+      );
 
       if (modulesResponse.ok) {
         const modulesPayload = (await modulesResponse.json()) as {
@@ -76,7 +86,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         };
 
         enabledModuleKeys = (modulesPayload.modules ?? [])
-          .filter((item) => item.effectiveEnabled && typeof item.moduleKey === "string")
+          .filter(
+            (item) =>
+              item.effectiveEnabled && typeof item.moduleKey === "string",
+          )
           .map((item) => item.moduleKey as string);
       }
     }

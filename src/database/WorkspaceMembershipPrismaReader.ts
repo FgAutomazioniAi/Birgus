@@ -1,8 +1,13 @@
 import { WorkspaceMembershipReader } from "../core/tenancy/WorkspaceMembershipReader.js";
 import { PrismaClientManager } from "./PrismaClientManager.js";
 
-export class WorkspaceMembershipPrismaReader implements WorkspaceMembershipReader {
-  public async isUserActiveInWorkspace(workspaceId: string, userId: string): Promise<boolean> {
+export class WorkspaceMembershipPrismaReader
+  implements WorkspaceMembershipReader
+{
+  public async isUserActiveInWorkspace(
+    workspaceId: string,
+    userId: string,
+  ): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
     const membership = await prisma.workspaceMembership.findFirst({
       where: {
@@ -22,7 +27,9 @@ export class WorkspaceMembershipPrismaReader implements WorkspaceMembershipReade
     return membership !== null;
   }
 
-  public async findPrimaryWorkspaceIdForUser(userId: string): Promise<string | null> {
+  public async findPrimaryWorkspaceIdForUser(
+    userId: string,
+  ): Promise<string | null> {
     const prisma = PrismaClientManager.getClient();
     const membership = await prisma.workspaceMembership.findFirst({
       where: {

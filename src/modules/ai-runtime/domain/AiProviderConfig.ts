@@ -61,7 +61,9 @@ function toInteger(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export function loadAiProviderConfig(overrides: Partial<AiProviderConfig> = {}): AiProviderConfig {
+export function loadAiProviderConfig(
+  overrides: Partial<AiProviderConfig> = {},
+): AiProviderConfig {
   const baseUrl = firstNonEmpty(
     overrides.baseUrl,
     process.env.AI_PROVIDER_BASE_URL,
@@ -78,15 +80,18 @@ export function loadAiProviderConfig(overrides: Partial<AiProviderConfig> = {}):
   );
 
   return {
-    provider: normalizeAiProviderId(firstNonEmpty(overrides.provider, process.env.AI_PROVIDER, "vllm")),
+    provider: normalizeAiProviderId(
+      firstNonEmpty(overrides.provider, process.env.AI_PROVIDER, "vllm"),
+    ),
     baseUrl,
     apiKey,
     chatModel,
-    embeddingModel: firstNonEmpty(
-      overrides.embeddingModel ?? undefined,
-      process.env.AI_PROVIDER_EMBEDDING_MODEL,
-      process.env.KNOWLEDGE_EMBEDDING_MODEL,
-    ) || null,
+    embeddingModel:
+      firstNonEmpty(
+        overrides.embeddingModel ?? undefined,
+        process.env.AI_PROVIDER_EMBEDDING_MODEL,
+        process.env.KNOWLEDGE_EMBEDDING_MODEL,
+      ) || null,
     completionsPath: firstNonEmpty(
       overrides.completionsPath,
       process.env.AI_PROVIDER_COMPLETIONS_PATH,
@@ -97,13 +102,20 @@ export function loadAiProviderConfig(overrides: Partial<AiProviderConfig> = {}):
       process.env.AI_PROVIDER_MODELS_PATH,
       "/v1/models",
     ),
-    timeoutMs: overrides.timeoutMs ?? toPositiveInt(process.env.AI_PROVIDER_TIMEOUT_MS, 60000),
-    temperature: overrides.temperature ?? toFloat(process.env.AI_PROVIDER_TEMPERATURE, 0),
-    maxOutputTokens: overrides.maxOutputTokens ?? toPositiveInt(process.env.AI_PROVIDER_MAX_OUTPUT_TOKENS, 512),
+    timeoutMs:
+      overrides.timeoutMs ??
+      toPositiveInt(process.env.AI_PROVIDER_TIMEOUT_MS, 60000),
+    temperature:
+      overrides.temperature ?? toFloat(process.env.AI_PROVIDER_TEMPERATURE, 0),
+    maxOutputTokens:
+      overrides.maxOutputTokens ??
+      toPositiveInt(process.env.AI_PROVIDER_MAX_OUTPUT_TOKENS, 512),
     topP: overrides.topP ?? toFloat(process.env.AI_PROVIDER_TOP_P, 1),
     topK: overrides.topK ?? toInteger(process.env.AI_PROVIDER_TOP_K, -1),
     minP: overrides.minP ?? toFloat(process.env.AI_PROVIDER_MIN_P, 0),
-    repetitionPenalty: overrides.repetitionPenalty ?? toFloat(process.env.AI_PROVIDER_REPETITION_PENALTY, 1),
+    repetitionPenalty:
+      overrides.repetitionPenalty ??
+      toFloat(process.env.AI_PROVIDER_REPETITION_PENALTY, 1),
     seed: overrides.seed ?? null,
     contextTokenLimit: overrides.contextTokenLimit ?? null,
   };

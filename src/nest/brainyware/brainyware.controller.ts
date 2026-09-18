@@ -27,15 +27,38 @@ export class BrainywareController {
 
   @Get("catalog")
   @RequirePermission(PermissionKey.WORKFLOWS_READ)
-  public async catalog(@CurrentRequestContext() context: RequestContext): Promise<Record<string, unknown>> {
+  public async catalog(
+    @CurrentRequestContext() context: RequestContext,
+  ): Promise<Record<string, unknown>> {
     const configured = await this.client.isConfigured();
-    if (!configured) return { configured: false, models: [], databaseConnections: [], agents: [] };
+    if (!configured)
+      return {
+        configured: false,
+        models: [],
+        databaseConnections: [],
+        agents: [],
+      };
 
     const [models, databaseConnections, agents] = await Promise.all([
       this.client.listModels(),
-      this.workspaceDatabaseConnectionService.listForWorkflowUser(context.workspace.workspaceId, context.workspace.userId),
-      this.workspaceAgentService.listForWorkflowUser(context.workspace.workspaceId, context.workspace.userId),
+      this.workspaceDatabaseConnectionService.listForWorkflowUser(
+        context.workspace.workspaceId,
+        context.workspace.userId,
+      ),
+      this.workspaceAgentService.listForWorkflowUser(
+        context.workspace.workspaceId,
+        context.workspace.userId,
+      ),
     ]);
-    return { configured: true, models, databaseConnections: databaseConnections.map((connection) => ({ id: connection.brainywareConnectionId, name: connection.label, dbType: null })), agents };
+    return {
+      configured: true,
+      models,
+      databaseConnections: databaseConnections.map((connection) => ({
+        id: connection.brainywareConnectionId,
+        name: connection.label,
+        dbType: null,
+      })),
+      agents,
+    };
   }
 }

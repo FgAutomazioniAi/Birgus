@@ -9,7 +9,10 @@ export interface NotificationRepository {
     title: string;
     message: string;
   }): Promise<NotificationEntity>;
-  listForUser(workspaceId: string, userId: string): Promise<NotificationEntity[]>;
+  listForUser(
+    workspaceId: string,
+    userId: string,
+  ): Promise<NotificationEntity[]>;
   markAllAsRead(workspaceId: string, userId: string): Promise<void>;
   clearForUser(workspaceId: string, userId: string): Promise<void>;
 }

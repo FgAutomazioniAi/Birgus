@@ -13,6 +13,13 @@ export interface UserPreferencePatch {
 }
 
 export interface UserPreferenceRepository {
-  getByUserAndWorkspace(userId: string, workspaceId: string): Promise<UserPreferenceEntity | null>;
-  upsertForUserAndWorkspace(userId: string, workspaceId: string, patch: UserPreferencePatch): Promise<UserPreferenceEntity>;
+  getByUserAndWorkspace(
+    userId: string,
+    workspaceId: string,
+  ): Promise<UserPreferenceEntity | null>;
+  upsertForUserAndWorkspace(
+    userId: string,
+    workspaceId: string,
+    patch: UserPreferencePatch,
+  ): Promise<UserPreferenceEntity>;
 }

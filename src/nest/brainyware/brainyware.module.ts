@@ -11,7 +11,16 @@ import { BrainyWorkspaceDatabaseConnectionsController } from "./brainy-workspace
 
 @Module({
   imports: [AuthModule],
-  controllers: [BrainywareController, BrainyWorkspaceAgentsController, BrainyWorkspaceDatabaseConnectionsController, BrainyChatsController],
-  providers: [BrainyWorkspaceAgentService, BrainyWorkspaceDatabaseConnectionService, BrainyChatService],
+  controllers: [
+    BrainywareController,
+    BrainyWorkspaceAgentsController,
+    BrainyWorkspaceDatabaseConnectionsController,
+    BrainyChatsController,
+  ],
+  providers: [
+    BrainyWorkspaceAgentService,
+    BrainyWorkspaceDatabaseConnectionService,
+    BrainyChatService,
+  ],
 })
 export class BrainywareNestModule {}

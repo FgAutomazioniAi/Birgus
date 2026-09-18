@@ -66,8 +66,12 @@ export class AppConfigService {
       "GARAGE_S3_ACCESS_KEY_ID",
       "GARAGE_S3_SECRET_ACCESS_KEY",
     ];
-    const missingKeys = requiredKeys.filter((key) => !this.getString(key).trim());
-    const mailProvider = this.getString("MAIL_PROVIDER", "smtp").trim().toLowerCase();
+    const missingKeys = requiredKeys.filter(
+      (key) => !this.getString(key).trim(),
+    );
+    const mailProvider = this.getString("MAIL_PROVIDER", "smtp")
+      .trim()
+      .toLowerCase();
     if (mailProvider === "resend") {
       for (const key of ["RESEND_API_KEY", "MAIL_FROM"]) {
         if (!this.getString(key).trim()) {
@@ -81,15 +85,22 @@ export class AppConfigService {
         }
       }
     }
-    const hasAiProviderConfig = this.getString("AI_PROVIDER_BASE_URL").trim() && this.getString("AI_PROVIDER_CHAT_MODEL").trim();
+    const hasAiProviderConfig =
+      this.getString("AI_PROVIDER_BASE_URL").trim() &&
+      this.getString("AI_PROVIDER_CHAT_MODEL").trim();
     if (!hasAiProviderConfig) {
       missingKeys.push("AI_PROVIDER_BASE_URL/AI_PROVIDER_CHAT_MODEL");
     }
     if (missingKeys.length > 0) {
-      throw new Error(`Missing required production environment variables: ${missingKeys.join(", ")}`);
+      throw new Error(
+        `Missing required production environment variables: ${missingKeys.join(", ")}`,
+      );
     }
 
-    if (this.getString("AUTH_COOKIE_SECURE", "true").trim().toLowerCase() === "false") {
+    if (
+      this.getString("AUTH_COOKIE_SECURE", "true").trim().toLowerCase() ===
+      "false"
+    ) {
       throw new Error("AUTH_COOKIE_SECURE must not be false in production.");
     }
   }

@@ -13,8 +13,11 @@ export class GarageConfig {
     this.bucket = this.read("GARAGE_S3_BUCKET");
     this.accessKeyId = this.read("GARAGE_S3_ACCESS_KEY_ID");
     this.secretAccessKey = this.read("GARAGE_S3_SECRET_ACCESS_KEY");
-    this.forcePathStyle = this.toBoolean(process.env.GARAGE_S3_FORCE_PATH_STYLE ?? "true");
-    this.storagePrefix = process.env.GARAGE_STORAGE_PREFIX?.trim() || "projects";
+    this.forcePathStyle = this.toBoolean(
+      process.env.GARAGE_S3_FORCE_PATH_STYLE ?? "true",
+    );
+    this.storagePrefix =
+      process.env.GARAGE_STORAGE_PREFIX?.trim() || "projects";
   }
 
   private read(name: string): string {

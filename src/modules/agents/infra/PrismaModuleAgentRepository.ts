@@ -24,7 +24,9 @@ interface ModuleAgentRow {
 }
 
 export class PrismaModuleAgentRepository implements ModuleAgentRepository {
-  public async listModuleAgents(workspaceId: string): Promise<ModuleAgentEntity[]> {
+  public async listModuleAgents(
+    workspaceId: string,
+  ): Promise<ModuleAgentEntity[]> {
     const prisma = PrismaClientManager.getClient();
     const rows = await prisma.moduleAgent.findMany({
       where: {
@@ -58,7 +60,10 @@ export class PrismaModuleAgentRepository implements ModuleAgentRepository {
     return rows.map((row) => this.toEntity(row as unknown as ModuleAgentRow));
   }
 
-  public async findModuleAgentById(workspaceId: string, agentId: string): Promise<ModuleAgentEntity | null> {
+  public async findModuleAgentById(
+    workspaceId: string,
+    agentId: string,
+  ): Promise<ModuleAgentEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.moduleAgent.findFirst({
       where: {
@@ -151,7 +156,11 @@ export class PrismaModuleAgentRepository implements ModuleAgentRepository {
     return this.findModuleAgentById(params.workspaceId, existing.id);
   }
 
-  public async resetModuleAgentPrompt(workspaceId: string, agentId: string, updatedByUserId: string): Promise<ModuleAgentEntity | null> {
+  public async resetModuleAgentPrompt(
+    workspaceId: string,
+    agentId: string,
+    updatedByUserId: string,
+  ): Promise<ModuleAgentEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const existing = await prisma.moduleAgent.findFirst({
       where: {

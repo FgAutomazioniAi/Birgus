@@ -2,6 +2,7 @@
 key: audit_center
 ui: Audit
 ---
+
 # audit_center
 
 Tracciamento consultabile delle operazioni rilevanti effettuate nell'istanza.

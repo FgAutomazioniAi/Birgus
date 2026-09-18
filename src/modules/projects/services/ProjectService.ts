@@ -29,9 +29,15 @@ export class ProjectService {
     return this.repository.listProjects(workspaceId);
   }
 
-  public async createProject(command: CreateProjectCommand): Promise<ProjectEntity> {
+  public async createProject(
+    command: CreateProjectCommand,
+  ): Promise<ProjectEntity> {
     if (!command.projectName || command.projectName.length < 2) {
-      throw new AppError("Project name is too short.", "PROJECT_NAME_INVALID", 400);
+      throw new AppError(
+        "Project name is too short.",
+        "PROJECT_NAME_INVALID",
+        400,
+      );
     }
 
     const project = await this.repository.createProject({
@@ -46,7 +52,11 @@ export class ProjectService {
       authorDate: command.authorDate,
     });
 
-    await this.repository.linkProjectClient(command.workspaceId, project.id, command.clientId);
+    await this.repository.linkProjectClient(
+      command.workspaceId,
+      project.id,
+      command.clientId,
+    );
 
     let initialVersion: ProjectVersionEntity | null = null;
     try {
@@ -94,8 +104,14 @@ export class ProjectService {
     });
   }
 
-  public async getProject(workspaceId: string, projectId: string): Promise<ProjectEntity> {
-    const project = await this.repository.findProjectById(workspaceId, projectId);
+  public async getProject(
+    workspaceId: string,
+    projectId: string,
+  ): Promise<ProjectEntity> {
+    const project = await this.repository.findProjectById(
+      workspaceId,
+      projectId,
+    );
     if (!project) {
       throw new AppError("Project not found.", "PROJECT_NOT_FOUND", 404);
     }
@@ -118,7 +134,11 @@ export class ProjectService {
   }): Promise<ProjectEntity> {
     const projectName = params.projectName.trim().replace(/\s+/g, " ");
     if (projectName.length < 2) {
-      throw new AppError("Project name is too short.", "PROJECT_NAME_INVALID", 400);
+      throw new AppError(
+        "Project name is too short.",
+        "PROJECT_NAME_INVALID",
+        400,
+      );
     }
 
     const updated = await this.repository.updateProject({
@@ -137,7 +157,11 @@ export class ProjectService {
       throw new AppError("Project not found.", "PROJECT_NOT_FOUND", 404);
     }
 
-    await this.repository.setProjectPrimaryClient(params.workspaceId, params.projectId, params.clientId);
+    await this.repository.setProjectPrimaryClient(
+      params.workspaceId,
+      params.projectId,
+      params.clientId,
+    );
     await this.notify(params.workspaceId, updated.name, "Progetto aggiornato.");
     await this.auditLogService?.record({
       workspaceId: params.workspaceId,
@@ -165,13 +189,23 @@ export class ProjectService {
     });
   }
 
-  public async deleteProject(workspaceId: string, projectId: string, actorUserId?: string | null): Promise<void> {
-    const project = await this.repository.findProjectById(workspaceId, projectId);
+  public async deleteProject(
+    workspaceId: string,
+    projectId: string,
+    actorUserId?: string | null,
+  ): Promise<void> {
+    const project = await this.repository.findProjectById(
+      workspaceId,
+      projectId,
+    );
     if (!project) {
       throw new AppError("Project not found.", "PROJECT_NOT_FOUND", 404);
     }
 
-    const removed = await this.repository.softDeleteProject(workspaceId, projectId);
+    const removed = await this.repository.softDeleteProject(
+      workspaceId,
+      projectId,
+    );
     if (!removed) {
       throw new AppError("Project not found.", "PROJECT_NOT_FOUND", 404);
     }
@@ -188,8 +222,14 @@ export class ProjectService {
     });
   }
 
-  public async listProjectVersions(workspaceId: string, projectId: string): Promise<ProjectVersionEntity[]> {
-    const project = await this.repository.findProjectById(workspaceId, projectId);
+  public async listProjectVersions(
+    workspaceId: string,
+    projectId: string,
+  ): Promise<ProjectVersionEntity[]> {
+    const project = await this.repository.findProjectById(
+      workspaceId,
+      projectId,
+    );
     if (!project) {
       throw new AppError("Project not found.", "PROJECT_NOT_FOUND", 404);
     }
@@ -197,16 +237,29 @@ export class ProjectService {
     return this.repository.listVersions(workspaceId, projectId);
   }
 
-  public async createProjectVersion(command: CreateProjectVersionCommand): Promise<ProjectVersionEntity> {
-    const project = await this.repository.findProjectById(command.workspaceId, command.projectId);
+  public async createProjectVersion(
+    command: CreateProjectVersionCommand,
+  ): Promise<ProjectVersionEntity> {
+    const project = await this.repository.findProjectById(
+      command.workspaceId,
+      command.projectId,
+    );
     if (!project) {
       throw new AppError("Project not found.", "PROJECT_NOT_FOUND", 404);
     }
 
-    const existingVersions = await this.repository.listVersions(command.workspaceId, command.projectId);
-    const nextVersionLabel = this.computeNextVersionLabel(existingVersions.map((version) => version.versionLabel));
+    const existingVersions = await this.repository.listVersions(
+      command.workspaceId,
+      command.projectId,
+    );
+    const nextVersionLabel = this.computeNextVersionLabel(
+      existingVersions.map((version) => version.versionLabel),
+    );
 
-    await this.repository.clearDefaultVersionFlags(command.workspaceId, command.projectId);
+    await this.repository.clearDefaultVersionFlags(
+      command.workspaceId,
+      command.projectId,
+    );
 
     const version = await this.repository.createVersion({
       workspaceId: command.workspaceId,
@@ -236,13 +289,19 @@ export class ProjectService {
       action: "project_version.create",
       entityType: "ProjectVersion",
       entityId: null,
-      payload: { projectId: command.projectId, versionId: version.id, versionLabel: version.versionLabel },
+      payload: {
+        projectId: command.projectId,
+        versionId: version.id,
+        versionLabel: version.versionLabel,
+      },
     });
 
     return refreshedVersion ?? version;
   }
 
-  public async selectDefaultVersion(command: SelectDefaultVersionCommand): Promise<ProjectVersionEntity> {
+  public async selectDefaultVersion(
+    command: SelectDefaultVersionCommand,
+  ): Promise<ProjectVersionEntity> {
     const target = await this.repository.findVersionByLabel(
       command.workspaceId,
       command.projectId,
@@ -250,12 +309,22 @@ export class ProjectService {
     );
 
     if (!target) {
-      throw new AppError("Version not found.", "PROJECT_VERSION_NOT_FOUND", 404);
+      throw new AppError(
+        "Version not found.",
+        "PROJECT_VERSION_NOT_FOUND",
+        404,
+      );
     }
 
-    await this.repository.clearDefaultVersionFlags(command.workspaceId, command.projectId);
+    await this.repository.clearDefaultVersionFlags(
+      command.workspaceId,
+      command.projectId,
+    );
     await this.repository.setDefaultVersion(target.id);
-    const project = await this.repository.findProjectById(command.workspaceId, command.projectId);
+    const project = await this.repository.findProjectById(
+      command.workspaceId,
+      command.projectId,
+    );
     await this.notify(
       command.workspaceId,
       project?.name ?? "Progetti",
@@ -277,7 +346,9 @@ export class ProjectService {
     });
   }
 
-  public async deleteProjectVersion(command: DeleteProjectVersionCommand): Promise<void> {
+  public async deleteProjectVersion(
+    command: DeleteProjectVersionCommand,
+  ): Promise<void> {
     const target = await this.repository.findVersionByLabel(
       command.workspaceId,
       command.projectId,
@@ -285,24 +356,41 @@ export class ProjectService {
     );
 
     if (!target) {
-      throw new AppError("Version not found.", "PROJECT_VERSION_NOT_FOUND", 404);
+      throw new AppError(
+        "Version not found.",
+        "PROJECT_VERSION_NOT_FOUND",
+        404,
+      );
     }
 
-    const activeCount = await this.repository.countActiveVersions(command.workspaceId, command.projectId);
+    const activeCount = await this.repository.countActiveVersions(
+      command.workspaceId,
+      command.projectId,
+    );
     if (activeCount <= 1) {
-      throw new AppError("Cannot remove the last active version.", "PROJECT_LAST_VERSION", 400);
+      throw new AppError(
+        "Cannot remove the last active version.",
+        "PROJECT_LAST_VERSION",
+        400,
+      );
     }
 
     await this.repository.softDeleteVersion(target.id);
 
     if (target.isDefault) {
-      const fallback = await this.repository.findMostRecentActiveVersion(command.workspaceId, command.projectId);
+      const fallback = await this.repository.findMostRecentActiveVersion(
+        command.workspaceId,
+        command.projectId,
+      );
       if (fallback) {
         await this.repository.setDefaultVersion(fallback.id);
       }
     }
 
-    const project = await this.repository.findProjectById(command.workspaceId, command.projectId);
+    const project = await this.repository.findProjectById(
+      command.workspaceId,
+      command.projectId,
+    );
     await this.notify(
       command.workspaceId,
       project?.name ?? "Progetti",
@@ -315,7 +403,11 @@ export class ProjectService {
       action: "project_version.delete",
       entityType: "ProjectVersion",
       entityId: null,
-      payload: { projectId: command.projectId, versionId: target.id, versionLabel: target.versionLabel },
+      payload: {
+        projectId: command.projectId,
+        versionId: target.id,
+        versionLabel: target.versionLabel,
+      },
     });
   }
 
@@ -340,7 +432,11 @@ export class ProjectService {
       isDefault: true,
     });
 
-    const refreshedVersion = await this.repository.findVersionByLabel(workspaceId, projectId, version.versionLabel);
+    const refreshedVersion = await this.repository.findVersionByLabel(
+      workspaceId,
+      projectId,
+      version.versionLabel,
+    );
     return refreshedVersion ?? version;
   }
 
@@ -371,7 +467,11 @@ export class ProjectService {
     return `v${Math.max(1, maxVersion + 1)}`;
   }
 
-  private async notify(workspaceId: string, title: string, message: string): Promise<void> {
+  private async notify(
+    workspaceId: string,
+    title: string,
+    message: string,
+  ): Promise<void> {
     if (!this.notificationService) {
       return;
     }
@@ -385,7 +485,12 @@ export class ProjectService {
         message,
       });
     } catch (error) {
-      console.error("[ProjectService] Unable to create notification", { workspaceId, title, message, error });
+      console.error("[ProjectService] Unable to create notification", {
+        workspaceId,
+        title,
+        message,
+        error,
+      });
     }
   }
 }

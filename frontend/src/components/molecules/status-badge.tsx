@@ -4,7 +4,10 @@ import { Badge } from "@/components/atoms";
 import { getProjectStatusLabel } from "@/lib/project-status";
 import type { ProjectStatus } from "@/lib/types";
 
-const STATUS_TONES: Record<ProjectStatus, "info" | "success" | "warn" | "progress"> = {
+const STATUS_TONES: Record<
+  ProjectStatus,
+  "info" | "success" | "warn" | "progress"
+> = {
   in_revisione: "info",
   completato: "success",
   in_attesa: "warn",

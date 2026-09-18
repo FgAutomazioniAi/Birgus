@@ -24,21 +24,21 @@ workflow: false
 
 ## Notazione ricevuta
 
-| Notazione | Significato dichiarato |
-| --- | --- |
-| `c1`, `c2`, ... | Pagina del modulo, numerata nel progresso. |
-| `txt (placeholder)` | Input con placeholder. |
-| `desc` | Titolino e text area. |
-| `_` ... `_` | Campo sulla stessa riga. |
-| `sel` | Selettore. |
-| `[]` | Checkbox. |
-| `tab` | Formato tabellare con colonne; anche vista lista tabellare. necessario usare struttura tabellare universale presente nel progetto. Vorrei poter aggiungere
-o rimuovere una riga a tabella a piacimento. |
-| `/` | Fine pagina (unico carattere nella riga)
-| `|` | a capo ma stesso "blocco"
-| `num` | sottotitolo numerato
-| `#` | commento per istruzioni o note per la stesura file
-| Firma finale | Salva il nome del firmatario che ha preso visione. |
+| Notazione                                    | Significato dichiarato                                                                                                                                     |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `c1`, `c2`, ...                              | Pagina del modulo, numerata nel progresso.                                                                                                                 |
+| `txt (placeholder)`                          | Input con placeholder.                                                                                                                                     |
+| `desc`                                       | Titolino e text area.                                                                                                                                      |
+| `_` ... `_`                                  | Campo sulla stessa riga.                                                                                                                                   |
+| `sel`                                        | Selettore.                                                                                                                                                 |
+| `[]`                                         | Checkbox.                                                                                                                                                  |
+| `tab`                                        | Formato tabellare con colonne; anche vista lista tabellare. necessario usare struttura tabellare universale presente nel progetto. Vorrei poter aggiungere |
+| o rimuovere una riga a tabella a piacimento. |
+| `/`                                          | Fine pagina (unico carattere nella riga)                                                                                                                   |
+| `                                            | `                                                                                                                                                          | a capo ma stesso "blocco" |
+| `num`                                        | sottotitolo numerato                                                                                                                                       |
+| `#`                                          | commento per istruzioni o note per la stesura file                                                                                                         |
+| Firma finale                                 | Salva il nome del firmatario che ha preso visione.                                                                                                         |
 
 ## Informazioni mancanti prima di progettare il database
 

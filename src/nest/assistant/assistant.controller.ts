@@ -1,4 +1,15 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req, Res, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from "@nestjs/common";
 import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
@@ -61,7 +72,10 @@ export class NestAssistantController {
   ): Promise<Record<string, unknown>> {
     const workspaceId = requestContext.workspace.workspaceId;
     const userId = requestContext.workspace.userId;
-    const sessions = await this.sessionService.listSessionsForUser(workspaceId, userId);
+    const sessions = await this.sessionService.listSessionsForUser(
+      workspaceId,
+      userId,
+    );
 
     return {
       workspaceId,
@@ -128,8 +142,16 @@ export class NestAssistantController {
     const { sessionId } = sessionIdParamsSchema.parse(paramsRaw);
     const workspaceId = requestContext.workspace.workspaceId;
     const userId = requestContext.workspace.userId;
-    const session = await this.sessionService.getSessionForUser(workspaceId, userId, sessionId);
-    const memory = await this.sessionService.findLatestMemorySnapshot(workspaceId, userId, sessionId);
+    const session = await this.sessionService.getSessionForUser(
+      workspaceId,
+      userId,
+      sessionId,
+    );
+    const memory = await this.sessionService.findLatestMemorySnapshot(
+      workspaceId,
+      userId,
+      sessionId,
+    );
 
     return {
       id: session.id,
@@ -143,7 +165,7 @@ export class NestAssistantController {
       clientId: session.clientId,
       documentId: session.documentId,
       ddtDocumentId: session.ddtDocumentId,
-        knowledgeMode: session.configuration?.knowledgeMode ?? "on_demand",
+      knowledgeMode: session.configuration?.knowledgeMode ?? "on_demand",
       openedAt: session.openedAt,
       lastActivityAt: session.lastActivityAt,
       closedAt: session.closedAt,
@@ -160,7 +182,11 @@ export class NestAssistantController {
     const { sessionId } = sessionIdParamsSchema.parse(paramsRaw);
     const workspaceId = requestContext.workspace.workspaceId;
     const userId = requestContext.workspace.userId;
-    const messages = await this.sessionService.listMessagesForUser(workspaceId, userId, sessionId);
+    const messages = await this.sessionService.listMessagesForUser(
+      workspaceId,
+      userId,
+      sessionId,
+    );
 
     return {
       sessionId,
@@ -214,7 +240,10 @@ export class NestAssistantController {
     const workspaceId = requestContext.workspace.workspaceId;
     const userId = requestContext.workspace.userId;
     await this.sessionService.getSessionForUser(workspaceId, userId, sessionId);
-    const documents = await this.sessionDocumentService.listSessionDocuments({ workspaceId, sessionId });
+    const documents = await this.sessionDocumentService.listSessionDocuments({
+      workspaceId,
+      sessionId,
+    });
 
     return {
       sessionId,
@@ -233,7 +262,10 @@ export class NestAssistantController {
 
   @Post("sessions/:sessionId/documents")
   @HttpCode(201)
-  @RequirePermission(PermissionKey.ASSISTANT_WRITE, PermissionKey.KNOWLEDGE_READ)
+  @RequirePermission(
+    PermissionKey.ASSISTANT_WRITE,
+    PermissionKey.KNOWLEDGE_READ,
+  )
   public async uploadSessionDocument(
     @Param() paramsRaw: unknown,
     @Req() request: FastifyRequest,
@@ -245,7 +277,9 @@ export class NestAssistantController {
     await this.sessionService.getSessionForUser(workspaceId, userId, sessionId);
 
     const multipart = await MultipartFormReader.read(request);
-    const uploaded = multipart.files.find((item) => item.fieldName === "file") ?? multipart.files[0];
+    const uploaded =
+      multipart.files.find((item) => item.fieldName === "file") ??
+      multipart.files[0];
     if (!uploaded) {
       throw new AppError("File mancante.", "ASSISTANT_DOCUMENT_REQUIRED", 400);
     }
@@ -345,10 +379,15 @@ export class NestAssistantController {
         sessionId,
         contentText: body.content,
       })) {
-        reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event.payload)}\n\n`);
+        reply.raw.write(
+          `event: ${event.type}\ndata: ${JSON.stringify(event.payload)}\n\n`,
+        );
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Risposta assistente non riuscita.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Risposta assistente non riuscita.";
       reply.raw.write(`event: error\ndata: ${JSON.stringify({ message })}\n\n`);
     } finally {
       reply.raw.end();
@@ -365,7 +404,11 @@ export class NestAssistantController {
     const { sessionId } = sessionIdParamsSchema.parse(paramsRaw);
     const workspaceId = requestContext.workspace.workspaceId;
     const userId = requestContext.workspace.userId;
-    await this.sessionService.closeSessionForUser(workspaceId, userId, sessionId);
+    await this.sessionService.closeSessionForUser(
+      workspaceId,
+      userId,
+      sessionId,
+    );
 
     return { ok: true, sessionId, status: "CLOSED" };
   }

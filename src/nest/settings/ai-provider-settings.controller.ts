@@ -1,10 +1,25 @@
-import { Body, Controller, Get, HttpCode, Inject, Patch, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Patch,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 import { z } from "zod";
 
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
 import { ModuleKey } from "../../core/module-access/ModuleKey.js";
-import { AI_PROVIDER_DEFINITIONS, MAX_AI_PROVIDER_OUTPUT_TOKENS } from "../../modules/ai-runtime/domain/AiProviderConfig.js";
+import {
+  AI_PROVIDER_DEFINITIONS,
+  MAX_AI_PROVIDER_OUTPUT_TOKENS,
+} from "../../modules/ai-runtime/domain/AiProviderConfig.js";
 import { AiProviderSettingsService } from "../../modules/ai-runtime/services/AiProviderSettingsService.js";
+import { AuditLogService } from "../../modules/audit/services/AuditLogService.js";
+import { RequestContext } from "../../core/tenancy/RequestContext.js";
+import { CurrentRequestContext } from "../common/decorators/request-context.decorator.js";
 import { AiProviderError } from "../../modules/ai-runtime/domain/AiProviderError.js";
 import { AppError } from "../../core/errors/AppError.js";
 import { AccessPolicyGuard } from "../auth/access-policy.guard.js";
@@ -12,20 +27,37 @@ import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
 import { RequireModule } from "../common/decorators/require-module.decorator.js";
 import { RequirePermission } from "../common/decorators/require-permission.decorator.js";
 
-const aiProviderSettingsSchema = z.object({
-  baseUrl: z.string().trim().min(1).max(300).optional(),
-  chatModel: z.string().trim().min(1).max(200).optional(),
-  provider: z.enum(AI_PROVIDER_DEFINITIONS.map((item) => item.id) as [string, ...string[]]).optional(),
-  temperature: z.number().min(0).max(2).optional(),
-  timeoutMs: z.number().int().min(1000).max(900000).optional(),
-  maxOutputTokens: z.number().int().min(1).max(MAX_AI_PROVIDER_OUTPUT_TOKENS).optional(),
-  topP: z.number().min(0).max(1).optional(),
-  topK: z.number().int().min(-1).max(1000).optional(),
-  minP: z.number().min(0).max(1).optional(),
-  repetitionPenalty: z.number().min(0.1).max(2).optional(),
-  seed: z.number().int().min(0).max(2147483647).nullable().optional(),
-  contextTokenLimit: z.number().int().min(256).max(8192).nullable().optional(),
-}).strict();
+const aiProviderSettingsSchema = z
+  .object({
+    baseUrl: z.string().trim().min(1).max(300).optional(),
+    chatModel: z.string().trim().min(1).max(200).optional(),
+    provider: z
+      .enum(
+        AI_PROVIDER_DEFINITIONS.map((item) => item.id) as [string, ...string[]],
+      )
+      .optional(),
+    temperature: z.number().min(0).max(2).optional(),
+    timeoutMs: z.number().int().min(1000).max(900000).optional(),
+    maxOutputTokens: z
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_AI_PROVIDER_OUTPUT_TOKENS)
+      .optional(),
+    topP: z.number().min(0).max(1).optional(),
+    topK: z.number().int().min(-1).max(1000).optional(),
+    minP: z.number().min(0).max(1).optional(),
+    repetitionPenalty: z.number().min(0.1).max(2).optional(),
+    seed: z.number().int().min(0).max(2147483647).nullable().optional(),
+    contextTokenLimit: z
+      .number()
+      .int()
+      .min(256)
+      .max(8192)
+      .nullable()
+      .optional(),
+  })
+  .strict();
 
 @Controller("/api/settings/ai-provider")
 @UseGuards(RequestContextAuthGuard, AccessPolicyGuard)
@@ -34,6 +66,8 @@ export class AiProviderSettingsController {
   public constructor(
     @Inject(AiProviderSettingsService)
     private readonly settingsService: AiProviderSettingsService,
+    @Inject(AuditLogService)
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   @Get()
@@ -45,15 +79,29 @@ export class AiProviderSettingsController {
   @Patch()
   @HttpCode(200)
   @RequirePermission(PermissionKey.ASSISTANT_CONFIGURE)
-  public async patchSettings(@Body() bodyRaw: unknown): Promise<Record<string, unknown>> {
+  public async patchSettings(
+    @Body() bodyRaw: unknown,
+    @CurrentRequestContext() context: RequestContext,
+  ): Promise<Record<string, unknown>> {
     const body = aiProviderSettingsSchema.parse(bodyRaw ?? {});
-    return { settings: await this.settingsService.saveSettings(body) };
+    const settings = await this.settingsService.saveSettings(body);
+    await this.auditLogService.record({
+      workspaceId: context.workspace.workspaceId,
+      userId: context.workspace.userId,
+      moduleKey: ModuleKey.CONVERSATIONAL_ASSISTANT,
+      action: "settings.ai_provider.updated",
+      entityType: "AiProviderSettings",
+      payload: { changedFields: Object.keys(body) },
+    });
+    return { settings };
   }
 
   @Post("models")
   @HttpCode(200)
   @RequirePermission(PermissionKey.ASSISTANT_CONFIGURE)
-  public async loadModels(@Body() bodyRaw: unknown): Promise<Record<string, unknown>> {
+  public async loadModels(
+    @Body() bodyRaw: unknown,
+  ): Promise<Record<string, unknown>> {
     const body = aiProviderSettingsSchema.parse(bodyRaw ?? {});
     try {
       return { models: await this.settingsService.discoverModels(body) };
@@ -65,7 +113,9 @@ export class AiProviderSettingsController {
   @Post("validate")
   @HttpCode(200)
   @RequirePermission(PermissionKey.ASSISTANT_CONFIGURE)
-  public async validate(@Body() bodyRaw: unknown): Promise<Record<string, unknown>> {
+  public async validate(
+    @Body() bodyRaw: unknown,
+  ): Promise<Record<string, unknown>> {
     const body = aiProviderSettingsSchema.parse(bodyRaw ?? {});
     const result = await this.settingsService.validateSettings(body);
     if (result.ok) {
@@ -76,11 +126,21 @@ export class AiProviderSettingsController {
 
   private toRequestError(error: unknown): AppError {
     if (error instanceof AiProviderError) {
-      return new AppError(error.code, error.code, error.statusCode && error.statusCode >= 400 && error.statusCode < 500 ? 400 : 502);
+      return new AppError(
+        error.code,
+        error.code,
+        error.statusCode && error.statusCode >= 400 && error.statusCode < 500
+          ? 400
+          : 502,
+      );
     }
     if (typeof error === "string" && error.startsWith("AI_PROVIDER_")) {
       return new AppError(error, error, 502);
     }
-    return new AppError("AI_PROVIDER_REQUEST_FAILED", "AI_PROVIDER_REQUEST_FAILED", 502);
+    return new AppError(
+      "AI_PROVIDER_REQUEST_FAILED",
+      "AI_PROVIDER_REQUEST_FAILED",
+      502,
+    );
   }
 }

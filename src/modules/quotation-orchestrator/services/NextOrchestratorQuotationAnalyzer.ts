@@ -1,6 +1,10 @@
 import { ModuleKey } from "../../../core/module-access/ModuleKey.js";
 import { ModuleAgentService } from "../../agents/services/ModuleAgentService.js";
-import { QuotationAnalysisResult, QuotationStructuredData, QUOTATION_FIELD_KEYS } from "../domain/QuotationStructuredData.js";
+import {
+  QuotationAnalysisResult,
+  QuotationStructuredData,
+  QUOTATION_FIELD_KEYS,
+} from "../domain/QuotationStructuredData.js";
 import { LocalLmOrchestrator } from "../../orchestration/services/LocalLmOrchestrator.js";
 
 interface WorkflowResponsePayload {
@@ -9,12 +13,16 @@ interface WorkflowResponsePayload {
 }
 
 export class NextOrchestratorQuotationAnalyzer {
-  public static readonly QUOTATION_PROMPT_AGENT_KEY = "quotation_structuring_prompt";
+  public static readonly QUOTATION_PROMPT_AGENT_KEY =
+    "quotation_structuring_prompt";
 
   private readonly moduleAgentService: ModuleAgentService;
   private readonly orchestrator: LocalLmOrchestrator;
 
-  public constructor(moduleAgentService: ModuleAgentService, orchestrator?: LocalLmOrchestrator) {
+  public constructor(
+    moduleAgentService: ModuleAgentService,
+    orchestrator?: LocalLmOrchestrator,
+  ) {
     this.moduleAgentService = moduleAgentService;
     this.orchestrator = orchestrator ?? new LocalLmOrchestrator();
   }
@@ -38,14 +46,21 @@ export class NextOrchestratorQuotationAnalyzer {
     });
 
     return {
-      structuredData: this.normalizeStructuredData(payload.structured_data ?? {}),
+      structuredData: this.normalizeStructuredData(
+        payload.structured_data ?? {},
+      ),
       rawResponse: payload.raw_response ?? {},
     };
   }
 
-  private normalizeStructuredData(input: Record<string, unknown>): QuotationStructuredData {
+  private normalizeStructuredData(
+    input: Record<string, unknown>,
+  ): QuotationStructuredData {
     return Object.fromEntries(
-      QUOTATION_FIELD_KEYS.map((key) => [key, this.toNullableString(input[key])]),
+      QUOTATION_FIELD_KEYS.map((key) => [
+        key,
+        this.toNullableString(input[key]),
+      ]),
     ) as QuotationStructuredData;
   }
 

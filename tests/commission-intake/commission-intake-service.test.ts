@@ -23,7 +23,10 @@ import { CommissionIntakeService } from "../../src/modules/commission-intake/ser
 class FakeCommissionIntakeRepository implements CommissionIntakeRepository {
   public createdRecordParams: CommissionRecordWriteParams | null = null;
   public listedEventsLimit: number | null = null;
-  public publishedVersion: { id: string; title: string } | null = { id: "form-version-1", title: "Checklist standard" };
+  public publishedVersion: { id: string; title: string } | null = {
+    id: "form-version-1",
+    title: "Checklist standard",
+  };
   public reopenParams: {
     workspaceId: string;
     recordId: string;
@@ -39,7 +42,9 @@ class FakeCommissionIntakeRepository implements CommissionIntakeRepository {
     return null;
   }
 
-  public async createRecord(params: CommissionRecordWriteParams): Promise<CommissionRecordEntity> {
+  public async createRecord(
+    params: CommissionRecordWriteParams,
+  ): Promise<CommissionRecordEntity> {
     this.createdRecordParams = params;
     return new CommissionRecordEntity({
       id: "record-1",
@@ -66,7 +71,9 @@ class FakeCommissionIntakeRepository implements CommissionIntakeRepository {
     });
   }
 
-  public async updateRecord(_params: CommissionRecordUpdateParams): Promise<CommissionRecordEntity | null> {
+  public async updateRecord(
+    _params: CommissionRecordUpdateParams,
+  ): Promise<CommissionRecordEntity | null> {
     return null;
   }
 
@@ -106,7 +113,11 @@ class FakeCommissionIntakeRepository implements CommissionIntakeRepository {
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
         updatedAt: new Date("2026-01-01T00:00:00.000Z"),
       }),
-      currentUser: { id: "user-1", fullName: "Utente Test", canReopenSignedChecklist: false },
+      currentUser: {
+        id: "user-1",
+        fullName: "Utente Test",
+        canReopenSignedChecklist: false,
+      },
       checklist: {
         id: "checklist-1",
         title: "Checklist standard",
@@ -143,7 +154,10 @@ class FakeCommissionIntakeRepository implements CommissionIntakeRepository {
     return true;
   }
 
-  public async resolvePublishedTemplateVersion(): Promise<{ id: string; title: string } | null> {
+  public async resolvePublishedTemplateVersion(): Promise<{
+    id: string;
+    title: string;
+  } | null> {
     return this.publishedVersion;
   }
 
@@ -176,7 +190,10 @@ test("CommissionIntakeService creates a normalized record with default owner, pr
   assert.equal(record.title, "Nuova commessa");
   assert.equal(repository.createdRecordParams?.companyName, "FG Automazioni");
   assert.equal(repository.createdRecordParams?.ownerUserId, "user-1");
-  assert.equal(repository.createdRecordParams?.priority, CommissionRecordPriority.NORMAL);
+  assert.equal(
+    repository.createdRecordParams?.priority,
+    CommissionRecordPriority.NORMAL,
+  );
   assert.equal(repository.createdRecordParams?.formVersionId, "form-version-1");
   assert.equal(repository.createdRecordParams?.currency, "EUR");
 });
@@ -191,7 +208,8 @@ test("CommissionIntakeService rejects too-short titles before writing", async ()
       actorUserId: "user-1",
       title: " x ",
     }),
-    (error: unknown) => error instanceof AppError && error.code === "COMMISSION_TITLE_INVALID",
+    (error: unknown) =>
+      error instanceof AppError && error.code === "COMMISSION_TITLE_INVALID",
   );
   assert.equal(repository.createdRecordParams, null);
 });

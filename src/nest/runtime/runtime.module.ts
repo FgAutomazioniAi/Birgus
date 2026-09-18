@@ -30,12 +30,14 @@ import { BackendRuntimeService } from "./runtime.service.js";
   providers: [
     {
       provide: WorkflowRunWorker,
-      useFactory: (executor: WorkflowRunExecutorService) => new WorkflowRunWorker(executor),
+      useFactory: (executor: WorkflowRunExecutorService) =>
+        new WorkflowRunWorker(executor),
       inject: [WorkflowRunExecutorService],
     },
     {
       provide: QuotationOrchestratorWorker,
-      useFactory: (service: QuotationOrchestratorService) => new QuotationOrchestratorWorker(service),
+      useFactory: (service: QuotationOrchestratorService) =>
+        new QuotationOrchestratorWorker(service),
       inject: [QuotationOrchestratorService],
     },
     {
@@ -44,11 +46,12 @@ import { BackendRuntimeService } from "./runtime.service.js";
         jobQueue: JobQueue,
         workflowRunWorker: WorkflowRunWorker,
         quotationOrchestratorWorker: QuotationOrchestratorWorker,
-      ) => new WorkerCoordinator(
-        jobQueue,
-        workflowRunWorker,
-        quotationOrchestratorWorker,
-      ),
+      ) =>
+        new WorkerCoordinator(
+          jobQueue,
+          workflowRunWorker,
+          quotationOrchestratorWorker,
+        ),
       inject: [JOB_QUEUE, WorkflowRunWorker, QuotationOrchestratorWorker],
     },
     BackendRuntimeService,

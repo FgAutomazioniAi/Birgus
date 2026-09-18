@@ -20,7 +20,8 @@ import { NestMeasureReportController } from "./measure-report.controller.js";
         storage: ProjectBinaryStorage,
         workflowService: WorkflowService,
         notificationService: NotificationService,
-      ) => new MeasureReportService(storage, workflowService, notificationService),
+      ) =>
+        new MeasureReportService(storage, workflowService, notificationService),
       inject: [PROJECT_BINARY_STORAGE, WorkflowService, NotificationService],
     },
   ],

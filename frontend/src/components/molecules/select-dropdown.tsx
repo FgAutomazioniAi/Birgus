@@ -23,7 +23,10 @@ interface SelectDropdownProps {
   value: string;
 }
 
-const triggerSizeClass: Record<NonNullable<SelectDropdownProps["size"]>, string> = {
+const triggerSizeClass: Record<
+  NonNullable<SelectDropdownProps["size"]>,
+  string
+> = {
   sm: "h-8 px-2 text-xs",
   md: "h-11 px-3 text-sm",
 };
@@ -41,7 +44,8 @@ export function SelectDropdown({
 }: SelectDropdownProps) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const selectedOption = options.find((option) => option.value === value) ?? null;
+  const selectedOption =
+    options.find((option) => option.value === value) ?? null;
 
   useEffect(() => {
     if (!open) {
@@ -96,10 +100,18 @@ export function SelectDropdown({
           triggerSizeClass[size],
         )}
       >
-        <span className={selectedOption ? "text-text-secondary" : "text-text-muted"}>
+        <span
+          className={selectedOption ? "text-text-secondary" : "text-text-muted"}
+        >
           {selectedOption?.label ?? placeholder}
         </span>
-        <ChevronDown size={16} className={cn("transition-transform", open ? "rotate-180" : "rotate-0")} />
+        <ChevronDown
+          size={16}
+          className={cn(
+            "transition-transform",
+            open ? "rotate-180" : "rotate-0",
+          )}
+        />
       </button>
 
       {open ? (
@@ -111,7 +123,9 @@ export function SelectDropdown({
               className="flex w-full items-center justify-between rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm text-text-muted transition-colors hover:bg-bg-subtle"
             >
               <span>{placeholder}</span>
-              {!value ? <Check size={14} className="text-brand-primary" /> : null}
+              {!value ? (
+                <Check size={14} className="text-brand-primary" />
+              ) : null}
             </button>
           ) : null}
 
@@ -130,7 +144,9 @@ export function SelectDropdown({
               )}
             >
               <span className="truncate">{option.label}</span>
-              {value === option.value ? <Check size={14} className="text-brand-primary" /> : null}
+              {value === option.value ? (
+                <Check size={14} className="text-brand-primary" />
+              ) : null}
             </button>
           ))}
         </div>

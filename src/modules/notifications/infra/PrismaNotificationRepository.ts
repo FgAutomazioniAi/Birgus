@@ -14,7 +14,10 @@ export class PrismaNotificationRepository implements NotificationRepository {
     const prisma = PrismaClientManager.getClient();
 
     const moduleRecord = params.moduleKey
-      ? await prisma.module.findFirst({ where: { key: params.moduleKey }, select: { id: true, key: true } })
+      ? await prisma.module.findFirst({
+          where: { key: params.moduleKey },
+          select: { id: true, key: true },
+        })
       : null;
 
     const row = await prisma.notification.create({
@@ -48,7 +51,10 @@ export class PrismaNotificationRepository implements NotificationRepository {
     });
   }
 
-  public async listForUser(workspaceId: string, userId: string): Promise<NotificationEntity[]> {
+  public async listForUser(
+    workspaceId: string,
+    userId: string,
+  ): Promise<NotificationEntity[]> {
     const prisma = PrismaClientManager.getClient();
 
     const rows = await prisma.notification.findMany({
@@ -70,20 +76,26 @@ export class PrismaNotificationRepository implements NotificationRepository {
       take: 30,
     });
 
-    return rows.map((row) => new NotificationEntity({
-      id: row.id,
-      workspaceId: row.workspace_id,
-      userId: row.user_id,
-      moduleKey: row.module?.key ?? null,
-      type: row.type,
-      title: row.title,
-      message: row.message,
-      readAt: row.read_at,
-      createdAt: row.created_at,
-    }));
+    return rows.map(
+      (row) =>
+        new NotificationEntity({
+          id: row.id,
+          workspaceId: row.workspace_id,
+          userId: row.user_id,
+          moduleKey: row.module?.key ?? null,
+          type: row.type,
+          title: row.title,
+          message: row.message,
+          readAt: row.read_at,
+          createdAt: row.created_at,
+        }),
+    );
   }
 
-  public async markAllAsRead(workspaceId: string, userId: string): Promise<void> {
+  public async markAllAsRead(
+    workspaceId: string,
+    userId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
 
     await prisma.notification.updateMany({
@@ -99,7 +111,10 @@ export class PrismaNotificationRepository implements NotificationRepository {
     });
   }
 
-  public async clearForUser(workspaceId: string, userId: string): Promise<void> {
+  public async clearForUser(
+    workspaceId: string,
+    userId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
 
     await prisma.notification.updateMany({

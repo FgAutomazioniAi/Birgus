@@ -79,7 +79,11 @@ export class PrismaUserAccountRepository implements UserAccountRepository {
     });
   }
 
-  public async updatePassword(userId: string, passwordHash: string, mustChangePassword = false): Promise<void> {
+  public async updatePassword(
+    userId: string,
+    passwordHash: string,
+    mustChangePassword = false,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
 
     await prisma.user.update({
@@ -111,7 +115,10 @@ export class PrismaUserAccountRepository implements UserAccountRepository {
     return assignment !== null;
   }
 
-  public async setTwoFactorSecret(userId: string, secretCiphertext: string): Promise<void> {
+  public async setTwoFactorSecret(
+    userId: string,
+    secretCiphertext: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     await prisma.user.update({
       where: {

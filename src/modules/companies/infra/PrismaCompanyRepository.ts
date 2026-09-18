@@ -13,7 +13,10 @@ export class PrismaCompanyRepository implements CompanyRepository {
     return rows.map((row) => this.mapRow(row));
   }
 
-  public async findById(workspaceId: string, companyId: number): Promise<CompanyEntity | null> {
+  public async findById(
+    workspaceId: string,
+    companyId: number,
+  ): Promise<CompanyEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.company.findFirst({
       where: { workspace_id: workspaceId, id: companyId, deleted_at: null },
@@ -46,7 +49,11 @@ export class PrismaCompanyRepository implements CompanyRepository {
     const row = await prisma.$transaction(async (tx) => {
       if (params.isHeadquarters) {
         await tx.company.updateMany({
-          where: { workspace_id: params.workspaceId, name: { equals: params.name, mode: "insensitive" }, deleted_at: null },
+          where: {
+            workspace_id: params.workspaceId,
+            name: { equals: params.name, mode: "insensitive" },
+            deleted_at: null,
+          },
           data: { is_headquarters: false },
         });
       }
@@ -101,7 +108,11 @@ export class PrismaCompanyRepository implements CompanyRepository {
   }): Promise<CompanyEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const existing = await prisma.company.findFirst({
-      where: { workspace_id: params.workspaceId, id: params.companyId, deleted_at: null },
+      where: {
+        workspace_id: params.workspaceId,
+        id: params.companyId,
+        deleted_at: null,
+      },
       select: { id: true },
     });
 
@@ -149,7 +160,10 @@ export class PrismaCompanyRepository implements CompanyRepository {
     return this.mapRow(row);
   }
 
-  public async softDelete(workspaceId: string, companyId: number): Promise<boolean> {
+  public async softDelete(
+    workspaceId: string,
+    companyId: number,
+  ): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
     const result = await prisma.company.updateMany({
       where: { workspace_id: workspaceId, id: companyId, deleted_at: null },
@@ -159,7 +173,10 @@ export class PrismaCompanyRepository implements CompanyRepository {
     return result.count > 0;
   }
 
-  public async hardDelete(workspaceId: string, companyId: number): Promise<boolean> {
+  public async hardDelete(
+    workspaceId: string,
+    companyId: number,
+  ): Promise<boolean> {
     const result = await PrismaClientManager.getClient().company.deleteMany({
       where: { workspace_id: workspaceId, id: companyId },
     });

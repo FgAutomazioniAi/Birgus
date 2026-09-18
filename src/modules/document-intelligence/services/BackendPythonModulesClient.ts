@@ -9,17 +9,37 @@ export class BackendPythonModulesClient {
   private readonly ocrLifecycleToken: string;
 
   public constructor() {
-    this.baseUrl = (process.env.PYTHON_MODULES_BASE_URL ?? "http://python_modules:8200").replace(/\/+$/, "");
-    this.executePath = this.normalizePath(process.env.PYTHON_MODULES_EXECUTE_PATH ?? "/v1/modules/execute");
-    this.timeoutMs = this.toPositiveInt(process.env.PYTHON_MODULES_TIMEOUT_MS, 180000);
-    this.ocrBaseUrl = (process.env.OCR_ENGINE_BASE_URL ?? "http://ocr_engine:8201").replace(/\/+$/, "");
-    this.ocrExecutePath = this.normalizePath(process.env.OCR_ENGINE_EXECUTE_PATH ?? "/v1/modules/execute");
-    this.ocrTimeoutMs = this.toPositiveInt(process.env.OCR_ENGINE_TIMEOUT_MS, 180000);
-    this.ocrLifecycleBaseUrl = (process.env.OCR_LIFECYCLE_BASE_URL ?? "http://ocr_lifecycle:8202").replace(/\/+$/, "");
+    this.baseUrl = (
+      process.env.PYTHON_MODULES_BASE_URL ?? "http://python_modules:8200"
+    ).replace(/\/+$/, "");
+    this.executePath = this.normalizePath(
+      process.env.PYTHON_MODULES_EXECUTE_PATH ?? "/v1/modules/execute",
+    );
+    this.timeoutMs = this.toPositiveInt(
+      process.env.PYTHON_MODULES_TIMEOUT_MS,
+      180000,
+    );
+    this.ocrBaseUrl = (
+      process.env.OCR_ENGINE_BASE_URL ?? "http://ocr_engine:8201"
+    ).replace(/\/+$/, "");
+    this.ocrExecutePath = this.normalizePath(
+      process.env.OCR_ENGINE_EXECUTE_PATH ?? "/v1/modules/execute",
+    );
+    this.ocrTimeoutMs = this.toPositiveInt(
+      process.env.OCR_ENGINE_TIMEOUT_MS,
+      180000,
+    );
+    this.ocrLifecycleBaseUrl = (
+      process.env.OCR_LIFECYCLE_BASE_URL ?? "http://ocr_lifecycle:8202"
+    ).replace(/\/+$/, "");
     this.ocrLifecycleToken = process.env.OCR_LIFECYCLE_TOKEN ?? "";
   }
 
-  public async execute(module: string, action: string, input: Record<string, unknown>): Promise<Record<string, unknown>> {
+  public async execute(
+    module: string,
+    action: string,
+    input: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
     const isOcrRequest = module === "ocr_engine";
     const baseUrl = isOcrRequest ? this.ocrBaseUrl : this.baseUrl;
     const executePath = isOcrRequest ? this.ocrExecutePath : this.executePath;
@@ -37,7 +57,10 @@ export class BackendPythonModulesClient {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       const serviceName = isOcrRequest ? "ocr_engine" : "python_modules";
-      const detail = typeof payload?.detail === "string" ? payload.detail : `${serviceName} HTTP ${response.status}`;
+      const detail =
+        typeof payload?.detail === "string"
+          ? payload.detail
+          : `${serviceName} HTTP ${response.status}`;
       throw new Error(detail);
     }
 
@@ -60,28 +83,46 @@ export class BackendPythonModulesClient {
   }> {
     const container = await this.getOcrContainerStatus();
     if (!container.running) {
-      return { containerRunning: false, state: "stopped", modelLoaded: false, error: null };
+      return {
+        containerRunning: false,
+        state: "stopped",
+        modelLoaded: false,
+        error: null,
+      };
     }
 
     const response = await fetch(`${this.ocrBaseUrl}/v1/runtime/status`, {
       signal: AbortSignal.timeout(5000),
       cache: "no-store",
     });
-    const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+    const payload = (await response.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >;
     if (!response.ok) {
-      return { containerRunning: true, state: "starting", modelLoaded: false, error: null };
+      return {
+        containerRunning: true,
+        state: "starting",
+        modelLoaded: false,
+        error: null,
+      };
     }
 
     const state = payload.state;
     return {
       containerRunning: true,
-      state: state === "ready" || state === "failed" || state === "idle" ? state : "starting",
+      state:
+        state === "ready" || state === "failed" || state === "idle"
+          ? state
+          : "starting",
       modelLoaded: payload.model_loaded === true,
       error: typeof payload.error === "string" ? payload.error : null,
     };
   }
 
-  private async updateOcrContainer(action: "start" | "stop"): Promise<{ running: boolean }> {
+  private async updateOcrContainer(
+    action: "start" | "stop",
+  ): Promise<{ running: boolean }> {
     return this.callOcrLifecycle(`/v1/ocr/${action}`);
   }
 
@@ -89,7 +130,10 @@ export class BackendPythonModulesClient {
     return this.callOcrLifecycle("/v1/ocr/status", "GET");
   }
 
-  private async callOcrLifecycle(path: string, method = "POST"): Promise<{ running: boolean }> {
+  private async callOcrLifecycle(
+    path: string,
+    method = "POST",
+  ): Promise<{ running: boolean }> {
     if (!this.ocrLifecycleToken) {
       throw new Error("OCR lifecycle token is not configured");
     }
@@ -100,9 +144,16 @@ export class BackendPythonModulesClient {
       signal: AbortSignal.timeout(45000),
       cache: "no-store",
     });
-    const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+    const payload = (await response.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >;
     if (!response.ok) {
-      throw new Error(typeof payload.detail === "string" ? payload.detail : `OCR lifecycle HTTP ${response.status}`);
+      throw new Error(
+        typeof payload.detail === "string"
+          ? payload.detail
+          : `OCR lifecycle HTTP ${response.status}`,
+      );
     }
 
     return { running: payload.running === true };

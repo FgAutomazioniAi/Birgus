@@ -7,7 +7,11 @@ export class AiGatewayService {
     this.client = client ?? new OpenAiCompatibleLmClient();
   }
 
-  public async health(): Promise<{ ok: boolean; model: string | null; error: string | null }> {
+  public async health(): Promise<{
+    ok: boolean;
+    model: string | null;
+    error: string | null;
+  }> {
     try {
       const result = await this.client.chat("Rispondi solo con OK.");
       return {
@@ -19,7 +23,10 @@ export class AiGatewayService {
       return {
         ok: false,
         model: null,
-        error: error instanceof Error ? error.message : "AI provider health check failed",
+        error:
+          error instanceof Error
+            ? error.message
+            : "AI provider health check failed",
       };
     }
   }

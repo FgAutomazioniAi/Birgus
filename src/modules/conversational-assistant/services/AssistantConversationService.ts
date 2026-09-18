@@ -2,12 +2,21 @@ import { AppError } from "../../../core/errors/AppError.js";
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { AiProviderError } from "../../ai-runtime/domain/AiProviderError.js";
 import { OpenAiCompatibleToolChatClient } from "../../ai-runtime/services/OpenAiCompatibleToolChatClient.js";
-import { DocumentChatContext, DocumentIntelligenceService } from "../../document-intelligence/services/DocumentIntelligenceService.js";
-import { normalizeKnowledgeMode, type KnowledgeMode } from "../../document-intelligence/domain/KnowledgeMode.js";
+import {
+  DocumentChatContext,
+  DocumentIntelligenceService,
+} from "../../document-intelligence/services/DocumentIntelligenceService.js";
+import {
+  normalizeKnowledgeMode,
+  type KnowledgeMode,
+} from "../../document-intelligence/domain/KnowledgeMode.js";
 import { AssistantMessageEntity } from "../domain/AssistantMessageEntity.js";
 import { PrismaAssistantSessionRepository } from "../infra/PrismaAssistantSessionRepository.js";
 import { AssistantSessionRepository } from "../repositories/AssistantSessionRepository.js";
-import { AssistantToolDefinition, AssistantToolExecutionContext } from "../tools/AssistantToolDefinition.js";
+import {
+  AssistantToolDefinition,
+  AssistantToolExecutionContext,
+} from "../tools/AssistantToolDefinition.js";
 import { AssistantSessionService } from "./AssistantSessionService.js";
 import { AssistantToolAccessService } from "./AssistantToolAccessService.js";
 import { AssistantToolRegistry } from "./AssistantToolRegistry.js";
@@ -40,7 +49,8 @@ export class AssistantConversationService {
     this.toolAccessService = params.toolAccessService;
     this.documentIntelligenceService = params.documentIntelligenceService;
     this.chatClient = params.chatClient ?? new OpenAiCompatibleToolChatClient();
-    this.repository = params.repository ?? new PrismaAssistantSessionRepository();
+    this.repository =
+      params.repository ?? new PrismaAssistantSessionRepository();
   }
 
   public async postUserMessage(params: {
@@ -63,12 +73,24 @@ export class AssistantConversationService {
   }> {
     const contentText = params.contentText.trim();
     if (!contentText) {
-      throw new AppError("Il messaggio non puo essere vuoto.", "ASSISTANT_MESSAGE_EMPTY", 400);
+      throw new AppError(
+        "Il messaggio non puo essere vuoto.",
+        "ASSISTANT_MESSAGE_EMPTY",
+        400,
+      );
     }
 
-    const session = await this.sessionService.getSessionForUser(params.workspaceId, params.userId, params.sessionId);
+    const session = await this.sessionService.getSessionForUser(
+      params.workspaceId,
+      params.userId,
+      params.sessionId,
+    );
     if (session.status !== "OPEN") {
-      throw new AppError("La sessione assistente e chiusa.", "ASSISTANT_SESSION_CLOSED", 409);
+      throw new AppError(
+        "La sessione assistente e chiusa.",
+        "ASSISTANT_SESSION_CLOSED",
+        409,
+      );
     }
 
     const userMessage = await this.repository.appendMessage({
@@ -80,18 +102,36 @@ export class AssistantConversationService {
       contentPayload: null,
     });
 
-    const knowledgeMode = this.resolveSessionKnowledgeMode(session.configuration);
-    const documentContext = await this.resolveLinkedDocumentContext(params.workspaceId, session, knowledgeMode);
-    const attachedDocumentsContext = await this.resolveAttachedDocumentsContext(params.workspaceId, session.id, knowledgeMode);
-    const workspaceKnowledgeContext = await this.resolveWorkspaceKnowledgeContext({
-      workspaceId: params.workspaceId,
-      userId: params.userId,
-      sessionId: session.id,
-      query: contentText,
+    const knowledgeMode = this.resolveSessionKnowledgeMode(
+      session.configuration,
+    );
+    const documentContext = await this.resolveLinkedDocumentContext(
+      params.workspaceId,
+      session,
       knowledgeMode,
-    });
-    const history = await this.repository.listMessages(params.workspaceId, session.id);
-    const memorySnapshot = await this.sessionService.findLatestMemorySnapshot(params.workspaceId, params.userId, session.id);
+    );
+    const attachedDocumentsContext = await this.resolveAttachedDocumentsContext(
+      params.workspaceId,
+      session.id,
+      knowledgeMode,
+    );
+    const workspaceKnowledgeContext =
+      await this.resolveWorkspaceKnowledgeContext({
+        workspaceId: params.workspaceId,
+        userId: params.userId,
+        sessionId: session.id,
+        query: contentText,
+        knowledgeMode,
+      });
+    const history = await this.repository.listMessages(
+      params.workspaceId,
+      session.id,
+    );
+    const memorySnapshot = await this.sessionService.findLatestMemorySnapshot(
+      params.workspaceId,
+      params.userId,
+      session.id,
+    );
     const initialMessages = this.buildModelMessages({
       session,
       history,
@@ -146,7 +186,8 @@ export class AssistantConversationService {
     }
 
     if (!finalContent) {
-      finalContent = "Non ho trovato ancora una risposta affidabile. Prova a specificare meglio progetto, versione o documento da analizzare.";
+      finalContent =
+        "Non ho trovato ancora una risposta affidabile. Prova a specificare meglio progetto, versione o documento da analizzare.";
     }
 
     const assistantMessage = await this.repository.appendMessage({
@@ -164,7 +205,12 @@ export class AssistantConversationService {
       completionTokens: finalCompletionTokens,
     });
 
-    await this.refreshMemorySnapshot(params.workspaceId, session.id, session, history.length + 1);
+    await this.refreshMemorySnapshot(
+      params.workspaceId,
+      session.id,
+      session,
+      history.length + 1,
+    );
 
     return {
       sessionId: session.id,
@@ -215,10 +261,16 @@ export class AssistantConversationService {
     };
 
     for (const toolCall of params.toolCalls) {
-      const tool = params.toolDefinitions.find((candidate) => candidate.name === toolCall.function.name)
-        ?? this.toolRegistry.getTool(toolCall.function.name);
-      const moduleId = await this.resolvePrimaryModuleId(tool?.moduleKeys?.[0] ?? null);
-      const argumentsPayload = this.parseToolArguments(toolCall.function.arguments);
+      const tool =
+        params.toolDefinitions.find(
+          (candidate) => candidate.name === toolCall.function.name,
+        ) ?? this.toolRegistry.getTool(toolCall.function.name);
+      const moduleId = await this.resolvePrimaryModuleId(
+        tool?.moduleKeys?.[0] ?? null,
+      );
+      const argumentsPayload = this.parseToolArguments(
+        toolCall.function.arguments,
+      );
       const logEntry = await this.repository.createToolCall({
         sessionId: params.sessionId,
         messageId: params.sourceMessageId,
@@ -260,7 +312,10 @@ export class AssistantConversationService {
       }
 
       try {
-        const authorization = await this.toolAccessService.ensureAllowed(context, tool);
+        const authorization = await this.toolAccessService.ensureAllowed(
+          context,
+          tool,
+        );
         await this.repository.updateToolCall({
           toolCallId: logEntry.id,
           workspaceId: params.workspaceId,
@@ -269,7 +324,11 @@ export class AssistantConversationService {
           startedAt: new Date(),
         });
 
-        const result = await this.toolRegistry.executeTool(tool.name, context, argumentsPayload);
+        const result = await this.toolRegistry.executeTool(
+          tool.name,
+          context,
+          argumentsPayload,
+        );
         await this.repository.updateToolCall({
           toolCallId: logEntry.id,
           workspaceId: params.workspaceId,
@@ -294,7 +353,8 @@ export class AssistantConversationService {
         });
       } catch (error) {
         const normalized = this.normalizeToolError(error);
-        const failedStatus = normalized.statusCode === 403 ? "DENIED" : "FAILED";
+        const failedStatus =
+          normalized.statusCode === 403 ? "DENIED" : "FAILED";
         const resultPayload = {
           error: true,
           code: normalized.code,
@@ -306,12 +366,13 @@ export class AssistantConversationService {
           workspaceId: params.workspaceId,
           status: failedStatus,
           resultPayload,
-          authorizationContext: tool.moduleKeys.length || tool.permissionKeys.length
-            ? {
-                moduleKeys: tool.moduleKeys,
-                permissionKeys: tool.permissionKeys,
-              }
-            : null,
+          authorizationContext:
+            tool.moduleKeys.length || tool.permissionKeys.length
+              ? {
+                  moduleKeys: tool.moduleKeys,
+                  permissionKeys: tool.permissionKeys,
+                }
+              : null,
           deniedReason: normalized.message,
           completedAt: new Date(),
         });
@@ -340,61 +401,163 @@ export class AssistantConversationService {
     userId: string;
     sessionId: string;
     contentText: string;
-  }): AsyncGenerator<{ type: "user" | "delta" | "done"; payload: Record<string, unknown> }> {
+  }): AsyncGenerator<{
+    type: "user" | "delta" | "done";
+    payload: Record<string, unknown>;
+  }> {
     const contentText = params.contentText.trim();
-    if (!contentText) throw new AppError("Il messaggio non puo essere vuoto.", "ASSISTANT_MESSAGE_EMPTY", 400);
-    const session = await this.sessionService.getSessionForUser(params.workspaceId, params.userId, params.sessionId);
-    if (session.status !== "OPEN") throw new AppError("La sessione assistente e chiusa.", "ASSISTANT_SESSION_CLOSED", 409);
+    if (!contentText)
+      throw new AppError(
+        "Il messaggio non puo essere vuoto.",
+        "ASSISTANT_MESSAGE_EMPTY",
+        400,
+      );
+    const session = await this.sessionService.getSessionForUser(
+      params.workspaceId,
+      params.userId,
+      params.sessionId,
+    );
+    if (session.status !== "OPEN")
+      throw new AppError(
+        "La sessione assistente e chiusa.",
+        "ASSISTANT_SESSION_CLOSED",
+        409,
+      );
 
     const userMessage = await this.repository.appendMessage({
-      sessionId: session.id, workspaceId: params.workspaceId, authorUserId: params.userId, role: "USER", contentText, contentPayload: null,
+      sessionId: session.id,
+      workspaceId: params.workspaceId,
+      authorUserId: params.userId,
+      role: "USER",
+      contentText,
+      contentPayload: null,
     });
-    yield { type: "user", payload: { id: userMessage.id, role: userMessage.role, contentText: userMessage.contentText, createdAt: userMessage.createdAt } };
+    yield {
+      type: "user",
+      payload: {
+        id: userMessage.id,
+        role: userMessage.role,
+        contentText: userMessage.contentText,
+        createdAt: userMessage.createdAt,
+      },
+    };
 
-    const knowledgeMode = this.resolveSessionKnowledgeMode(session.configuration);
-    const documentContext = await this.resolveLinkedDocumentContext(params.workspaceId, session, knowledgeMode);
-    const attachedDocumentsContext = await this.resolveAttachedDocumentsContext(params.workspaceId, session.id, knowledgeMode);
-    const workspaceKnowledgeContext = await this.resolveWorkspaceKnowledgeContext({ workspaceId: params.workspaceId, userId: params.userId, sessionId: session.id, query: contentText, knowledgeMode });
-    const history = await this.repository.listMessages(params.workspaceId, session.id);
-    const memorySnapshot = await this.sessionService.findLatestMemorySnapshot(params.workspaceId, params.userId, session.id);
+    const knowledgeMode = this.resolveSessionKnowledgeMode(
+      session.configuration,
+    );
+    const documentContext = await this.resolveLinkedDocumentContext(
+      params.workspaceId,
+      session,
+      knowledgeMode,
+    );
+    const attachedDocumentsContext = await this.resolveAttachedDocumentsContext(
+      params.workspaceId,
+      session.id,
+      knowledgeMode,
+    );
+    const workspaceKnowledgeContext =
+      await this.resolveWorkspaceKnowledgeContext({
+        workspaceId: params.workspaceId,
+        userId: params.userId,
+        sessionId: session.id,
+        query: contentText,
+        knowledgeMode,
+      });
+    const history = await this.repository.listMessages(
+      params.workspaceId,
+      session.id,
+    );
+    const memorySnapshot = await this.sessionService.findLatestMemorySnapshot(
+      params.workspaceId,
+      params.userId,
+      session.id,
+    );
     const initialMessages = this.buildModelMessages({
-      session, history, memorySummary: memorySnapshot?.summaryText ?? null, documentContext, attachedDocumentsContext, workspaceKnowledgeContext, knowledgeMode,
+      session,
+      history,
+      memorySummary: memorySnapshot?.summaryText ?? null,
+      documentContext,
+      attachedDocumentsContext,
+      workspaceKnowledgeContext,
+      knowledgeMode,
     });
 
     // The planning pass preserves the existing tool authorization and execution flow.
     const toolDefinitions = this.toolRegistry.listDefinitions();
-    const firstPass = await this.chatWithOptionalTools({ messages: initialMessages, toolDefinitions });
-    const toolCalls = await this.executeToolCalls({
-      workspaceId: params.workspaceId, userId: params.userId, sessionId: session.id, sourceMessageId: userMessage.id, toolCalls: firstPass.toolCalls, toolDefinitions,
+    const firstPass = await this.chatWithOptionalTools({
+      messages: initialMessages,
+      toolDefinitions,
     });
-    const finalMessages: ModelMessage[] = toolCalls.modelMessages.length > 0
-      ? [...initialMessages, { role: "assistant", content: firstPass.content, tool_calls: firstPass.toolCalls.map((toolCall) => ({ id: toolCall.id, type: toolCall.type, function: toolCall.function })) }, ...toolCalls.modelMessages]
-      : initialMessages;
+    const toolCalls = await this.executeToolCalls({
+      workspaceId: params.workspaceId,
+      userId: params.userId,
+      sessionId: session.id,
+      sourceMessageId: userMessage.id,
+      toolCalls: firstPass.toolCalls,
+      toolDefinitions,
+    });
+    const finalMessages: ModelMessage[] =
+      toolCalls.modelMessages.length > 0
+        ? [
+            ...initialMessages,
+            {
+              role: "assistant",
+              content: firstPass.content,
+              tool_calls: firstPass.toolCalls.map((toolCall) => ({
+                id: toolCall.id,
+                type: toolCall.type,
+                function: toolCall.function,
+              })),
+            },
+            ...toolCalls.modelMessages,
+          ]
+        : initialMessages;
 
     let finalContent = "";
     let modelName = firstPass.model;
-    for await (const chunk of this.chatClient.streamChat({ messages: finalMessages })) {
+    for await (const chunk of this.chatClient.streamChat({
+      messages: finalMessages,
+    })) {
       modelName = chunk.model;
       finalContent += chunk.delta;
       yield { type: "delta", payload: { text: chunk.delta } };
     }
-    finalContent = finalContent.trim() || firstPass.content?.trim() || "Non ho trovato ancora una risposta affidabile. Prova a specificare meglio la richiesta.";
+    finalContent =
+      finalContent.trim() ||
+      firstPass.content?.trim() ||
+      "Non ho trovato ancora una risposta affidabile. Prova a specificare meglio la richiesta.";
     const assistantMessage = await this.repository.appendMessage({
       sessionId: session.id,
       workspaceId: params.workspaceId,
       authorUserId: null,
       role: "ASSISTANT",
       contentText: finalContent,
-      contentPayload: { streamed: true, tool_calls_count: toolCalls.persisted.length },
+      contentPayload: {
+        streamed: true,
+        tool_calls_count: toolCalls.persisted.length,
+      },
       modelName,
       promptTokens: firstPass.promptTokens,
       completionTokens: null,
     });
-    await this.refreshMemorySnapshot(params.workspaceId, session.id, session, history.length + 1);
-    yield { type: "done", payload: {
-      sessionId: session.id,
-      assistantMessage: { id: assistantMessage.id, role: assistantMessage.role, contentText: assistantMessage.contentText, createdAt: assistantMessage.createdAt },
-    } };
+    await this.refreshMemorySnapshot(
+      params.workspaceId,
+      session.id,
+      session,
+      history.length + 1,
+    );
+    yield {
+      type: "done",
+      payload: {
+        sessionId: session.id,
+        assistantMessage: {
+          id: assistantMessage.id,
+          role: assistantMessage.role,
+          contentText: assistantMessage.contentText,
+          createdAt: assistantMessage.createdAt,
+        },
+      },
+    };
   }
 
   private async chatWithOptionalTools(params: {
@@ -437,10 +600,9 @@ export class AssistantConversationService {
           ...params.messages,
           {
             role: "system",
-            content: (
-              "Il provider AI corrente non accetta tool-calling OpenAI in questa richiesta. "
-              + "Rispondi usando il contesto gia presente nei messaggi; se serve accesso a dati non inclusi, dichiaralo."
-            ),
+            content:
+              "Il provider AI corrente non accetta tool-calling OpenAI in questa richiesta. " +
+              "Rispondi usando il contesto gia presente nei messaggi; se serve accesso a dati non inclusi, dichiaralo.",
           },
         ],
       });
@@ -474,7 +636,12 @@ export class AssistantConversationService {
     const relevant = messages.slice(-8);
     const summary = relevant
       .map((message) => {
-        const role = message.role === "USER" ? "Utente" : message.role === "ASSISTANT" ? "Assistente" : message.role;
+        const role =
+          message.role === "USER"
+            ? "Utente"
+            : message.role === "ASSISTANT"
+              ? "Assistente"
+              : message.role;
         const content = (message.contentText ?? "").replace(/\s+/g, " ").trim();
         if (!content) {
           return null;
@@ -560,13 +727,22 @@ export class AssistantConversationService {
 
     if (params.documentContext) {
       const structuredParts = [
-        params.documentContext.kind === "ddt_document" && params.documentContext.ddtDocumentId
+        params.documentContext.kind === "ddt_document" &&
+        params.documentContext.ddtDocumentId
           ? `Tipo documento collegato: DDT (${params.documentContext.ddtDocumentId})`
           : "Tipo documento collegato: documento generico",
-        params.documentContext.title ? `Titolo: ${params.documentContext.title}` : null,
-        params.documentContext.sourceLabel ? `Origine archivio: ${params.documentContext.sourceLabel}` : null,
-        params.documentContext.summaryText ? `Riassunto estratto: ${params.documentContext.summaryText}` : null,
-        params.documentContext.contentPreview ? `Estratto contenuto: ${params.documentContext.contentPreview}` : null,
+        params.documentContext.title
+          ? `Titolo: ${params.documentContext.title}`
+          : null,
+        params.documentContext.sourceLabel
+          ? `Origine archivio: ${params.documentContext.sourceLabel}`
+          : null,
+        params.documentContext.summaryText
+          ? `Riassunto estratto: ${params.documentContext.summaryText}`
+          : null,
+        params.documentContext.contentPreview
+          ? `Estratto contenuto: ${params.documentContext.contentPreview}`
+          : null,
         params.documentContext.ddtAnalysis
           ? `Analisi DDT strutturata: ${JSON.stringify(params.documentContext.ddtAnalysis)}`
           : null,
@@ -634,7 +810,9 @@ export class AssistantConversationService {
         ? `entita ${session.contextEntityType}:${session.contextEntityId}`
         : null,
       session.projectId ? `projectId ${session.projectId}` : null,
-      session.projectVersionId ? `projectVersionId ${session.projectVersionId}` : null,
+      session.projectVersionId
+        ? `projectVersionId ${session.projectVersionId}`
+        : null,
       session.documentId ? `documentId ${session.documentId}` : null,
       session.ddtDocumentId ? `ddtDocumentId ${session.ddtDocumentId}` : null,
     ].filter((value): value is string => Boolean(value));
@@ -668,7 +846,11 @@ export class AssistantConversationService {
     return null;
   }
 
-  private async resolveAttachedDocumentsContext(workspaceId: string, sessionId: string, knowledgeMode: KnowledgeMode): Promise<string | null> {
+  private async resolveAttachedDocumentsContext(
+    workspaceId: string,
+    sessionId: string,
+    knowledgeMode: KnowledgeMode,
+  ): Promise<string | null> {
     const prisma = PrismaClientManager.getClient();
     const links = await prisma.assistantSessionDocument.findMany({
       where: {
@@ -696,18 +878,25 @@ export class AssistantConversationService {
 
     const parts: string[] = [];
     for (const [index, link] of links.entries()) {
-      const context = await this.documentIntelligenceService.getDocumentChatContextForMode({
-        workspaceId,
-        documentId: link.document_id,
-        knowledgeMode,
-      });
-      parts.push([
-        `Documento allegato ${index + 1}: ${link.display_name ?? context.title ?? link.document.filename ?? link.document_id}`,
-        `documentId: ${link.document_id}`,
-        `sessionDocumentId: ${link.id}`,
-        context.summaryText ? `Riassunto: ${context.summaryText}` : null,
-        context.contentPreview ? `Estratto: ${context.contentPreview.slice(0, 2000)}` : null,
-      ].filter((value): value is string => Boolean(value)).join("\n"));
+      const context =
+        await this.documentIntelligenceService.getDocumentChatContextForMode({
+          workspaceId,
+          documentId: link.document_id,
+          knowledgeMode,
+        });
+      parts.push(
+        [
+          `Documento allegato ${index + 1}: ${link.display_name ?? context.title ?? link.document.filename ?? link.document_id}`,
+          `documentId: ${link.document_id}`,
+          `sessionDocumentId: ${link.id}`,
+          context.summaryText ? `Riassunto: ${context.summaryText}` : null,
+          context.contentPreview
+            ? `Estratto: ${context.contentPreview.slice(0, 2000)}`
+            : null,
+        ]
+          .filter((value): value is string => Boolean(value))
+          .join("\n"),
+      );
     }
 
     return parts.join("\n\n---\n\n");
@@ -724,17 +913,22 @@ export class AssistantConversationService {
       return null;
     }
 
-    const knowledgeTool = this.toolRegistry.getTool("search_workspace_knowledge");
+    const knowledgeTool = this.toolRegistry.getTool(
+      "search_workspace_knowledge",
+    );
     if (!knowledgeTool) {
       return null;
     }
 
     try {
-      await this.toolAccessService.ensureAllowed({
-        workspaceId: params.workspaceId,
-        userId: params.userId,
-        sessionId: params.sessionId,
-      }, knowledgeTool);
+      await this.toolAccessService.ensureAllowed(
+        {
+          workspaceId: params.workspaceId,
+          userId: params.userId,
+          sessionId: params.sessionId,
+        },
+        knowledgeTool,
+      );
     } catch {
       return null;
     }
@@ -745,16 +939,22 @@ export class AssistantConversationService {
     }
 
     const [semanticResult, ...keywordResults] = await Promise.all([
-      this.documentIntelligenceService.searchWorkspaceKnowledge({
-        workspaceId: params.workspaceId,
-        query: params.query,
-        topK: 3,
-      }).catch(() => []),
-      ...searchTerms.map((query) => this.documentIntelligenceService.searchWorkspaceKnowledgeByKeyword({
-        workspaceId: params.workspaceId,
-        query,
-        topK: 3,
-      }).catch(() => [])),
+      this.documentIntelligenceService
+        .searchWorkspaceKnowledge({
+          workspaceId: params.workspaceId,
+          query: params.query,
+          topK: 3,
+        })
+        .catch(() => []),
+      ...searchTerms.map((query) =>
+        this.documentIntelligenceService
+          .searchWorkspaceKnowledgeByKeyword({
+            workspaceId: params.workspaceId,
+            query,
+            topK: 3,
+          })
+          .catch(() => []),
+      ),
     ]);
 
     const seenChunkIds = new Set<string>();
@@ -772,11 +972,17 @@ export class AssistantConversationService {
       return null;
     }
 
-    return hits.map((hit, index) => [
-      `Fonte ${index + 1}: ${hit.title ?? "Documento senza titolo"}`,
-      hit.sourceLabel ? `Archivio: ${hit.sourceLabel}` : null,
-      hit.contentText.slice(0, 1800),
-    ].filter((value): value is string => Boolean(value)).join("\n")).join("\n\n---\n\n");
+    return hits
+      .map((hit, index) =>
+        [
+          `Fonte ${index + 1}: ${hit.title ?? "Documento senza titolo"}`,
+          hit.sourceLabel ? `Archivio: ${hit.sourceLabel}` : null,
+          hit.contentText.slice(0, 1800),
+        ]
+          .filter((value): value is string => Boolean(value))
+          .join("\n"),
+      )
+      .join("\n\n---\n\n");
   }
 
   private buildKnowledgeSearchTerms(query: string): string[] {
@@ -786,9 +992,47 @@ export class AssistantConversationService {
     }
 
     const ignoredTerms = new Set([
-      "a", "ad", "al", "alla", "alle", "che", "chi", "con", "come", "cosa", "dei", "del", "della", "delle",
-      "di", "e", "è", "gli", "ha", "hai", "il", "in", "io", "la", "le", "lo", "mi", "nel", "nella", "per",
-      "puoi", "puo", "quale", "quali", "questa", "questo", "sa", "sono", "su", "un", "una",
+      "a",
+      "ad",
+      "al",
+      "alla",
+      "alle",
+      "che",
+      "chi",
+      "con",
+      "come",
+      "cosa",
+      "dei",
+      "del",
+      "della",
+      "delle",
+      "di",
+      "e",
+      "è",
+      "gli",
+      "ha",
+      "hai",
+      "il",
+      "in",
+      "io",
+      "la",
+      "le",
+      "lo",
+      "mi",
+      "nel",
+      "nella",
+      "per",
+      "puoi",
+      "puo",
+      "quale",
+      "quali",
+      "questa",
+      "questo",
+      "sa",
+      "sono",
+      "su",
+      "un",
+      "una",
     ]);
     const keywords = normalized
       .toLocaleLowerCase("it-IT")
@@ -799,7 +1043,9 @@ export class AssistantConversationService {
     return Array.from(new Set([...keywords, normalized])).slice(0, 4);
   }
 
-  private resolveSessionKnowledgeMode(configuration: Record<string, unknown> | null): KnowledgeMode {
+  private resolveSessionKnowledgeMode(
+    configuration: Record<string, unknown> | null,
+  ): KnowledgeMode {
     return normalizeKnowledgeMode(configuration?.knowledgeMode, "on_demand");
   }
 
@@ -828,7 +1074,7 @@ export class AssistantConversationService {
     try {
       const parsed = JSON.parse(normalized);
       return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-        ? parsed as Record<string, unknown>
+        ? (parsed as Record<string, unknown>)
         : { value: parsed };
     } catch {
       return { raw: normalized };
@@ -844,16 +1090,24 @@ export class AssistantConversationService {
       return new AppError(error.message, "ASSISTANT_TOOL_ERROR", 500);
     }
 
-    return new AppError("Errore imprevisto durante l'esecuzione del tool.", "ASSISTANT_TOOL_ERROR", 500);
+    return new AppError(
+      "Errore imprevisto durante l'esecuzione del tool.",
+      "ASSISTANT_TOOL_ERROR",
+      500,
+    );
   }
 
   private isToolCallingRejected(error: unknown): boolean {
-    return error instanceof AiProviderError
-      && error.code === "AI_PROVIDER_HTTP_ERROR"
-      && error.statusCode === 400;
+    return (
+      error instanceof AiProviderError &&
+      error.code === "AI_PROVIDER_HTTP_ERROR" &&
+      error.statusCode === 400
+    );
   }
 
-  private async resolvePrimaryModuleId(moduleKey: string | null): Promise<number | null> {
+  private async resolvePrimaryModuleId(
+    moduleKey: string | null,
+  ): Promise<number | null> {
     if (!moduleKey) {
       return null;
     }

@@ -257,6 +257,12 @@ enum ScheduledWorkflowDeliveryStatus {
   CANCELLED
 }
 
+enum ScheduledWorkflowExecutionStatus {
+  ACTIVE
+  PROCESSING
+  PAUSED
+}
+
 enum WorkflowRunStatus {
   QUEUED
   RUNNING
@@ -397,6 +403,7 @@ model Workspace {
   module_workflow_runs          ModuleWorkflowRun[]
   module_workflow_run_steps     ModuleWorkflowRunStep[]
   scheduled_workflow_deliveries ScheduledWorkflowDelivery[]
+  scheduled_workflow_executions ScheduledWorkflowExecution[]
   human_interventions           HumanIntervention[]
   commission_records            CommissionRecord[]
   commission_record_contacts    CommissionRecordContact[]
@@ -425,6 +432,7 @@ model Workspace {
   commission_import_runs        CommissionImportRun[]
   commission_import_items       CommissionImportItem[]
   brainy_workspace_database_connections BrainyWorkspaceDatabaseConnection[]
+  external_database_connections          ExternalDatabaseConnection[]
   brainy_chats                  BrainyChat[]
   brainy_chat_shares            BrainyChatShare[]
 
@@ -480,6 +488,7 @@ model User {
   assistant_messages_authored          AssistantMessage[]         @relation("assistant_message_author")
   quotation_jobs_requested             QuotationOrchestratorJob[] @relation("quotation_job_requested_by")
   workflow_runs_requested              ModuleWorkflowRun[]        @relation("module_workflow_run_requested_by")
+  scheduled_workflow_executions_created ScheduledWorkflowExecution[]
   human_interventions_created          HumanIntervention[]        @relation("human_intervention_created_by")
   human_interventions_assigned         HumanIntervention[]        @relation("human_intervention_assigned_user")
   human_interventions_resolved         HumanIntervention[]        @relation("human_intervention_resolved_by")
@@ -502,6 +511,8 @@ model User {
   commission_import_sources_created    CommissionImportSource[]   @relation("commission_import_source_created_by")
   commission_import_runs_requested     CommissionImportRun[]      @relation("commission_import_run_requested_by")
   brainy_chats_created                 BrainyChat[]               @relation("brainy_chat_created_by")
+  external_database_connections_created ExternalDatabaseConnection[] @relation("external_database_connection_created_by")
+  external_database_connection_accesses ExternalDatabaseConnectionUserAccess[] @relation("external_database_connection_user_access")
   brainy_chat_shares_received          BrainyChatShare[]          @relation("brainy_chat_share_user")
   brainy_chat_shares_granted           BrainyChatShare[]          @relation("brainy_chat_share_granted_by")
   brainy_agent_assignments             BrainyWorkspaceAgentAssignment[] @relation("brainy_agent_assignment_user")
@@ -1244,9 +1255,9 @@ model MaintenanceProposal {
   urgency                  MaintenanceProposalUrgency @default(LOW)
   reason                   String?
   metadata                 Json?
+  deleted_at               DateTime?
   created_at               DateTime                   @default(now())
   updated_at               DateTime                   @updatedAt
-  deleted_at               DateTime?
 
   workspace      Workspace                 @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
   work_reference OperationalWorkReference? @relation(fields: [work_reference_id], references: [id], onDelete: SetNull)
@@ -1471,6 +1482,7 @@ model ModuleWorkflow {
   nodes           ModuleWorkflowNode[]
   edges           ModuleWorkflowEdge[]
   runs            ModuleWorkflowRun[]
+  scheduled_executions ScheduledWorkflowExecution[]
 
   @@unique([workspace_id, module_id, key])
   @@index([workspace_id])
@@ -1697,6 +1709,32 @@ model ScheduledWorkflowDelivery {
   @@index([workflow_node_id])
   @@index([status, next_run_at])
   @@map("scheduled_workflow_deliveries")
+}
+
+model ScheduledWorkflowExecution {
+  id                     String                           @id @default(uuid()) @db.Uuid
+  workspace_id           String                           @db.Uuid
+  workflow_id            String                           @db.Uuid
+  created_by_user_id     String                           @db.Uuid
+  label                  String?
+  input_payload          Json?
+  repeat_every_seconds   Int
+  status                 ScheduledWorkflowExecutionStatus @default(ACTIVE)
+  next_run_at            DateTime
+  last_run_at            DateTime?
+  last_workflow_run_id   String?                          @db.Uuid
+  last_error             String?                          @db.Text
+  created_at             DateTime                         @default(now())
+  updated_at             DateTime                         @updatedAt
+
+  workspace       Workspace      @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  workflow        ModuleWorkflow @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
+  created_by_user User           @relation(fields: [created_by_user_id], references: [id], onDelete: Restrict)
+
+  @@index([workspace_id, status, next_run_at])
+  @@index([workflow_id])
+  @@index([created_by_user_id])
+  @@map("scheduled_workflow_executions")
 }
 
 model ProjectClient {
@@ -2188,6 +2226,62 @@ model BrainyWorkspaceDatabaseConnection {
   @@index([workspace_id, is_enabled])
   @@index([workspace_id, deleted_at])
   @@map("brainy_workspace_database_connections")
+}
+
+model ExternalDatabaseConnection {
+  id                       String   @id @default(uuid()) @db.Uuid
+  workspace_id             String   @db.Uuid
+  name                     String
+  db_type                  String
+  host                     String
+  port                     Int
+  database_name            String
+  source_view              String?
+  username                 String
+  password_ciphertext      String
+  trust_server_certificate Boolean  @default(false)
+  is_enabled               Boolean  @default(true)
+  created_by_user_id       String?  @db.Uuid
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+
+  workspace     Workspace @relation(fields: [workspace_id], references: [id], onDelete: Restrict)
+  created_by    User?     @relation("external_database_connection_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  user_accesses ExternalDatabaseConnectionUserAccess[]
+  module_bindings ExternalDatabaseModuleBinding[]
+
+  @@unique([workspace_id, name])
+  @@map("external_database_connections")
+}
+
+model ExternalDatabaseConnectionUserAccess {
+  id                              String   @id @default(uuid()) @db.Uuid
+  external_database_connection_id String   @db.Uuid
+  workspace_id                    String   @db.Uuid
+  user_id                         String   @db.Uuid
+  created_at                      DateTime @default(now())
+
+  external_database_connection ExternalDatabaseConnection @relation(fields: [external_database_connection_id], references: [id], onDelete: Cascade)
+  user                         User                       @relation("external_database_connection_user_access", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([external_database_connection_id, user_id])
+  @@index([workspace_id, user_id])
+  @@map("external_database_connection_user_accesses")
+}
+
+model ExternalDatabaseModuleBinding {
+  id                              String   @id @default(uuid()) @db.Uuid
+  workspace_id                    String   @db.Uuid
+  module_key                      String
+  external_database_connection_id String   @db.Uuid
+  created_at                      DateTime @default(now())
+  updated_at                      DateTime @updatedAt
+
+  external_database_connection ExternalDatabaseConnection @relation(fields: [external_database_connection_id], references: [id], onDelete: Cascade)
+
+  @@unique([workspace_id, module_key])
+  @@index([workspace_id, external_database_connection_id])
+  @@map("external_database_module_bindings")
 }
 
 model BrainyWorkspaceDatabaseConnectionRoleAccess {

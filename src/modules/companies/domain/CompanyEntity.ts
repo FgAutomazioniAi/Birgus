@@ -58,8 +58,14 @@ export class CompanyEntity {
     this.city = params.city ?? "";
     this.province = params.province ?? "";
     this.country = params.country ?? "";
-    this.latitude = params.latitude === null || typeof params.latitude === "undefined" ? "" : String(params.latitude);
-    this.longitude = params.longitude === null || typeof params.longitude === "undefined" ? "" : String(params.longitude);
+    this.latitude =
+      params.latitude === null || typeof params.latitude === "undefined"
+        ? ""
+        : String(params.latitude);
+    this.longitude =
+      params.longitude === null || typeof params.longitude === "undefined"
+        ? ""
+        : String(params.longitude);
     this.notes = params.notes ?? "";
     this.createdAt = params.createdAt;
   }

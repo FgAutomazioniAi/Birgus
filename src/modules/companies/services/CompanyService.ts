@@ -10,7 +10,10 @@ export class CompanyService {
   private readonly repository: CompanyRepository;
   private readonly auditLogService: AuditLogService | null;
 
-  public constructor(repository: CompanyRepository, auditLogService?: AuditLogService | null) {
+  public constructor(
+    repository: CompanyRepository,
+    auditLogService?: AuditLogService | null,
+  ) {
     this.repository = repository;
     this.auditLogService = auditLogService ?? null;
   }
@@ -19,7 +22,10 @@ export class CompanyService {
     return this.repository.list(workspaceId);
   }
 
-  public async getById(workspaceId: string, companyId: number): Promise<CompanyEntity> {
+  public async getById(
+    workspaceId: string,
+    companyId: number,
+  ): Promise<CompanyEntity> {
     const item = await this.repository.findById(workspaceId, companyId);
     if (!item) {
       throw new AppError("Company not found.", "COMPANY_NOT_FOUND", 404);
@@ -104,7 +110,11 @@ export class CompanyService {
     return company;
   }
 
-  public async delete(workspaceId: string, companyId: number, actorUserId?: string | null): Promise<void> {
+  public async delete(
+    workspaceId: string,
+    companyId: number,
+    actorUserId?: string | null,
+  ): Promise<void> {
     const removed = await this.repository.softDelete(workspaceId, companyId);
     if (!removed) {
       throw new AppError("Company not found.", "COMPANY_NOT_FOUND", 404);
@@ -121,9 +131,14 @@ export class CompanyService {
     });
   }
 
-  public async permanentlyDelete(workspaceId: string, companyId: number, actorUserId?: string | null): Promise<void> {
+  public async permanentlyDelete(
+    workspaceId: string,
+    companyId: number,
+    actorUserId?: string | null,
+  ): Promise<void> {
     const removed = await this.repository.hardDelete(workspaceId, companyId);
-    if (!removed) throw new AppError("Company not found.", "COMPANY_NOT_FOUND", 404);
+    if (!removed)
+      throw new AppError("Company not found.", "COMPANY_NOT_FOUND", 404);
 
     await this.auditLogService?.record({
       workspaceId,
@@ -139,7 +154,11 @@ export class CompanyService {
   private normalizeName(name: string): string {
     const value = name.trim().replace(/\s+/g, " ");
     if (value.length < 2) {
-      throw new AppError("Company name is too short.", "COMPANY_NAME_INVALID", 400);
+      throw new AppError(
+        "Company name is too short.",
+        "COMPANY_NAME_INVALID",
+        400,
+      );
     }
 
     return value;

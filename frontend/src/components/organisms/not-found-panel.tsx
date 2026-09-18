@@ -9,7 +9,9 @@ export function NotFoundPanel() {
       <div className="rounded-[var(--radius-xl)] bg-status-danger-bg p-6 text-status-danger-text shadow-[0_16px_30px_rgba(254,202,202,0.6)] transition-transform hover:scale-110">
         <AlertCircle size={64} />
       </div>
-      <h1 className="text-4xl font-extrabold tracking-tight text-brand-primary">{t("common.notFound")}</h1>
+      <h1 className="text-4xl font-extrabold tracking-tight text-brand-primary">
+        {t("common.notFound")}
+      </h1>
       <p className="max-w-sm text-text-muted">
         {t("common.notFoundDescription")}
       </p>

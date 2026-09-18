@@ -6,9 +6,16 @@ import { FileKind } from "../../document-archive/domain/FileKind.js";
 import { DocumentArchiveService } from "../../document-archive/services/DocumentArchiveService.js";
 import { KnowledgeDocumentEntity } from "../domain/KnowledgeDocumentEntity.js";
 import { KnowledgeSearchHitEntity } from "../domain/KnowledgeSearchHitEntity.js";
-import { DEFAULT_KNOWLEDGE_MODE, normalizeKnowledgeMode, type KnowledgeMode } from "../domain/KnowledgeMode.js";
+import {
+  DEFAULT_KNOWLEDGE_MODE,
+  normalizeKnowledgeMode,
+  type KnowledgeMode,
+} from "../domain/KnowledgeMode.js";
 import { PrismaKnowledgeRepository } from "../infra/PrismaKnowledgeRepository.js";
-import { KnowledgeRepository, SourceDocumentRecord } from "../repositories/KnowledgeRepository.js";
+import {
+  KnowledgeRepository,
+  SourceDocumentRecord,
+} from "../repositories/KnowledgeRepository.js";
 import { BackendPythonModulesClient } from "./BackendPythonModulesClient.js";
 import { KnowledgeEmbeddingService } from "./KnowledgeEmbeddingService.js";
 
@@ -41,15 +48,29 @@ export class DocumentIntelligenceService {
   ) {
     this.documentArchiveService = documentArchiveService;
     this.repository = repository ?? new PrismaKnowledgeRepository();
-    this.pythonModulesClient = pythonModulesClient ?? new BackendPythonModulesClient();
+    this.pythonModulesClient =
+      pythonModulesClient ?? new BackendPythonModulesClient();
     this.embeddingService = embeddingService ?? new KnowledgeEmbeddingService();
-    this.defaultTopK = this.toPositiveInt(process.env.KNOWLEDGE_SEARCH_TOP_K, 5);
+    this.defaultTopK = this.toPositiveInt(
+      process.env.KNOWLEDGE_SEARCH_TOP_K,
+      5,
+    );
   }
 
-  public async refreshDocumentKnowledge(workspaceId: string, documentId: string): Promise<KnowledgeDocumentEntity> {
-    const source = await this.loadNormalizedSourceDocument(workspaceId, documentId);
+  public async refreshDocumentKnowledge(
+    workspaceId: string,
+    documentId: string,
+  ): Promise<KnowledgeDocumentEntity> {
+    const source = await this.loadNormalizedSourceDocument(
+      workspaceId,
+      documentId,
+    );
     if (!source) {
-      throw new AppError("Documento sorgente non trovato.", "KNOWLEDGE_SOURCE_NOT_FOUND", 404);
+      throw new AppError(
+        "Documento sorgente non trovato.",
+        "KNOWLEDGE_SOURCE_NOT_FOUND",
+        404,
+      );
     }
 
     const extracted = await this.extractDocumentText(source);
@@ -76,14 +97,28 @@ export class DocumentIntelligenceService {
     });
 
     const chunks = await this.buildChunkModels(extracted.text);
-    await this.repository.replaceKnowledgeChunks(workspaceId, knowledgeDocument.id, chunks);
+    await this.repository.replaceKnowledgeChunks(
+      workspaceId,
+      knowledgeDocument.id,
+      chunks,
+    );
     return knowledgeDocument;
   }
 
-  public async getOrRefreshKnowledgeDocument(workspaceId: string, documentId: string): Promise<KnowledgeDocumentEntity> {
-    const source = await this.loadNormalizedSourceDocument(workspaceId, documentId);
+  public async getOrRefreshKnowledgeDocument(
+    workspaceId: string,
+    documentId: string,
+  ): Promise<KnowledgeDocumentEntity> {
+    const source = await this.loadNormalizedSourceDocument(
+      workspaceId,
+      documentId,
+    );
     if (!source) {
-      throw new AppError("Documento sorgente non trovato.", "KNOWLEDGE_SOURCE_NOT_FOUND", 404);
+      throw new AppError(
+        "Documento sorgente non trovato.",
+        "KNOWLEDGE_SOURCE_NOT_FOUND",
+        404,
+      );
     }
     return this.ensureDocumentKnowledge(source);
   }
@@ -96,18 +131,35 @@ export class DocumentIntelligenceService {
     useDeepReasoning?: boolean;
     aiProvider?: Record<string, unknown> | null;
   }): Promise<Record<string, unknown>> {
-    const knowledgeMode = normalizeKnowledgeMode(params.knowledgeMode, DEFAULT_KNOWLEDGE_MODE);
-    const documentIds = Array.from(new Set(params.documentIds.map((id) => id.trim()).filter(Boolean)));
+    const knowledgeMode = normalizeKnowledgeMode(
+      params.knowledgeMode,
+      DEFAULT_KNOWLEDGE_MODE,
+    );
+    const documentIds = Array.from(
+      new Set(params.documentIds.map((id) => id.trim()).filter(Boolean)),
+    );
     if (documentIds.length === 0) {
-      throw new AppError("Seleziona almeno un documento.", "DOCUMENT_SET_EMPTY", 400);
+      throw new AppError(
+        "Seleziona almeno un documento.",
+        "DOCUMENT_SET_EMPTY",
+        400,
+      );
     }
     if (documentIds.length > 20) {
-      throw new AppError("Puoi analizzare al massimo 20 documenti alla volta.", "DOCUMENT_SET_TOO_LARGE", 400);
+      throw new AppError(
+        "Puoi analizzare al massimo 20 documenti alla volta.",
+        "DOCUMENT_SET_TOO_LARGE",
+        400,
+      );
     }
 
     const documents = [];
     for (const documentId of documentIds) {
-      const knowledge = await this.resolveKnowledgeDocumentForMode(params.workspaceId, documentId, knowledgeMode);
+      const knowledge = await this.resolveKnowledgeDocumentForMode(
+        params.workspaceId,
+        documentId,
+        knowledgeMode,
+      );
       documents.push({
         documentId,
         knowledgeDocumentId: knowledge.id,
@@ -119,22 +171,28 @@ export class DocumentIntelligenceService {
       });
     }
 
-    const prompt = params.prompt.trim() || "Riassumi i documenti, evidenziando punti principali, differenze e azioni suggerite.";
+    const prompt =
+      params.prompt.trim() ||
+      "Riassumi i documenti, evidenziando punti principali, differenze e azioni suggerite.";
     const inputText = this.buildDocumentSetPrompt(prompt, documents);
-    const response = await this.pythonModulesClient.execute("langchain_orchestrator", "chat", {
-      instructions: (
-        "Sei un assistente documentale. Rispondi in italiano. "
-        + "Usa solo le informazioni presenti nei documenti forniti; se manca un dato, dichiaralo."
-      ),
-      input_text: inputText,
-      use_deep_reasoning: params.useDeepReasoning === true,
-      ai_provider: params.aiProvider ?? null,
-      max_tokens: params.useDeepReasoning ? 2048 : 1200,
-      temperature: 0.2,
-    });
-    const output = response.output && typeof response.output === "object"
-      ? response.output as Record<string, unknown>
-      : {};
+    const response = await this.pythonModulesClient.execute(
+      "langchain_orchestrator",
+      "chat",
+      {
+        instructions:
+          "Sei un assistente documentale. Rispondi in italiano. " +
+          "Usa solo le informazioni presenti nei documenti forniti; se manca un dato, dichiaralo.",
+        input_text: inputText,
+        use_deep_reasoning: params.useDeepReasoning === true,
+        ai_provider: params.aiProvider ?? null,
+        max_tokens: params.useDeepReasoning ? 2048 : 1200,
+        temperature: 0.2,
+      },
+    );
+    const output =
+      response.output && typeof response.output === "object"
+        ? (response.output as Record<string, unknown>)
+        : {};
 
     return {
       reply: typeof output.reply === "string" ? output.reply : "",
@@ -158,9 +216,16 @@ export class DocumentIntelligenceService {
     workspaceId: string;
     documentId: string;
   }): Promise<DocumentChatContext> {
-    const source = await this.loadNormalizedSourceDocument(params.workspaceId, params.documentId);
+    const source = await this.loadNormalizedSourceDocument(
+      params.workspaceId,
+      params.documentId,
+    );
     if (!source) {
-      throw new AppError("Documento sorgente non trovato.", "KNOWLEDGE_SOURCE_NOT_FOUND", 404);
+      throw new AppError(
+        "Documento sorgente non trovato.",
+        "KNOWLEDGE_SOURCE_NOT_FOUND",
+        404,
+      );
     }
 
     const knowledge = await this.ensureDocumentKnowledge(source);
@@ -184,15 +249,30 @@ export class DocumentIntelligenceService {
     documentId: string;
     knowledgeMode?: KnowledgeMode;
   }): Promise<DocumentChatContext> {
-    const source = await this.loadNormalizedSourceDocument(params.workspaceId, params.documentId);
+    const source = await this.loadNormalizedSourceDocument(
+      params.workspaceId,
+      params.documentId,
+    );
     if (!source) {
-      throw new AppError("Documento sorgente non trovato.", "KNOWLEDGE_SOURCE_NOT_FOUND", 404);
+      throw new AppError(
+        "Documento sorgente non trovato.",
+        "KNOWLEDGE_SOURCE_NOT_FOUND",
+        404,
+      );
     }
 
-    const knowledgeMode = normalizeKnowledgeMode(params.knowledgeMode, DEFAULT_KNOWLEDGE_MODE);
-    const knowledge = knowledgeMode === "on_demand"
-      ? await this.refreshDocumentKnowledge(params.workspaceId, source.id)
-      : await this.resolveKnowledgeDocumentForMode(params.workspaceId, source.id, knowledgeMode);
+    const knowledgeMode = normalizeKnowledgeMode(
+      params.knowledgeMode,
+      DEFAULT_KNOWLEDGE_MODE,
+    );
+    const knowledge =
+      knowledgeMode === "on_demand"
+        ? await this.refreshDocumentKnowledge(params.workspaceId, source.id)
+        : await this.resolveKnowledgeDocumentForMode(
+            params.workspaceId,
+            source.id,
+            knowledgeMode,
+          );
 
     return {
       kind: "document",
@@ -238,7 +318,11 @@ export class DocumentIntelligenceService {
     });
 
     if (!row?.document?.id) {
-      throw new AppError("Documento DDT non trovato.", "DDT_DOCUMENT_NOT_FOUND", 404);
+      throw new AppError(
+        "Documento DDT non trovato.",
+        "DDT_DOCUMENT_NOT_FOUND",
+        404,
+      );
     }
 
     const baseContext = await this.getDocumentChatContext({
@@ -282,18 +366,26 @@ export class DocumentIntelligenceService {
     summaryText: string | null;
     contentPreview: string | null;
   }> {
-    const document = await this.documentArchiveService.getCurrentProjectVersionFile({
-      workspaceId: params.workspaceId,
-      projectId: params.projectId,
-      versionLabel: params.versionLabel,
-      fileKind: FileKind.QUOTATION_PDF,
-    });
+    const document =
+      await this.documentArchiveService.getCurrentProjectVersionFile({
+        workspaceId: params.workspaceId,
+        projectId: params.projectId,
+        versionLabel: params.versionLabel,
+        fileKind: FileKind.QUOTATION_PDF,
+      });
 
     if (!document) {
-      throw new AppError("Preventivo PDF non trovato per la versione richiesta.", "QUOTATION_FILE_NOT_FOUND", 404);
+      throw new AppError(
+        "Preventivo PDF non trovato per la versione richiesta.",
+        "QUOTATION_FILE_NOT_FOUND",
+        404,
+      );
     }
 
-    const knowledge = await this.refreshDocumentKnowledge(params.workspaceId, document.id);
+    const knowledge = await this.refreshDocumentKnowledge(
+      params.workspaceId,
+      document.id,
+    );
     return {
       documentId: document.id,
       fileName: document.filename,
@@ -357,15 +449,24 @@ export class DocumentIntelligenceService {
     payload: Record<string, unknown> | null;
   }> {
     if (this.isPdfDocument(source)) {
-      const response = await this.pythonModulesClient.execute("ocr_engine", "extract_text_from_pdf_storage", {
-        storage_path: source.storagePath,
-      });
-      const output = response.output && typeof response.output === "object"
-        ? response.output as Record<string, unknown>
-        : {};
+      const response = await this.pythonModulesClient.execute(
+        "ocr_engine",
+        "extract_text_from_pdf_storage",
+        {
+          storage_path: source.storagePath,
+        },
+      );
+      const output =
+        response.output && typeof response.output === "object"
+          ? (response.output as Record<string, unknown>)
+          : {};
       const text = String(output.extracted_text ?? "").trim();
       if (!text) {
-        throw new AppError("OCR completato ma testo non disponibile.", "KNOWLEDGE_OCR_EMPTY", 422);
+        throw new AppError(
+          "OCR completato ma testo non disponibile.",
+          "KNOWLEDGE_OCR_EMPTY",
+          422,
+        );
       }
 
       return {
@@ -376,11 +477,21 @@ export class DocumentIntelligenceService {
       };
     }
 
-    const binary = await this.documentArchiveService.getBinaryByStoragePath(source.storagePath);
-    if (binary && (source.contentType?.startsWith("text/") || this.isTextLikeFile(source.filename))) {
+    const binary = await this.documentArchiveService.getBinaryByStoragePath(
+      source.storagePath,
+    );
+    if (
+      binary &&
+      (source.contentType?.startsWith("text/") ||
+        this.isTextLikeFile(source.filename))
+    ) {
       const text = binary.bytes.toString("utf8").trim();
       if (!text) {
-        throw new AppError("Il documento testuale e vuoto.", "KNOWLEDGE_TEXT_EMPTY", 422);
+        throw new AppError(
+          "Il documento testuale e vuoto.",
+          "KNOWLEDGE_TEXT_EMPTY",
+          422,
+        );
       }
 
       return {
@@ -398,19 +509,21 @@ export class DocumentIntelligenceService {
     );
   }
 
-  private async buildChunkModels(text: string): Promise<Array<{
-    chunkIndex: number;
-    contentText: string;
-    tokenEstimate: number;
-    embeddingStatus: string;
-    embeddingProvider: string | null;
-    embeddingModel: string | null;
-    embeddingDimensions: number | null;
-    embeddingVector: number[] | null;
-    embeddingPayload: Record<string, unknown> | null;
-    metadata: Record<string, unknown> | null;
-    embeddedAt: Date | null;
-  }>> {
+  private async buildChunkModels(text: string): Promise<
+    Array<{
+      chunkIndex: number;
+      contentText: string;
+      tokenEstimate: number;
+      embeddingStatus: string;
+      embeddingProvider: string | null;
+      embeddingModel: string | null;
+      embeddingDimensions: number | null;
+      embeddingVector: number[] | null;
+      embeddingPayload: Record<string, unknown> | null;
+      metadata: Record<string, unknown> | null;
+      embeddedAt: Date | null;
+    }>
+  > {
     const chunks = this.chunkText(text);
     const results = [] as Array<{
       chunkIndex: number;
@@ -477,10 +590,22 @@ export class DocumentIntelligenceService {
     return chunks;
   }
 
-  private async ensureDocumentKnowledge(source: SourceDocumentRecord): Promise<KnowledgeDocumentEntity> {
-    const representationKey = this.isPdfDocument(source) ? "ocr_text" : "plain_text";
-    const existing = await this.repository.findKnowledgeDocumentByDocumentId(source.workspaceId, source.id, representationKey);
-    if (existing && existing.extractionStatus === "READY" && (existing.contentText?.trim() || existing.summaryText?.trim())) {
+  private async ensureDocumentKnowledge(
+    source: SourceDocumentRecord,
+  ): Promise<KnowledgeDocumentEntity> {
+    const representationKey = this.isPdfDocument(source)
+      ? "ocr_text"
+      : "plain_text";
+    const existing = await this.repository.findKnowledgeDocumentByDocumentId(
+      source.workspaceId,
+      source.id,
+      representationKey,
+    );
+    if (
+      existing &&
+      existing.extractionStatus === "READY" &&
+      (existing.contentText?.trim() || existing.summaryText?.trim())
+    ) {
       return existing;
     }
 
@@ -492,14 +617,31 @@ export class DocumentIntelligenceService {
     documentId: string,
     knowledgeMode: KnowledgeMode,
   ): Promise<KnowledgeDocumentEntity> {
-    const source = await this.loadNormalizedSourceDocument(workspaceId, documentId);
+    const source = await this.loadNormalizedSourceDocument(
+      workspaceId,
+      documentId,
+    );
     if (!source) {
-      throw new AppError("Documento sorgente non trovato.", "KNOWLEDGE_SOURCE_NOT_FOUND", 404);
+      throw new AppError(
+        "Documento sorgente non trovato.",
+        "KNOWLEDGE_SOURCE_NOT_FOUND",
+        404,
+      );
     }
 
-    const representationKey = this.isPdfDocument(source) ? "ocr_text" : "plain_text";
-    const existing = await this.repository.findKnowledgeDocumentByDocumentId(workspaceId, source.id, representationKey);
-    if (existing && existing.extractionStatus === "READY" && (existing.contentText?.trim() || existing.summaryText?.trim())) {
+    const representationKey = this.isPdfDocument(source)
+      ? "ocr_text"
+      : "plain_text";
+    const existing = await this.repository.findKnowledgeDocumentByDocumentId(
+      workspaceId,
+      source.id,
+      representationKey,
+    );
+    if (
+      existing &&
+      existing.extractionStatus === "READY" &&
+      (existing.contentText?.trim() || existing.summaryText?.trim())
+    ) {
       return existing;
     }
 
@@ -514,8 +656,14 @@ export class DocumentIntelligenceService {
     return this.ensureDocumentKnowledge(source);
   }
 
-  private async loadNormalizedSourceDocument(workspaceId: string, documentId: string): Promise<SourceDocumentRecord | null> {
-    const source = await this.repository.findSourceDocumentById(workspaceId, documentId);
+  private async loadNormalizedSourceDocument(
+    workspaceId: string,
+    documentId: string,
+  ): Promise<SourceDocumentRecord | null> {
+    const source = await this.repository.findSourceDocumentById(
+      workspaceId,
+      documentId,
+    );
     if (!source) {
       return null;
     }
@@ -523,8 +671,13 @@ export class DocumentIntelligenceService {
     return this.normalizeSourceDocument(source);
   }
 
-  private async normalizeSourceDocument(source: SourceDocumentRecord): Promise<SourceDocumentRecord> {
-    if (source.domainEntityType !== "DdtDocument" || source.domainEntityId?.trim()) {
+  private async normalizeSourceDocument(
+    source: SourceDocumentRecord,
+  ): Promise<SourceDocumentRecord> {
+    if (
+      source.domainEntityType !== "DdtDocument" ||
+      source.domainEntityId?.trim()
+    ) {
       return source;
     }
 
@@ -582,11 +735,11 @@ export class DocumentIntelligenceService {
     }>,
   ): string {
     const maxTotalChars = 50_000;
-    const maxPerDocumentChars = Math.max(2_000, Math.floor(maxTotalChars / Math.max(1, documents.length)));
-    const parts = [
-      `Richiesta utente:\n${prompt}`,
-      "Documenti disponibili:",
-    ];
+    const maxPerDocumentChars = Math.max(
+      2_000,
+      Math.floor(maxTotalChars / Math.max(1, documents.length)),
+    );
+    const parts = [`Richiesta utente:\n${prompt}`, "Documenti disponibili:"];
     let usedChars = parts.join("\n\n").length;
 
     documents.forEach((document, index) => {
@@ -598,9 +751,13 @@ export class DocumentIntelligenceService {
         `Documento ${index + 1}: ${document.title}`,
         `document_id: ${document.documentId}`,
         document.sourceLabel ? `percorso: ${document.sourceLabel}` : null,
-        document.summaryText ? `summary esistente: ${document.summaryText}` : null,
+        document.summaryText
+          ? `summary esistente: ${document.summaryText}`
+          : null,
         `contenuto:\n${content}${compactContent.length > content.length ? "\n[contenuto troncato]" : ""}`,
-      ].filter(Boolean).join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
       parts.push(section);
       usedChars += section.length;
     });
@@ -626,8 +783,10 @@ export class DocumentIntelligenceService {
   }
 
   private isPdfDocument(source: SourceDocumentRecord): boolean {
-    return source.contentType === "application/pdf"
-      || source.filename?.toLowerCase().endsWith(".pdf") === true;
+    return (
+      source.contentType === "application/pdf" ||
+      source.filename?.toLowerCase().endsWith(".pdf") === true
+    );
   }
 
   private isTextLikeFile(fileName: string | null): boolean {

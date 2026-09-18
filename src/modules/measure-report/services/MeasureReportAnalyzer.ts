@@ -59,17 +59,26 @@ export interface MeasureReportAnalysisInput {
   }>;
 }
 
-const AGENT_KEY_BY_DOCUMENT_TYPE: Record<Exclude<MeasureReportDocumentType, "auto">, string> = {
+const AGENT_KEY_BY_DOCUMENT_TYPE: Record<
+  Exclude<MeasureReportDocumentType, "auto">,
+  string
+> = {
   zeiss_1: "measure_report_zeiss_1_prompt",
   zeiss_2: "measure_report_zeiss_2_prompt",
   vicivision: "measure_report_vicivision_prompt",
   dea: "measure_report_dea_prompt",
 };
 
-const ROW_FORMAT_BY_DOCUMENT_TYPE: Record<Exclude<MeasureReportDocumentType, "auto">, string> = {
-  zeiss_1: "Nome: ... | Measured value: ... | Nominal value: ... | Toll+: ... | Toll-: ... | Deviation: ... | +/-: ...",
-  zeiss_2: "Nome: ... | Attuale: ... | Nominale: ... | Toll. Superiore: ... | Toll. Inferiore: ... | Deviazione: ...",
-  vicivision: "ID: ... | Nome: ... | Nom: ... | Mis: ... | Oltre Tol: ... | Tol Inf: ... | Tol Sup: ...",
+const ROW_FORMAT_BY_DOCUMENT_TYPE: Record<
+  Exclude<MeasureReportDocumentType, "auto">,
+  string
+> = {
+  zeiss_1:
+    "Nome: ... | Measured value: ... | Nominal value: ... | Toll+: ... | Toll-: ... | Deviation: ... | +/-: ...",
+  zeiss_2:
+    "Nome: ... | Attuale: ... | Nominale: ... | Toll. Superiore: ... | Toll. Inferiore: ... | Deviazione: ...",
+  vicivision:
+    "ID: ... | Nome: ... | Nom: ... | Mis: ... | Oltre Tol: ... | Tol Inf: ... | Tol Sup: ...",
   dea: "Quota: ... | Asse: ... | Nominale: ... | +Tol: ... | -Tol: ... | MIS: ... | DEV: ... | FUORITOL: ...",
 };
 
@@ -84,7 +93,8 @@ export class MeasureReportAnalyzer {
     lmClient?: OpenAiCompatibleLmClient,
   ) {
     this.moduleAgentService = moduleAgentService;
-    this.pythonModulesClient = pythonModulesClient ?? new BackendPythonModulesClient();
+    this.pythonModulesClient =
+      pythonModulesClient ?? new BackendPythonModulesClient();
     this.lmClient = lmClient ?? new OpenAiCompatibleLmClient();
   }
 
@@ -123,9 +133,14 @@ export class MeasureReportAnalyzer {
       },
     );
 
-    const prepared = this.normalizePreparedPayload(payload, effectiveDocumentType);
+    const prepared = this.normalizePreparedPayload(
+      payload,
+      effectiveDocumentType,
+    );
     if (prepared.candidates.length === 0) {
-      throw new Error("Preprocessing measure report completato senza immagini candidate.");
+      throw new Error(
+        "Preprocessing measure report completato senza immagini candidate.",
+      );
     }
 
     const rawOutputs: string[] = [];
@@ -169,13 +184,18 @@ export class MeasureReportAnalyzer {
           ),
         );
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Errore AI provider sconosciuto";
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Errore AI provider sconosciuto";
         candidateErrors.push(`${candidate.candidateId}: ${message}`);
       }
     }
 
     if (candidateErrors.length === prepared.candidates.length) {
-      throw new Error(`Analisi Measure Report fallita su tutti i candidati: ${candidateErrors.join(" | ")}`);
+      throw new Error(
+        `Analisi Measure Report fallita su tutti i candidati: ${candidateErrors.join(" | ")}`,
+      );
     }
 
     const rows = this.dedupeRows(collectedRows);
@@ -184,9 +204,10 @@ export class MeasureReportAnalyzer {
     return {
       documentTypeUsed: prepared.documentTypeUsed,
       promptAgentKey,
-      summary: rows.length > 0
-        ? `Trovate ${rows.length} righe fuori tolleranza.`
-        : "Nessuna riga fuori tolleranza rilevata.",
+      summary:
+        rows.length > 0
+          ? `Trovate ${rows.length} righe fuori tolleranza.`
+          : "Nessuna riga fuori tolleranza rilevata.",
       rawOutput,
       rawResponse: {
         provider: "openai-compatible-chat-completions-multimodal",
@@ -217,15 +238,25 @@ export class MeasureReportAnalyzer {
     rowFormat: string;
   } {
     const envelope = payload as PythonEnvelopePayload;
-    const response = (envelope.output ?? payload) as PythonPreparedMeasureReportPayload;
+    const response = (envelope.output ??
+      payload) as PythonPreparedMeasureReportPayload;
     const candidates = Array.isArray(response.candidates)
       ? response.candidates
-          .map((candidate, index) => this.normalizeCandidate(candidate as PythonPreparedCandidatePayload, index))
-          .filter((candidate): candidate is PreparedCandidate => candidate !== null)
+          .map((candidate, index) =>
+            this.normalizeCandidate(
+              candidate as PythonPreparedCandidatePayload,
+              index,
+            ),
+          )
+          .filter(
+            (candidate): candidate is PreparedCandidate => candidate !== null,
+          )
       : [];
 
     const documentTypeUsed = resolveMeasureReportEffectiveDocumentType(
-      typeof response.document_type_used === "string" ? response.document_type_used : fallbackType,
+      typeof response.document_type_used === "string"
+        ? response.document_type_used
+        : fallbackType,
       null,
     );
 
@@ -233,20 +264,30 @@ export class MeasureReportAnalyzer {
       candidates,
       documentTypeUsed,
       executionMetadata: this.toRecord(response.execution_metadata),
-      rowFormat: this.toNullableString(response.row_format) ?? ROW_FORMAT_BY_DOCUMENT_TYPE[documentTypeUsed],
+      rowFormat:
+        this.toNullableString(response.row_format) ??
+        ROW_FORMAT_BY_DOCUMENT_TYPE[documentTypeUsed],
     };
   }
 
-  private normalizeCandidate(candidate: PythonPreparedCandidatePayload, index: number): PreparedCandidate | null {
+  private normalizeCandidate(
+    candidate: PythonPreparedCandidatePayload,
+    index: number,
+  ): PreparedCandidate | null {
     const imageDataUrl = this.toNullableString(candidate.image_data_url);
     if (!imageDataUrl) {
       return null;
     }
 
-    const candidateKind = this.toNullableString(candidate.candidate_kind) === "page" ? "page" : "row";
+    const candidateKind =
+      this.toNullableString(candidate.candidate_kind) === "page"
+        ? "page"
+        : "row";
     const pageIndex = this.toPositiveInt(candidate.page_index) ?? 1;
     return {
-      candidateId: this.toNullableString(candidate.candidate_id) ?? `${candidateKind}-${pageIndex}-${index + 1}`,
+      candidateId:
+        this.toNullableString(candidate.candidate_id) ??
+        `${candidateKind}-${pageIndex}-${index + 1}`,
       candidateKind,
       imageDataUrl,
       pageIndex,
@@ -285,13 +326,18 @@ export class MeasureReportAnalyzer {
     }
 
     if (candidate.candidateKind === "row") {
-      common.push("Se nel crop ci sono piu righe fuori tolleranza, restituiscile tutte, una per riga.");
+      common.push(
+        "Se nel crop ci sono piu righe fuori tolleranza, restituiscile tutte, una per riga.",
+      );
     }
 
     return common.join(" ");
   }
 
-  private decorateRawOutput(candidate: PreparedCandidate, content: string): string {
+  private decorateRawOutput(
+    candidate: PreparedCandidate,
+    content: string,
+  ): string {
     return [
       `### ${candidate.candidateId}`,
       `kind=${candidate.candidateKind} page=${candidate.pageIndex}${candidate.pageHint ? ` hint=${candidate.pageHint}` : ""}`,
@@ -360,7 +406,10 @@ export class MeasureReportAnalyzer {
       .filter((row): row is ParsedRow => row !== null);
   }
 
-  private normalizeJsonRow(item: unknown, candidate: PreparedCandidate): ParsedRow | null {
+  private normalizeJsonRow(
+    item: unknown,
+    candidate: PreparedCandidate,
+  ): ParsedRow | null {
     if (typeof item === "string") {
       const rowText = item.trim();
       if (!rowText) {
@@ -383,18 +432,25 @@ export class MeasureReportAnalyzer {
     }
 
     const row = item as Record<string, unknown>;
-    const rowText = this.toNullableString(row.row_text)
-      ?? this.toNullableString(row.text)
-      ?? this.toNullableString(row.line)
-      ?? this.toNullableString(row.row);
+    const rowText =
+      this.toNullableString(row.row_text) ??
+      this.toNullableString(row.text) ??
+      this.toNullableString(row.line) ??
+      this.toNullableString(row.row);
     if (!rowText) {
       return null;
     }
 
     return {
       rowText,
-      note: this.toNullableString(row.note) ?? this.toNullableString(row.reason) ?? this.toNullableString(row.motivo),
-      pageHint: this.toNullableString(row.page_hint) ?? this.toNullableString(row.page) ?? candidate.pageHint,
+      note:
+        this.toNullableString(row.note) ??
+        this.toNullableString(row.reason) ??
+        this.toNullableString(row.motivo),
+      pageHint:
+        this.toNullableString(row.page_hint) ??
+        this.toNullableString(row.page) ??
+        candidate.pageHint,
       rawPayload: {
         source: "lm_json_object",
         candidate_id: candidate.candidateId,
@@ -436,7 +492,16 @@ export class MeasureReportAnalyzer {
     if (this.looksLikeAxisToken(quota) && this.isNumericLike(asse)) {
       pairs.set("Quota", asse);
       pairs.set("Asse", quota);
-      const orderedKeys = ["Quota", "Asse", "Nominale", "+Tol", "-Tol", "MIS", "DEV", "FUORITOL"];
+      const orderedKeys = [
+        "Quota",
+        "Asse",
+        "Nominale",
+        "+Tol",
+        "-Tol",
+        "MIS",
+        "DEV",
+        "FUORITOL",
+      ];
       const ordered = orderedKeys
         .filter((key) => pairs.has(key))
         .map((key) => `${key}: ${pairs.get(key)}`);
@@ -455,7 +520,10 @@ export class MeasureReportAnalyzer {
     const seen = new Set<string>();
     const deduped: ParsedRow[] = [];
     for (const row of rows) {
-      const normalizedKey = row.rowText.replace(/\s+/g, " ").trim().toLowerCase();
+      const normalizedKey = row.rowText
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
       if (!normalizedKey || seen.has(normalizedKey)) {
         continue;
       }

@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 
 import { QuotationOrchestratorService } from "../../modules/quotation-orchestrator/services/QuotationOrchestratorService.js";
 import { ScheduledWorkflowDeliveryService } from "../../modules/workflows/services/ScheduledWorkflowDeliveryService.js";
+import { ScheduledWorkflowExecutionService } from "../../modules/workflows/services/ScheduledWorkflowExecutionService.js";
 import { TelegramLinkPollingService } from "../../modules/connected-apps/services/TelegramLinkPollingService.js";
 import { WorkflowRunExecutorService } from "../../modules/workflows/services/WorkflowRunExecutorService.js";
 import { WorkerCoordinator } from "../../worker/services/WorkerCoordinator.js";
@@ -20,6 +21,8 @@ export class BackendRuntimeService {
     private readonly workflowRunExecutorService: WorkflowRunExecutorService,
     @Inject(ScheduledWorkflowDeliveryService)
     private readonly scheduledWorkflowDeliveryService: ScheduledWorkflowDeliveryService,
+    @Inject(ScheduledWorkflowExecutionService)
+    private readonly scheduledWorkflowExecutionService: ScheduledWorkflowExecutionService,
     @Inject(TelegramLinkPollingService)
     private readonly telegramLinkPollingService: TelegramLinkPollingService,
   ) {}
@@ -32,6 +35,7 @@ export class BackendRuntimeService {
     this.started = true;
     this.workerCoordinator.registerHandlers();
     this.scheduledWorkflowDeliveryService.start();
+    this.scheduledWorkflowExecutionService.start();
     this.telegramLinkPollingService.start();
 
     const results = await Promise.allSettled([
@@ -43,7 +47,10 @@ export class BackendRuntimeService {
     this.logResumeOutcome("workflow runs", results[1]);
   }
 
-  private logResumeOutcome(label: string, result: PromiseSettledResult<void>): void {
+  private logResumeOutcome(
+    label: string,
+    result: PromiseSettledResult<void>,
+  ): void {
     if (result.status === "fulfilled") {
       this.logger.log(`Resumed pending ${label}.`);
       return;

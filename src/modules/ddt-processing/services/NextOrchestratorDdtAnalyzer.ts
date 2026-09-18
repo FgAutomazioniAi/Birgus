@@ -29,7 +29,10 @@ export class NextOrchestratorDdtAnalyzer {
   private readonly moduleAgentService: ModuleAgentService;
   private readonly orchestrator: LocalLmOrchestrator;
 
-  public constructor(moduleAgentService: ModuleAgentService, orchestrator?: LocalLmOrchestrator) {
+  public constructor(
+    moduleAgentService: ModuleAgentService,
+    orchestrator?: LocalLmOrchestrator,
+  ) {
     this.moduleAgentService = moduleAgentService;
     this.orchestrator = orchestrator ?? new LocalLmOrchestrator();
   }
@@ -72,7 +75,9 @@ export class NextOrchestratorDdtAnalyzer {
     });
 
     if (!row?.document?.storage_path) {
-      throw new Error(`Documento DDT ${ddtDocumentId} non trovato o senza storage_path.`);
+      throw new Error(
+        `Documento DDT ${ddtDocumentId} non trovato o senza storage_path.`,
+      );
     }
 
     return {
@@ -83,7 +88,10 @@ export class NextOrchestratorDdtAnalyzer {
     };
   }
 
-  private normalizeResponse(payload: WorkflowResponsePayload, ddtDocumentId: string): DdtAnalysisInput {
+  private normalizeResponse(
+    payload: WorkflowResponsePayload,
+    ddtDocumentId: string,
+  ): DdtAnalysisInput {
     const articleItems = Array.isArray(payload.article_items)
       ? payload.article_items.map((item) => ({
           articleType: this.toStringOrDefault(item.article_type, "sconosciuto"),
@@ -99,8 +107,13 @@ export class NextOrchestratorDdtAnalyzer {
       bollaNumber: this.toNullableString(payload.bolla_number),
       commessaReference: this.toNullableString(payload.commessa_reference),
       transferNote: this.toNullableString(payload.transfer_note),
-      articleCount: Number.isFinite(Number(payload.article_count)) ? Number(payload.article_count) : articleItems.length,
-      warehouseDelta: this.computeWarehouseDelta(this.toNullableString(payload.main_warehouse_action), this.toNumber(payload.article_count)),
+      articleCount: Number.isFinite(Number(payload.article_count))
+        ? Number(payload.article_count)
+        : articleItems.length,
+      warehouseDelta: this.computeWarehouseDelta(
+        this.toNullableString(payload.main_warehouse_action),
+        this.toNumber(payload.article_count),
+      ),
       summary: this.toNullableString(payload.analysis_summary),
       rawResponse: {
         provider: "next-orchestrator",
@@ -111,7 +124,10 @@ export class NextOrchestratorDdtAnalyzer {
     };
   }
 
-  private computeWarehouseDelta(mainAction: string | null, articleCount: number): number {
+  private computeWarehouseDelta(
+    mainAction: string | null,
+    articleCount: number,
+  ): number {
     if (mainAction === "aggiunta_principale") {
       return articleCount;
     }

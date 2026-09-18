@@ -2,7 +2,10 @@ import { ProjectAuthorEntity } from "../../projects/domain/ProjectAuthorEntity.j
 
 export interface ProjectAuthorRepository {
   list(workspaceId: string): Promise<ProjectAuthorEntity[]>;
-  findById(workspaceId: string, authorId: number): Promise<ProjectAuthorEntity | null>;
+  findById(
+    workspaceId: string,
+    authorId: number,
+  ): Promise<ProjectAuthorEntity | null>;
   create(params: {
     workspaceId: string;
     firstName: string;

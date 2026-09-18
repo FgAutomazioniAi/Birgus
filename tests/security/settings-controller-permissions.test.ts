@@ -36,7 +36,10 @@ test("settings provider endpoints require explicit permissions", () => {
     [PermissionKey.NOTIFICATIONS_READ],
   );
   assert.deepEqual(
-    permissionMetadata(MailProviderSettingsController.prototype, "patchSettings"),
+    permissionMetadata(
+      MailProviderSettingsController.prototype,
+      "patchSettings",
+    ),
     [PermissionKey.NOTIFICATIONS_WRITE],
   );
   assert.deepEqual(

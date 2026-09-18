@@ -12,9 +12,15 @@ import { AuthModule } from "../auth/auth.module.js";
 import { PROJECT_BINARY_STORAGE } from "../common/tokens.js";
 import { NotificationsNestModule } from "../notifications/notifications.module.js";
 import { CommissionIntakeController } from "./commission-intake.controller.js";
+import { ExternalDatabasesNestModule } from "../external-databases/external-databases.module.js";
 
 @Module({
-  imports: [AuthModule, AuditNestModule, NotificationsNestModule],
+  imports: [
+    AuthModule,
+    AuditNestModule,
+    NotificationsNestModule,
+    ExternalDatabasesNestModule,
+  ],
   controllers: [CommissionIntakeController],
   providers: [
     PrismaCommissionIntakeRepository,
@@ -26,8 +32,19 @@ import { CommissionIntakeController } from "./commission-intake.controller.js";
         storage: ProjectBinaryStorage,
         notificationService: NotificationService,
         auditLogService: AuditLogService,
-      ) => new CommissionIntakeService(repository, storage, notificationService, auditLogService),
-      inject: [PrismaCommissionIntakeRepository, PROJECT_BINARY_STORAGE, NotificationService, AuditLogService],
+      ) =>
+        new CommissionIntakeService(
+          repository,
+          storage,
+          notificationService,
+          auditLogService,
+        ),
+      inject: [
+        PrismaCommissionIntakeRepository,
+        PROJECT_BINARY_STORAGE,
+        NotificationService,
+        AuditLogService,
+      ],
     },
   ],
   exports: [CommissionIntakeService],

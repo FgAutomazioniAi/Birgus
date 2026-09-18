@@ -1,6 +1,14 @@
 "use client";
 
-import { Bell, Bug, Loader2, Menu, PanelLeft, PanelLeftClose, X } from "lucide-react";
+import {
+  Bell,
+  Bug,
+  Loader2,
+  Menu,
+  PanelLeft,
+  PanelLeftClose,
+  X,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -53,7 +61,12 @@ const formatNotificationDate = (isoDate: string, language: "it" | "en") =>
     month: "2-digit",
   });
 
-export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }: TopNavProps) {
+export function TopNav({
+  collapsed,
+  currentUser,
+  onMenuClick,
+  onToggleCollapse,
+}: TopNavProps) {
   const router = useRouter();
   const { language, setLanguage, t } = useLanguage();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -66,12 +79,18 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
   const [bugDescription, setBugDescription] = useState("");
   const [sendingBugReport, setSendingBugReport] = useState(false);
   const notificationRef = useRef<HTMLDivElement | null>(null);
-  const notificationsEnabled = currentUser.enabledModuleKeys.includes("notification_center");
-  const bugReportsEnabled = currentUser.enabledModuleKeys.includes("bug_reports");
+  const notificationsEnabled = currentUser.enabledModuleKeys.includes(
+    "notification_center",
+  );
+  const bugReportsEnabled =
+    currentUser.enabledModuleKeys.includes("bug_reports");
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+      if (
+        notificationRef.current &&
+        !notificationRef.current.contains(event.target as Node)
+      ) {
         setShowNotifications(false);
       }
     };
@@ -80,7 +99,9 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
-  const loadNotifications = async ({ silent = false }: { silent?: boolean } = {}) => {
+  const loadNotifications = async ({
+    silent = false,
+  }: { silent?: boolean } = {}) => {
     try {
       if (!silent) {
         setIsNotificationsLoading(true);
@@ -125,13 +146,21 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
 
     const loadOperations = async () => {
       try {
-        const response = await fetch("/api/operations/my-queue", { cache: "no-store" });
+        const response = await fetch("/api/operations/my-queue", {
+          cache: "no-store",
+        });
         if (!response.ok) {
           return;
         }
-        const payload = await response.json() as { operations?: QueuedOperation[] };
+        const payload = (await response.json()) as {
+          operations?: QueuedOperation[];
+        };
         if (active) {
-          setOperations(Array.isArray(payload.operations) ? payload.operations.slice(0, 5) : []);
+          setOperations(
+            Array.isArray(payload.operations)
+              ? payload.operations.slice(0, 5)
+              : [],
+          );
         }
       } catch {
         // The header must remain quiet if the operation feed is temporarily unavailable.
@@ -150,17 +179,28 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
     let active = true;
     const loadInterventionsCount = async () => {
       try {
-        const response = await fetch("/api/workflow-interventions/open-count", { cache: "no-store" });
+        const response = await fetch("/api/workflow-interventions/open-count", {
+          cache: "no-store",
+        });
         if (!response.ok) return;
-        const payload = await response.json() as { count?: number };
-        if (active) setOpenInterventionsCount(typeof payload.count === "number" ? payload.count : 0);
+        const payload = (await response.json()) as { count?: number };
+        if (active)
+          setOpenInterventionsCount(
+            typeof payload.count === "number" ? payload.count : 0,
+          );
       } catch {
         // The dashboard badge is supplementary and must not affect navigation.
       }
     };
     void loadInterventionsCount();
-    const interval = window.setInterval(() => void loadInterventionsCount(), 10_000);
-    return () => { active = false; window.clearInterval(interval); };
+    const interval = window.setInterval(
+      () => void loadInterventionsCount(),
+      10_000,
+    );
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
   }, []);
 
   const handleNotificationClick = () => {
@@ -173,7 +213,9 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
     if (nextValue) {
       void loadNotifications();
       const nowIso = new Date().toISOString();
-      setNotifications((prev) => prev.map((item) => ({ ...item, readAt: item.readAt ?? nowIso })));
+      setNotifications((prev) =>
+        prev.map((item) => ({ ...item, readAt: item.readAt ?? nowIso })),
+      );
       void fetch("/api/notifications", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -192,55 +234,101 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
         body: JSON.stringify({ confirmText: "cancella" }),
       });
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({ message: t("notifications.clearFailed") }))) as { message?: string };
+        const payload = (await response
+          .json()
+          .catch(() => ({ message: t("notifications.clearFailed") }))) as {
+          message?: string;
+        };
         throw new Error(payload.message ?? t("notifications.clearFailed"));
       }
 
       toast.success(t("notifications.cleared"));
     } catch (error) {
       setNotifications(previousNotifications);
-      const message = error instanceof Error && error.message.trim().length > 0
-        ? error.message
-        : t("notifications.clearFailed");
+      const message =
+        error instanceof Error && error.message.trim().length > 0
+          ? error.message
+          : t("notifications.clearFailed");
       toast.error(message);
     }
   };
 
   const handleOpenOperation = (operation: QueuedOperation) => {
-    router.push(`${APP_ROUTES.workflows}?workflowId=${encodeURIComponent(operation.workflowId)}&runId=${encodeURIComponent(operation.id)}`);
+    router.push(
+      `${APP_ROUTES.workflows}?workflowId=${encodeURIComponent(operation.workflowId)}&runId=${encodeURIComponent(operation.id)}`,
+    );
   };
 
   const userName = currentUser.nome;
-  const hasUnreadNotifications = notifications.some((notification) => !notification.readAt);
+  const hasUnreadNotifications = notifications.some(
+    (notification) => !notification.readAt,
+  );
   const operationStatus = (status: QueuedOperation["status"]) => {
     switch (status) {
-      case "RUNNING": return t("operations.queue.running");
-      case "COMPLETED": return t("operations.queue.completed");
-      case "FAILED": return t("operations.queue.failed");
-      case "CANCELED": return t("operations.queue.canceled");
-      default: return t("operations.queue.queued");
+      case "RUNNING":
+        return t("operations.queue.running");
+      case "COMPLETED":
+        return t("operations.queue.completed");
+      case "FAILED":
+        return t("operations.queue.failed");
+      case "CANCELED":
+        return t("operations.queue.canceled");
+      default:
+        return t("operations.queue.queued");
     }
   };
   const operationStatusClass = (status: QueuedOperation["status"]) => {
     if (status === "COMPLETED") return "text-status-success-text";
-    if (status === "FAILED" || status === "CANCELED") return "text-status-danger-text";
+    if (status === "FAILED" || status === "CANCELED")
+      return "text-status-danger-text";
     if (status === "RUNNING") return "text-brand-primary";
     return "text-text-muted";
   };
 
   const handleSubmitBugReport = async () => {
-    if (bugTitle.trim().length < 3 || bugDescription.trim().length < 10 || sendingBugReport) return;
+    if (
+      bugTitle.trim().length < 3 ||
+      bugDescription.trim().length < 10 ||
+      sendingBugReport
+    )
+      return;
     setSendingBugReport(true);
     try {
-      const response = await fetch("/api/bug-reports", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: bugTitle.trim(), description: bugDescription.trim(), pageUrl: window.location.href }) });
-      const payload = await response.json().catch(() => ({})) as { message?: string };
-      if (!response.ok) throw new Error(payload.message ?? "Invio della segnalazione non riuscito.");
-      setShowBugReport(false); setBugTitle(""); setBugDescription("");
+      const response = await fetch("/api/bug-reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: bugTitle.trim(),
+          description: bugDescription.trim(),
+          pageUrl: window.location.href,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        message?: string;
+      };
+      if (!response.ok)
+        throw new Error(
+          payload.message ?? "Invio della segnalazione non riuscito.",
+        );
+      setShowBugReport(false);
+      setBugTitle("");
+      setBugDescription("");
       toast.success("Segnalazione inviata.");
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Invio della segnalazione non riuscito."); }
-    finally { setSendingBugReport(false); }
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Invio della segnalazione non riuscito.",
+      );
+    } finally {
+      setSendingBugReport(false);
+    }
   };
-  const operationTime = (operation: QueuedOperation) => new Date(operation.startedAt ?? operation.queuedAt).toLocaleTimeString(language === "it" ? "it-IT" : "en-GB", { hour: "2-digit", minute: "2-digit" });
+  const operationTime = (operation: QueuedOperation) =>
+    new Date(operation.startedAt ?? operation.queuedAt).toLocaleTimeString(
+      language === "it" ? "it-IT" : "en-GB",
+      { hour: "2-digit", minute: "2-digit" },
+    );
 
   return (
     <header className="sticky top-0 z-30 h-16 border-b border-border-default bg-bg-surface">
@@ -258,14 +346,20 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
             {collapsed ? (
               <PanelLeft size={20} className="group-hover:text-brand-primary" />
             ) : (
-              <PanelLeftClose size={20} className="group-hover:text-brand-primary" />
+              <PanelLeftClose
+                size={20}
+                className="group-hover:text-brand-primary"
+              />
             )}
           </button>
         </div>
 
         <div className="flex items-center gap-2 lg:gap-4">
           {operations.length > 0 ? (
-            <div className="hidden h-9 items-stretch gap-1 lg:flex" aria-label={t("operations.queue.title")}>
+            <div
+              className="hidden h-9 items-stretch gap-1 md:flex"
+              aria-label={t("operations.queue.title")}
+            >
               {operations.map((operation, index) => (
                 <button
                   key={operation.id}
@@ -274,19 +368,34 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
                   onClick={() => handleOpenOperation(operation)}
                   className={`${index >= 2 ? "hidden 2xl:flex" : "flex"} w-32 min-w-0 items-center gap-2 border border-border-subtle bg-bg-page px-2 text-left transition-colors hover:border-brand-primary hover:bg-bg-muted 2xl:w-40`}
                 >
-                  <span className={`h-2 w-2 shrink-0 rounded-full ${operation.status === "COMPLETED" ? "bg-status-success-text" : operation.status === "FAILED" || operation.status === "CANCELED" ? "bg-status-danger-text" : operation.status === "RUNNING" ? "bg-brand-primary" : "bg-text-muted"}`} />
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${operation.status === "COMPLETED" ? "bg-status-success-text" : operation.status === "FAILED" || operation.status === "CANCELED" ? "bg-status-danger-text" : operation.status === "RUNNING" ? "bg-brand-primary" : "bg-text-muted"}`}
+                  />
                   <div className="min-w-0 leading-tight">
-                    <p className="truncate text-[11px] font-semibold text-text-primary">{operation.label}</p>
-                    <p className={`truncate text-[10px] font-semibold ${operationStatusClass(operation.status)}`}>{operationTime(operation)} · {operationStatus(operation.status)}</p>
+                    <p className="truncate text-[11px] font-semibold text-text-primary">
+                      {operation.label}
+                    </p>
+                    <p
+                      className={`truncate text-[10px] font-semibold ${operationStatusClass(operation.status)}`}
+                    >
+                      {operationTime(operation)} ·{" "}
+                      {operationStatus(operation.status)}
+                    </p>
                   </div>
                 </button>
               ))}
             </div>
           ) : null}
 
-          {operations.length > 0 ? <div className="hidden h-8 w-px bg-border-default lg:block" /> : null}
+          {operations.length > 0 ? (
+            <div className="hidden h-8 w-px bg-border-default md:block" />
+          ) : null}
 
-          <div className="inline-flex overflow-hidden rounded-[var(--radius-md)] border border-border-default" role="group" aria-label={t("language.switch")}>
+          <div
+            className="inline-flex overflow-hidden rounded-[var(--radius-md)] border border-border-default"
+            role="group"
+            aria-label={t("language.switch")}
+          >
             <button
               type="button"
               className={`h-8 px-2 text-xs font-bold ${language === "it" ? "bg-brand-primary text-text-inverse" : "text-text-secondary hover:bg-bg-subtle"}`}
@@ -307,7 +416,10 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
           {notificationsEnabled ? (
             <>
               <div className="relative" ref={notificationRef}>
-                <IconButton className="relative" onClick={handleNotificationClick}>
+                <IconButton
+                  className="relative"
+                  onClick={handleNotificationClick}
+                >
                   <Bell size={20} />
                   {hasUnreadNotifications && (
                     <span className="absolute right-2 top-2 h-2 w-2 rounded-full border-2 border-bg-surface bg-brand-accent" />
@@ -317,7 +429,9 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
                 {showNotifications && (
                   <div className="absolute right-0 top-12 max-h-[420px] w-[360px] overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-4 shadow-elevated">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">{t("notifications.title")}</p>
+                      <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">
+                        {t("notifications.title")}
+                      </p>
                       <button
                         type="button"
                         onClick={() => void handleClearNotifications()}
@@ -328,17 +442,31 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
                     </div>
 
                     {isNotificationsLoading ? (
-                      <p className="mt-3 text-sm text-text-muted">{t("notifications.loading")}</p>
+                      <p className="mt-3 text-sm text-text-muted">
+                        {t("notifications.loading")}
+                      </p>
                     ) : notifications.length === 0 ? (
-                      <p className="mt-3 text-sm text-text-muted">{t("notifications.empty")}</p>
+                      <p className="mt-3 text-sm text-text-muted">
+                        {t("notifications.empty")}
+                      </p>
                     ) : (
                       <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
                         {notifications.map((notification) => (
-                          <div key={notification.id} className="rounded-lg border border-border-subtle bg-bg-muted px-3 py-2">
-                            <p className="text-xs font-semibold text-text-primary">{notification.title}</p>
-                            <p className="mt-1 text-xs leading-5 text-text-secondary">{notification.message}</p>
+                          <div
+                            key={notification.id}
+                            className="rounded-lg border border-border-subtle bg-bg-muted px-3 py-2"
+                          >
+                            <p className="text-xs font-semibold text-text-primary">
+                              {notification.title}
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-text-secondary">
+                              {notification.message}
+                            </p>
                             <p className="mt-1 text-[10px] uppercase tracking-wide text-text-muted">
-                              {formatNotificationDate(notification.createdAt, language)}
+                              {formatNotificationDate(
+                                notification.createdAt,
+                                language,
+                              )}
                             </p>
                           </div>
                         ))}
@@ -352,40 +480,105 @@ export function TopNav({ collapsed, currentUser, onMenuClick, onToggleCollapse }
           {bugReportsEnabled ? (
             <>
               <div className="h-8 w-px bg-border-default" aria-hidden="true" />
-              <IconButton title="Segnala un problema" onClick={() => setShowBugReport(true)}>
+              <IconButton
+                title="Segnala un problema"
+                onClick={() => setShowBugReport(true)}
+              >
                 <Bug size={20} />
               </IconButton>
             </>
           ) : null}
-
         </div>
       </div>
-      {showBugReport ? <div className="fixed inset-0 z-[100] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-labelledby="bug-report-title" onMouseDown={(event) => { if (event.target === event.currentTarget && !sendingBugReport) setShowBugReport(false); }}>
-        <div className="w-full max-w-lg rounded-[var(--radius-md)] border border-border-default bg-bg-surface shadow-elevated">
-          <div className="flex items-start gap-3 border-b border-border-default px-5 py-4">
-            <BirgusLogo className="h-9 w-9 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <h2 id="bug-report-title" className="text-base font-bold text-text-primary">Birgus dice:</h2>
-              <p className="mt-1 text-sm text-text-secondary">Segnala un problema, lo risolveremo appena possibile.</p>
+      {showBugReport ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-bg-overlay p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bug-report-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !sendingBugReport)
+              setShowBugReport(false);
+          }}
+        >
+          <div className="w-full max-w-lg rounded-[var(--radius-md)] border border-border-default bg-bg-surface shadow-elevated">
+            <div className="flex items-start gap-3 border-b border-border-default px-5 py-4">
+              <BirgusLogo className="h-9 w-9 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <h2
+                  id="bug-report-title"
+                  className="text-base font-bold text-text-primary"
+                >
+                  Birgus dice:
+                </h2>
+                <p className="mt-1 text-sm text-text-secondary">
+                  Segnala un problema, lo risolveremo appena possibile.
+                </p>
+              </div>
+              <IconButton
+                title="Chiudi"
+                disabled={sendingBugReport}
+                onClick={() => setShowBugReport(false)}
+              >
+                <X size={18} />
+              </IconButton>
             </div>
-            <IconButton title="Chiudi" disabled={sendingBugReport} onClick={() => setShowBugReport(false)}><X size={18} /></IconButton>
-          </div>
-          <div className="space-y-4 p-5">
-            <label className="block text-sm font-semibold text-text-primary" htmlFor="bug-report-title-input">
-              Argomento
-              <Input id="bug-report-title-input" className="mt-1 h-10 bg-bg-page" maxLength={160} value={bugTitle} onChange={(event) => setBugTitle(event.target.value)} autoFocus />
-            </label>
-            <label className="block text-sm font-semibold text-text-primary" htmlFor="bug-report-description">
-              Problema
-              <textarea id="bug-report-description" className="mt-1 min-h-36 w-full resize-y rounded-[var(--radius-md)] border border-border-default bg-bg-page p-3 text-sm text-text-primary outline-none focus-visible:border-brand-primary focus-visible:ring-2 focus-visible:ring-ring-primary" maxLength={10_000} value={bugDescription} onChange={(event) => setBugDescription(event.target.value)} />
-            </label>
-          </div>
-          <div className="flex justify-end gap-2 border-t border-border-default px-5 py-4">
-            <Button type="button" variant="outline" disabled={sendingBugReport} onClick={() => setShowBugReport(false)}>Annulla</Button>
-            <Button type="button" disabled={sendingBugReport || bugTitle.trim().length < 3 || bugDescription.trim().length < 10} onClick={() => void handleSubmitBugReport()}>{sendingBugReport ? <Loader2 size={16} className="animate-spin" /> : null}Invia</Button>
+            <div className="space-y-4 p-5">
+              <label
+                className="block text-sm font-semibold text-text-primary"
+                htmlFor="bug-report-title-input"
+              >
+                Argomento
+                <Input
+                  id="bug-report-title-input"
+                  className="mt-1 h-10 bg-bg-page"
+                  maxLength={160}
+                  value={bugTitle}
+                  onChange={(event) => setBugTitle(event.target.value)}
+                  autoFocus
+                />
+              </label>
+              <label
+                className="block text-sm font-semibold text-text-primary"
+                htmlFor="bug-report-description"
+              >
+                Problema
+                <textarea
+                  id="bug-report-description"
+                  className="mt-1 min-h-36 w-full resize-y rounded-[var(--radius-md)] border border-border-default bg-bg-page p-3 text-sm text-text-primary outline-none focus-visible:border-brand-primary focus-visible:ring-2 focus-visible:ring-ring-primary"
+                  maxLength={10_000}
+                  value={bugDescription}
+                  onChange={(event) => setBugDescription(event.target.value)}
+                />
+              </label>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-border-default px-5 py-4">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={sendingBugReport}
+                onClick={() => setShowBugReport(false)}
+              >
+                Annulla
+              </Button>
+              <Button
+                type="button"
+                disabled={
+                  sendingBugReport ||
+                  bugTitle.trim().length < 3 ||
+                  bugDescription.trim().length < 10
+                }
+                onClick={() => void handleSubmitBugReport()}
+              >
+                {sendingBugReport ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : null}
+                Invia
+              </Button>
+            </div>
           </div>
         </div>
-      </div> : null}
+      ) : null}
     </header>
   );
 }

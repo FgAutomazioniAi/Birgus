@@ -40,13 +40,25 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
   items,
   storageKey,
 }: ConfigurableDataTableProps<TItem, TKey>) {
-  const defaultOrder = useMemo(() => columns.map((column) => column.key), [columns]);
+  const defaultOrder = useMemo(
+    () => columns.map((column) => column.key),
+    [columns],
+  );
   const [columnOrder, setColumnOrder] = useState<TKey[]>(defaultOrder);
   const [hiddenColumns, setHiddenColumns] = useState<TKey[]>([]);
-  const [columnWidths, setColumnWidths] = useState<Partial<Record<TKey, number>>>({});
-  const [sort, setSort] = useState<{ direction: SortDirection; key: TKey } | null>(null);
+  const [columnWidths, setColumnWidths] = useState<
+    Partial<Record<TKey, number>>
+  >({});
+  const [sort, setSort] = useState<{
+    direction: SortDirection;
+    key: TKey;
+  } | null>(null);
   const [isColumnsMenuOpen, setIsColumnsMenuOpen] = useState(false);
-  const [resizingColumn, setResizingColumn] = useState<{ key: TKey; startWidth: number; startX: number } | null>(null);
+  const [resizingColumn, setResizingColumn] = useState<{
+    key: TKey;
+    startWidth: number;
+    startX: number;
+  } | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -67,8 +79,17 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
     try {
       const parsed = JSON.parse(raw) as Partial<StoredTableConfig<TKey>>;
       const keys = new Set(defaultOrder);
-      setColumnOrder([...(parsed.order ?? []).filter((key) => keys.has(key)), ...defaultOrder.filter((key) => !(parsed.order ?? []).includes(key))]);
-      setHiddenColumns((parsed.hidden ?? []).filter((key) => keys.has(key) && !columns.find((column) => column.key === key)?.required));
+      setColumnOrder([
+        ...(parsed.order ?? []).filter((key) => keys.has(key)),
+        ...defaultOrder.filter((key) => !(parsed.order ?? []).includes(key)),
+      ]);
+      setHiddenColumns(
+        (parsed.hidden ?? []).filter(
+          (key) =>
+            keys.has(key) &&
+            !columns.find((column) => column.key === key)?.required,
+        ),
+      );
       setColumnWidths(parsed.widths ?? {});
     } catch {
       setColumnOrder(defaultOrder);
@@ -78,7 +99,14 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
   }, [columns, defaultOrder, storageKey]);
 
   useEffect(() => {
-    window.localStorage.setItem(storageKey, JSON.stringify({ hidden: hiddenColumns, order: columnOrder, widths: columnWidths }));
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        hidden: hiddenColumns,
+        order: columnOrder,
+        widths: columnWidths,
+      }),
+    );
   }, [columnOrder, columnWidths, hiddenColumns, storageKey]);
 
   useEffect(() => {
@@ -99,8 +127,14 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
     const handlePointerMove = (event: PointerEvent) => {
       const column = columns.find((item) => item.key === resizingColumn.key);
       const minWidth = column?.minWidth ?? 110;
-      const nextWidth = Math.max(minWidth, resizingColumn.startWidth + event.clientX - resizingColumn.startX);
-      setColumnWidths((current) => ({ ...current, [resizingColumn.key]: nextWidth }));
+      const nextWidth = Math.max(
+        minWidth,
+        resizingColumn.startWidth + event.clientX - resizingColumn.startX,
+      );
+      setColumnWidths((current) => ({
+        ...current,
+        [resizingColumn.key]: nextWidth,
+      }));
     };
 
     const handlePointerUp = () => setResizingColumn(null);
@@ -112,10 +146,15 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
     };
   }, [columns, resizingColumn]);
 
-  const columnByKey = useMemo(() => new Map(columns.map((column) => [column.key, column])), [columns]);
+  const columnByKey = useMemo(
+    () => new Map(columns.map((column) => [column.key, column])),
+    [columns],
+  );
   const visibleColumns = columnOrder
     .map((key) => columnByKey.get(key))
-    .filter((column): column is ConfigurableColumn<TItem, TKey> => Boolean(column))
+    .filter((column): column is ConfigurableColumn<TItem, TKey> =>
+      Boolean(column),
+    )
     .filter((column) => !hiddenColumns.includes(column.key));
 
   const sortedItems = useMemo(() => {
@@ -136,7 +175,10 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
     });
   }, [columnByKey, items, sort]);
 
-  const tableWidth = visibleColumns.reduce((sum, column) => sum + (columnWidths[column.key] ?? column.defaultWidth), 0);
+  const tableWidth = visibleColumns.reduce(
+    (sum, column) => sum + (columnWidths[column.key] ?? column.defaultWidth),
+    0,
+  );
 
   const toggleSort = (key: TKey) => {
     const column = columnByKey.get(key);
@@ -159,7 +201,11 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
       return;
     }
 
-    setHiddenColumns((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
+    setHiddenColumns((current) =>
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key],
+    );
   };
 
   const moveColumn = (key: TKey, direction: "up" | "down") => {
@@ -187,15 +233,27 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
     <div>
       <div className="flex justify-end border-b border-border-subtle px-4 py-3">
         <div className="relative" ref={menuRef}>
-          <Button variant="outline" size="sm" className="h-9 rounded-lg px-3" onClick={() => setIsColumnsMenuOpen((current) => !current)}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 rounded-lg px-3"
+            onClick={() => setIsColumnsMenuOpen((current) => !current)}
+          >
             <Columns3 size={16} />
             Colonne
           </Button>
           {isColumnsMenuOpen && (
             <div className="absolute right-0 top-11 z-20 w-80 rounded-lg border border-border-default bg-bg-surface p-3 shadow-elevated">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-bold uppercase text-brand-primary">Configura colonne</p>
-                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={resetColumns}>
+                <p className="text-xs font-bold uppercase text-brand-primary">
+                  Configura colonne
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={resetColumns}
+                >
                   <RotateCcw size={13} />
                   Reset
                 </Button>
@@ -208,7 +266,10 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
                   }
                   const hidden = hiddenColumns.includes(key);
                   return (
-                    <div key={key} className="flex items-center justify-between gap-2 rounded-lg border border-border-subtle bg-bg-muted px-2.5 py-2">
+                    <div
+                      key={key}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-border-subtle bg-bg-muted px-2.5 py-2"
+                    >
                       <label className="flex min-w-0 items-center gap-2 text-sm text-text-secondary">
                         <CheckboxControl
                           id={`${storageKey}-${key}`}
@@ -250,10 +311,18 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-left" style={{ minWidth: tableWidth }}>
+        <table
+          className="w-full border-collapse text-left"
+          style={{ minWidth: tableWidth }}
+        >
           <colgroup>
             {visibleColumns.map((column) => (
-              <col key={column.key} style={{ width: columnWidths[column.key] ?? column.defaultWidth }} />
+              <col
+                key={column.key}
+                style={{
+                  width: columnWidths[column.key] ?? column.defaultWidth,
+                }}
+              />
             ))}
           </colgroup>
           <thead className="bg-bg-muted/70">
@@ -262,14 +331,22 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
                 const isSortable = Boolean(column.sortValue);
                 const isActive = sort?.key === column.key;
                 return (
-                  <th key={column.key} className="relative px-5 py-3 text-xs font-bold uppercase text-text-muted">
+                  <th
+                    key={column.key}
+                    className="relative px-5 py-3 text-xs font-bold uppercase text-text-muted"
+                  >
                     <button
                       type="button"
-                      className={cn("flex w-full items-center justify-between gap-2 text-left", isSortable ? "cursor-pointer" : "cursor-default")}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-2 text-left",
+                        isSortable ? "cursor-pointer" : "cursor-default",
+                      )}
                       onClick={() => toggleSort(column.key)}
                     >
                       <span>{column.label}</span>
-                      {isActive && <span>{sort.direction === "asc" ? "↑" : "↓"}</span>}
+                      {isActive && (
+                        <span>{sort.direction === "asc" ? "↑" : "↓"}</span>
+                      )}
                     </button>
                     <span
                       aria-label={`Ridimensiona colonna ${column.label}`}
@@ -280,7 +357,8 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
                         setResizingColumn({
                           key: column.key,
                           startX: event.clientX,
-                          startWidth: columnWidths[column.key] ?? column.defaultWidth,
+                          startWidth:
+                            columnWidths[column.key] ?? column.defaultWidth,
                         });
                       }}
                     />
@@ -291,9 +369,18 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
           </thead>
           <tbody className="divide-y divide-border-subtle">
             {sortedItems.map((item) => (
-              <tr key={getRowId(item)} className="transition-colors hover:bg-bg-muted/60">
+              <tr
+                key={getRowId(item)}
+                className="transition-colors hover:bg-bg-muted/60"
+              >
                 {visibleColumns.map((column) => (
-                  <td key={`${getRowId(item)}-${column.key}`} className={cn("px-5 py-4 align-top text-sm text-text-secondary", column.cellClassName)}>
+                  <td
+                    key={`${getRowId(item)}-${column.key}`}
+                    className={cn(
+                      "px-5 py-4 align-top text-sm text-text-secondary",
+                      column.cellClassName,
+                    )}
+                  >
                     {column.render(item)}
                   </td>
                 ))}
@@ -301,7 +388,10 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
             ))}
             {!sortedItems.length && (
               <tr>
-                <td colSpan={Math.max(visibleColumns.length, 1)} className="px-6 py-12 text-center text-sm text-text-muted">
+                <td
+                  colSpan={Math.max(visibleColumns.length, 1)}
+                  className="px-6 py-12 text-center text-sm text-text-muted"
+                >
                   {emptyLabel}
                 </td>
               </tr>
@@ -313,10 +403,18 @@ export function ConfigurableDataTable<TItem, TKey extends string>({
   );
 }
 
-function compareValues(left: number | string | null | undefined, right: number | string | null | undefined): number {
+function compareValues(
+  left: number | string | null | undefined,
+  right: number | string | null | undefined,
+): number {
   if (typeof left === "number" || typeof right === "number") {
-    return Number(left ?? Number.NEGATIVE_INFINITY) - Number(right ?? Number.NEGATIVE_INFINITY);
+    return (
+      Number(left ?? Number.NEGATIVE_INFINITY) -
+      Number(right ?? Number.NEGATIVE_INFINITY)
+    );
   }
 
-  return String(left ?? "").localeCompare(String(right ?? ""), "it", { sensitivity: "base" });
+  return String(left ?? "").localeCompare(String(right ?? ""), "it", {
+    sensitivity: "base",
+  });
 }

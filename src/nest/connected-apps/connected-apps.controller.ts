@@ -1,4 +1,14 @@
-import { Controller, Delete, Get, HttpCode, Inject, Param, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { z } from "zod";
 
 import { ModuleKey } from "../../core/module-access/ModuleKey.js";
@@ -25,7 +35,9 @@ export class ConnectedAppsController {
     @Query("provider") providerRaw: string | undefined,
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Record<string, unknown>> {
-    const provider = providerRaw ? providerSchema.parse(providerRaw) : undefined;
+    const provider = providerRaw
+      ? providerSchema.parse(providerRaw)
+      : undefined;
     const apps = await this.service.listUserApps({
       workspaceId: requestContext.workspace.workspaceId,
       userId: requestContext.workspace.userId,
@@ -38,8 +50,11 @@ export class ConnectedAppsController {
         {
           provider: "telegram",
           label: "Telegram",
-          description: "Usa il tuo account Telegram per i nodi Resoconto nei workflow.",
-          status: apps.some((app) => app.provider === "telegram") ? "connected" : "available",
+          description:
+            "Usa il tuo account Telegram per i nodi Resoconto nei workflow.",
+          status: apps.some((app) => app.provider === "telegram")
+            ? "connected"
+            : "available",
         },
       ],
     };

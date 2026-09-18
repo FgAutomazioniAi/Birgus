@@ -14,7 +14,9 @@ async function main(): Promise<void> {
   const userEmail = process.env.BIRGUS_E2E_USER_EMAIL?.trim();
 
   if (!userEmail) {
-    throw new Error("BIRGUS_E2E_USER_EMAIL is required to run chatbot upload e2e scripts.");
+    throw new Error(
+      "BIRGUS_E2E_USER_EMAIL is required to run chatbot upload e2e scripts.",
+    );
   }
 
   const workspace = await prisma.workspace.findFirstOrThrow({
@@ -41,9 +43,14 @@ async function main(): Promise<void> {
     select: { id: true },
   });
 
-  const archiveService = new DocumentArchiveService(new PrismaDocumentArchiveRepository(), StorageSelector.create());
+  const archiveService = new DocumentArchiveService(
+    new PrismaDocumentArchiveRepository(),
+    StorageSelector.create(),
+  );
   const intelligenceService = new DocumentIntelligenceService(archiveService);
-  const uploadService = new AssistantSessionDocumentService(intelligenceService);
+  const uploadService = new AssistantSessionDocumentService(
+    intelligenceService,
+  );
   const uploaded = await uploadService.uploadSessionDocument({
     workspaceId: workspace.id,
     sessionId: session.id,
@@ -68,17 +75,23 @@ async function main(): Promise<void> {
     sourceEntityId: context.sourceEntityId,
   });
 
-  console.log(JSON.stringify({
-    sessionId: session.id,
-    uploaded,
-    sourceEntityType: context.sourceEntityType,
-    sourceEntityId: context.sourceEntityId,
-    hits: hits.map((hit) => ({
-      title: hit.title,
-      preview: hit.contentText.slice(0, 120),
-      distance: hit.distance,
-    })),
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        sessionId: session.id,
+        uploaded,
+        sourceEntityType: context.sourceEntityType,
+        sourceEntityId: context.sourceEntityId,
+        hits: hits.map((hit) => ({
+          title: hit.title,
+          preview: hit.contentText.slice(0, 120),
+          distance: hit.distance,
+        })),
+      },
+      null,
+      2,
+    ),
+  );
 
   await prisma.$disconnect();
 }

@@ -16,9 +16,10 @@ interface UndoableActionOptions {
 export function scheduleUndoableAction(options: UndoableActionOptions): void {
   void options.commit().catch((error: unknown) => {
     options.rollback();
-    const message = error instanceof Error && error.message.trim().length > 0
-      ? error.message
-      : options.errorMessage;
+    const message =
+      error instanceof Error && error.message.trim().length > 0
+        ? error.message
+        : options.errorMessage;
     toast.error(message);
   });
 }

@@ -12,24 +12,23 @@ import { PrismaModuleAccessRepository } from "../../modules/module-management/in
   providers: [
     {
       provide: TenancyGuard,
-      useFactory: (membershipReader: WorkspaceMembershipPrismaReader) => new TenancyGuard(membershipReader),
+      useFactory: (membershipReader: WorkspaceMembershipPrismaReader) =>
+        new TenancyGuard(membershipReader),
       inject: [WorkspaceMembershipPrismaReader],
     },
     {
       provide: PermissionPolicy,
-      useFactory: (permissionReader: WorkspacePermissionPrismaReader) => new PermissionPolicy(permissionReader),
+      useFactory: (permissionReader: WorkspacePermissionPrismaReader) =>
+        new PermissionPolicy(permissionReader),
       inject: [WorkspacePermissionPrismaReader],
     },
     {
       provide: ModuleAccessPolicy,
-      useFactory: (moduleAccessRepository: PrismaModuleAccessRepository) => new ModuleAccessPolicy(moduleAccessRepository),
+      useFactory: (moduleAccessRepository: PrismaModuleAccessRepository) =>
+        new ModuleAccessPolicy(moduleAccessRepository),
       inject: [PrismaModuleAccessRepository],
     },
   ],
-  exports: [
-    TenancyGuard,
-    PermissionPolicy,
-    ModuleAccessPolicy,
-  ],
+  exports: [TenancyGuard, PermissionPolicy, ModuleAccessPolicy],
 })
 export class AccessControlModule {}

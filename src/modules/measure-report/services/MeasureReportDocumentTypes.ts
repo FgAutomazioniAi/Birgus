@@ -6,9 +6,13 @@ export const MEASURE_REPORT_DOCUMENT_TYPES = [
   "dea",
 ] as const;
 
-export type MeasureReportDocumentType = (typeof MEASURE_REPORT_DOCUMENT_TYPES)[number];
+export type MeasureReportDocumentType =
+  (typeof MEASURE_REPORT_DOCUMENT_TYPES)[number];
 
-export const MEASURE_REPORT_DOCUMENT_TYPE_LABELS: Record<MeasureReportDocumentType, string> = {
+export const MEASURE_REPORT_DOCUMENT_TYPE_LABELS: Record<
+  MeasureReportDocumentType,
+  string
+> = {
   auto: "Auto",
   zeiss_1: "Zeiss 1",
   zeiss_2: "Zeiss 2",
@@ -16,12 +20,17 @@ export const MEASURE_REPORT_DOCUMENT_TYPE_LABELS: Record<MeasureReportDocumentTy
   dea: "DEA",
 };
 
-export function normalizeMeasureReportDocumentType(value: string | null | undefined): MeasureReportDocumentType {
+export function normalizeMeasureReportDocumentType(
+  value: string | null | undefined,
+): MeasureReportDocumentType {
   if (!value) {
     return "auto";
   }
 
-  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
   const aliases: Record<string, MeasureReportDocumentType> = {
     zeiss: "zeiss_1",
     zeiss1: "zeiss_1",
@@ -32,14 +41,20 @@ export function normalizeMeasureReportDocumentType(value: string | null | undefi
   };
 
   const candidate = aliases[normalized] ?? normalized;
-  if (MEASURE_REPORT_DOCUMENT_TYPES.includes(candidate as MeasureReportDocumentType)) {
+  if (
+    MEASURE_REPORT_DOCUMENT_TYPES.includes(
+      candidate as MeasureReportDocumentType,
+    )
+  ) {
     return candidate as MeasureReportDocumentType;
   }
 
   return "auto";
 }
 
-export function inferMeasureReportDocumentTypeFromFilename(fileName: string | null | undefined): MeasureReportDocumentType {
+export function inferMeasureReportDocumentTypeFromFilename(
+  fileName: string | null | undefined,
+): MeasureReportDocumentType {
   const lower = (fileName ?? "").trim().toLowerCase();
   if (!lower) {
     return "auto";
@@ -77,4 +92,3 @@ export function resolveMeasureReportEffectiveDocumentType(
 
   return "zeiss_1";
 }
-

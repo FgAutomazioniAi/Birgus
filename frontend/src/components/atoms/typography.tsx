@@ -17,6 +17,11 @@ export interface TextProps extends React.HTMLAttributes<HTMLElement> {
   variant?: TextVariant;
 }
 
-export function Text({ as: Tag = "p", className, variant = "body", ...props }: TextProps) {
+export function Text({
+  as: Tag = "p",
+  className,
+  variant = "body",
+  ...props
+}: TextProps) {
   return <Tag className={cn(variantClasses[variant], className)} {...props} />;
 }

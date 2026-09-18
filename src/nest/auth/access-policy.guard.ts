@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, Inject, Injectable } from "@nestjs/common";
+import {
+  CanActivate,
+  ExecutionContext,
+  Inject,
+  Injectable,
+} from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { FastifyRequest } from "fastify";
 
@@ -20,14 +25,22 @@ export class AccessPolicyGuard implements CanActivate {
   ) {}
 
   public async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredModules = this.collectMetadataValues(REQUIRED_MODULE_METADATA_KEY, context);
-    const requiredPermissions = this.collectMetadataValues(REQUIRED_PERMISSION_METADATA_KEY, context);
+    const requiredModules = this.collectMetadataValues(
+      REQUIRED_MODULE_METADATA_KEY,
+      context,
+    );
+    const requiredPermissions = this.collectMetadataValues(
+      REQUIRED_PERMISSION_METADATA_KEY,
+      context,
+    );
 
     if (requiredModules.length === 0 && requiredPermissions.length === 0) {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest<FastifyRequest & { requestContext?: RequestContext }>();
+    const request = context
+      .switchToHttp()
+      .getRequest<FastifyRequest & { requestContext?: RequestContext }>();
     const requestContext = request.requestContext;
     if (!requestContext) {
       return false;
@@ -58,12 +71,32 @@ export class AccessPolicyGuard implements CanActivate {
     }
 
     const values = Array.isArray(value) ? value : [value];
-    return [...new Set(values.filter((item) => typeof item === "string" && item.trim().length > 0))];
+    return [
+      ...new Set(
+        values.filter(
+          (item) => typeof item === "string" && item.trim().length > 0,
+        ),
+      ),
+    ];
   }
 
-  private collectMetadataValues(key: string, context: ExecutionContext): string[] {
-    const handlerValue = this.reflector.get<string[] | string | undefined>(key, context.getHandler());
-    const classValue = this.reflector.get<string[] | string | undefined>(key, context.getClass());
-    return [...new Set([...this.normalizeValues(classValue), ...this.normalizeValues(handlerValue)])];
+  private collectMetadataValues(
+    key: string,
+    context: ExecutionContext,
+  ): string[] {
+    const handlerValue = this.reflector.get<string[] | string | undefined>(
+      key,
+      context.getHandler(),
+    );
+    const classValue = this.reflector.get<string[] | string | undefined>(
+      key,
+      context.getClass(),
+    );
+    return [
+      ...new Set([
+        ...this.normalizeValues(classValue),
+        ...this.normalizeValues(handlerValue),
+      ]),
+    ];
   }
 }

@@ -5,7 +5,10 @@ import { ModuleKey } from "../../../core/module-access/ModuleKey.js";
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { DocumentIntelligenceService } from "../../document-intelligence/services/DocumentIntelligenceService.js";
 import { ProjectService } from "../../projects/services/ProjectService.js";
-import { AssistantToolDefinition, AssistantToolExecutionContext } from "../tools/AssistantToolDefinition.js";
+import {
+  AssistantToolDefinition,
+  AssistantToolExecutionContext,
+} from "../tools/AssistantToolDefinition.js";
 
 export class AssistantToolRegistry {
   private readonly projectService: ProjectService;
@@ -29,7 +32,11 @@ export class AssistantToolRegistry {
     return this.tools.get(name) ?? null;
   }
 
-  public async executeTool(name: string, context: AssistantToolExecutionContext, args: unknown): Promise<Record<string, unknown>> {
+  public async executeTool(
+    name: string,
+    context: AssistantToolExecutionContext,
+    args: unknown,
+  ): Promise<Record<string, unknown>> {
     const tool = this.tools.get(name);
     if (!tool) {
       throw new Error(`Tool non registrato: ${name}`);
@@ -76,7 +83,9 @@ export class AssistantToolRegistry {
     type SemanticSearchArgs = z.infer<typeof semanticSearchSchema>;
     type TargetedSearchArgs = z.infer<typeof targetedSearchSchema>;
     type LinkedDocumentSearchArgs = z.infer<typeof linkedDocumentSearchSchema>;
-    type SessionDocumentsSearchArgs = z.infer<typeof sessionDocumentsSearchSchema>;
+    type SessionDocumentsSearchArgs = z.infer<
+      typeof sessionDocumentsSearchSchema
+    >;
 
     return [
       {
@@ -132,7 +141,8 @@ export class AssistantToolRegistry {
       },
       {
         name: "get_project_summary",
-        description: "Restituisce una sintesi strutturata del progetto e del suo stato.",
+        description:
+          "Restituisce una sintesi strutturata del progetto e del suo stato.",
         moduleKeys: [ModuleKey.PROJECT_MANAGEMENT],
         permissionKeys: [PermissionKey.PROJECTS_READ],
         parametersSchema: projectVersionsSchema,
@@ -145,8 +155,14 @@ export class AssistantToolRegistry {
           required: ["projectId"],
         },
         execute: async (context, args: ProjectVersionsArgs) => {
-          const project = await this.projectService.getProject(context.workspaceId, args.projectId);
-          const versions = await this.projectService.listProjectVersions(context.workspaceId, args.projectId);
+          const project = await this.projectService.getProject(
+            context.workspaceId,
+            args.projectId,
+          );
+          const versions = await this.projectService.listProjectVersions(
+            context.workspaceId,
+            args.projectId,
+          );
           return {
             projectId: project.id,
             projectName: project.name,
@@ -178,7 +194,10 @@ export class AssistantToolRegistry {
           required: ["projectId"],
         },
         execute: async (context, args: ProjectVersionsArgs) => {
-          const versions = await this.projectService.listProjectVersions(context.workspaceId, args.projectId);
+          const versions = await this.projectService.listProjectVersions(
+            context.workspaceId,
+            args.projectId,
+          );
           return {
             versions: versions.map((version) => ({
               versionId: version.id,
@@ -195,9 +214,18 @@ export class AssistantToolRegistry {
       },
       {
         name: "get_project_version_quotation_context",
-        description: "Legge il preventivo PDF della versione progetto, lo indicizza se necessario e restituisce contesto testuale utile.",
-        moduleKeys: [ModuleKey.PROJECT_MANAGEMENT, ModuleKey.DOCUMENT_ARCHIVE, ModuleKey.DOCUMENT_INTELLIGENCE],
-        permissionKeys: [PermissionKey.PROJECTS_READ, PermissionKey.DOCUMENTS_READ, PermissionKey.KNOWLEDGE_READ],
+        description:
+          "Legge il preventivo PDF della versione progetto, lo indicizza se necessario e restituisce contesto testuale utile.",
+        moduleKeys: [
+          ModuleKey.PROJECT_MANAGEMENT,
+          ModuleKey.DOCUMENT_ARCHIVE,
+          ModuleKey.DOCUMENT_INTELLIGENCE,
+        ],
+        permissionKeys: [
+          PermissionKey.PROJECTS_READ,
+          PermissionKey.DOCUMENTS_READ,
+          PermissionKey.KNOWLEDGE_READ,
+        ],
         parametersSchema: projectVersionSchema,
         parametersJsonSchema: {
           type: "object",
@@ -209,18 +237,27 @@ export class AssistantToolRegistry {
           required: ["projectId", "versionLabel"],
         },
         execute: async (context, args: ProjectVersionArgs) => {
-          return this.documentIntelligenceService.getProjectVersionQuotationContext({
-            workspaceId: context.workspaceId,
-            projectId: args.projectId,
-            versionLabel: args.versionLabel,
-          });
+          return this.documentIntelligenceService.getProjectVersionQuotationContext(
+            {
+              workspaceId: context.workspaceId,
+              projectId: args.projectId,
+              versionLabel: args.versionLabel,
+            },
+          );
         },
       },
       {
         name: "search_linked_document_knowledge",
-        description: "Cerca informazioni solo nel documento collegato alla sessione chat corrente, senza allargare la ricerca al resto del workspace.",
-        moduleKeys: [ModuleKey.CONVERSATIONAL_ASSISTANT, ModuleKey.DOCUMENT_INTELLIGENCE],
-        permissionKeys: [PermissionKey.ASSISTANT_READ, PermissionKey.KNOWLEDGE_READ],
+        description:
+          "Cerca informazioni solo nel documento collegato alla sessione chat corrente, senza allargare la ricerca al resto del workspace.",
+        moduleKeys: [
+          ModuleKey.CONVERSATIONAL_ASSISTANT,
+          ModuleKey.DOCUMENT_INTELLIGENCE,
+        ],
+        permissionKeys: [
+          PermissionKey.ASSISTANT_READ,
+          PermissionKey.KNOWLEDGE_READ,
+        ],
         parametersSchema: linkedDocumentSearchSchema,
         parametersJsonSchema: {
           type: "object",
@@ -255,13 +292,14 @@ export class AssistantToolRegistry {
               ddtDocumentId: session.ddt_document_id,
             });
 
-            const hits = await this.documentIntelligenceService.searchWorkspaceKnowledge({
-              workspaceId: context.workspaceId,
-              query: args.query,
-              topK: args.topK,
-              sourceEntityType: "DdtDocument",
-              sourceEntityId: session.ddt_document_id,
-            });
+            const hits =
+              await this.documentIntelligenceService.searchWorkspaceKnowledge({
+                workspaceId: context.workspaceId,
+                query: args.query,
+                topK: args.topK,
+                sourceEntityType: "DdtDocument",
+                sourceEntityId: session.ddt_document_id,
+              });
 
             return {
               found: true,
@@ -284,18 +322,20 @@ export class AssistantToolRegistry {
           }
 
           if (session.document_id) {
-            const documentContext = await this.documentIntelligenceService.getDocumentChatContext({
-              workspaceId: context.workspaceId,
-              documentId: session.document_id,
-            });
+            const documentContext =
+              await this.documentIntelligenceService.getDocumentChatContext({
+                workspaceId: context.workspaceId,
+                documentId: session.document_id,
+              });
 
-            const hits = await this.documentIntelligenceService.searchWorkspaceKnowledge({
-              workspaceId: context.workspaceId,
-              query: args.query,
-              topK: args.topK,
-              sourceEntityType: documentContext.sourceEntityType,
-              sourceEntityId: documentContext.sourceEntityId,
-            });
+            const hits =
+              await this.documentIntelligenceService.searchWorkspaceKnowledge({
+                workspaceId: context.workspaceId,
+                query: args.query,
+                topK: args.topK,
+                sourceEntityType: documentContext.sourceEntityType,
+                sourceEntityId: documentContext.sourceEntityId,
+              });
 
             return {
               found: true,
@@ -325,9 +365,16 @@ export class AssistantToolRegistry {
       },
       {
         name: "search_session_documents_knowledge",
-        description: "Cerca informazioni solo nei documenti allegati alla sessione assistente corrente.",
-        moduleKeys: [ModuleKey.CONVERSATIONAL_ASSISTANT, ModuleKey.DOCUMENT_INTELLIGENCE],
-        permissionKeys: [PermissionKey.ASSISTANT_READ, PermissionKey.KNOWLEDGE_READ],
+        description:
+          "Cerca informazioni solo nei documenti allegati alla sessione assistente corrente.",
+        moduleKeys: [
+          ModuleKey.CONVERSATIONAL_ASSISTANT,
+          ModuleKey.DOCUMENT_INTELLIGENCE,
+        ],
+        permissionKeys: [
+          PermissionKey.ASSISTANT_READ,
+          PermissionKey.KNOWLEDGE_READ,
+        ],
         parametersSchema: sessionDocumentsSearchSchema,
         parametersJsonSchema: {
           type: "object",
@@ -364,32 +411,36 @@ export class AssistantToolRegistry {
           const topK = Math.min(args.topK ?? 5, 10);
           const hits = [];
           for (const link of links) {
-            const documentContext = await this.documentIntelligenceService.getDocumentChatContext({
-              workspaceId: context.workspaceId,
-              documentId: link.document_id,
-            });
-            const documentHits = await this.documentIntelligenceService.searchWorkspaceKnowledge({
-              workspaceId: context.workspaceId,
-              query: args.query,
-              topK,
-              sourceEntityType: documentContext.sourceEntityType,
-              sourceEntityId: documentContext.sourceEntityId,
-            });
+            const documentContext =
+              await this.documentIntelligenceService.getDocumentChatContext({
+                workspaceId: context.workspaceId,
+                documentId: link.document_id,
+              });
+            const documentHits =
+              await this.documentIntelligenceService.searchWorkspaceKnowledge({
+                workspaceId: context.workspaceId,
+                query: args.query,
+                topK,
+                sourceEntityType: documentContext.sourceEntityType,
+                sourceEntityId: documentContext.sourceEntityId,
+              });
 
-            hits.push(...documentHits.map((hit) => ({
-              sessionDocumentId: link.id,
-              sessionDocumentName: link.display_name ?? documentContext.title,
-              chunkId: hit.chunkId,
-              knowledgeDocumentId: hit.knowledgeDocumentId,
-              documentId: hit.documentId,
-              sourceEntityType: hit.sourceEntityType,
-              sourceEntityId: hit.sourceEntityId,
-              title: hit.title,
-              sourceLabel: hit.sourceLabel,
-              chunkIndex: hit.chunkIndex,
-              contentText: hit.contentText,
-              distance: hit.distance,
-            })));
+            hits.push(
+              ...documentHits.map((hit) => ({
+                sessionDocumentId: link.id,
+                sessionDocumentName: link.display_name ?? documentContext.title,
+                chunkId: hit.chunkId,
+                knowledgeDocumentId: hit.knowledgeDocumentId,
+                documentId: hit.documentId,
+                sourceEntityType: hit.sourceEntityType,
+                sourceEntityId: hit.sourceEntityId,
+                title: hit.title,
+                sourceLabel: hit.sourceLabel,
+                chunkIndex: hit.chunkIndex,
+                contentText: hit.contentText,
+                distance: hit.distance,
+              })),
+            );
           }
 
           hits.sort((left, right) => left.distance - right.distance);
@@ -407,7 +458,8 @@ export class AssistantToolRegistry {
       },
       {
         name: "search_workspace_knowledge",
-        description: "Esegue una ricerca semantica sui contenuti documentali indicizzati del workspace.",
+        description:
+          "Esegue una ricerca semantica sui contenuti documentali indicizzati del workspace.",
         moduleKeys: [ModuleKey.DOCUMENT_INTELLIGENCE],
         permissionKeys: [PermissionKey.KNOWLEDGE_READ],
         parametersSchema: semanticSearchSchema,
@@ -423,13 +475,14 @@ export class AssistantToolRegistry {
           required: ["query"],
         },
         execute: async (context, args: SemanticSearchArgs) => {
-          const hits = await this.documentIntelligenceService.searchWorkspaceKnowledge({
-            workspaceId: context.workspaceId,
-            query: args.query,
-            topK: args.topK,
-            sourceEntityType: args.sourceEntityType ?? null,
-            sourceEntityId: args.sourceEntityId ?? null,
-          });
+          const hits =
+            await this.documentIntelligenceService.searchWorkspaceKnowledge({
+              workspaceId: context.workspaceId,
+              query: args.query,
+              topK: args.topK,
+              sourceEntityType: args.sourceEntityType ?? null,
+              sourceEntityId: args.sourceEntityId ?? null,
+            });
           return {
             mode: "semantic",
             hits: hits.map((hit) => ({
@@ -449,7 +502,8 @@ export class AssistantToolRegistry {
       },
       {
         name: "search_workspace_knowledge_targeted",
-        description: "Esegue una ricerca mirata (keyword/exact match) sui contenuti indicizzati; piu adatta a verifiche puntuali.",
+        description:
+          "Esegue una ricerca mirata (keyword/exact match) sui contenuti indicizzati; piu adatta a verifiche puntuali.",
         moduleKeys: [ModuleKey.DOCUMENT_INTELLIGENCE],
         permissionKeys: [PermissionKey.KNOWLEDGE_READ],
         parametersSchema: targetedSearchSchema,
@@ -465,13 +519,16 @@ export class AssistantToolRegistry {
           required: ["query"],
         },
         execute: async (context, args: TargetedSearchArgs) => {
-          const hits = await this.documentIntelligenceService.searchWorkspaceKnowledgeByKeyword({
-            workspaceId: context.workspaceId,
-            query: args.query,
-            topK: args.topK,
-            sourceEntityType: args.sourceEntityType ?? null,
-            sourceEntityId: args.sourceEntityId ?? null,
-          });
+          const hits =
+            await this.documentIntelligenceService.searchWorkspaceKnowledgeByKeyword(
+              {
+                workspaceId: context.workspaceId,
+                query: args.query,
+                topK: args.topK,
+                sourceEntityType: args.sourceEntityType ?? null,
+                sourceEntityId: args.sourceEntityId ?? null,
+              },
+            );
           return {
             mode: "targeted",
             hits: hits.map((hit) => ({

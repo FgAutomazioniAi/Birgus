@@ -3,7 +3,12 @@
 import type { ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-import { isUiLanguage, translate, UI_LANGUAGE_STORAGE_KEY, type UiLanguage } from "@/lib/language";
+import {
+  isUiLanguage,
+  translate,
+  UI_LANGUAGE_STORAGE_KEY,
+  type UiLanguage,
+} from "@/lib/language";
 
 interface LanguageContextValue {
   language: UiLanguage;
@@ -29,7 +34,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
     const syncLanguageFromDatabase = async () => {
       try {
-        const response = await fetch("/api/user/preferences", { cache: "no-store" });
+        const response = await fetch("/api/user/preferences", {
+          cache: "no-store",
+        });
         if (!response.ok) {
           return;
         }
@@ -70,13 +77,20 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     void persistLanguage();
   };
 
-  const value = useMemo<LanguageContextValue>(() => ({
-    language,
-    setLanguage,
-    t: (key, values) => translate(language, key, values),
-  }), [language]);
+  const value = useMemo<LanguageContextValue>(
+    () => ({
+      language,
+      setLanguage,
+      t: (key, values) => translate(language, key, values),
+    }),
+    [language],
+  );
 
-  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
+  return (
+    <LanguageContext.Provider value={value}>
+      {children}
+    </LanguageContext.Provider>
+  );
 }
 
 export function useLanguage() {

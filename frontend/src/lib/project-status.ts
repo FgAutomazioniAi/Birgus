@@ -6,13 +6,14 @@ export const PROJECT_STATUS_OPTIONS = [
 
 export type ProjectStatusKey = (typeof PROJECT_STATUS_OPTIONS)[number]["key"];
 
-export const PROJECT_STATUS_LABEL_BY_KEY: Record<ProjectStatusKey, string> = PROJECT_STATUS_OPTIONS.reduce(
-  (acc, item) => {
-    acc[item.key] = item.label;
-    return acc;
-  },
-  {} as Record<ProjectStatusKey, string>,
-);
+export const PROJECT_STATUS_LABEL_BY_KEY: Record<ProjectStatusKey, string> =
+  PROJECT_STATUS_OPTIONS.reduce(
+    (acc, item) => {
+      acc[item.key] = item.label;
+      return acc;
+    },
+    {} as Record<ProjectStatusKey, string>,
+  );
 
 export const getProjectStatusLabel = (key: string): string => {
   if (key in PROJECT_STATUS_LABEL_BY_KEY) {

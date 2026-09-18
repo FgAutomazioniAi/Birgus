@@ -15,6 +15,7 @@ import { CommissionIntakeNestModule } from "./commission-intake/commission-intak
 import { ConnectedAppsNestModule } from "./connected-apps/connected-apps.module.js";
 import { DdtReaderNestModule } from "./ddt-reader/ddt-reader.module.js";
 import { DocumentArchiveNestModule } from "./document-archive/document-archive.module.js";
+import { ExternalDatabasesNestModule } from "./external-databases/external-databases.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { InfrastructureModule } from "./infrastructure/infrastructure.module.js";
 import { KnowledgeNestModule } from "./knowledge/knowledge.module.js";
@@ -50,6 +51,7 @@ import { WorkflowsNestModule } from "./workflows/workflows.module.js";
     ConnectedAppsNestModule,
     DdtReaderNestModule,
     DocumentArchiveNestModule,
+    ExternalDatabasesNestModule,
     KnowledgeNestModule,
     MeasureReportNestModule,
     ModuleManagementNestModule,

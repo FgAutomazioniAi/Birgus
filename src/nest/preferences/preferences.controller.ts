@@ -1,4 +1,12 @@
-import { Body, Controller, Get, HttpCode, Inject, Patch, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Patch,
+  UseGuards,
+} from "@nestjs/common";
 import { z } from "zod";
 
 import { RequestContext } from "../../core/tenancy/RequestContext.js";
@@ -7,33 +15,39 @@ import { jsonValueSchema } from "../../shared/validation/json.js";
 import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
 import { CurrentRequestContext } from "../common/decorators/request-context.decorator.js";
 
-const columnConfigSchema = z.object({
-  hidden: z.array(z.string().min(1).max(80)).max(80),
-  order: z.array(z.string().min(1).max(80)).max(80),
-}).strict();
+const columnConfigSchema = z
+  .object({
+    hidden: z.array(z.string().min(1).max(80)).max(80),
+    order: z.array(z.string().min(1).max(80)).max(80),
+  })
+  .strict();
 
-const patchPreferencesSchema = z.object({
-  paletteId: z.string().min(1).optional(),
-  cornerStyle: z.enum(["rounded", "square"]).optional(),
-  notificationPosition: z.enum([
-    "top-left",
-    "top-center",
-    "top-right",
-    "bottom-left",
-    "bottom-center",
-    "bottom-right",
-  ]).optional(),
-  notificationPopups: z.boolean().optional(),
-  languageCode: z.string().min(2).optional(),
-  righeProgetti: z.number().int().min(1).max(500).optional(),
-  righeClienti: z.number().int().min(1).max(500).optional(),
-  colonneProgetti: columnConfigSchema.nullable().optional(),
-  colonneClienti: columnConfigSchema.nullable().optional(),
-  rowsProjects: z.number().int().min(1).max(500).optional(),
-  rowsClients: z.number().int().min(1).max(500).optional(),
-  columnsProjects: columnConfigSchema.nullable().optional(),
-  columnsClients: columnConfigSchema.nullable().optional(),
-}).catchall(jsonValueSchema.optional());
+const patchPreferencesSchema = z
+  .object({
+    paletteId: z.string().min(1).optional(),
+    cornerStyle: z.enum(["rounded", "square"]).optional(),
+    notificationPosition: z
+      .enum([
+        "top-left",
+        "top-center",
+        "top-right",
+        "bottom-left",
+        "bottom-center",
+        "bottom-right",
+      ])
+      .optional(),
+    notificationPopups: z.boolean().optional(),
+    languageCode: z.string().min(2).optional(),
+    righeProgetti: z.number().int().min(1).max(500).optional(),
+    righeClienti: z.number().int().min(1).max(500).optional(),
+    colonneProgetti: columnConfigSchema.nullable().optional(),
+    colonneClienti: columnConfigSchema.nullable().optional(),
+    rowsProjects: z.number().int().min(1).max(500).optional(),
+    rowsClients: z.number().int().min(1).max(500).optional(),
+    columnsProjects: columnConfigSchema.nullable().optional(),
+    columnsClients: columnConfigSchema.nullable().optional(),
+  })
+  .catchall(jsonValueSchema.optional());
 
 @Controller("/api/user/preferences")
 @UseGuards(RequestContextAuthGuard)

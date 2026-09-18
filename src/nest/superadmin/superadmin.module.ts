@@ -8,6 +8,7 @@ import { AuthModule } from "../auth/auth.module.js";
 import { AuditNestModule } from "../audit/audit.module.js";
 import { DocumentArchiveNestModule } from "../document-archive/document-archive.module.js";
 import { ModuleManagementNestModule } from "../module-management/module-management.module.js";
+import { ExternalDatabasesNestModule } from "../external-databases/external-databases.module.js";
 import { BackendProvidersModule } from "../providers/backend-providers.module.js";
 import { ArchivedItemsService } from "../../modules/document-archive/services/ArchivedItemsService.js";
 import { ModuleManagementService } from "../../modules/module-management/services/ModuleManagementService.js";
@@ -15,7 +16,14 @@ import { AuditLogService } from "../../modules/audit/services/AuditLogService.js
 import { NestSuperadminController } from "./superadmin.controller.js";
 
 @Module({
-  imports: [AuthModule, AuditNestModule, BackendProvidersModule, DocumentArchiveNestModule, ModuleManagementNestModule],
+  imports: [
+    AuthModule,
+    AuditNestModule,
+    BackendProvidersModule,
+    DocumentArchiveNestModule,
+    ModuleManagementNestModule,
+    ExternalDatabasesNestModule,
+  ],
   controllers: [NestSuperadminController],
   providers: [
     {
@@ -27,14 +35,15 @@ import { NestSuperadminController } from "./superadmin.controller.js";
         authSessionRepository: PrismaAuthSessionRepository,
         moduleManagementService: ModuleManagementService,
         auditLogService: AuditLogService,
-      ) => new SuperadminService({
-        archivedItemsService,
-        passwordHasher,
-        passwordPolicy,
-        authSessionRepository,
-        moduleManagementService,
-        auditLogService,
-      }),
+      ) =>
+        new SuperadminService({
+          archivedItemsService,
+          passwordHasher,
+          passwordPolicy,
+          authSessionRepository,
+          moduleManagementService,
+          auditLogService,
+        }),
       inject: [
         ArchivedItemsService,
         PasswordHasher,

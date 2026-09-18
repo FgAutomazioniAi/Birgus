@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 import { z } from "zod";
 
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
@@ -35,11 +45,15 @@ export class NestModuleManagementController {
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Record<string, unknown>> {
     const workspaceId = requestContext.workspace.workspaceId;
-    const modules = await this.moduleManagementService.listWorkspaceModules(workspaceId);
+    const modules =
+      await this.moduleManagementService.listWorkspaceModules(workspaceId);
 
     return {
       workspaceId,
-      modules: modules.map((item) => ({ moduleKey: item.moduleKey, enabled: item.enabled })),
+      modules: modules.map((item) => ({
+        moduleKey: item.moduleKey,
+        enabled: item.enabled,
+      })),
     };
   }
 
@@ -49,11 +63,15 @@ export class NestModuleManagementController {
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Record<string, unknown>> {
     const workspaceId = requestContext.workspace.workspaceId;
-    const modules = await this.moduleManagementService.listWorkspaceModules(workspaceId);
+    const modules =
+      await this.moduleManagementService.listWorkspaceModules(workspaceId);
 
     return {
       workspaceId,
-      modules: modules.map((item) => ({ moduleKey: item.moduleKey, enabled: item.enabled })),
+      modules: modules.map((item) => ({
+        moduleKey: item.moduleKey,
+        enabled: item.enabled,
+      })),
     };
   }
 
@@ -71,13 +89,18 @@ export class NestModuleManagementController {
     if (moduleKey === "ddt_processing") {
       await this.startOcrRuntime();
     }
-    await this.moduleManagementService.enableModule(workspaceId, moduleKey, configuredByUserId);
+    await this.moduleManagementService.enableModule(
+      workspaceId,
+      moduleKey,
+      configuredByUserId,
+    );
     return {
       ok: true,
       workspaceId,
       moduleKey,
       enabled: true,
-      ocrRuntime: moduleKey === "ddt_processing" ? { running: true, error: null } : null,
+      ocrRuntime:
+        moduleKey === "ddt_processing" ? { running: true, error: null } : null,
     };
   }
 
@@ -92,10 +115,13 @@ export class NestModuleManagementController {
     const configuredByUserId = requestContext.workspace.userId;
     const moduleKey = this.getModuleKey(moduleKeyRaw);
 
-    await this.moduleManagementService.disableModule(workspaceId, moduleKey, configuredByUserId);
-    const ocrRuntime = moduleKey === "ddt_processing"
-      ? await this.stopOcrRuntime()
-      : null;
+    await this.moduleManagementService.disableModule(
+      workspaceId,
+      moduleKey,
+      configuredByUserId,
+    );
+    const ocrRuntime =
+      moduleKey === "ddt_processing" ? await this.stopOcrRuntime() : null;
     return { ok: true, workspaceId, moduleKey, enabled: false, ocrRuntime };
   }
 
@@ -109,7 +135,10 @@ export class NestModuleManagementController {
         containerRunning: false,
         state: "failed",
         modelLoaded: false,
-        error: error instanceof Error ? error.message : "OCR runtime status unavailable",
+        error:
+          error instanceof Error
+            ? error.message
+            : "OCR runtime status unavailable",
       };
     }
   }
@@ -122,7 +151,10 @@ export class NestModuleManagementController {
   ): Promise<Record<string, unknown>> {
     const workspaceId = requestContext.workspace.workspaceId;
     const userId = this.getUserId(userIdRaw);
-    const modules = await this.moduleManagementService.listUserModules(workspaceId, userId);
+    const modules = await this.moduleManagementService.listUserModules(
+      workspaceId,
+      userId,
+    );
 
     return {
       workspaceId,
@@ -210,7 +242,11 @@ export class NestModuleManagementController {
     const userId = this.getUserId(userIdRaw);
     const moduleKey = this.getModuleKey(moduleKeyRaw);
 
-    await this.moduleManagementService.clearUserOverride(workspaceId, userId, moduleKey);
+    await this.moduleManagementService.clearUserOverride(
+      workspaceId,
+      userId,
+      moduleKey,
+    );
     return { ok: true, workspaceId, userId, moduleKey, overrideMode: null };
   }
 
@@ -237,8 +273,16 @@ export class NestModuleManagementController {
     }
   }
 
-  private async stopOcrRuntime(): Promise<{ running: boolean; shared: boolean; error: string | null }> {
-    if (await this.moduleManagementService.isModuleEnabledInAnyActiveWorkspace("ddt_processing")) {
+  private async stopOcrRuntime(): Promise<{
+    running: boolean;
+    shared: boolean;
+    error: string | null;
+  }> {
+    if (
+      await this.moduleManagementService.isModuleEnabledInAnyActiveWorkspace(
+        "ddt_processing",
+      )
+    ) {
       return { running: true, shared: true, error: null };
     }
 
@@ -249,7 +293,8 @@ export class NestModuleManagementController {
       return {
         running: true,
         shared: false,
-        error: error instanceof Error ? error.message : "OCR container stop failed",
+        error:
+          error instanceof Error ? error.message : "OCR container stop failed",
       };
     }
   }

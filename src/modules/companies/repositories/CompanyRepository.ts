@@ -2,7 +2,10 @@ import { CompanyEntity } from "../domain/CompanyEntity.js";
 
 export interface CompanyRepository {
   list(workspaceId: string): Promise<CompanyEntity[]>;
-  findById(workspaceId: string, companyId: number): Promise<CompanyEntity | null>;
+  findById(
+    workspaceId: string,
+    companyId: number,
+  ): Promise<CompanyEntity | null>;
   create(params: {
     workspaceId: string;
     name: string;

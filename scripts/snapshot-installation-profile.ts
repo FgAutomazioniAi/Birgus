@@ -1,5 +1,8 @@
 import { Prisma, PrismaClient } from "@prisma/client";
-import { createInstallationProfile, hashInstallationProfile } from "./installation-profile.js";
+import {
+  createInstallationProfile,
+  hashInstallationProfile,
+} from "./installation-profile.js";
 
 const prisma = new PrismaClient();
 
@@ -14,20 +17,41 @@ async function main(): Promise<void> {
       },
     },
   });
-  if (workspaces.length === 0) throw new Error("No active workspace exists. Run instance:initialize first.");
+  if (workspaces.length === 0)
+    throw new Error(
+      "No active workspace exists. Run instance:initialize first.",
+    );
 
-  const profile = createInstallationProfile(workspaces.map((workspace) => ({
-    workspace_code: workspace.code,
-    enabled_modules: workspace.workspace_modules.map(({ module }) => module.key),
-  })));
+  const profile = createInstallationProfile(
+    workspaces.map((workspace) => ({
+      workspace_code: workspace.code,
+      enabled_modules: workspace.workspace_modules.map(
+        ({ module }) => module.key,
+      ),
+    })),
+  );
   const profileHash = hashInstallationProfile(profile);
-  const existing = await prisma.installationProfileSnapshot.findUnique({ where: { profile_hash: profileHash } });
+  const existing = await prisma.installationProfileSnapshot.findUnique({
+    where: { profile_hash: profileHash },
+  });
   if (existing) {
-    console.log(JSON.stringify({ status: "unchanged", version: existing.version, profile_hash: existing.profile_hash }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          status: "unchanged",
+          version: existing.version,
+          profile_hash: existing.profile_hash,
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
-  const latest = await prisma.installationProfileSnapshot.aggregate({ _max: { version: true } });
+  const latest = await prisma.installationProfileSnapshot.aggregate({
+    _max: { version: true },
+  });
   const snapshot = await prisma.installationProfileSnapshot.create({
     data: {
       version: (latest._max.version ?? 0) + 1,
@@ -36,7 +60,17 @@ async function main(): Promise<void> {
       normalized_profile: profile as Prisma.InputJsonValue,
     },
   });
-  console.log(JSON.stringify({ status: "created", version: snapshot.version, profile_hash: snapshot.profile_hash }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        status: "created",
+        version: snapshot.version,
+        profile_hash: snapshot.profile_hash,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 main()

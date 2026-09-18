@@ -24,9 +24,18 @@ interface OptionSelectProps<TValue extends string> {
   value: TValue;
 }
 
-export function SegmentedControl<TValue extends string>({ ariaLabel, onChange, options, value }: SegmentedControlProps<TValue>) {
+export function SegmentedControl<TValue extends string>({
+  ariaLabel,
+  onChange,
+  options,
+  value,
+}: SegmentedControlProps<TValue>) {
   return (
-    <div className="inline-flex rounded-lg border border-border-default bg-bg-surface p-1" aria-label={ariaLabel} role="group">
+    <div
+      className="inline-flex rounded-lg border border-border-default bg-bg-surface p-1"
+      aria-label={ariaLabel}
+      role="group"
+    >
       {options.map((option) => (
         <Button
           key={option.value}
@@ -44,9 +53,18 @@ export function SegmentedControl<TValue extends string>({ ariaLabel, onChange, o
   );
 }
 
-export function OptionSelect<TValue extends string>({ id, label, onChange, options, value }: OptionSelectProps<TValue>) {
+export function OptionSelect<TValue extends string>({
+  id,
+  label,
+  onChange,
+  options,
+  value,
+}: OptionSelectProps<TValue>) {
   return (
-    <label className="flex items-center gap-2 text-sm text-text-secondary" htmlFor={id}>
+    <label
+      className="flex items-center gap-2 text-sm text-text-secondary"
+      htmlFor={id}
+    >
       <span className="font-medium text-text-muted">{label}</span>
       <select
         id={id}

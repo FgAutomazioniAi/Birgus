@@ -2,7 +2,9 @@ import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { AuthLoginChallengeEntity } from "../domain/AuthLoginChallengeEntity.js";
 import { AuthLoginChallengeRepository } from "../repositories/AuthLoginChallengeRepository.js";
 
-export class PrismaAuthLoginChallengeRepository implements AuthLoginChallengeRepository {
+export class PrismaAuthLoginChallengeRepository
+  implements AuthLoginChallengeRepository
+{
   public async create(params: {
     userId: string;
     challengeHash: string;
@@ -30,7 +32,9 @@ export class PrismaAuthLoginChallengeRepository implements AuthLoginChallengeRep
     return this.toEntity(row);
   }
 
-  public async findByChallengeHash(challengeHash: string): Promise<AuthLoginChallengeEntity | null> {
+  public async findByChallengeHash(
+    challengeHash: string,
+  ): Promise<AuthLoginChallengeEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.authLoginChallenge.findFirst({
       where: {

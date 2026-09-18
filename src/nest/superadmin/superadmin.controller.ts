@@ -1,10 +1,25 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 import { ModuleOverrideMode } from "@prisma/client";
 import { FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import { RequestContext } from "../../core/tenancy/RequestContext.js";
 import { SuperadminService } from "../../modules/superadmin/services/SuperadminService.js";
+import { ExternalDatabaseConnectionService } from "../../modules/external-databases/services/ExternalDatabaseConnectionService.js";
 import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
 import { CurrentRequestContext } from "../common/decorators/request-context.decorator.js";
 
@@ -27,6 +42,11 @@ const workspaceModuleParamsSchema = workspaceParamsSchema.extend({
 
 const userModulesQuerySchema = z.object({
   workspaceId: z.string().uuid(),
+});
+
+const externalDatabaseAccessSchema = z.object({
+  workspaceId: z.string().uuid(),
+  connectionIds: z.array(z.string().uuid()).max(100),
 });
 
 const createUserSchema = z.object({
@@ -75,13 +95,24 @@ const workspaceRolesSchema = z.object({
   roleKeys: z.array(z.string().trim().min(1)).length(1),
 });
 
+const rolePermissionsSchema = z.object({
+  roleKey: z.string().trim().min(1),
+  permissionKeys: z.array(z.string().trim().min(1)),
+});
+
 const addUserWorkspaceSchema = z.object({
   workspaceId: z.string().uuid(),
   roleKey: z.string().trim().min(1),
 });
 
 const archiveParamsSchema = z.object({
-  entityType: z.enum(["project", "project_version", "document", "company", "client"]),
+  entityType: z.enum([
+    "project",
+    "project_version",
+    "document",
+    "company",
+    "client",
+  ]),
   entityId: z.string().min(1),
 });
 
@@ -101,6 +132,8 @@ export class NestSuperadminController {
   public constructor(
     @Inject(SuperadminService)
     private readonly service: SuperadminService,
+    @Inject(ExternalDatabaseConnectionService)
+    private readonly externalDatabaseConnectionService: ExternalDatabaseConnectionService,
   ) {}
 
   @Get("workspaces")
@@ -110,7 +143,9 @@ export class NestSuperadminController {
     const scope = await this.managementScope(requestContext);
     return {
       managementScope: scope,
-      workspaces: await this.service.listWorkspaces(scope === "WORKSPACE" ? requestContext.workspace.workspaceId : null),
+      workspaces: await this.service.listWorkspaces(
+        scope === "WORKSPACE" ? requestContext.workspace.workspaceId : null,
+      ),
     };
   }
 
@@ -120,6 +155,33 @@ export class NestSuperadminController {
   ): Promise<Record<string, unknown>> {
     const scope = await this.managementScope(requestContext);
     return { roles: await this.service.listRoles(scope === "GLOBAL") };
+  }
+
+  @Get("role-permissions")
+  public async listRolePermissions(
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const scope = await this.managementScope(requestContext);
+    this.service.assertGlobalScope(scope);
+    return { roles: await this.service.listRolePermissions() };
+  }
+
+  @Put("role-permissions")
+  @HttpCode(200)
+  public async replaceRolePermissions(
+    @Body() bodyRaw: unknown,
+    @Req() request: FastifyRequest,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const body = rolePermissionsSchema.parse(bodyRaw);
+    const scope = await this.managementScope(requestContext);
+    this.service.assertGlobalScope(scope);
+    await this.service.replaceRolePermissions(
+      body.roleKey,
+      body.permissionKeys,
+      this.getAuditContext(requestContext, request),
+    );
+    return { ok: true };
   }
 
   @Get("modules")
@@ -137,7 +199,11 @@ export class NestSuperadminController {
   ): Promise<Record<string, unknown>> {
     const params = workspaceParamsSchema.parse(paramsRaw);
     const scope = await this.managementScope(requestContext);
-    this.service.assertWorkspaceInScope(scope, requestContext.workspace.workspaceId, params.workspaceId);
+    this.service.assertWorkspaceInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      params.workspaceId,
+    );
     return {
       workspaceId: params.workspaceId,
       modules: await this.service.listWorkspaceModules(params.workspaceId),
@@ -155,7 +221,11 @@ export class NestSuperadminController {
     const params = workspaceModuleParamsSchema.parse(paramsRaw);
     const body = workspaceModuleSchema.parse(bodyRaw);
     const scope = await this.managementScope(requestContext);
-    this.service.assertWorkspaceInScope(scope, requestContext.workspace.workspaceId, params.workspaceId);
+    this.service.assertWorkspaceInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      params.workspaceId,
+    );
 
     await this.service.setWorkspaceModule({
       workspaceId: params.workspaceId,
@@ -164,7 +234,12 @@ export class NestSuperadminController {
       auditContext: this.getAuditContext(requestContext, request),
     });
 
-    return { ok: true, workspaceId: params.workspaceId, moduleKey: params.moduleKey, enabled: body.enabled };
+    return {
+      ok: true,
+      workspaceId: params.workspaceId,
+      moduleKey: params.moduleKey,
+      enabled: body.enabled,
+    };
   }
 
   @Delete("workspaces/:workspaceId")
@@ -196,8 +271,17 @@ export class NestSuperadminController {
   ): Promise<Record<string, unknown>> {
     const query = usersQuerySchema.parse(queryRaw);
     const scope = await this.managementScope(requestContext);
-    const workspaceId = scope === "WORKSPACE" ? requestContext.workspace.workspaceId : query.workspaceId ?? null;
-    return { users: await this.service.listUsers(query.search ?? null, workspaceId, scope === "GLOBAL") };
+    const workspaceId =
+      scope === "WORKSPACE"
+        ? requestContext.workspace.workspaceId
+        : (query.workspaceId ?? null);
+    return {
+      users: await this.service.listUsers(
+        query.search ?? null,
+        workspaceId,
+        scope === "GLOBAL",
+      ),
+    };
   }
 
   @Post("users")
@@ -209,7 +293,11 @@ export class NestSuperadminController {
   ): Promise<Record<string, unknown>> {
     const body = createUserSchema.parse(bodyRaw);
     const scope = await this.managementScope(requestContext);
-    this.service.assertWorkspaceInScope(scope, requestContext.workspace.workspaceId, body.workspaceId);
+    this.service.assertWorkspaceInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      body.workspaceId,
+    );
     await this.service.assertRoleAssignable(scope, body.roleKeys[0] ?? "");
     const created = await this.service.createUserInWorkspace({
       workspaceId: body.workspaceId,
@@ -239,7 +327,11 @@ export class NestSuperadminController {
     const params = userParamsSchema.parse(paramsRaw);
     const body = setUserStatusSchema.parse(bodyRaw);
     const scope = await this.managementScope(requestContext);
-    await this.service.assertUserAccountInScope(scope, requestContext.workspace.workspaceId, params.userId);
+    await this.service.assertUserAccountInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      params.userId,
+    );
 
     await this.service.setUserActiveStatus({
       targetUserId: params.userId,
@@ -257,10 +349,17 @@ export class NestSuperadminController {
   ): Promise<Record<string, unknown>> {
     const params = userParamsSchema.parse(paramsRaw);
     const scope = await this.managementScope(requestContext);
-    await this.service.assertUserInScope(scope, requestContext.workspace.workspaceId, params.userId);
+    await this.service.assertUserInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      params.userId,
+    );
     return {
       userId: params.userId,
-      memberships: await this.service.listUserMemberships(params.userId, scope === "WORKSPACE" ? requestContext.workspace.workspaceId : null),
+      memberships: await this.service.listUserMemberships(
+        params.userId,
+        scope === "WORKSPACE" ? requestContext.workspace.workspaceId : null,
+      ),
     };
   }
 
@@ -273,8 +372,16 @@ export class NestSuperadminController {
     const params = userParamsSchema.parse(paramsRaw);
     const query = userModulesQuerySchema.parse(queryRaw);
     const scope = await this.managementScope(requestContext);
-    this.service.assertWorkspaceInScope(scope, requestContext.workspace.workspaceId, query.workspaceId);
-    await this.service.assertUserInScope(scope, requestContext.workspace.workspaceId, params.userId);
+    this.service.assertWorkspaceInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      query.workspaceId,
+    );
+    await this.service.assertUserInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      params.userId,
+    );
     const modules = await this.service.listUserModules({
       workspaceId: query.workspaceId,
       userId: params.userId,
@@ -285,6 +392,68 @@ export class NestSuperadminController {
       userId: params.userId,
       modules,
     };
+  }
+
+  @Get("users/:userId/external-database-access")
+  public async listUserExternalDatabaseAccess(
+    @Param() paramsRaw: unknown,
+    @Query() queryRaw: unknown,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const params = userParamsSchema.parse(paramsRaw);
+    const query = userModulesQuerySchema.parse(queryRaw);
+    const scope = await this.managementScope(requestContext);
+    this.service.assertWorkspaceInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      query.workspaceId,
+    );
+    await this.service.assertUserInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      params.userId,
+    );
+    return {
+      connections: await this.externalDatabaseConnectionService.listUserAccess(
+        query.workspaceId,
+        params.userId,
+      ),
+    };
+  }
+
+  @Put("users/:userId/external-database-access")
+  @HttpCode(200)
+  public async replaceUserExternalDatabaseAccess(
+    @Param() paramsRaw: unknown,
+    @Body() bodyRaw: unknown,
+    @Req() request: FastifyRequest,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const params = userParamsSchema.parse(paramsRaw);
+    const body = externalDatabaseAccessSchema.parse(bodyRaw);
+    const scope = await this.managementScope(requestContext);
+    this.service.assertWorkspaceInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      body.workspaceId,
+    );
+    await this.service.assertUserInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      params.userId,
+    );
+    await this.externalDatabaseConnectionService.replaceUserAccess(
+      body.workspaceId,
+      params.userId,
+      body.connectionIds,
+    );
+    await this.service.recordExternalDatabaseAccessChange({
+      workspaceId: body.workspaceId,
+      targetUserId: params.userId,
+      connectionIds: body.connectionIds,
+      auditContext: this.getAuditContext(requestContext, request),
+    });
+    return { ok: true };
   }
 
   @Post("users/:userId/workspaces")
@@ -298,9 +467,17 @@ export class NestSuperadminController {
     const params = userParamsSchema.parse(paramsRaw);
     const body = addUserWorkspaceSchema.parse(bodyRaw);
     const scope = await this.managementScope(requestContext);
-    this.service.assertWorkspaceInScope(scope, requestContext.workspace.workspaceId, body.workspaceId);
+    this.service.assertWorkspaceInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      body.workspaceId,
+    );
     await this.service.assertRoleAssignable(scope, body.roleKey, params.userId);
-    await this.service.assertUserInScope(scope, requestContext.workspace.workspaceId, params.userId);
+    await this.service.assertUserInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      params.userId,
+    );
 
     await this.service.addUserToWorkspace({
       workspaceId: body.workspaceId,
@@ -323,7 +500,11 @@ export class NestSuperadminController {
     const params = userParamsSchema.parse(paramsRaw);
     const body = resetPasswordSchema.parse(bodyRaw);
     const scope = await this.managementScope(requestContext);
-    await this.service.assertUserAccountInScope(scope, requestContext.workspace.workspaceId, params.userId);
+    await this.service.assertUserAccountInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      params.userId,
+    );
 
     await this.service.resetUserPassword({
       targetUserId: params.userId,
@@ -343,7 +524,11 @@ export class NestSuperadminController {
   ): Promise<Record<string, unknown>> {
     const params = userParamsSchema.parse(paramsRaw);
     const scope = await this.managementScope(requestContext);
-    await this.service.assertUserAccountInScope(scope, requestContext.workspace.workspaceId, params.userId);
+    await this.service.assertUserAccountInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      params.userId,
+    );
     await this.service.revokeUserSessions({
       targetUserId: params.userId,
       auditContext: this.getAuditContext(requestContext, request),
@@ -361,7 +546,11 @@ export class NestSuperadminController {
   ): Promise<Record<string, unknown>> {
     const params = userParamsSchema.parse(paramsRaw);
     const scope = await this.managementScope(requestContext);
-    await this.service.assertUserAccountInScope(scope, requestContext.workspace.workspaceId, params.userId);
+    await this.service.assertUserAccountInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      params.userId,
+    );
     await this.service.resetUserTwoFactor({
       targetUserId: params.userId,
       auditContext: this.getAuditContext(requestContext, request),
@@ -379,8 +568,16 @@ export class NestSuperadminController {
   ): Promise<Record<string, unknown>> {
     const body = moduleOverrideSchema.parse(bodyRaw);
     const scope = await this.managementScope(requestContext);
-    this.service.assertWorkspaceInScope(scope, requestContext.workspace.workspaceId, body.workspaceId);
-    await this.service.assertUserInScope(scope, requestContext.workspace.workspaceId, body.userId);
+    this.service.assertWorkspaceInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      body.workspaceId,
+    );
+    await this.service.assertUserInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      body.userId,
+    );
 
     await this.service.setModuleOverride({
       workspaceId: body.workspaceId,
@@ -403,8 +600,16 @@ export class NestSuperadminController {
   ): Promise<Record<string, unknown>> {
     const body = clearModuleOverrideSchema.parse(bodyRaw);
     const scope = await this.managementScope(requestContext);
-    this.service.assertWorkspaceInScope(scope, requestContext.workspace.workspaceId, body.workspaceId);
-    await this.service.assertUserInScope(scope, requestContext.workspace.workspaceId, body.userId);
+    this.service.assertWorkspaceInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      body.workspaceId,
+    );
+    await this.service.assertUserInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      body.userId,
+    );
 
     await this.service.clearModuleOverride({
       workspaceId: body.workspaceId,
@@ -425,9 +630,21 @@ export class NestSuperadminController {
   ): Promise<Record<string, unknown>> {
     const body = workspaceRolesSchema.parse(bodyRaw);
     const scope = await this.managementScope(requestContext);
-    this.service.assertWorkspaceInScope(scope, requestContext.workspace.workspaceId, body.workspaceId);
-    await this.service.assertRoleAssignable(scope, body.roleKeys[0] ?? "", body.userId);
-    await this.service.assertUserInScope(scope, requestContext.workspace.workspaceId, body.userId);
+    this.service.assertWorkspaceInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      body.workspaceId,
+    );
+    await this.service.assertRoleAssignable(
+      scope,
+      body.roleKeys[0] ?? "",
+      body.userId,
+    );
+    await this.service.assertUserInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      body.userId,
+    );
 
     await this.service.replaceWorkspaceRoles({
       workspaceId: body.workspaceId,
@@ -450,7 +667,11 @@ export class NestSuperadminController {
     const params = archiveParamsSchema.parse(paramsRaw);
     const body = restoreArchiveSchema.parse(bodyRaw);
     const scope = await this.managementScope(requestContext);
-    this.service.assertWorkspaceInScope(scope, requestContext.workspace.workspaceId, body.workspaceId);
+    this.service.assertWorkspaceInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      body.workspaceId,
+    );
 
     await this.service.restoreArchivedItem({
       workspaceId: body.workspaceId,
@@ -474,7 +695,11 @@ export class NestSuperadminController {
     const body = hardDeleteArchiveSchema.parse(bodyRaw);
     const scope = await this.managementScope(requestContext);
     this.service.assertGlobalScope(scope);
-    this.service.assertWorkspaceInScope(scope, requestContext.workspace.workspaceId, body.workspaceId);
+    this.service.assertWorkspaceInScope(
+      scope,
+      requestContext.workspace.workspaceId,
+      body.workspaceId,
+    );
 
     await this.service.permanentlyDeleteArchivedItem({
       workspaceId: body.workspaceId,

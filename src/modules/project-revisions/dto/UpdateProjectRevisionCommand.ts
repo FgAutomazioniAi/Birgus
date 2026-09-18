@@ -4,7 +4,12 @@ export class UpdateProjectRevisionCommand {
   public readonly code: string;
   public readonly actorUserId: string | null;
 
-  public constructor(params: { workspaceId: string; revisionId: number; code: string; actorUserId?: string | null }) {
+  public constructor(params: {
+    workspaceId: string;
+    revisionId: number;
+    code: string;
+    actorUserId?: string | null;
+  }) {
     this.workspaceId = params.workspaceId;
     this.revisionId = params.revisionId;
     this.code = params.code.trim();

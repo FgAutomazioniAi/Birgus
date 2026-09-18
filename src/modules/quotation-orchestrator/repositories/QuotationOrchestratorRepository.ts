@@ -38,22 +38,25 @@ export interface QuotationOrchestratorRepository {
     step: string;
   }): Promise<QuotationJobStateRecord>;
   findJobById(jobId: string): Promise<QuotationJobStateRecord | null>;
-  updateJob(jobId: string, patch: {
-    status?: string;
-    progress?: number;
-    message?: string | null;
-    step?: string | null;
-    error?: string | null;
-    outputDocxPath?: string | null;
-    outputDocxStoragePath?: string | null;
-    outputDocxSizeBytes?: number | null;
-    emailRecipient?: string | null;
-    mailDeliveryStatus?: string;
-    mailSentAt?: Date | null;
-    mailError?: string | null;
-    finalMessage?: string | null;
-    startedAt?: Date | null;
-    completedAt?: Date | null;
-  }): Promise<void>;
+  updateJob(
+    jobId: string,
+    patch: {
+      status?: string;
+      progress?: number;
+      message?: string | null;
+      step?: string | null;
+      error?: string | null;
+      outputDocxPath?: string | null;
+      outputDocxStoragePath?: string | null;
+      outputDocxSizeBytes?: number | null;
+      emailRecipient?: string | null;
+      mailDeliveryStatus?: string;
+      mailSentAt?: Date | null;
+      mailError?: string | null;
+      finalMessage?: string | null;
+      startedAt?: Date | null;
+      completedAt?: Date | null;
+    },
+  ): Promise<void>;
   listRecoverableJobs(): Promise<QuotationJobStateRecord[]>;
 }

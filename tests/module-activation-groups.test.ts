@@ -4,7 +4,9 @@ import test from "node:test";
 import { ModuleManagementService } from "../src/modules/module-management/services/ModuleManagementService.js";
 import { ModuleAccessRepository } from "../src/modules/module-management/repositories/ModuleAccessRepository.js";
 
-function repositoryStub(overrides: Partial<ModuleAccessRepository> = {}): ModuleAccessRepository {
+function repositoryStub(
+  overrides: Partial<ModuleAccessRepository> = {},
+): ModuleAccessRepository {
   return {
     isModuleEnabledForUser: async () => false,
     isModuleEnabledForWorkspace: async () => false,
@@ -22,14 +24,20 @@ function repositoryStub(overrides: Partial<ModuleAccessRepository> = {}): Module
 
 test("enabling one planning module enables the complete planning group", async () => {
   const changes: Array<{ moduleKey: string; enabled: boolean }> = [];
-  const service = new ModuleManagementService(repositoryStub({
-    setWorkspaceModule: async (_workspaceId, moduleKey, enabled) => { changes.push({ moduleKey, enabled }); },
-  }));
+  const service = new ModuleManagementService(
+    repositoryStub({
+      setWorkspaceModule: async (_workspaceId, moduleKey, enabled) => {
+        changes.push({ moduleKey, enabled });
+      },
+    }),
+  );
 
   await service.enableModule("workspace", "maintenance_calendar", "admin");
 
   assert.deepEqual(
-    changes.sort((left, right) => left.moduleKey.localeCompare(right.moduleKey)),
+    changes.sort((left, right) =>
+      left.moduleKey.localeCompare(right.moduleKey),
+    ),
     [
       { moduleKey: "maintenance_calendar", enabled: true },
       { moduleKey: "maintenance_proposals", enabled: true },
@@ -40,9 +48,13 @@ test("enabling one planning module enables the complete planning group", async (
 
 test("disabling one planning module disables the complete planning group", async () => {
   const changes: Array<{ moduleKey: string; enabled: boolean }> = [];
-  const service = new ModuleManagementService(repositoryStub({
-    setWorkspaceModule: async (_workspaceId, moduleKey, enabled) => { changes.push({ moduleKey, enabled }); },
-  }));
+  const service = new ModuleManagementService(
+    repositoryStub({
+      setWorkspaceModule: async (_workspaceId, moduleKey, enabled) => {
+        changes.push({ moduleKey, enabled });
+      },
+    }),
+  );
 
   await service.disableModule("workspace", "offer_priority", "admin");
 
@@ -51,9 +63,12 @@ test("disabling one planning module disables the complete planning group", async
 });
 
 test("a dependent outside the planning group still blocks a grouped disable", async () => {
-  const service = new ModuleManagementService(repositoryStub({
-    listEnabledDependents: async (_workspaceId, moduleKey) => moduleKey === "maintenance_calendar" ? ["external_module"] : [],
-  }));
+  const service = new ModuleManagementService(
+    repositoryStub({
+      listEnabledDependents: async (_workspaceId, moduleKey) =>
+        moduleKey === "maintenance_calendar" ? ["external_module"] : [],
+    }),
+  );
 
   await assert.rejects(
     service.disableModule("workspace", "maintenance_proposals", "admin"),

@@ -16,6 +16,7 @@ import { NextOrchestratorQuotationAnalyzer } from "../../modules/quotation-orche
 import { PrismaWorkflowRepository } from "../../modules/workflows/infra/PrismaWorkflowRepository.js";
 import { QueueWorkflowRunDispatcher } from "../../modules/workflows/services/QueueWorkflowRunDispatcher.js";
 import { ScheduledWorkflowDeliveryService } from "../../modules/workflows/services/ScheduledWorkflowDeliveryService.js";
+import { ScheduledWorkflowExecutionService } from "../../modules/workflows/services/ScheduledWorkflowExecutionService.js";
 import { WorkflowRunExecutorService } from "../../modules/workflows/services/WorkflowRunExecutorService.js";
 import { WorkflowRuntimeAccessPolicy } from "../../modules/workflows/services/WorkflowRuntimeAccessPolicy.js";
 import { HumanInterventionService } from "../../modules/workflows/services/HumanInterventionService.js";
@@ -25,6 +26,7 @@ import { WorkflowLockService } from "../../modules/workflows/services/WorkflowLo
 import { WorkflowTransferService } from "../../modules/workflows/services/WorkflowTransferService.js";
 import { JobQueue } from "../../worker/queue/JobQueue.js";
 import { AuthModule } from "../auth/auth.module.js";
+import { AuditNestModule } from "../audit/audit.module.js";
 import { JOB_QUEUE } from "../common/tokens.js";
 import { ConnectedAppsNestModule } from "../connected-apps/connected-apps.module.js";
 import { DocumentArchiveNestModule } from "../document-archive/document-archive.module.js";
@@ -36,6 +38,7 @@ import { NestWorkflowsController } from "./workflows.controller.js";
 @Module({
   imports: [
     AuthModule,
+    AuditNestModule,
     ConnectedAppsNestModule,
     DocumentArchiveNestModule,
     KnowledgeNestModule,
@@ -50,12 +53,14 @@ import { NestWorkflowsController } from "./workflows.controller.js";
     BrainyWorkspaceDatabaseConnectionService,
     {
       provide: WorkflowRuntimeAccessPolicy,
-      useFactory: (moduleAccessPolicy: ModuleAccessPolicy) => new WorkflowRuntimeAccessPolicy(moduleAccessPolicy),
+      useFactory: (moduleAccessPolicy: ModuleAccessPolicy) =>
+        new WorkflowRuntimeAccessPolicy(moduleAccessPolicy),
       inject: [ModuleAccessPolicy],
     },
     {
       provide: QueueWorkflowRunDispatcher,
-      useFactory: (jobQueue: JobQueue) => new QueueWorkflowRunDispatcher(jobQueue),
+      useFactory: (jobQueue: JobQueue) =>
+        new QueueWorkflowRunDispatcher(jobQueue),
       inject: [JOB_QUEUE],
     },
     {
@@ -64,17 +69,19 @@ import { NestWorkflowsController } from "./workflows.controller.js";
         repository: PrismaWorkflowRepository,
         runDispatcher: QueueWorkflowRunDispatcher,
         lockService: WorkflowLockService,
-      ) => new WorkflowService(
-        repository,
-        runDispatcher,
-        lockService,
-      ),
-      inject: [PrismaWorkflowRepository, QueueWorkflowRunDispatcher, WorkflowLockService],
+      ) => new WorkflowService(repository, runDispatcher, lockService),
+      inject: [
+        PrismaWorkflowRepository,
+        QueueWorkflowRunDispatcher,
+        WorkflowLockService,
+      ],
     },
     {
       provide: WorkflowTransferService,
-      useFactory: (workflowService: WorkflowService, moduleAccessPolicy: ModuleAccessPolicy) =>
-        new WorkflowTransferService(workflowService, moduleAccessPolicy),
+      useFactory: (
+        workflowService: WorkflowService,
+        moduleAccessPolicy: ModuleAccessPolicy,
+      ) => new WorkflowTransferService(workflowService, moduleAccessPolicy),
       inject: [WorkflowService, ModuleAccessPolicy],
     },
     {
@@ -82,6 +89,12 @@ import { NestWorkflowsController } from "./workflows.controller.js";
       useFactory: (pythonModulesClient: BackendPythonModulesClient) =>
         new ScheduledWorkflowDeliveryService(pythonModulesClient),
       inject: [BackendPythonModulesClient],
+    },
+    {
+      provide: ScheduledWorkflowExecutionService,
+      useFactory: (workflowService: WorkflowService) =>
+        new ScheduledWorkflowExecutionService(workflowService),
+      inject: [WorkflowService],
     },
     {
       provide: WorkflowRunExecutorService,
@@ -103,25 +116,26 @@ import { NestWorkflowsController } from "./workflows.controller.js";
         brainywareClient: BrainywareClient,
         brainyWorkspaceAgentService: BrainyWorkspaceAgentService,
         brainyWorkspaceDatabaseConnectionService: BrainyWorkspaceDatabaseConnectionService,
-      ) => new WorkflowRunExecutorService({
-        documentArchiveService,
-        documentIntelligenceService,
-        quotationAnalyzer,
-        ddtAnalyzer,
-        measureReportAnalyzer,
-        pythonModulesClient,
-        aiProviderSettingsService,
-        mailProviderSettingsService,
-        notificationService,
-        jobQueue,
-        scheduledWorkflowDeliveryService,
-        connectedAppsService,
-        runtimeAccessPolicy,
-        humanInterventionService,
-        brainywareClient,
-        brainyWorkspaceAgentService,
-        brainyWorkspaceDatabaseConnectionService,
-      }),
+      ) =>
+        new WorkflowRunExecutorService({
+          documentArchiveService,
+          documentIntelligenceService,
+          quotationAnalyzer,
+          ddtAnalyzer,
+          measureReportAnalyzer,
+          pythonModulesClient,
+          aiProviderSettingsService,
+          mailProviderSettingsService,
+          notificationService,
+          jobQueue,
+          scheduledWorkflowDeliveryService,
+          connectedAppsService,
+          runtimeAccessPolicy,
+          humanInterventionService,
+          brainywareClient,
+          brainyWorkspaceAgentService,
+          brainyWorkspaceDatabaseConnectionService,
+        }),
       inject: [
         DocumentArchiveService,
         DocumentIntelligenceService,
@@ -143,6 +157,11 @@ import { NestWorkflowsController } from "./workflows.controller.js";
       ],
     },
   ],
-  exports: [WorkflowService, WorkflowRunExecutorService, ScheduledWorkflowDeliveryService],
+  exports: [
+    WorkflowService,
+    WorkflowRunExecutorService,
+    ScheduledWorkflowDeliveryService,
+    ScheduledWorkflowExecutionService,
+  ],
 })
 export class WorkflowsNestModule {}

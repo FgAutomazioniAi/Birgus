@@ -19,9 +19,7 @@ import { NestProjectsController } from "./projects.controller.js";
         repository: PrismaProjectRepository,
         notificationService: NotificationService,
         auditLogService: AuditLogService,
-      ) => new ProjectService(
-        repository, notificationService, auditLogService,
-      ),
+      ) => new ProjectService(repository, notificationService, auditLogService),
       inject: [PrismaProjectRepository, NotificationService, AuditLogService],
     },
   ],

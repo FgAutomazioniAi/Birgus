@@ -40,15 +40,17 @@ export class OpenAiCompatibleToolChatClient {
       model: result.model,
       content: result.content,
       toolCalls: this.normalizeToolCalls(result.toolCalls),
-      promptTokens: typeof usage?.prompt_tokens === "number" ? usage.prompt_tokens : null,
-      completionTokens: typeof usage?.completion_tokens === "number" ? usage.completion_tokens : null,
+      promptTokens:
+        typeof usage?.prompt_tokens === "number" ? usage.prompt_tokens : null,
+      completionTokens:
+        typeof usage?.completion_tokens === "number"
+          ? usage.completion_tokens
+          : null,
       raw: result.response as Record<string, unknown>,
     };
   }
 
-  public async chat(params: {
-    messages: AiChatMessage[];
-  }): Promise<{
+  public async chat(params: { messages: AiChatMessage[] }): Promise<{
     model: string;
     content: string | null;
     promptTokens: number | null;
@@ -65,17 +67,25 @@ export class OpenAiCompatibleToolChatClient {
     return {
       model: result.model,
       content: result.content,
-      promptTokens: typeof usage?.prompt_tokens === "number" ? usage.prompt_tokens : null,
-      completionTokens: typeof usage?.completion_tokens === "number" ? usage.completion_tokens : null,
+      promptTokens:
+        typeof usage?.prompt_tokens === "number" ? usage.prompt_tokens : null,
+      completionTokens:
+        typeof usage?.completion_tokens === "number"
+          ? usage.completion_tokens
+          : null,
       raw: result.response as Record<string, unknown>,
     };
   }
 
-  public streamChat(params: { messages: AiChatMessage[] }): AsyncGenerator<{ model: string; delta: string }> {
+  public streamChat(params: {
+    messages: AiChatMessage[];
+  }): AsyncGenerator<{ model: string; delta: string }> {
     return this.client.streamMessages(params.messages);
   }
 
-  private normalizeToolCalls(value: Array<Record<string, unknown>>): ToolCallResponse[] {
+  private normalizeToolCalls(
+    value: Array<Record<string, unknown>>,
+  ): ToolCallResponse[] {
     const normalized: ToolCallResponse[] = [];
     for (const item of value) {
       const fn = item.function;
@@ -86,8 +96,12 @@ export class OpenAiCompatibleToolChatClient {
       const functionPayload = fn as Record<string, unknown>;
       const id = typeof item.id === "string" ? item.id : "";
       const type = typeof item.type === "string" ? item.type : "function";
-      const name = typeof functionPayload.name === "string" ? functionPayload.name : "";
-      const args = typeof functionPayload.arguments === "string" ? functionPayload.arguments : "{}";
+      const name =
+        typeof functionPayload.name === "string" ? functionPayload.name : "";
+      const args =
+        typeof functionPayload.arguments === "string"
+          ? functionPayload.arguments
+          : "{}";
       if (!id || !name) {
         continue;
       }

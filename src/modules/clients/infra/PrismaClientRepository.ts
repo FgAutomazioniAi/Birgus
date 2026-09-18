@@ -28,7 +28,10 @@ export class PrismaClientRepository implements ClientRepository {
     return rows.map((row) => this.mapRowToEntity(row));
   }
 
-  public async findById(workspaceId: string, clientId: string): Promise<ClientEntity | null> {
+  public async findById(
+    workspaceId: string,
+    clientId: string,
+  ): Promise<ClientEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.client.findFirst({
       where: {
@@ -179,7 +182,10 @@ export class PrismaClientRepository implements ClientRepository {
     return this.mapRowToEntity(row);
   }
 
-  public async softDelete(workspaceId: string, clientId: string): Promise<boolean> {
+  public async softDelete(
+    workspaceId: string,
+    clientId: string,
+  ): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
     const result = await prisma.client.updateMany({
       where: {
@@ -195,7 +201,10 @@ export class PrismaClientRepository implements ClientRepository {
     return result.count > 0;
   }
 
-  public async hardDelete(workspaceId: string, clientId: string): Promise<boolean> {
+  public async hardDelete(
+    workspaceId: string,
+    clientId: string,
+  ): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
     return prisma.$transaction(async (tx) => {
       const existing = await tx.client.findFirst({
@@ -204,7 +213,9 @@ export class PrismaClientRepository implements ClientRepository {
       });
       if (!existing) return false;
 
-      await tx.projectClient.deleteMany({ where: { workspace_id: workspaceId, client_id: clientId } });
+      await tx.projectClient.deleteMany({
+        where: { workspace_id: workspaceId, client_id: clientId },
+      });
       await tx.client.delete({ where: { id: clientId } });
       return true;
     });

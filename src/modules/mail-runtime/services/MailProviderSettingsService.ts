@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import nodemailer from "nodemailer";
 
 import { PrismaService } from "../../../nest/prisma/prisma.service.js";
 
@@ -45,21 +46,28 @@ type StoredMailProviderSettings = Partial<MailProviderRuntimeConfig>;
 export class MailProviderSettingsService {
   public constructor(private readonly prisma: PrismaService) {}
 
-  public async getRuntimeConfig(patch?: MailProviderSettingsPatch): Promise<MailProviderRuntimeConfig> {
+  public async getRuntimeConfig(
+    patch?: MailProviderSettingsPatch,
+  ): Promise<MailProviderRuntimeConfig> {
     return this.buildEffectiveConfig(patch);
   }
 
   public async getPublicSettings(): Promise<PublicMailProviderSettings> {
     const stored = await this.getStoredSettings();
-    return this.toPublicSettings(await this.buildEffectiveConfig(), Boolean(stored));
+    return this.toPublicSettings(
+      await this.buildEffectiveConfig(),
+      Boolean(stored),
+    );
   }
 
-  public async saveSettings(patch: MailProviderSettingsPatch): Promise<PublicMailProviderSettings> {
-    const previous = this.sanitizeStoredSettings(await this.getStoredSettings());
-    const next = this.compactSettings({
-      ...previous,
-      ...this.normalizePatch(patch),
-    });
+  public async saveSettings(
+    patch: MailProviderSettingsPatch,
+  ): Promise<PublicMailProviderSettings> {
+    const previous = this.sanitizeStoredSettings(
+      await this.getStoredSettings(),
+    );
+    const normalizedPatch = this.normalizePatch(patch);
+    const next = this.compactSettings({ ...previous, ...normalizedPatch });
 
     await this.prisma.appSetting.upsert({
       where: { key: MAIL_PROVIDER_SETTING_KEY },
@@ -75,18 +83,44 @@ export class MailProviderSettingsService {
     return this.getPublicSettings();
   }
 
-  public async validateSettings(patch: MailProviderSettingsPatch): Promise<{ ok: boolean; error: string | null }> {
+  public async validateSettings(
+    patch: MailProviderSettingsPatch,
+  ): Promise<{ ok: boolean; error: string | null }> {
     const config = await this.buildEffectiveConfig(patch);
     const error = this.validateConfig(config);
-    return { ok: error === null, error };
+    if (error) return { ok: false, error };
+    if (config.provider !== "smtp") return { ok: true, error: null };
+    try {
+      await nodemailer
+        .createTransport({
+          host: config.smtpHost,
+          port: config.smtpPort,
+          secure: config.smtpSecure,
+          auth:
+            config.smtpUser && config.smtpPass
+              ? { user: config.smtpUser, pass: config.smtpPass }
+              : undefined,
+        })
+        .verify();
+      return { ok: true, error: null };
+    } catch {
+      return {
+        ok: false,
+        error: "Connessione o autenticazione del relay SMTP non riuscita.",
+      };
+    }
   }
 
-  private async buildEffectiveConfig(patch?: MailProviderSettingsPatch): Promise<MailProviderRuntimeConfig> {
-    return {
-      ...this.loadFromEnv(),
+  private async buildEffectiveConfig(
+    patch?: MailProviderSettingsPatch,
+  ): Promise<MailProviderRuntimeConfig> {
+    const envConfig = this.loadFromEnv();
+    const merged = {
+      ...envConfig,
       ...this.sanitizeStoredSettings(await this.getStoredSettings()),
       ...this.normalizePatch(patch ?? {}),
     };
+    return merged;
   }
 
   private loadFromEnv(): MailProviderRuntimeConfig {
@@ -102,7 +136,10 @@ export class MailProviderSettingsService {
     };
   }
 
-  private toPublicSettings(config: MailProviderRuntimeConfig, hasStoredSettings: boolean): PublicMailProviderSettings {
+  private toPublicSettings(
+    config: MailProviderRuntimeConfig,
+    hasStoredSettings: boolean,
+  ): PublicMailProviderSettings {
     return {
       provider: config.provider,
       from: config.from,
@@ -129,15 +166,21 @@ export class MailProviderSettingsService {
     return null;
   }
 
-  private normalizePatch(patch: MailProviderSettingsPatch): StoredMailProviderSettings {
+  private normalizePatch(
+    patch: MailProviderSettingsPatch,
+  ): StoredMailProviderSettings {
     return this.compactSettings({
       provider: this.normalizeProvider(patch.provider),
       from: this.trimString(patch.from),
       smtpHost: this.trimString(patch.smtpHost),
-      smtpPort: typeof patch.smtpPort === "number" && Number.isFinite(patch.smtpPort) && patch.smtpPort > 0
-        ? Math.trunc(patch.smtpPort)
-        : undefined,
-      smtpSecure: typeof patch.smtpSecure === "boolean" ? patch.smtpSecure : undefined,
+      smtpPort:
+        typeof patch.smtpPort === "number" &&
+        Number.isFinite(patch.smtpPort) &&
+        patch.smtpPort > 0
+          ? Math.trunc(patch.smtpPort)
+          : undefined,
+      smtpSecure:
+        typeof patch.smtpSecure === "boolean" ? patch.smtpSecure : undefined,
       smtpUser: this.trimString(patch.smtpUser),
       smtpPass: this.trimString(patch.smtpPass),
       resendApiKey: this.trimString(patch.resendApiKey),
@@ -154,10 +197,14 @@ export class MailProviderSettingsService {
       provider: this.normalizeProvider(row.provider),
       from: this.trimString(row.from),
       smtpHost: this.trimString(row.smtpHost),
-      smtpPort: typeof row.smtpPort === "number" && Number.isFinite(row.smtpPort) && row.smtpPort > 0
-        ? Math.trunc(row.smtpPort)
-        : undefined,
-      smtpSecure: typeof row.smtpSecure === "boolean" ? row.smtpSecure : undefined,
+      smtpPort:
+        typeof row.smtpPort === "number" &&
+        Number.isFinite(row.smtpPort) &&
+        row.smtpPort > 0
+          ? Math.trunc(row.smtpPort)
+          : undefined,
+      smtpSecure:
+        typeof row.smtpSecure === "boolean" ? row.smtpSecure : undefined,
       smtpUser: this.trimString(row.smtpUser),
       smtpPass: this.trimString(row.smtpPass),
       resendApiKey: this.trimString(row.resendApiKey),
@@ -177,7 +224,9 @@ export class MailProviderSettingsService {
   }
 
   private trimString(value: unknown): string | undefined {
-    return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+    return typeof value === "string" && value.trim().length > 0
+      ? value.trim()
+      : undefined;
   }
 
   private firstNonEmpty(...values: Array<string | undefined>): string {
@@ -202,7 +251,9 @@ export class MailProviderSettingsService {
     return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
   }
 
-  private compactSettings(settings: StoredMailProviderSettings): StoredMailProviderSettings {
+  private compactSettings(
+    settings: StoredMailProviderSettings,
+  ): StoredMailProviderSettings {
     return Object.fromEntries(
       Object.entries(settings).filter(([, value]) => value !== undefined),
     ) as StoredMailProviderSettings;

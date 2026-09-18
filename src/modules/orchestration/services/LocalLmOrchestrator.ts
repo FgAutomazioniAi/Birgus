@@ -48,7 +48,11 @@ export interface DdtWorkflowResult {
   commessa_reference: string;
   transfer_note: string;
   article_count: number;
-  article_items: Array<{ article_type: string; quantity: number; unit: string }>;
+  article_items: Array<{
+    article_type: string;
+    quantity: number;
+    unit: string;
+  }>;
   analysis_summary: string;
   raw_response: Record<string, unknown>;
 }
@@ -68,10 +72,16 @@ export class LocalLmOrchestrator {
     pythonModulesClient?: BackendPythonModulesClient,
     lmClient?: OpenAiCompatibleLmClient,
   ) {
-    this.pythonModulesClient = pythonModulesClient ?? new BackendPythonModulesClient();
+    this.pythonModulesClient =
+      pythonModulesClient ?? new BackendPythonModulesClient();
     this.lmClient = lmClient ?? new OpenAiCompatibleLmClient();
-    this.ddtMaxTokens = this.parseOptionalPositiveInt(process.env.ORCH_DDT_LM_MAX_TOKENS);
-    this.useJsonSchema = this.parseBoolean(process.env.ORCH_DDT_USE_JSON_SCHEMA, true);
+    this.ddtMaxTokens = this.parseOptionalPositiveInt(
+      process.env.ORCH_DDT_LM_MAX_TOKENS,
+    );
+    this.useJsonSchema = this.parseBoolean(
+      process.env.ORCH_DDT_USE_JSON_SCHEMA,
+      true,
+    );
   }
 
   public async analyzeFromStorage(input: {
@@ -82,10 +92,14 @@ export class LocalLmOrchestrator {
   }): Promise<DdtWorkflowResult> {
     const workflowStartedAt = Date.now();
     const ocrStartedAt = Date.now();
-    const ocrResult = await this.executePythonModule("ocr_engine", "extract_text_from_pdf_storage", {
-      storage_path: input.storagePath,
-      max_pages: input.maxPages,
-    });
+    const ocrResult = await this.executePythonModule(
+      "ocr_engine",
+      "extract_text_from_pdf_storage",
+      {
+        storage_path: input.storagePath,
+        max_pages: input.maxPages,
+      },
+    );
     const ocrDurationMs = Date.now() - ocrStartedAt;
 
     const extractedText = String(ocrResult.output.extracted_text ?? "").trim();
@@ -96,7 +110,8 @@ export class LocalLmOrchestrator {
     const fgRule = this.inferMovementByFgRule(extractedText);
     const evidence = this.partyEvidence(extractedText);
     const ocrItems = this.extractArticleItemsFromOcr(extractedText);
-    const hasNegativeMarker = this.hasNegativeQuantityMarkerInText(extractedText);
+    const hasNegativeMarker =
+      this.hasNegativeQuantityMarkerInText(extractedText);
 
     const userContext = extractedText;
     const systemPrompt = input.systemPrompt?.trim() || this.getPrompt();
@@ -108,7 +123,13 @@ export class LocalLmOrchestrator {
     });
     const inferenceDurationMs = Date.now() - inferenceStartedAt;
 
-    const normalized = this.normalizePayload(parsed, fgRule, evidence, ocrItems, hasNegativeMarker);
+    const normalized = this.normalizePayload(
+      parsed,
+      fgRule,
+      evidence,
+      ocrItems,
+      hasNegativeMarker,
+    );
     return {
       ...normalized,
       raw_response: {
@@ -136,10 +157,14 @@ export class LocalLmOrchestrator {
   }): Promise<QuotationWorkflowResult> {
     const workflowStartedAt = Date.now();
     const ocrStartedAt = Date.now();
-    const ocrResult = await this.executePythonModule("ocr_engine", "extract_text_from_pdf_storage", {
-      storage_path: input.storagePath,
-      max_pages: input.maxPages,
-    });
+    const ocrResult = await this.executePythonModule(
+      "ocr_engine",
+      "extract_text_from_pdf_storage",
+      {
+        storage_path: input.storagePath,
+        max_pages: input.maxPages,
+      },
+    );
     const ocrDurationMs = Date.now() - ocrStartedAt;
 
     const extractedText = String(ocrResult.output.extracted_text ?? "").trim();
@@ -148,7 +173,8 @@ export class LocalLmOrchestrator {
     }
 
     const cleanedText = this.removeQuotationFooterBlocks(extractedText);
-    const systemPrompt = input.systemPrompt?.trim() || this.getQuotationPrompt();
+    const systemPrompt =
+      input.systemPrompt?.trim() || this.getQuotationPrompt();
 
     this.logLmEvent("QUOTATION_LM_REQUEST", {
       chars: cleanedText.length,
@@ -166,10 +192,15 @@ export class LocalLmOrchestrator {
     });
     const inferenceDurationMs = Date.now() - inferenceStartedAt;
 
-    const parsed = this.tryParseJsonCandidate(lmResponse.content) as Record<string, unknown>;
+    const parsed = this.tryParseJsonCandidate(lmResponse.content) as Record<
+      string,
+      unknown
+    >;
     const structuredData = this.normalizeQuotationStructuredData(parsed);
 
-    this.logLmEvent("QUOTATION_LM_RESPONSE", { contentChars: lmResponse.content.length });
+    this.logLmEvent("QUOTATION_LM_RESPONSE", {
+      contentChars: lmResponse.content.length,
+    });
 
     return {
       structured_data: structuredData,
@@ -230,8 +261,13 @@ export class LocalLmOrchestrator {
       return result;
     }
 
-    const lmResponse = await this.lmClient.chat(`${input.systemPrompt}\n\n${input.userContext}`);
-    const content = (lmResponse.response.output ?? []).map((item) => item.content ?? "").join("\n").trim();
+    const lmResponse = await this.lmClient.chat(
+      `${input.systemPrompt}\n\n${input.userContext}`,
+    );
+    const content = (lmResponse.response.output ?? [])
+      .map((item) => item.content ?? "")
+      .join("\n")
+      .trim();
 
     const result = {
       parsed: this.tryParseJsonCandidate(content),
@@ -249,7 +285,9 @@ export class LocalLmOrchestrator {
   }
 
   private logLmEvent(event: string, meta: Record<string, unknown>): void {
-    const enabled = ["1", "true", "yes", "on"].includes((process.env.LOG_LM_TRAFFIC ?? "").trim().toLowerCase());
+    const enabled = ["1", "true", "yes", "on"].includes(
+      (process.env.LOG_LM_TRAFFIC ?? "").trim().toLowerCase(),
+    );
     if (!enabled) {
       return;
     }
@@ -262,7 +300,11 @@ export class LocalLmOrchestrator {
     action: string,
     input: Record<string, unknown>,
   ): Promise<PythonModulesExecuteResult> {
-    const payload = await this.pythonModulesClient.execute(module, action, input);
+    const payload = await this.pythonModulesClient.execute(
+      module,
+      action,
+      input,
+    );
     const output = this.toRecord(payload.output);
 
     return {
@@ -280,7 +322,8 @@ export class LocalLmOrchestrator {
 
     const start = content.indexOf("{");
     const end = content.lastIndexOf("}");
-    const candidate = start >= 0 && end > start ? content.slice(start, end + 1) : content;
+    const candidate =
+      start >= 0 && end > start ? content.slice(start, end + 1) : content;
 
     try {
       return JSON.parse(candidate) as ParsedPayload;
@@ -312,34 +355,51 @@ export class LocalLmOrchestrator {
     const internalByFg = evidence.receiver_has_fg && evidence.sender_has_fg;
 
     const modelScope = this.normalizeMovementScope(parsed.movement_scope);
-    const movementScope = internalByFg || hasNegativeMarker
-      ? "interno_fg"
-      : modelScope !== "sconosciuto"
-        ? modelScope
-        : evidence.receiver_has_fg || evidence.sender_has_fg
-          ? "esterno"
-          : "sconosciuto";
-
-    const modelMainAction = this.normalizeMainAction(parsed.main_warehouse_action);
-    const mainWarehouseAction = modelMainAction !== "sconosciuto"
-      ? modelMainAction
-      : movementType === "entrata"
-        ? "aggiunta_principale"
-        : movementType === "uscita"
-          ? "rimozione_principale"
-          : movementScope === "interno_fg"
-            ? "invariato"
+    const movementScope =
+      internalByFg || hasNegativeMarker
+        ? "interno_fg"
+        : modelScope !== "sconosciuto"
+          ? modelScope
+          : evidence.receiver_has_fg || evidence.sender_has_fg
+            ? "esterno"
             : "sconosciuto";
+
+    const modelMainAction = this.normalizeMainAction(
+      parsed.main_warehouse_action,
+    );
+    const mainWarehouseAction =
+      modelMainAction !== "sconosciuto"
+        ? modelMainAction
+        : movementType === "entrata"
+          ? "aggiunta_principale"
+          : movementType === "uscita"
+            ? "rimozione_principale"
+            : movementScope === "interno_fg"
+              ? "invariato"
+              : "sconosciuto";
 
     let articleCount = this.toInteger(parsed.article_count);
     if (articleCount === 0) {
       articleCount = articleItems.length;
     }
 
-    const bollaNumber = this.pickFirstNonEmpty(parsed, ["bolla_number", "numero_bolla", "ddt_number", "numero_ddt", "numero_documento"]);
-    const commessaReference = this.pickFirstNonEmpty(parsed, ["commessa_reference", "numero_commessa", "commessa", "cantiere_reference", "cantiere"]);
+    const bollaNumber = this.pickFirstNonEmpty(parsed, [
+      "bolla_number",
+      "numero_bolla",
+      "ddt_number",
+      "numero_ddt",
+      "numero_documento",
+    ]);
+    const commessaReference = this.pickFirstNonEmpty(parsed, [
+      "commessa_reference",
+      "numero_commessa",
+      "commessa",
+      "cantiere_reference",
+      "cantiere",
+    ]);
 
-    const transferNote = movementScope === "interno_fg" ? "reso da cantiere" : "";
+    const transferNote =
+      movementScope === "interno_fg" ? "reso da cantiere" : "";
     const summary = this.composeHumanSummary(
       movementType,
       articleCount,
@@ -362,7 +422,9 @@ export class LocalLmOrchestrator {
   }
 
   private normalizeMovementType(value: unknown): string {
-    const normalized = String(value ?? "").trim().toLowerCase();
+    const normalized = String(value ?? "")
+      .trim()
+      .toLowerCase();
     if (normalized === "entrata" || normalized === "uscita") {
       return normalized;
     }
@@ -371,7 +433,15 @@ export class LocalLmOrchestrator {
 
   private normalizeMovementScope(value: unknown): string {
     const normalized = this.normalizeText(String(value ?? ""));
-    if (["interno", "interno fg", "interno_fg", "spostamento interno", "internal"].includes(normalized)) {
+    if (
+      [
+        "interno",
+        "interno fg",
+        "interno_fg",
+        "spostamento interno",
+        "internal",
+      ].includes(normalized)
+    ) {
       return "interno_fg";
     }
     if (["esterno", "external"].includes(normalized)) {
@@ -382,10 +452,26 @@ export class LocalLmOrchestrator {
 
   private normalizeMainAction(value: unknown): string {
     const normalized = this.normalizeText(String(value ?? ""));
-    if (["aggiunta", "aggiunta principale", "aggiunta_principale", "ingresso", "in"].includes(normalized)) {
+    if (
+      [
+        "aggiunta",
+        "aggiunta principale",
+        "aggiunta_principale",
+        "ingresso",
+        "in",
+      ].includes(normalized)
+    ) {
       return "aggiunta_principale";
     }
-    if (["rimozione", "rimozione principale", "rimozione_principale", "uscita", "out"].includes(normalized)) {
+    if (
+      [
+        "rimozione",
+        "rimozione principale",
+        "rimozione_principale",
+        "uscita",
+        "out",
+      ].includes(normalized)
+    ) {
       return "rimozione_principale";
     }
     if (["invariato", "nessuna", "nessun impatto"].includes(normalized)) {
@@ -398,23 +484,39 @@ export class LocalLmOrchestrator {
     return /(^|\\s)-\\s*\\d+(?:[.,]\\d+)?(\\s|$)/m.test(extractedText);
   }
 
-  private extractArticleItemsFromModel(parsed: ParsedPayload): Array<{ article_type: string; quantity: number; unit: string }> {
+  private extractArticleItemsFromModel(
+    parsed: ParsedPayload,
+  ): Array<{ article_type: string; quantity: number; unit: string }> {
     if (!Array.isArray(parsed.article_items)) {
       return [];
     }
 
-    const items: Array<{ article_type: string; quantity: number; unit: string }> = [];
+    const items: Array<{
+      article_type: string;
+      quantity: number;
+      unit: string;
+    }> = [];
     for (const row of parsed.article_items) {
       if (!row || typeof row !== "object") {
         continue;
       }
 
       const entry = row as Record<string, unknown>;
-      const articleType = String(entry.article_type ?? "").replace(/\s+/g, " ").trim();
+      const articleType = String(entry.article_type ?? "")
+        .replace(/\s+/g, " ")
+        .trim();
       const quantity = this.toFloat(entry.quantity);
-      const unit = String(entry.unit ?? "").replace(/\s+/g, " ").trim().toUpperCase();
+      const unit = String(entry.unit ?? "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toUpperCase();
 
-      if (!articleType || !Number.isFinite(quantity) || quantity === 0 || !unit) {
+      if (
+        !articleType ||
+        !Number.isFinite(quantity) ||
+        quantity === 0 ||
+        !unit
+      ) {
         continue;
       }
 
@@ -429,7 +531,9 @@ export class LocalLmOrchestrator {
   }
 
   private toFloat(value: unknown): number {
-    const text = String(value ?? "").trim().replace(/,/g, ".");
+    const text = String(value ?? "")
+      .trim()
+      .replace(/,/g, ".");
     const match = text.match(/-?\d+(?:\.\d+)?/);
     if (!match) {
       return 0;
@@ -443,13 +547,19 @@ export class LocalLmOrchestrator {
     return Number.isFinite(numeric) ? numeric : 0;
   }
 
-  private extractArticleItemsFromOcr(extractedText: string): Array<{ article_type: string; quantity: number; unit: string }> {
+  private extractArticleItemsFromOcr(
+    extractedText: string,
+  ): Array<{ article_type: string; quantity: number; unit: string }> {
     const lines = extractedText
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter((line) => line.length > 0 && !line.startsWith("[PAGE"));
 
-    const items: Array<{ article_type: string; quantity: number; unit: string }> = [];
+    const items: Array<{
+      article_type: string;
+      quantity: number;
+      unit: string;
+    }> = [];
     for (let index = 0; index < lines.length - 3; index += 1) {
       const code = lines[index];
       const description = lines[index + 1];
@@ -488,10 +598,15 @@ export class LocalLmOrchestrator {
   }
 
   private looksLikeUnit(value: string): boolean {
-    return /^(PZ|NR|N\.|KG|G|L|LT|ML|M|CM|MM|SCAT|BANCALE|CONF)$/i.test(value.trim());
+    return /^(PZ|NR|N\.|KG|G|L|LT|ML|M|CM|MM|SCAT|BANCALE|CONF)$/i.test(
+      value.trim(),
+    );
   }
 
-  private pickFirstNonEmpty(payload: ParsedPayload, keys: Array<keyof ParsedPayload>): string {
+  private pickFirstNonEmpty(
+    payload: ParsedPayload,
+    keys: Array<keyof ParsedPayload>,
+  ): string {
     for (const key of keys) {
       const value = String(payload[key] ?? "").trim();
       if (value) {
@@ -584,7 +699,10 @@ export class LocalLmOrchestrator {
     };
   }
 
-  private extractPartyValues(lines: string[], fieldKeywords: string[]): string[] {
+  private extractPartyValues(
+    lines: string[],
+    fieldKeywords: string[],
+  ): string[] {
     const normalizedLines = lines.map((line) => this.normalizeText(line));
     const fieldTokens = fieldKeywords.map((item) => this.normalizeText(item));
 
@@ -629,7 +747,9 @@ export class LocalLmOrchestrator {
   }
 
   private containsFg(values: string[]): boolean {
-    return values.some((value) => this.normalizeText(value).includes(FG_CANONICAL));
+    return values.some((value) =>
+      this.normalizeText(value).includes(FG_CANONICAL),
+    );
   }
 
   private normalizeText(value: string): string {
@@ -680,9 +800,23 @@ export class LocalLmOrchestrator {
       type: "object",
       additionalProperties: false,
       properties: {
-        movement_type: { type: "string", enum: ["entrata", "uscita", "sconosciuto"] },
-        movement_scope: { type: "string", enum: ["interno_fg", "esterno", "sconosciuto"] },
-        main_warehouse_action: { type: "string", enum: ["aggiunta_principale", "rimozione_principale", "invariato", "sconosciuto"] },
+        movement_type: {
+          type: "string",
+          enum: ["entrata", "uscita", "sconosciuto"],
+        },
+        movement_scope: {
+          type: "string",
+          enum: ["interno_fg", "esterno", "sconosciuto"],
+        },
+        main_warehouse_action: {
+          type: "string",
+          enum: [
+            "aggiunta_principale",
+            "rimozione_principale",
+            "invariato",
+            "sconosciuto",
+          ],
+        },
         bolla_number: { type: "string" },
         commessa_reference: { type: "string" },
         article_count: { type: "integer" },
@@ -716,10 +850,7 @@ export class LocalLmOrchestrator {
 
   private getQuotationSchema(): Record<string, unknown> {
     const nullableString = {
-      anyOf: [
-        { type: "string" },
-        { type: "null" },
-      ],
+      anyOf: [{ type: "string" }, { type: "null" }],
     };
 
     return {
@@ -792,7 +923,9 @@ export class LocalLmOrchestrator {
     };
   }
 
-  private normalizeQuotationStructuredData(parsed: Record<string, unknown>): QuotationStructuredData {
+  private normalizeQuotationStructuredData(
+    parsed: Record<string, unknown>,
+  ): QuotationStructuredData {
     const keys = [
       "Place",
       "Date",
@@ -832,10 +965,12 @@ export class LocalLmOrchestrator {
   }
 
   private removeQuotationFooterBlocks(text: string): string {
-    return text.replace(
-      /Birgus\s+srl\s+Headquarter[\s\S]*?suzie\.hutton@birgus\.com/gi,
-      "",
-    ).trim();
+    return text
+      .replace(
+        /Birgus\s+srl\s+Headquarter[\s\S]*?suzie\.hutton@birgus\.com/gi,
+        "",
+      )
+      .trim();
   }
 
   private getQuotationPrompt(): string {

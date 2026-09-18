@@ -49,7 +49,9 @@ async function main(): Promise<void> {
   const userEmail = process.env.BIRGUS_E2E_USER_EMAIL?.trim();
 
   if (!userEmail) {
-    throw new Error("BIRGUS_E2E_USER_EMAIL is required to run chatbot e2e scripts.");
+    throw new Error(
+      "BIRGUS_E2E_USER_EMAIL is required to run chatbot e2e scripts.",
+    );
   }
 
   const workspace = await prisma.workspace.findFirstOrThrow({
@@ -62,16 +64,26 @@ async function main(): Promise<void> {
   });
 
   const aiSettingsService = new AiProviderSettingsService(prisma);
-  OpenAiCompatibleLmClient.setRuntimeConfigResolver(() => aiSettingsService.getRuntimeConfig());
+  OpenAiCompatibleLmClient.setRuntimeConfigResolver(() =>
+    aiSettingsService.getRuntimeConfig(),
+  );
 
   const storage = StorageSelector.create();
-  const archiveService = new DocumentArchiveService(new PrismaDocumentArchiveRepository(), storage);
+  const archiveService = new DocumentArchiveService(
+    new PrismaDocumentArchiveRepository(),
+    storage,
+  );
   const intelligenceService = new DocumentIntelligenceService(archiveService);
   const sessionRepository = new PrismaAssistantSessionRepository();
   const sessionService = new AssistantSessionService(sessionRepository);
-  const uploadService = new AssistantSessionDocumentService(intelligenceService);
+  const uploadService = new AssistantSessionDocumentService(
+    intelligenceService,
+  );
   const projectService = new ProjectService(new PrismaProjectRepository());
-  const toolRegistry = new AssistantToolRegistry(projectService, intelligenceService);
+  const toolRegistry = new AssistantToolRegistry(
+    projectService,
+    intelligenceService,
+  );
   const toolAccessService = new AssistantToolAccessService(
     new ModuleAccessPolicy(new PrismaModuleAccessRepository()),
     new PermissionPolicy(new WorkspacePermissionPrismaReader()),
@@ -94,14 +106,16 @@ async function main(): Promise<void> {
 
   const uploadedDocuments = [];
   for (const item of DOCS) {
-    uploadedDocuments.push(await uploadService.uploadSessionDocument({
-      workspaceId: workspace.id,
-      sessionId: session.id,
-      userId: user.id,
-      fileName: item.fileName,
-      mimeType: "text/plain",
-      bytes: Buffer.from(item.text, "utf8"),
-    }));
+    uploadedDocuments.push(
+      await uploadService.uploadSessionDocument({
+        workspaceId: workspace.id,
+        sessionId: session.id,
+        userId: user.id,
+        fileName: item.fileName,
+        mimeType: "text/plain",
+        bytes: Buffer.from(item.text, "utf8"),
+      }),
+    );
   }
 
   const scopedSearch = await toolRegistry.executeTool(
@@ -121,18 +135,28 @@ async function main(): Promise<void> {
     workspaceId: workspace.id,
     userId: user.id,
     sessionId: session.id,
-    contentText: "Riassumi i documenti allegati e dimmi cliente, priorità e prossima azione per ognuno.",
+    contentText:
+      "Riassumi i documenti allegati e dimmi cliente, priorità e prossima azione per ognuno.",
   });
 
   const secondTurn = await conversationService.postUserMessage({
     workspaceId: workspace.id,
     userId: user.id,
     sessionId: session.id,
-    contentText: "Nel messaggio precedente quale cliente aveva priorità critica? Rispondi solo con cliente e azione.",
+    contentText:
+      "Nel messaggio precedente quale cliente aveva priorità critica? Rispondi solo con cliente e azione.",
   });
 
-  const messages = await sessionService.listMessagesForUser(workspace.id, user.id, session.id);
-  const memory = await sessionService.findLatestMemorySnapshot(workspace.id, user.id, session.id);
+  const messages = await sessionService.listMessagesForUser(
+    workspace.id,
+    user.id,
+    session.id,
+  );
+  const memory = await sessionService.findLatestMemorySnapshot(
+    workspace.id,
+    user.id,
+    session.id,
+  );
   const toolCalls = await prisma.assistantToolCall.findMany({
     where: {
       workspace_id: workspace.id,
@@ -149,41 +173,47 @@ async function main(): Promise<void> {
     },
   });
 
-  console.log(JSON.stringify({
-    ok: true,
-    workspaceId: workspace.id,
-    userEmail: user.email,
-    sessionId: session.id,
-    uploadedDocuments,
-    scopedSearch,
-    firstTurn: {
-      assistantText: firstTurn.assistantMessage.contentText,
-      toolCalls: firstTurn.toolCalls.map((toolCall) => ({
-        toolName: toolCall.toolName,
-        status: toolCall.status,
-        deniedReason: toolCall.deniedReason,
-      })),
-    },
-    secondTurn: {
-      assistantText: secondTurn.assistantMessage.contentText,
-      toolCalls: secondTurn.toolCalls.map((toolCall) => ({
-        toolName: toolCall.toolName,
-        status: toolCall.status,
-        deniedReason: toolCall.deniedReason,
-      })),
-    },
-    memory,
-    persisted: {
-      messageCount: messages.length,
-      roles: messages.map((message) => message.role),
-      toolCalls: toolCalls.map((toolCall) => ({
-        toolName: toolCall.tool_name,
-        status: toolCall.status,
-        deniedReason: toolCall.denied_reason,
-        hasResult: toolCall.result_payload !== null,
-      })),
-    },
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        ok: true,
+        workspaceId: workspace.id,
+        userEmail: user.email,
+        sessionId: session.id,
+        uploadedDocuments,
+        scopedSearch,
+        firstTurn: {
+          assistantText: firstTurn.assistantMessage.contentText,
+          toolCalls: firstTurn.toolCalls.map((toolCall) => ({
+            toolName: toolCall.toolName,
+            status: toolCall.status,
+            deniedReason: toolCall.deniedReason,
+          })),
+        },
+        secondTurn: {
+          assistantText: secondTurn.assistantMessage.contentText,
+          toolCalls: secondTurn.toolCalls.map((toolCall) => ({
+            toolName: toolCall.toolName,
+            status: toolCall.status,
+            deniedReason: toolCall.deniedReason,
+          })),
+        },
+        memory,
+        persisted: {
+          messageCount: messages.length,
+          roles: messages.map((message) => message.role),
+          toolCalls: toolCalls.map((toolCall) => ({
+            toolName: toolCall.tool_name,
+            status: toolCall.status,
+            deniedReason: toolCall.denied_reason,
+            hasResult: toolCall.result_payload !== null,
+          })),
+        },
+      },
+      null,
+      2,
+    ),
+  );
 
   await prisma.$disconnect();
 }

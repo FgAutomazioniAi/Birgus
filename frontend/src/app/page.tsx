@@ -7,7 +7,10 @@ import { AUTH_CONFIGURED_COOKIE_NAME } from "@/lib/auth/constants";
 import { APP_ROUTES } from "@/lib/routes";
 
 const getApiBaseUrl = () =>
-  (process.env.BIRGUS_API_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  (process.env.BIRGUS_API_BASE_URL ?? "http://localhost:3000").replace(
+    /\/$/,
+    "",
+  );
 
 export default async function HomePage() {
   const cookieStore = await cookies();
@@ -16,7 +19,9 @@ export default async function HomePage() {
     try {
       const response = await fetch(`${getApiBaseUrl()}/api/auth/session`, {
         cache: "no-store",
-        headers: { cookie: `${AUTH_CONFIGURED_COOKIE_NAME}=${encodeURIComponent(token)}` },
+        headers: {
+          cookie: `${AUTH_CONFIGURED_COOKIE_NAME}=${encodeURIComponent(token)}`,
+        },
       });
       if (response.ok) redirect(APP_ROUTES.dashboard);
     } catch {

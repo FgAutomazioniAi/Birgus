@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 
 import multipart from "@fastify/multipart";
-import fastify, { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import fastify, {
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest,
+} from "fastify";
 import { z, ZodError } from "zod";
 
 import { AppError } from "../../src/core/errors/AppError.js";
@@ -14,7 +18,11 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-const uploadedDocuments: Array<{ fileName: string; mimeType: string; bytes: Buffer }> = [];
+const uploadedDocuments: Array<{
+  fileName: string;
+  mimeType: string;
+  bytes: Buffer;
+}> = [];
 
 let app: FastifyInstance;
 
@@ -29,35 +37,39 @@ before(async () => {
     },
   });
 
-  app.setErrorHandler((error: unknown, _request: FastifyRequest, reply: FastifyReply) => {
-    if (error instanceof ZodError) {
-      reply.status(400).send({
-        code: "VALIDATION_ERROR",
-        message: "Invalid payload.",
-        issues: error.issues,
-      });
-      return;
-    }
+  app.setErrorHandler(
+    (error: unknown, _request: FastifyRequest, reply: FastifyReply) => {
+      if (error instanceof ZodError) {
+        reply.status(400).send({
+          code: "VALIDATION_ERROR",
+          message: "Invalid payload.",
+          issues: error.issues,
+        });
+        return;
+      }
 
-    if (error instanceof AppError) {
-      reply.status(error.statusCode).send({
-        code: error.code,
-        message: error.message,
-      });
-      return;
-    }
+      if (error instanceof AppError) {
+        reply.status(error.statusCode).send({
+          code: error.code,
+          message: error.message,
+        });
+        return;
+      }
 
-    reply.status(500).send({
-      code: "INTERNAL_ERROR",
-      message: "Unexpected error.",
-    });
-  });
+      reply.status(500).send({
+        code: "INTERNAL_ERROR",
+        message: "Unexpected error.",
+      });
+    },
+  );
 
   app.post("/api/auth/login", async (request, reply) => {
     const body = loginSchema.parse(request.body);
     const normalizedEmail = body.email.trim().toLowerCase();
-    const cookie = new SessionCookieFactory({ cookieName: "birgus_test", secure: true })
-      .createSessionCookie(`token-for-${normalizedEmail}`, 3600);
+    const cookie = new SessionCookieFactory({
+      cookieName: "birgus_test",
+      secure: true,
+    }).createSessionCookie(`token-for-${normalizedEmail}`, 3600);
     reply.header("Set-Cookie", cookie);
     return {
       ok: true,
@@ -70,13 +82,19 @@ before(async () => {
   app.post("/api/ddt-reader/documents", async (request) => {
     assertAuthorized(request);
     const multipartPayload = await MultipartFormReader.read(request);
-    const uploaded = multipartPayload.files.find((item) => item.fieldName === "file") ?? multipartPayload.files[0];
+    const uploaded =
+      multipartPayload.files.find((item) => item.fieldName === "file") ??
+      multipartPayload.files[0];
     if (!uploaded) {
       throw new AppError("File mancante.", "DDT_FILE_REQUIRED", 400);
     }
 
     if (!isPdfFile(uploaded.fileName, uploaded.mimeType, uploaded.bytes)) {
-      throw new AppError("Sono accettati solo file PDF.", "DDT_FILE_EXTENSION_INVALID", 400);
+      throw new AppError(
+        "Sono accettati solo file PDF.",
+        "DDT_FILE_EXTENSION_INVALID",
+        400,
+      );
     }
 
     uploadedDocuments.push(uploaded);
@@ -136,11 +154,19 @@ test("HTTP protected upload endpoints reject missing authorization", async () =>
     method: "POST",
     url: "/api/ddt-reader/documents",
     headers: multipartHeaders("----birgus-test-boundary"),
-    payload: multipartBody("----birgus-test-boundary", "document.pdf", "application/pdf", "%PDF-1.7\n"),
+    payload: multipartBody(
+      "----birgus-test-boundary",
+      "document.pdf",
+      "application/pdf",
+      "%PDF-1.7\n",
+    ),
   });
 
   assert.equal(response.statusCode, 401);
-  assert.equal((response.json() as { code?: string }).code, "AUTH_TOKEN_REQUIRED");
+  assert.equal(
+    (response.json() as { code?: string }).code,
+    "AUTH_TOKEN_REQUIRED",
+  );
 });
 
 test("HTTP DDT upload rejects fake PDFs even with application/pdf MIME", async () => {
@@ -151,11 +177,19 @@ test("HTTP DDT upload rejects fake PDFs even with application/pdf MIME", async (
       authorization: "Bearer valid-token",
       ...multipartHeaders("----birgus-test-boundary"),
     },
-    payload: multipartBody("----birgus-test-boundary", "fake.pdf", "application/pdf", "not a pdf"),
+    payload: multipartBody(
+      "----birgus-test-boundary",
+      "fake.pdf",
+      "application/pdf",
+      "not a pdf",
+    ),
   });
 
   assert.equal(response.statusCode, 400);
-  assert.equal((response.json() as { code?: string }).code, "DDT_FILE_EXTENSION_INVALID");
+  assert.equal(
+    (response.json() as { code?: string }).code,
+    "DDT_FILE_EXTENSION_INVALID",
+  );
   assert.equal(uploadedDocuments.length, 0);
 });
 
@@ -167,24 +201,39 @@ test("HTTP DDT upload accepts real PDF signatures and sanitizes filenames", asyn
       authorization: "Bearer valid-token",
       ...multipartHeaders("----birgus-test-boundary"),
     },
-    payload: multipartBody("----birgus-test-boundary", "../unsafe/<ddt>.pdf", "application/pdf", "%PDF-1.7\n"),
+    payload: multipartBody(
+      "----birgus-test-boundary",
+      "../unsafe/<ddt>.pdf",
+      "application/pdf",
+      "%PDF-1.7\n",
+    ),
   });
 
   assert.equal(response.statusCode, 200);
   assert.equal(uploadedDocuments.length, 1);
   assert.equal(uploadedDocuments[0]?.fileName, "_ddt_.pdf");
-  assert.equal(uploadedDocuments[0]?.bytes.subarray(0, 5).toString("latin1"), "%PDF-");
+  assert.equal(
+    uploadedDocuments[0]?.bytes.subarray(0, 5).toString("latin1"),
+    "%PDF-",
+  );
 });
 
 function assertAuthorized(request: FastifyRequest): void {
   if (request.headers.authorization !== "Bearer valid-token") {
-    throw new AppError("Missing authentication token.", "AUTH_TOKEN_REQUIRED", 401);
+    throw new AppError(
+      "Missing authentication token.",
+      "AUTH_TOKEN_REQUIRED",
+      401,
+    );
   }
 }
 
 function isPdfFile(fileName: string, mimeType: string, bytes: Buffer): boolean {
-  const hasPdfNameOrMime = mimeType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
-  return hasPdfNameOrMime && bytes.subarray(0, 5).toString("latin1") === "%PDF-";
+  const hasPdfNameOrMime =
+    mimeType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
+  return (
+    hasPdfNameOrMime && bytes.subarray(0, 5).toString("latin1") === "%PDF-"
+  );
 }
 
 function multipartHeaders(boundary: string): Record<string, string> {
@@ -193,7 +242,12 @@ function multipartHeaders(boundary: string): Record<string, string> {
   };
 }
 
-function multipartBody(boundary: string, filename: string, contentType: string, content: string): string {
+function multipartBody(
+  boundary: string,
+  filename: string,
+  contentType: string,
+  content: string,
+): string {
   return [
     `--${boundary}`,
     `Content-Disposition: form-data; name="file"; filename="${filename}"`,

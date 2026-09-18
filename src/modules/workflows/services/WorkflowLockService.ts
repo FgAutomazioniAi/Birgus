@@ -11,7 +11,11 @@ export interface WorkflowLockResult {
 }
 
 export class WorkflowLockService {
-  public async acquire(workspaceId: string, workflowId: string, userId: string): Promise<WorkflowLockResult> {
+  public async acquire(
+    workspaceId: string,
+    workflowId: string,
+    userId: string,
+  ): Promise<WorkflowLockResult> {
     const prisma = PrismaClientManager.getClient();
     const workflow = await prisma.moduleWorkflow.findFirst({
       where: { id: workflowId, workspace_id: workspaceId, deleted_at: null },
@@ -34,7 +38,11 @@ export class WorkflowLockService {
       select: { id: true },
     });
     if (blocking) {
-      throw new AppError("Questo workflow è in modifica da un altro utente.", "WORKFLOW_LOCKED", 409);
+      throw new AppError(
+        "Questo workflow è in modifica da un altro utente.",
+        "WORKFLOW_LOCKED",
+        409,
+      );
     }
 
     const expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
@@ -51,7 +59,11 @@ export class WorkflowLockService {
         where: { id: own.id },
         data: { expires_at: expiresAt, heartbeat_at: now },
       });
-      return { id: updated.id, resourceId: workflowId, expiresAt: updated.expires_at };
+      return {
+        id: updated.id,
+        resourceId: workflowId,
+        expiresAt: updated.expires_at,
+      };
     }
 
     try {
@@ -66,16 +78,31 @@ export class WorkflowLockService {
           expires_at: expiresAt,
         },
       });
-      return { id: lock.id, resourceId: workflowId, expiresAt: lock.expires_at };
+      return {
+        id: lock.id,
+        resourceId: workflowId,
+        expiresAt: lock.expires_at,
+      };
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new AppError("Questo workflow è in modifica da un altro utente.", "WORKFLOW_LOCKED", 409);
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        throw new AppError(
+          "Questo workflow è in modifica da un altro utente.",
+          "WORKFLOW_LOCKED",
+          409,
+        );
       }
       throw error;
     }
   }
 
-  public async heartbeat(workspaceId: string, workflowId: string, userId: string): Promise<WorkflowLockResult> {
+  public async heartbeat(
+    workspaceId: string,
+    workflowId: string,
+    userId: string,
+  ): Promise<WorkflowLockResult> {
     const prisma = PrismaClientManager.getClient();
     const now = new Date();
     const lock = await prisma.commissionResourceLock.findFirst({
@@ -90,7 +117,11 @@ export class WorkflowLockService {
       orderBy: { heartbeat_at: "desc" },
     });
     if (!lock) {
-      throw new AppError("Il blocco del workflow non è più attivo.", "WORKFLOW_LOCK_LOST", 409);
+      throw new AppError(
+        "Il blocco del workflow non è più attivo.",
+        "WORKFLOW_LOCK_LOST",
+        409,
+      );
     }
 
     const expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
@@ -99,12 +130,20 @@ export class WorkflowLockService {
       data: { expires_at: expiresAt, heartbeat_at: now },
     });
     if (result.count !== 1) {
-      throw new AppError("Il blocco del workflow non è più attivo.", "WORKFLOW_LOCK_LOST", 409);
+      throw new AppError(
+        "Il blocco del workflow non è più attivo.",
+        "WORKFLOW_LOCK_LOST",
+        409,
+      );
     }
     return { id: lock.id, resourceId: workflowId, expiresAt };
   }
 
-  public async release(workspaceId: string, workflowId: string, userId: string): Promise<void> {
+  public async release(
+    workspaceId: string,
+    workflowId: string,
+    userId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     await prisma.commissionResourceLock.updateMany({
       where: {
@@ -114,14 +153,30 @@ export class WorkflowLockService {
         locked_by_user_id: userId,
         released_at: null,
       },
-      data: { active_scope_key: null, released_at: new Date(), release_reason: "workflow_editor_closed" },
+      data: {
+        active_scope_key: null,
+        released_at: new Date(),
+        release_reason: "workflow_editor_closed",
+      },
     });
   }
 
-  private async expire(prisma: ReturnType<typeof PrismaClientManager.getClient>, scopeKey: string, now: Date): Promise<void> {
+  private async expire(
+    prisma: ReturnType<typeof PrismaClientManager.getClient>,
+    scopeKey: string,
+    now: Date,
+  ): Promise<void> {
     await prisma.commissionResourceLock.updateMany({
-      where: { active_scope_key: scopeKey, released_at: null, expires_at: { lte: now } },
-      data: { active_scope_key: null, released_at: now, release_reason: "expired" },
+      where: {
+        active_scope_key: scopeKey,
+        released_at: null,
+        expires_at: { lte: now },
+      },
+      data: {
+        active_scope_key: null,
+        released_at: now,
+        release_reason: "expired",
+      },
     });
   }
 

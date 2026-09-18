@@ -23,11 +23,17 @@ export class PostgresJobQueue implements JobQueue {
     this.handlers = new Map<string, JobHandler<unknown>>();
     this.workerId = `birgus-${process.pid}`;
     this.workerCount = this.toPositiveInt(process.env.BACKEND_QUEUE_WORKERS, 2);
-    this.pollIntervalMs = this.toPositiveInt(process.env.BACKEND_QUEUE_POLL_MS, 750);
+    this.pollIntervalMs = this.toPositiveInt(
+      process.env.BACKEND_QUEUE_POLL_MS,
+      750,
+    );
     this.started = false;
   }
 
-  public register<TPayload>(jobName: string, handler: JobHandler<TPayload>): void {
+  public register<TPayload>(
+    jobName: string,
+    handler: JobHandler<TPayload>,
+  ): void {
     this.handlers.set(jobName, handler as JobHandler<unknown>);
   }
 
@@ -68,7 +74,11 @@ export class PostgresJobQueue implements JobQueue {
         return;
       }
 
-      throw new AppError("Impossibile accodare il job su Postgres.", "BACKEND_JOB_ENQUEUE_FAILED", 500);
+      throw new AppError(
+        "Impossibile accodare il job su Postgres.",
+        "BACKEND_JOB_ENQUEUE_FAILED",
+        500,
+      );
     }
   }
 
@@ -86,7 +96,10 @@ export class PostgresJobQueue implements JobQueue {
 
       const handler = this.handlers.get(job.name);
       if (!handler) {
-        await this.failJob(job.id, `No handler registered for job '${job.name}'.`);
+        await this.failJob(
+          job.id,
+          `No handler registered for job '${job.name}'.`,
+        );
         continue;
       }
 
@@ -94,7 +107,10 @@ export class PostgresJobQueue implements JobQueue {
         await handler.handle(new Job(job.id, job.name, job.payload));
         await this.completeJob(job.id);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown backend job failure";
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unknown backend job failure";
         await this.failJob(job.id, message);
       }
     }
@@ -166,7 +182,10 @@ export class PostgresJobQueue implements JobQueue {
   }
 
   private isUniqueConstraint(error: unknown): boolean {
-    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    );
   }
 
   private toPositiveInt(value: string | undefined, fallback: number): number {

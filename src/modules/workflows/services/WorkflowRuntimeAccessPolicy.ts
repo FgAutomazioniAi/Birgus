@@ -32,9 +32,16 @@ export class WorkflowRuntimeAccessPolicy {
 
     for (const moduleKey of moduleKeys) {
       if (params.requestedByUserId) {
-        await this.moduleAccessPolicy.ensureEnabled(params.workspaceId, params.requestedByUserId, moduleKey);
+        await this.moduleAccessPolicy.ensureEnabled(
+          params.workspaceId,
+          params.requestedByUserId,
+          moduleKey,
+        );
       } else {
-        await this.moduleAccessPolicy.ensureEnabledForWorkspace(params.workspaceId, moduleKey);
+        await this.moduleAccessPolicy.ensureEnabledForWorkspace(
+          params.workspaceId,
+          moduleKey,
+        );
       }
     }
   }
@@ -42,7 +49,10 @@ export class WorkflowRuntimeAccessPolicy {
   private ensureResourceEnabled(
     nodeKey: string,
     resourceType: "agent" | "tool",
-    resource: { moduleKey: string; enabled: boolean; deleted: boolean } | null | undefined,
+    resource:
+      | { moduleKey: string; enabled: boolean; deleted: boolean }
+      | null
+      | undefined,
   ): void {
     if (!resource) {
       return;

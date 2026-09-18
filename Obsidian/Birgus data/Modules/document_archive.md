@@ -2,6 +2,7 @@
 key: document_archive
 ui: Archivio
 ---
+
 # document_archive
 
 Archivio documentale comune al workspace: file, metadati, stato, cartelle logiche e storage oggetti.

@@ -11,7 +11,8 @@ import { NestModuleManagementController } from "./module-management.controller.j
   providers: [
     {
       provide: ModuleManagementService,
-      useFactory: (moduleAccessRepository: PrismaModuleAccessRepository) => new ModuleManagementService(moduleAccessRepository),
+      useFactory: (moduleAccessRepository: PrismaModuleAccessRepository) =>
+        new ModuleManagementService(moduleAccessRepository),
       inject: [PrismaModuleAccessRepository],
     },
   ],

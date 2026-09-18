@@ -11,7 +11,8 @@ import { NestAuditController } from "./audit.controller.js";
   providers: [
     {
       provide: AuditLogService,
-      useFactory: (repository: PrismaAuditLogRepository) => new AuditLogService(repository),
+      useFactory: (repository: PrismaAuditLogRepository) =>
+        new AuditLogService(repository),
       inject: [PrismaAuditLogRepository],
     },
   ],

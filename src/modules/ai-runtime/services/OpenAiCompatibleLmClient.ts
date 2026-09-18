@@ -1,7 +1,14 @@
-import { loadAiProviderConfig, MAX_AI_PROVIDER_OUTPUT_TOKENS, type AiProviderConfig } from "../domain/AiProviderConfig.js";
+import {
+  loadAiProviderConfig,
+  MAX_AI_PROVIDER_OUTPUT_TOKENS,
+  type AiProviderConfig,
+} from "../domain/AiProviderConfig.js";
 import { AiProviderError } from "../domain/AiProviderError.js";
 import type { AiChatMessage } from "../domain/AiChatMessage.js";
-import type { AiChatCompletionsResponse, AiModelItem } from "../domain/AiChatResponse.js";
+import type {
+  AiChatCompletionsResponse,
+  AiModelItem,
+} from "../domain/AiChatResponse.js";
 import type { AiToolDefinition } from "../domain/AiToolDefinition.js";
 
 interface OpenAiCompatibleClientOptions {
@@ -28,14 +35,17 @@ export interface LegacyChatResponse {
   stats?: Record<string, unknown>;
 }
 
-type AiProviderRuntimeConfigResolver = () => Partial<AiProviderConfig> | Promise<Partial<AiProviderConfig>>;
+type AiProviderRuntimeConfigResolver = () =>
+  | Partial<AiProviderConfig>
+  | Promise<Partial<AiProviderConfig>>;
 
 function normalizePath(path: string): string {
   return path.startsWith("/") ? path : `/${path}`;
 }
 
 export class OpenAiCompatibleLmClient {
-  private static runtimeConfigResolver: AiProviderRuntimeConfigResolver | null = null;
+  private static runtimeConfigResolver: AiProviderRuntimeConfigResolver | null =
+    null;
 
   private readonly config: AiProviderConfig;
   private readonly maxOutputTokens: number | null;
@@ -55,7 +65,9 @@ export class OpenAiCompatibleLmClient {
     this.useRuntimeConfig = options.useRuntimeConfig ?? true;
   }
 
-  public static setRuntimeConfigResolver(resolver: AiProviderRuntimeConfigResolver | null): void {
+  public static setRuntimeConfigResolver(
+    resolver: AiProviderRuntimeConfigResolver | null,
+  ): void {
     OpenAiCompatibleLmClient.runtimeConfigResolver = resolver;
   }
 
@@ -78,7 +90,9 @@ export class OpenAiCompatibleLmClient {
     return { model: await this.selectModel() };
   }
 
-  private async selectModelForConfig(config: AiProviderConfig): Promise<string> {
+  private async selectModelForConfig(
+    config: AiProviderConfig,
+  ): Promise<string> {
     const requestedModel = config.chatModel.trim();
     const available = await this.listModels(config);
     const availableIds = new Set(available.map((item) => item.id));
@@ -97,7 +111,11 @@ export class OpenAiCompatibleLmClient {
 
     const candidate = available.find((item) => {
       const lowered = item.id.toLowerCase();
-      return item.type !== "embedding" && !lowered.includes("embed") && !lowered.includes("embedding");
+      return (
+        item.type !== "embedding" &&
+        !lowered.includes("embed") &&
+        !lowered.includes("embedding")
+      );
     });
 
     if (!candidate) {
@@ -107,7 +125,9 @@ export class OpenAiCompatibleLmClient {
     return candidate.id;
   }
 
-  public async chat(inputText: string): Promise<{ model: string; response: LegacyChatResponse }> {
+  public async chat(
+    inputText: string,
+  ): Promise<{ model: string; response: LegacyChatResponse }> {
     const result = await this.completeMessages({
       messages: [{ role: "user", content: inputText }],
       maxTokens: this.maxOutputTokens,
@@ -131,7 +151,11 @@ export class OpenAiCompatibleLmClient {
     schema: Record<string, unknown>;
     maxTokens?: number | null;
     temperature?: number;
-  }): Promise<{ model: string; response: AiChatCompletionsResponse; content: string }> {
+  }): Promise<{
+    model: string;
+    response: AiChatCompletionsResponse;
+    content: string;
+  }> {
     return this.completeMessages({
       messages: [
         { role: "system", content: options.systemPrompt },
@@ -156,7 +180,11 @@ export class OpenAiCompatibleLmClient {
     imageUrls: string[];
     maxTokens?: number | null;
     temperature?: number;
-  }): Promise<{ model: string; response: AiChatCompletionsResponse; content: string }> {
+  }): Promise<{
+    model: string;
+    response: AiChatCompletionsResponse;
+    content: string;
+  }> {
     const userContent: Array<Record<string, unknown>> = [
       { type: "text", text: options.userText },
       ...options.imageUrls.map((imageUrl) => ({
@@ -183,7 +211,12 @@ export class OpenAiCompatibleLmClient {
     tools: AiToolDefinition[];
     toolChoice?: "auto" | "none" | "required";
     temperature?: number;
-  }): Promise<{ model: string; response: AiChatCompletionsResponse; content: string | null; toolCalls: Array<Record<string, unknown>> }> {
+  }): Promise<{
+    model: string;
+    response: AiChatCompletionsResponse;
+    content: string | null;
+    toolCalls: Array<Record<string, unknown>>;
+  }> {
     const config = await this.resolveConfig();
     const model = await this.selectModelForConfig(config);
     const requestPayload: Record<string, unknown> = {
@@ -214,7 +247,11 @@ export class OpenAiCompatibleLmClient {
     responseFormat?: Record<string, unknown>;
     maxTokens?: number | null;
     temperature?: number;
-  }): Promise<{ model: string; response: AiChatCompletionsResponse; content: string }> {
+  }): Promise<{
+    model: string;
+    response: AiChatCompletionsResponse;
+    content: string;
+  }> {
     const config = await this.resolveConfig();
     const model = await this.selectModelForConfig(config);
     const requestPayload: Record<string, unknown> = {
@@ -223,13 +260,19 @@ export class OpenAiCompatibleLmClient {
       stream: false,
       messages: options.messages,
     };
-    this.applyGenerationOptions(requestPayload, config, options.maxTokens ?? this.maxOutputTokens);
+    this.applyGenerationOptions(
+      requestPayload,
+      config,
+      options.maxTokens ?? this.maxOutputTokens,
+    );
 
     if (options.responseFormat) {
       requestPayload.response_format = options.responseFormat;
     }
     const payload = await this.postChatCompletions(requestPayload, config);
-    const content = String(payload?.choices?.[0]?.message?.content ?? "").trim();
+    const content = String(
+      payload?.choices?.[0]?.message?.content ?? "",
+    ).trim();
     if (!content) {
       throw new Error("AI provider ha restituito risposta vuota.");
     }
@@ -237,7 +280,10 @@ export class OpenAiCompatibleLmClient {
     return { model, response: payload, content };
   }
 
-  private async postChatCompletions(requestPayload: Record<string, unknown>, config: AiProviderConfig): Promise<AiChatCompletionsResponse> {
+  private async postChatCompletions(
+    requestPayload: Record<string, unknown>,
+    config: AiProviderConfig,
+  ): Promise<AiChatCompletionsResponse> {
     const endpoint = this.resolveEndpoint(config, config.completionsPath);
     this.logAiTraffic("request", endpoint, requestPayload);
 
@@ -248,7 +294,10 @@ export class OpenAiCompatibleLmClient {
       signal: AbortSignal.timeout(config.timeoutMs),
       cache: "no-store",
     }).catch((error: unknown) => {
-      if (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) {
+      if (
+        error instanceof Error &&
+        ["AbortError", "TimeoutError"].includes(error.name)
+      ) {
         throw new AiProviderError("AI_PROVIDER_TIMEOUT");
       }
 
@@ -268,7 +317,10 @@ export class OpenAiCompatibleLmClient {
     return responsePayload as AiChatCompletionsResponse;
   }
 
-  private async listModels(config: AiProviderConfig, strict = false): Promise<AiModelItem[]> {
+  private async listModels(
+    config: AiProviderConfig,
+    strict = false,
+  ): Promise<AiModelItem[]> {
     const timeout = Math.max(5000, Math.min(config.timeoutMs, 30000));
     const endpoint = this.resolveEndpoint(config, config.modelsPath);
     const response = await fetch(endpoint, {
@@ -280,7 +332,10 @@ export class OpenAiCompatibleLmClient {
       if (!strict) {
         return null;
       }
-      if (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) {
+      if (
+        error instanceof Error &&
+        ["AbortError", "TimeoutError"].includes(error.name)
+      ) {
         throw new AiProviderError("AI_PROVIDER_TIMEOUT");
       }
       throw new AiProviderError("AI_PROVIDER_NETWORK_UNREACHABLE");
@@ -294,7 +349,11 @@ export class OpenAiCompatibleLmClient {
     }
 
     const payload = await this.readJsonResponse(response, strict);
-    if (strict && !Array.isArray((payload as { models?: unknown }).models) && !Array.isArray((payload as { data?: unknown }).data)) {
+    if (
+      strict &&
+      !Array.isArray((payload as { models?: unknown }).models) &&
+      !Array.isArray((payload as { data?: unknown }).data)
+    ) {
       throw new AiProviderError("AI_PROVIDER_INVALID_RESPONSE");
     }
     const items = Array.isArray((payload as { models?: unknown[] }).models)
@@ -311,7 +370,9 @@ export class OpenAiCompatibleLmClient {
 
         const row = item as Record<string, unknown>;
         const id = String(row.key ?? row.id ?? "").trim();
-        const type = String(row.type ?? row.object ?? "").trim().toLowerCase();
+        const type = String(row.type ?? row.object ?? "")
+          .trim()
+          .toLowerCase();
         if (!id) {
           return null;
         }
@@ -333,7 +394,9 @@ export class OpenAiCompatibleLmClient {
     return headers;
   }
 
-  public async *streamMessages(messages: AiChatMessage[]): AsyncGenerator<{ model: string; delta: string }> {
+  public async *streamMessages(
+    messages: AiChatMessage[],
+  ): AsyncGenerator<{ model: string; delta: string }> {
     const config = await this.resolveConfig();
     const model = await this.selectModelForConfig(config);
     const requestPayload: Record<string, unknown> = {
@@ -351,10 +414,15 @@ export class OpenAiCompatibleLmClient {
       signal: AbortSignal.timeout(config.timeoutMs),
       cache: "no-store",
     }).catch((error: unknown) => {
-      if (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) throw new AiProviderError("AI_PROVIDER_TIMEOUT");
+      if (
+        error instanceof Error &&
+        ["AbortError", "TimeoutError"].includes(error.name)
+      )
+        throw new AiProviderError("AI_PROVIDER_TIMEOUT");
       throw new AiProviderError("AI_PROVIDER_NETWORK_UNREACHABLE");
     });
-    if (!response.ok || !response.body) throw this.toProviderHttpError(response.status);
+    if (!response.ok || !response.body)
+      throw this.toProviderHttpError(response.status);
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -366,12 +434,17 @@ export class OpenAiCompatibleLmClient {
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
       for (const line of lines) {
-        const data = line.trim().startsWith("data:") ? line.trim().slice(5).trim() : "";
+        const data = line.trim().startsWith("data:")
+          ? line.trim().slice(5).trim()
+          : "";
         if (!data || data === "[DONE]") continue;
         try {
-          const payload = JSON.parse(data) as { choices?: Array<{ delta?: { content?: unknown } }> };
+          const payload = JSON.parse(data) as {
+            choices?: Array<{ delta?: { content?: unknown } }>;
+          };
           const delta = payload.choices?.[0]?.delta?.content;
-          if (typeof delta === "string" && delta.length > 0) yield { model, delta };
+          if (typeof delta === "string" && delta.length > 0)
+            yield { model, delta };
         } catch {
           // Ignore malformed keep-alive frames from OpenAI-compatible providers.
         }
@@ -379,10 +452,17 @@ export class OpenAiCompatibleLmClient {
     }
   }
 
-  private applyGenerationOptions(requestPayload: Record<string, unknown>, config: AiProviderConfig, maxTokens: number | null): void {
+  private applyGenerationOptions(
+    requestPayload: Record<string, unknown>,
+    config: AiProviderConfig,
+    maxTokens: number | null,
+  ): void {
     const outputLimit = maxTokens ?? config.maxOutputTokens;
     if (Number.isFinite(outputLimit) && outputLimit > 0) {
-      requestPayload.max_tokens = Math.min(Math.trunc(outputLimit), MAX_AI_PROVIDER_OUTPUT_TOKENS);
+      requestPayload.max_tokens = Math.min(
+        Math.trunc(outputLimit),
+        MAX_AI_PROVIDER_OUTPUT_TOKENS,
+      );
     }
     requestPayload.top_p = config.topP;
     requestPayload.top_k = config.topK;
@@ -396,11 +476,17 @@ export class OpenAiCompatibleLmClient {
     }
   }
 
-  private async readJsonResponse(response: Response, strict = true): Promise<Record<string, unknown>> {
+  private async readJsonResponse(
+    response: Response,
+    strict = true,
+  ): Promise<Record<string, unknown>> {
     const text = await response.text();
     if (!text.trim()) {
       if (strict) {
-        throw new AiProviderError("AI_PROVIDER_INVALID_RESPONSE", response.status);
+        throw new AiProviderError(
+          "AI_PROVIDER_INVALID_RESPONSE",
+          response.status,
+        );
       }
       return {};
     }
@@ -408,7 +494,10 @@ export class OpenAiCompatibleLmClient {
     try {
       const payload = JSON.parse(text) as unknown;
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-        throw new AiProviderError("AI_PROVIDER_INVALID_RESPONSE", response.status);
+        throw new AiProviderError(
+          "AI_PROVIDER_INVALID_RESPONSE",
+          response.status,
+        );
       }
       return payload as Record<string, unknown>;
     } catch (error) {
@@ -416,7 +505,10 @@ export class OpenAiCompatibleLmClient {
         throw error;
       }
       if (strict) {
-        throw new AiProviderError("AI_PROVIDER_INVALID_RESPONSE", response.status);
+        throw new AiProviderError(
+          "AI_PROVIDER_INVALID_RESPONSE",
+          response.status,
+        );
       }
       return {};
     }
@@ -438,18 +530,25 @@ export class OpenAiCompatibleLmClient {
   private resolveEndpoint(config: AiProviderConfig, path: string): string {
     const normalizedBaseUrl = config.baseUrl.replace(/\/+$/, "");
     const normalizedPath = normalizePath(path);
-    if (normalizedBaseUrl.endsWith("/v1") && normalizedPath.startsWith("/v1/")) {
+    if (
+      normalizedBaseUrl.endsWith("/v1") &&
+      normalizedPath.startsWith("/v1/")
+    ) {
       return `${normalizedBaseUrl}${normalizedPath.slice(3)}`;
     }
     return `${normalizedBaseUrl}${normalizedPath}`;
   }
 
   private async resolveConfig(): Promise<AiProviderConfig> {
-    if (!this.useRuntimeConfig || !OpenAiCompatibleLmClient.runtimeConfigResolver) {
+    if (
+      !this.useRuntimeConfig ||
+      !OpenAiCompatibleLmClient.runtimeConfigResolver
+    ) {
       return this.config;
     }
 
-    const runtimeConfig = await OpenAiCompatibleLmClient.runtimeConfigResolver();
+    const runtimeConfig =
+      await OpenAiCompatibleLmClient.runtimeConfigResolver();
     return {
       ...this.config,
       ...runtimeConfig,
@@ -478,7 +577,12 @@ export class OpenAiCompatibleLmClient {
     payload: unknown,
     meta?: Record<string, unknown>,
   ): void {
-    if (!this.parseBoolean(process.env.LOG_LM_TRAFFIC ?? process.env.LOG_AI_TRAFFIC, false)) {
+    if (
+      !this.parseBoolean(
+        process.env.LOG_LM_TRAFFIC ?? process.env.LOG_AI_TRAFFIC,
+        false,
+      )
+    ) {
       return;
     }
 

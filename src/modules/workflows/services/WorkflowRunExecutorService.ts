@@ -11,13 +11,20 @@ import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { GaragePath } from "../../../storage/GaragePath.js";
 import { StorageSelector } from "../../../storage/StorageSelector.js";
 import { AiProviderSettingsService } from "../../ai-runtime/services/AiProviderSettingsService.js";
-import { BrainywareClient, type BrainywareInferenceMode } from "../../brainyware/services/BrainywareClient.js";
+import {
+  BrainywareClient,
+  type BrainywareInferenceMode,
+} from "../../brainyware/services/BrainywareClient.js";
 import { BrainyWorkspaceAgentService } from "../../brainyware/services/BrainyWorkspaceAgentService.js";
 import { BrainyWorkspaceDatabaseConnectionService } from "../../brainyware/services/BrainyWorkspaceDatabaseConnectionService.js";
 import { FileKind } from "../../document-archive/domain/FileKind.js";
 import { PutProjectFileCommand } from "../../document-archive/dto/PutProjectFileCommand.js";
 import { DocumentArchiveService } from "../../document-archive/services/DocumentArchiveService.js";
-import { DEFAULT_KNOWLEDGE_MODE, normalizeKnowledgeMode, type KnowledgeMode } from "../../document-intelligence/domain/KnowledgeMode.js";
+import {
+  DEFAULT_KNOWLEDGE_MODE,
+  normalizeKnowledgeMode,
+  type KnowledgeMode,
+} from "../../document-intelligence/domain/KnowledgeMode.js";
 import { DocumentIntelligenceService } from "../../document-intelligence/services/DocumentIntelligenceService.js";
 import { BackendPythonModulesClient } from "../../document-intelligence/services/BackendPythonModulesClient.js";
 import { MailProviderSettingsService } from "../../mail-runtime/services/MailProviderSettingsService.js";
@@ -26,13 +33,22 @@ import { NotificationService } from "../../notifications/services/NotificationSe
 import { NextOrchestratorDdtAnalyzer } from "../../ddt-processing/services/NextOrchestratorDdtAnalyzer.js";
 import { DdtAnalysisInput } from "../../ddt-processing/domain/DdtAnalysisInput.js";
 import { NextOrchestratorQuotationAnalyzer } from "../../quotation-orchestrator/services/NextOrchestratorQuotationAnalyzer.js";
-import { MeasureReportAnalysisInput, MeasureReportAnalyzer } from "../../measure-report/services/MeasureReportAnalyzer.js";
+import {
+  MeasureReportAnalysisInput,
+  MeasureReportAnalyzer,
+} from "../../measure-report/services/MeasureReportAnalyzer.js";
 import { normalizeMeasureReportDocumentType } from "../../measure-report/services/MeasureReportDocumentTypes.js";
 import { Job } from "../../../worker/queue/Job.js";
 import { JobQueue } from "../../../worker/queue/JobQueue.js";
 import { WorkflowGraphPlanner } from "./WorkflowGraphPlanner.js";
-import { QueueWorkflowRunDispatcher, WorkflowRunJobPayload } from "./QueueWorkflowRunDispatcher.js";
-import { ScheduledWorkflowDeliveryService, type ScheduledDeliveryChannel } from "./ScheduledWorkflowDeliveryService.js";
+import {
+  QueueWorkflowRunDispatcher,
+  WorkflowRunJobPayload,
+} from "./QueueWorkflowRunDispatcher.js";
+import {
+  ScheduledWorkflowDeliveryService,
+  type ScheduledDeliveryChannel,
+} from "./ScheduledWorkflowDeliveryService.js";
 
 interface StepExecutionContext {
   workspaceId: string;
@@ -97,7 +113,12 @@ interface IncomingFieldBinding {
   inputLabel?: string | null;
 }
 
-type PublishedOutputKind = "text" | "file" | "image" | "delivery_status" | "data";
+type PublishedOutputKind =
+  | "text"
+  | "file"
+  | "image"
+  | "delivery_status"
+  | "data";
 
 interface PublishedNodeOutput {
   key: string;
@@ -116,8 +137,23 @@ interface WorkflowNodeRow {
   input_kind: string | null;
   output_kind: string | null;
   configuration: Prisma.JsonValue | null;
-  module_agent: { key: string; active_prompt: string; original_prompt: string; is_enabled: boolean; deleted_at: Date | null; module: { key: string } } | null;
-  module_tool: { key: string; runtime_kind: string; handler_key: string; configuration: Prisma.JsonValue | null; is_enabled: boolean; deleted_at: Date | null; module: { key: string } } | null;
+  module_agent: {
+    key: string;
+    active_prompt: string;
+    original_prompt: string;
+    is_enabled: boolean;
+    deleted_at: Date | null;
+    module: { key: string };
+  } | null;
+  module_tool: {
+    key: string;
+    runtime_kind: string;
+    handler_key: string;
+    configuration: Prisma.JsonValue | null;
+    is_enabled: boolean;
+    deleted_at: Date | null;
+    module: { key: string };
+  } | null;
 }
 
 export class WorkflowRunExecutorService {
@@ -167,15 +203,19 @@ export class WorkflowRunExecutorService {
     this.measureReportAnalyzer = params.measureReportAnalyzer;
     this.pythonModulesClient = params.pythonModulesClient;
     this.aiProviderSettingsService = params.aiProviderSettingsService ?? null;
-    this.mailProviderSettingsService = params.mailProviderSettingsService ?? null;
+    this.mailProviderSettingsService =
+      params.mailProviderSettingsService ?? null;
     this.connectedAppsService = params.connectedAppsService ?? null;
     this.jobQueue = params.jobQueue ?? null;
     this.notificationService = params.notificationService ?? null;
-    this.scheduledWorkflowDeliveryService = params.scheduledWorkflowDeliveryService ?? null;
+    this.scheduledWorkflowDeliveryService =
+      params.scheduledWorkflowDeliveryService ?? null;
     this.humanInterventionService = params.humanInterventionService ?? null;
     this.brainywareClient = params.brainywareClient ?? null;
-    this.brainyWorkspaceAgentService = params.brainyWorkspaceAgentService ?? null;
-    this.brainyWorkspaceDatabaseConnectionService = params.brainyWorkspaceDatabaseConnectionService ?? null;
+    this.brainyWorkspaceAgentService =
+      params.brainyWorkspaceAgentService ?? null;
+    this.brainyWorkspaceDatabaseConnectionService =
+      params.brainyWorkspaceDatabaseConnectionService ?? null;
     this.runtimeAccessPolicy = params.runtimeAccessPolicy;
   }
 
@@ -211,21 +251,26 @@ export class WorkflowRunExecutorService {
 
         await this.executeRun(row.id);
       } catch (error) {
-        console.error("[WorkflowRunExecutorService] Unable to resume workflow run", {
-          runId: row.id,
-          error,
-        });
+        console.error(
+          "[WorkflowRunExecutorService] Unable to resume workflow run",
+          {
+            runId: row.id,
+            error,
+          },
+        );
       }
     }
   }
 
   public async resumeAfterDecision(runId: string): Promise<void> {
     if (this.jobQueue) {
-      await this.jobQueue.enqueue(new Job<WorkflowRunJobPayload>(
-        this.buildQueueJobId(runId),
-        QueueWorkflowRunDispatcher.JOB_NAME,
-        { runId },
-      ));
+      await this.jobQueue.enqueue(
+        new Job<WorkflowRunJobPayload>(
+          this.buildQueueJobId(runId),
+          QueueWorkflowRunDispatcher.JOB_NAME,
+          { runId },
+        ),
+      );
       return;
     }
     await this.executeRun(runId);
@@ -301,17 +346,27 @@ export class WorkflowRunExecutorService {
     });
     const context = await this.buildContext(runId);
     const existingSteps = await prisma.moduleWorkflowRunStep.findMany({
-      where: { workflow_run_id: runId, status: { in: ["SUCCEEDED", "SKIPPED"] } },
+      where: {
+        workflow_run_id: runId,
+        status: { in: ["SUCCEEDED", "SKIPPED"] },
+      },
       orderBy: { sequence_no: "asc" },
     });
-    const completedStepByKey = new Map(existingSteps.map((step) => [step.step_key, step]));
+    const completedStepByKey = new Map(
+      existingSteps.map((step) => [step.step_key, step]),
+    );
     for (const step of existingSteps) {
       context.nodeOutputs.set(step.step_key, step.output_payload ?? {});
     }
-    const evaluateCondition = (payload: unknown) => this.evaluateCondition(payload as ConditionPayload | null, context);
+    const evaluateCondition = (payload: unknown) =>
+      this.evaluateCondition(payload as ConditionPayload | null, context);
     const includeForOrdering = () => true;
     const orderedNodes = this.orderScheduleNodesAfterDeliveryInputs(
-      this.graphPlanner.buildExecutionOrder(run.workflow.nodes, run.workflow.edges, includeForOrdering),
+      this.graphPlanner.buildExecutionOrder(
+        run.workflow.nodes,
+        run.workflow.edges,
+        includeForOrdering,
+      ),
       run.workflow.edges,
       includeForOrdering,
     );
@@ -321,26 +376,49 @@ export class WorkflowRunExecutorService {
       workflowModuleKey: run.workflow.module.key,
       nodes: orderedNodes.map((node) => ({
         nodeKey: node.node_key,
-        agent: node.module_agent ? {
-          moduleKey: node.module_agent.module.key,
-          enabled: node.module_agent.is_enabled,
-          deleted: node.module_agent.deleted_at !== null,
-        } : null,
-        tool: node.module_tool ? {
-          moduleKey: node.module_tool.module.key,
-          enabled: node.module_tool.is_enabled,
-          deleted: node.module_tool.deleted_at !== null,
-        } : null,
+        agent: node.module_agent
+          ? {
+              moduleKey: node.module_agent.module.key,
+              enabled: node.module_agent.is_enabled,
+              deleted: node.module_agent.deleted_at !== null,
+            }
+          : null,
+        tool: node.module_tool
+          ? {
+              moduleKey: node.module_tool.module.key,
+              enabled: node.module_tool.is_enabled,
+              deleted: node.module_tool.deleted_at !== null,
+            }
+          : null,
       })),
     });
-    context.incomingNodeKeys = this.graphPlanner.buildIncomingNodeKeyMap(run.workflow.nodes, run.workflow.edges, includeForOrdering);
-    context.incomingFieldBindings = this.buildIncomingFieldBindingMap(run.workflow.nodes, run.workflow.edges, includeForOrdering);
-    context.outgoingNodeKeys = this.buildOutgoingNodeKeyMap(run.workflow.nodes, run.workflow.edges, includeForOrdering);
-    context.workflowNodesByKey = new Map(run.workflow.nodes.map((node) => [node.node_key, node]));
+    context.incomingNodeKeys = this.graphPlanner.buildIncomingNodeKeyMap(
+      run.workflow.nodes,
+      run.workflow.edges,
+      includeForOrdering,
+    );
+    context.incomingFieldBindings = this.buildIncomingFieldBindingMap(
+      run.workflow.nodes,
+      run.workflow.edges,
+      includeForOrdering,
+    );
+    context.outgoingNodeKeys = this.buildOutgoingNodeKeyMap(
+      run.workflow.nodes,
+      run.workflow.edges,
+      includeForOrdering,
+    );
+    context.workflowNodesByKey = new Map(
+      run.workflow.nodes.map((node) => [node.node_key, node]),
+    );
     this.ensureScheduleConnectionsAreSupported(context);
-    context.scheduledTargetNodeKeys = this.buildScheduledTargetNodeKeys(run.workflow.nodes, context.outgoingNodeKeys);
+    context.scheduledTargetNodeKeys = this.buildScheduledTargetNodeKeys(
+      run.workflow.nodes,
+      context.outgoingNodeKeys,
+    );
 
-    let sequenceNo = existingSteps.reduce((max, step) => Math.max(max, step.sequence_no), 0) + 1;
+    let sequenceNo =
+      existingSteps.reduce((max, step) => Math.max(max, step.sequence_no), 0) +
+      1;
     try {
       for (const node of orderedNodes) {
         if (completedStepByKey.has(node.node_key)) {
@@ -348,7 +426,10 @@ export class WorkflowRunExecutorService {
         }
         await this.handlePreStepStatus(context, node.node_key);
         if (!this.shouldExecuteNode(node.id, run.workflow.edges, context)) {
-          const output = { status: "skipped_by_condition", nodeKey: node.node_key };
+          const output = {
+            status: "skipped_by_condition",
+            nodeKey: node.node_key,
+          };
           context.nodeOutputs.set(node.node_key, output);
           await prisma.moduleWorkflowRunStep.create({
             data: {
@@ -402,20 +483,32 @@ export class WorkflowRunExecutorService {
           });
         } catch (error) {
           if (error instanceof WorkflowDecisionRequiredError) {
-            const output = { status: "waiting_for_decision", interventionId: error.interventionId };
+            const output = {
+              status: "waiting_for_decision",
+              interventionId: error.interventionId,
+            };
             context.nodeOutputs.set(node.node_key, output);
             await prisma.moduleWorkflowRunStep.update({
               where: { id: step.id },
-              data: { status: "WAITING_FOR_DECISION", output_payload: this.toInputJson(output) },
+              data: {
+                status: "WAITING_FOR_DECISION",
+                output_payload: this.toInputJson(output),
+              },
             });
             await prisma.moduleWorkflowRun.update({
               where: { id: runId },
-              data: { status: "WAITING_FOR_DECISION", result_payload: this.toInputJson(this.buildRunResultPayload(context)) },
+              data: {
+                status: "WAITING_FOR_DECISION",
+                result_payload: this.toInputJson(
+                  this.buildRunResultPayload(context),
+                ),
+              },
             });
             await this.notifyRunStatus(context, "waiting_for_decision");
             return;
           }
-          const message = error instanceof Error ? error.message : "Step failed";
+          const message =
+            error instanceof Error ? error.message : "Step failed";
           await prisma.moduleWorkflowRunStep.update({
             where: {
               id: step.id,
@@ -446,7 +539,8 @@ export class WorkflowRunExecutorService {
       });
       await this.notifyRunStatus(context, "completed");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Workflow execution failed";
+      const message =
+        error instanceof Error ? error.message : "Workflow execution failed";
       await this.handleRunFailureStatus(context, message);
       await prisma.moduleWorkflowRun.update({
         where: {
@@ -533,21 +627,28 @@ export class WorkflowRunExecutorService {
     }
 
     let quotationSource: StepExecutionContext["quotationSource"] = null;
-    let resolvedProjectVersionLabel = row.project_version?.version_label ?? null;
+    let resolvedProjectVersionLabel =
+      row.project_version?.version_label ?? null;
     if (row.project_id) {
-      const versionLabel = resolvedProjectVersionLabel
-        ?? (typeof row.input_payload === "object" && row.input_payload && "versionLabel" in row.input_payload
-          ? String((row.input_payload as Record<string, unknown>).versionLabel ?? "")
-          : "")
-        ?? "";
+      const versionLabel =
+        resolvedProjectVersionLabel ??
+        (typeof row.input_payload === "object" &&
+        row.input_payload &&
+        "versionLabel" in row.input_payload
+          ? String(
+              (row.input_payload as Record<string, unknown>).versionLabel ?? "",
+            )
+          : "") ??
+        "";
       if (versionLabel) {
         resolvedProjectVersionLabel = versionLabel;
-        const quotation = await this.documentArchiveService.getCurrentProjectVersionFile({
-          workspaceId: row.workspace_id,
-          projectId: row.project_id,
-          versionLabel,
-          fileKind: FileKind.QUOTATION_PDF,
-        });
+        const quotation =
+          await this.documentArchiveService.getCurrentProjectVersionFile({
+            workspaceId: row.workspace_id,
+            projectId: row.project_id,
+            versionLabel,
+            fileKind: FileKind.QUOTATION_PDF,
+          });
         if (quotation) {
           quotationSource = {
             documentId: quotation.id,
@@ -564,15 +665,24 @@ export class WorkflowRunExecutorService {
     const ddtSource = row.ddt_document?.document?.storage_path
       ? {
           storagePath: row.ddt_document.document.storage_path,
-          fileName: row.ddt_document.original_filename ?? row.ddt_document.document.filename ?? "document.pdf",
+          fileName:
+            row.ddt_document.original_filename ??
+            row.ddt_document.document.filename ??
+            "document.pdf",
         }
       : null;
-    const measureReportSource = row.measure_report_document?.document?.storage_path
+    const measureReportSource = row.measure_report_document?.document
+      ?.storage_path
       ? {
           storagePath: row.measure_report_document.document.storage_path,
-          fileName: row.measure_report_document.original_filename ?? row.measure_report_document.document.filename ?? "document.pdf",
-          requestedDocumentType: row.measure_report_document.document_type_requested ?? null,
-          effectiveDocumentType: row.measure_report_document.document_type_effective ?? null,
+          fileName:
+            row.measure_report_document.original_filename ??
+            row.measure_report_document.document.filename ??
+            "document.pdf",
+          requestedDocumentType:
+            row.measure_report_document.document_type_requested ?? null,
+          effectiveDocumentType:
+            row.measure_report_document.document_type_effective ?? null,
         }
       : null;
 
@@ -583,7 +693,10 @@ export class WorkflowRunExecutorService {
       workflowKey: row.workflow.key,
       workflowLabel: row.workflow.label,
       moduleKey: row.workflow.module?.key ?? null,
-      knowledgeMode: this.resolveKnowledgeMode(row.input_payload, row.workflow.configuration),
+      knowledgeMode: this.resolveKnowledgeMode(
+        row.input_payload,
+        row.workflow.configuration,
+      ),
       projectId: row.project_id,
       projectVersionLabel: resolvedProjectVersionLabel,
       projectVersionId: row.project_version_id,
@@ -597,10 +710,16 @@ export class WorkflowRunExecutorService {
       quotationSource,
       ddtSource,
       measureReportSource,
-      inputPayload: (row.input_payload ?? null) as Record<string, unknown> | null,
+      inputPayload: (row.input_payload ?? null) as Record<
+        string,
+        unknown
+      > | null,
       nodeOutputs: new Map<string, unknown>(),
       incomingNodeKeys: new Map<string, string[]>(),
-      incomingFieldBindings: new Map<string, Map<string, IncomingFieldBinding[]>>(),
+      incomingFieldBindings: new Map<
+        string,
+        Map<string, IncomingFieldBinding[]>
+      >(),
       outgoingNodeKeys: new Map<string, string[]>(),
       workflowNodesByKey: new Map<string, WorkflowNodeRow>(),
       scheduledTargetNodeKeys: new Set<string>(),
@@ -649,17 +768,25 @@ export class WorkflowRunExecutorService {
     const keyById = new Map(nodes.map((node) => [node.id, node.node_key]));
     const incoming = new Map<string, Map<string, IncomingFieldBinding[]>>();
     for (const edge of edges) {
-      if (!edge.is_enabled || !evaluateCondition(edge.condition_payload)) continue;
+      if (!edge.is_enabled || !evaluateCondition(edge.condition_payload))
+        continue;
       const sourceKey = keyById.get(edge.source_node_id);
       const targetKey = keyById.get(edge.target_node_id);
-      if (!sourceKey || !targetKey || !edge.target_handle?.startsWith("field:")) continue;
+      if (!sourceKey || !targetKey || !edge.target_handle?.startsWith("field:"))
+        continue;
       const field = edge.target_handle.slice("field:".length);
       if (!field) continue;
-      const byField = incoming.get(targetKey) ?? new Map<string, IncomingFieldBinding[]>();
+      const byField =
+        incoming.get(targetKey) ?? new Map<string, IncomingFieldBinding[]>();
       const bindings = byField.get(field) ?? [];
       const condition = this.toRecord(edge.condition_payload);
-      const selectedOutputKey = this.firstString(condition.selected_output_key, condition.selectedOutputKey) || null;
-      const inputLabel = this.firstString(condition.input_label, condition.inputLabel) || null;
+      const selectedOutputKey =
+        this.firstString(
+          condition.selected_output_key,
+          condition.selectedOutputKey,
+        ) || null;
+      const inputLabel =
+        this.firstString(condition.input_label, condition.inputLabel) || null;
       bindings.push({ sourceKey, selectedOutputKey, inputLabel });
       byField.set(field, bindings);
       incoming.set(targetKey, byField);
@@ -680,7 +807,11 @@ export class WorkflowRunExecutorService {
       const targetKeys = outgoingNodeKeys.get(node.node_key) ?? [];
       for (const targetKey of targetKeys) {
         const target = nodesByKey.get(targetKey);
-        if (this.deliveryChannelFromHandler(target?.module_tool?.handler_key ?? null)) {
+        if (
+          this.deliveryChannelFromHandler(
+            target?.module_tool?.handler_key ?? null,
+          )
+        ) {
           claimed.add(targetKey);
         }
       }
@@ -701,16 +832,40 @@ export class WorkflowRunExecutorService {
     const ordered = [...nodes];
     const byId = new Map(nodes.map((node) => [node.id, node]));
     for (const schedule of nodes) {
-      if (!this.isScheduleHandler(schedule.module_tool?.handler_key ?? null)) continue;
+      if (!this.isScheduleHandler(schedule.module_tool?.handler_key ?? null))
+        continue;
       const deliveryTargetIds = edges
-        .filter((edge) => edge.is_enabled && evaluateCondition(edge.condition_payload) && edge.source_node_id === schedule.id)
+        .filter(
+          (edge) =>
+            edge.is_enabled &&
+            evaluateCondition(edge.condition_payload) &&
+            edge.source_node_id === schedule.id,
+        )
         .map((edge) => edge.target_node_id)
-        .filter((targetId) => this.deliveryChannelFromHandler(byId.get(targetId)?.module_tool?.handler_key ?? null) !== null);
+        .filter(
+          (targetId) =>
+            this.deliveryChannelFromHandler(
+              byId.get(targetId)?.module_tool?.handler_key ?? null,
+            ) !== null,
+        );
       const inputSourceIds = edges
-        .filter((edge) => edge.is_enabled && evaluateCondition(edge.condition_payload) && deliveryTargetIds.includes(edge.target_node_id) && edge.source_node_id !== schedule.id)
+        .filter(
+          (edge) =>
+            edge.is_enabled &&
+            evaluateCondition(edge.condition_payload) &&
+            deliveryTargetIds.includes(edge.target_node_id) &&
+            edge.source_node_id !== schedule.id,
+        )
         .map((edge) => edge.source_node_id);
-      const latestInputIndex = Math.max(-1, ...inputSourceIds.map((sourceId) => ordered.findIndex((node) => node.id === sourceId)));
-      const scheduleIndex = ordered.findIndex((node) => node.id === schedule.id);
+      const latestInputIndex = Math.max(
+        -1,
+        ...inputSourceIds.map((sourceId) =>
+          ordered.findIndex((node) => node.id === sourceId),
+        ),
+      );
+      const scheduleIndex = ordered.findIndex(
+        (node) => node.id === schedule.id,
+      );
       if (latestInputIndex <= scheduleIndex) continue;
       const [scheduledNode] = ordered.splice(scheduleIndex, 1);
       ordered.splice(latestInputIndex, 0, scheduledNode);
@@ -718,16 +873,25 @@ export class WorkflowRunExecutorService {
     return ordered;
   }
 
-  private ensureScheduleConnectionsAreSupported(context: StepExecutionContext): void {
+  private ensureScheduleConnectionsAreSupported(
+    context: StepExecutionContext,
+  ): void {
     for (const node of context.workflowNodesByKey.values()) {
       if (!this.isScheduleHandler(node.module_tool?.handler_key ?? null)) {
         continue;
       }
       const invalidTarget = (context.outgoingNodeKeys.get(node.node_key) ?? [])
         .map((key) => context.workflowNodesByKey.get(key))
-        .find((target) => !this.deliveryChannelFromHandler(target?.module_tool?.handler_key ?? null));
+        .find(
+          (target) =>
+            !this.deliveryChannelFromHandler(
+              target?.module_tool?.handler_key ?? null,
+            ),
+        );
       if (invalidTarget) {
-        throw new Error(`Il nodo Pianifica puo' collegarsi solo a nodi di Resoconto: ${invalidTarget.node_key}.`);
+        throw new Error(
+          `Il nodo Pianifica puo' collegarsi solo a nodi di Resoconto: ${invalidTarget.node_key}.`,
+        );
       }
     }
   }
@@ -747,7 +911,9 @@ export class WorkflowRunExecutorService {
         return context.measureReportSource;
       }
       if (node.input_kind === "document" || node.input_kind === "file") {
-        const workflowFiles = this.toRecord(context.inputPayload?.workflow_files);
+        const workflowFiles = this.toRecord(
+          context.inputPayload?.workflow_files,
+        );
         const uploaded = this.toRecord(workflowFiles[node.node_key]);
         if (Object.keys(uploaded).length > 0) {
           return {
@@ -797,12 +963,18 @@ export class WorkflowRunExecutorService {
     node: {
       node_key: string;
       configuration: Prisma.JsonValue | null;
-      module_agent: { key: string; active_prompt: string; original_prompt: string } | null;
+      module_agent: {
+        key: string;
+        active_prompt: string;
+        original_prompt: string;
+      } | null;
     },
   ): Promise<unknown> {
     if (node.node_key === "quotation_structuring_agent") {
       if (!context.quotationSource || !context.projectId) {
-        throw new Error("Sorgente preventivo mancante per l'agente strutturazione.");
+        throw new Error(
+          "Sorgente preventivo mancante per l'agente strutturazione.",
+        );
       }
       const analysis = await this.quotationAnalyzer.analyze({
         workspaceId: context.workspaceId,
@@ -825,27 +997,39 @@ export class WorkflowRunExecutorService {
 
     if (node.node_key === "measure_report_analysis_agent") {
       if (!context.measureReportSource) {
-        throw new Error("Documento Measure Report mancante per l'agente analisi.");
+        throw new Error(
+          "Documento Measure Report mancante per l'agente analisi.",
+        );
       }
       return this.measureReportAnalyzer.analyze({
         workspaceId: context.workspaceId,
         fileName: context.measureReportSource.fileName,
         storagePath: context.measureReportSource.storagePath,
-        requestedDocumentType: context.measureReportSource.effectiveDocumentType
-          ?? context.measureReportSource.requestedDocumentType,
+        requestedDocumentType:
+          context.measureReportSource.effectiveDocumentType ??
+          context.measureReportSource.requestedDocumentType,
       });
     }
 
     const nodeConfig = this.toRecord(node.configuration);
-    const prompt = this.resolveNodePrompt(nodeConfig, node.module_agent?.active_prompt, node.module_agent?.original_prompt);
+    const prompt = this.resolveNodePrompt(
+      nodeConfig,
+      node.module_agent?.active_prompt,
+      node.module_agent?.original_prompt,
+    );
     if (!prompt) {
       throw new Error(`Prompt agente mancante per il nodo ${node.node_key}.`);
     }
 
     const previousOutput = this.toRecord(this.findLatestNodeOutput(context));
-    const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
+    const incomingOutputs = this.findIncomingNodeOutputs(
+      context,
+      node.node_key,
+    );
     const fieldInput = this.toRecord(incomingOutputs.byTargetHandle.input_text);
-    const connectedInputText = this.formatIncomingText(incomingOutputs.byTargetHandleItems.input_text ?? []);
+    const connectedInputText = this.formatIncomingText(
+      incomingOutputs.byTargetHandleItems.input_text ?? [],
+    );
     const inputPayload = context.inputPayload ?? {};
     const inputText = this.firstString(
       connectedInputText,
@@ -869,11 +1053,21 @@ export class WorkflowRunExecutorService {
       previousOutput.reply,
       previousOutput.text,
       previousOutput.raw_output,
-      ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "extracted_text", "reply", "text", "raw_output"]),
+      ...this.pickIncomingStrings(incomingOutputs.items, [
+        "input_text",
+        "inputText",
+        "promptText",
+        "extracted_text",
+        "reply",
+        "text",
+        "raw_output",
+      ]),
     );
 
     if (!inputText) {
-      throw new Error(`Input testuale mancante per il nodo agente ${node.node_key}.`);
+      throw new Error(
+        `Input testuale mancante per il nodo agente ${node.node_key}.`,
+      );
     }
 
     return this.pythonModulesClient.execute("langchain_orchestrator", "chat", {
@@ -900,11 +1094,27 @@ export class WorkflowRunExecutorService {
         throw new Error(`Handler tool non valido: ${tool.handler_key}`);
       }
 
-      const input = await this.buildPythonToolInput(context, node, moduleName, action);
-      const result = await this.pythonModulesClient.execute(moduleName, action, input);
-      if (moduleName === "docx_engine" && action === "generate_document" && this.toRecord(node.configuration).save_to_archive === true) {
+      const input = await this.buildPythonToolInput(
+        context,
+        node,
+        moduleName,
+        action,
+      );
+      const result = await this.pythonModulesClient.execute(
+        moduleName,
+        action,
+        input,
+      );
+      if (
+        moduleName === "docx_engine" &&
+        action === "generate_document" &&
+        this.toRecord(node.configuration).save_to_archive === true
+      ) {
         const archived = await this.archiveGeneratedDocument(context, result);
-        return { ...result, output: { ...this.unwrapPythonOutput(result), ...archived } };
+        return {
+          ...result,
+          output: { ...this.unwrapPythonOutput(result), ...archived },
+        };
       }
       return result;
     }
@@ -914,7 +1124,9 @@ export class WorkflowRunExecutorService {
     }
 
     if (tool.runtime_kind === "NEXT_ORCHESTRATOR") {
-      throw new Error(`Runtime tool non ancora implementato: ${tool.runtime_kind}`);
+      throw new Error(
+        `Runtime tool non ancora implementato: ${tool.runtime_kind}`,
+      );
     }
 
     throw new Error(`Runtime tool non supportato: ${tool.runtime_kind}`);
@@ -926,15 +1138,27 @@ export class WorkflowRunExecutorService {
     moduleName: string,
     action: string,
   ): Promise<Record<string, unknown>> {
-    if (moduleName === "ocr_engine" && action === "extract_text_from_pdf_storage") {
-      const source = context.quotationSource ?? context.ddtSource ?? context.measureReportSource;
+    if (
+      moduleName === "ocr_engine" &&
+      action === "extract_text_from_pdf_storage"
+    ) {
+      const source =
+        context.quotationSource ??
+        context.ddtSource ??
+        context.measureReportSource;
       const previousOutput = this.toRecord(this.findLatestNodeOutput(context));
-      const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
+      const incomingOutputs = this.findIncomingNodeOutputs(
+        context,
+        node.node_key,
+      );
       const storagePath = this.firstString(
         source?.storagePath,
         previousOutput.storage_path,
         previousOutput.storagePath,
-        ...this.pickIncomingStrings(incomingOutputs.items, ["storage_path", "storagePath"]),
+        ...this.pickIncomingStrings(incomingOutputs.items, [
+          "storage_path",
+          "storagePath",
+        ]),
       );
       if (storagePath) {
         return {
@@ -946,7 +1170,12 @@ export class WorkflowRunExecutorService {
         previousOutput.fileBase64,
         previousOutput.pdf_base64,
         previousOutput.document_base64,
-        ...this.pickIncomingStrings(incomingOutputs.items, ["file_base64", "fileBase64", "pdf_base64", "document_base64"]),
+        ...this.pickIncomingStrings(incomingOutputs.items, [
+          "file_base64",
+          "fileBase64",
+          "pdf_base64",
+          "document_base64",
+        ]),
       );
       if (!fileBase64) {
         throw new Error("Sorgente file mancante per Text Recognition.");
@@ -956,18 +1185,27 @@ export class WorkflowRunExecutorService {
         file_name: this.firstString(
           previousOutput.file_name,
           previousOutput.fileName,
-          ...this.pickIncomingStrings(incomingOutputs.items, ["file_name", "fileName"]),
+          ...this.pickIncomingStrings(incomingOutputs.items, [
+            "file_name",
+            "fileName",
+          ]),
         ),
         content_type: this.firstString(
           previousOutput.content_type,
           previousOutput.contentType,
-          ...this.pickIncomingStrings(incomingOutputs.items, ["content_type", "contentType"]),
+          ...this.pickIncomingStrings(incomingOutputs.items, [
+            "content_type",
+            "contentType",
+          ]),
         ),
       };
     }
 
     if (moduleName === "docx_engine" && action === "build_quotation_docx") {
-      const structured = this.findNodeOutput(context, "quotation_structuring_agent") as Record<string, unknown> | null;
+      const structured = this.findNodeOutput(
+        context,
+        "quotation_structuring_agent",
+      ) as Record<string, unknown> | null;
       const structuredData = structured?.structured_data;
       if (!structuredData || typeof structuredData !== "object") {
         throw new Error("Dati strutturati mancanti per generazione DOCX.");
@@ -980,9 +1218,15 @@ export class WorkflowRunExecutorService {
     }
 
     if (moduleName === "mail_engine" && action === "send_quotation_email") {
-      const docxOutputEnvelope = this.findNodeOutput(context, "quotation_docx_builder_tool") as Record<string, unknown> | null;
+      const docxOutputEnvelope = this.findNodeOutput(
+        context,
+        "quotation_docx_builder_tool",
+      ) as Record<string, unknown> | null;
       const docxOutput = this.unwrapPythonOutput(docxOutputEnvelope);
-      const docxBase64 = typeof docxOutput.docx_base64 === "string" ? docxOutput.docx_base64 : "";
+      const docxBase64 =
+        typeof docxOutput.docx_base64 === "string"
+          ? docxOutput.docx_base64
+          : "";
       if (!docxBase64) {
         throw new Error("DOCX base64 mancante per invio email.");
       }
@@ -1006,27 +1250,58 @@ export class WorkflowRunExecutorService {
 
     const nodeConfig = this.toRecord(node.configuration);
     const previousOutput = this.toRecord(this.findLatestNodeOutput(context));
-    const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
+    const incomingOutputs = this.findIncomingNodeOutputs(
+      context,
+      node.node_key,
+    );
     const inputPayload = context.inputPayload ?? {};
 
     if (moduleName === "langchain_orchestrator") {
-      return await this.buildLangchainToolInput(action, nodeConfig, inputPayload, previousOutput, incomingOutputs);
+      return await this.buildLangchainToolInput(
+        action,
+        nodeConfig,
+        inputPayload,
+        previousOutput,
+        incomingOutputs,
+      );
     }
 
     if (moduleName === "docx_engine" && action === "generate_document") {
-      return this.buildGenericDocumentInput(nodeConfig, inputPayload, previousOutput, incomingOutputs);
+      return this.buildGenericDocumentInput(
+        nodeConfig,
+        inputPayload,
+        previousOutput,
+        incomingOutputs,
+      );
     }
 
     if (moduleName === "mail_engine" && action === "send_email") {
-      return await this.buildGenericMailInput(context, nodeConfig, inputPayload, previousOutput, incomingOutputs);
+      return await this.buildGenericMailInput(
+        context,
+        nodeConfig,
+        inputPayload,
+        previousOutput,
+        incomingOutputs,
+      );
     }
 
     if (moduleName === "messaging_engine" && action === "send_telegram") {
-      return await this.buildTelegramInput(context, nodeConfig, inputPayload, previousOutput, incomingOutputs);
+      return await this.buildTelegramInput(
+        context,
+        nodeConfig,
+        inputPayload,
+        previousOutput,
+        incomingOutputs,
+      );
     }
 
     if (moduleName === "messaging_engine" && action === "send_whatsapp") {
-      return this.buildWhatsappInput(nodeConfig, inputPayload, previousOutput, incomingOutputs);
+      return this.buildWhatsappInput(
+        nodeConfig,
+        inputPayload,
+        previousOutput,
+        incomingOutputs,
+      );
     }
 
     return {
@@ -1051,10 +1326,15 @@ export class WorkflowRunExecutorService {
       incoming_outputs: incomingOutputs.byNodeKey,
       ai_provider: await this.buildPythonAiProviderOverride(),
     };
-    const prompt = this.resolveNodePrompt(nodeConfig, this.defaultPromptForLangchainAction(action));
+    const prompt = this.resolveNodePrompt(
+      nodeConfig,
+      this.defaultPromptForLangchainAction(action),
+    );
 
     if (action === "chat") {
-      const connectedInputText = this.formatIncomingText(incomingOutputs.byTargetHandleItems?.input_text ?? []);
+      const connectedInputText = this.formatIncomingText(
+        incomingOutputs.byTargetHandleItems?.input_text ?? [],
+      );
       return {
         ...merged,
         ...(prompt ? { instructions: prompt } : {}),
@@ -1069,17 +1349,36 @@ export class WorkflowRunExecutorService {
           previousOutput.extracted_text,
           previousOutput.text,
           previousOutput.raw_output,
-          ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "reply", "extracted_text", "text", "raw_output"]),
+          ...this.pickIncomingStrings(incomingOutputs.items, [
+            "input_text",
+            "inputText",
+            "promptText",
+            "reply",
+            "extracted_text",
+            "text",
+            "raw_output",
+          ]),
         ),
       };
     }
 
     if (action === "structure_text") {
+      const inputField = this.toRecord(
+        incomingOutputs.byTargetHandle.input_text,
+      );
       return {
         ...merged,
         ...(prompt ? { instructions: prompt } : {}),
         extracted_text: this.firstString(
+          inputField.extracted_text,
+          inputField.input_text,
+          inputField.inputText,
+          inputField.promptText,
+          inputField.text,
+          inputField.reply,
+          inputField.raw_output,
           nodeConfig.extracted_text,
+          nodeConfig.input_text,
           inputPayload.extracted_text,
           previousOutput.input_text,
           previousOutput.inputText,
@@ -1088,16 +1387,34 @@ export class WorkflowRunExecutorService {
           previousOutput.reply,
           previousOutput.text,
           previousOutput.raw_output,
-          ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "extracted_text", "reply", "text", "raw_output"]),
+          ...this.pickIncomingStrings(incomingOutputs.items, [
+            "input_text",
+            "inputText",
+            "promptText",
+            "extracted_text",
+            "reply",
+            "text",
+            "raw_output",
+          ]),
         ),
       };
     }
 
     if (action === "compose_email") {
+      const contextField = this.toRecord(
+        incomingOutputs.byTargetHandle.context,
+      );
       return {
         ...merged,
         ...(prompt ? { extra_instructions: prompt, instructions: prompt } : {}),
         context: this.firstString(
+          contextField.context,
+          contextField.input_text,
+          contextField.inputText,
+          contextField.promptText,
+          contextField.text,
+          contextField.reply,
+          contextField.raw_output,
           nodeConfig.context,
           inputPayload.context,
           previousOutput.input_text,
@@ -1107,14 +1424,26 @@ export class WorkflowRunExecutorService {
           previousOutput.raw_output,
           previousOutput.text,
           previousOutput.extracted_text,
-          ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "reply", "raw_output", "text", "extracted_text"]),
+          ...this.pickIncomingStrings(incomingOutputs.items, [
+            "input_text",
+            "inputText",
+            "promptText",
+            "reply",
+            "raw_output",
+            "text",
+            "extracted_text",
+          ]),
         ),
       };
     }
 
     if (action === "format_text") {
-      const contentField = this.toRecord(incomingOutputs.byTargetHandle.content);
-      const templateField = this.toRecord(incomingOutputs.byTargetHandle.template);
+      const contentField = this.toRecord(
+        incomingOutputs.byTargetHandle.content,
+      );
+      const templateField = this.toRecord(
+        incomingOutputs.byTargetHandle.template,
+      );
       return {
         ...merged,
         ...(prompt ? { instructions: prompt } : {}),
@@ -1126,7 +1455,14 @@ export class WorkflowRunExecutorService {
           contentField.raw_output,
           nodeConfig.content,
           inputPayload.content,
-          ...this.pickIncomingStrings(incomingOutputs.items, ["content", "formatted_text", "text", "reply", "raw_output", "extracted_text"]),
+          ...this.pickIncomingStrings(incomingOutputs.items, [
+            "content",
+            "formatted_text",
+            "text",
+            "reply",
+            "raw_output",
+            "extracted_text",
+          ]),
         ),
         template: this.firstString(
           templateField.template,
@@ -1177,7 +1513,10 @@ export class WorkflowRunExecutorService {
     return "";
   }
 
-  private async buildPythonAiProviderOverride(): Promise<Record<string, unknown> | null> {
+  private async buildPythonAiProviderOverride(): Promise<Record<
+    string,
+    unknown
+  > | null> {
     if (!this.aiProviderSettingsService) {
       return null;
     }
@@ -1190,10 +1529,17 @@ export class WorkflowRunExecutorService {
     if (typeof config.chatModel === "string" && config.chatModel.trim()) {
       override.chat_model = config.chatModel.trim();
     }
-    if (typeof config.temperature === "number" && Number.isFinite(config.temperature)) {
+    if (
+      typeof config.temperature === "number" &&
+      Number.isFinite(config.temperature)
+    ) {
       override.temperature = config.temperature;
     }
-    if (typeof config.maxOutputTokens === "number" && Number.isFinite(config.maxOutputTokens) && config.maxOutputTokens > 0) {
+    if (
+      typeof config.maxOutputTokens === "number" &&
+      Number.isFinite(config.maxOutputTokens) &&
+      config.maxOutputTokens > 0
+    ) {
       override.max_output_tokens = Math.trunc(config.maxOutputTokens);
     }
     if (typeof config.topP === "number" && Number.isFinite(config.topP)) {
@@ -1205,23 +1551,37 @@ export class WorkflowRunExecutorService {
     if (typeof config.minP === "number" && Number.isFinite(config.minP)) {
       override.min_p = config.minP;
     }
-    if (typeof config.repetitionPenalty === "number" && Number.isFinite(config.repetitionPenalty)) {
+    if (
+      typeof config.repetitionPenalty === "number" &&
+      Number.isFinite(config.repetitionPenalty)
+    ) {
       override.repetition_penalty = config.repetitionPenalty;
     }
     if (typeof config.seed === "number" && Number.isFinite(config.seed)) {
       override.seed = Math.trunc(config.seed);
     }
-    if (typeof config.contextTokenLimit === "number" && Number.isFinite(config.contextTokenLimit) && config.contextTokenLimit > 0) {
+    if (
+      typeof config.contextTokenLimit === "number" &&
+      Number.isFinite(config.contextTokenLimit) &&
+      config.contextTokenLimit > 0
+    ) {
       override.context_token_limit = Math.trunc(config.contextTokenLimit);
     }
-    if (typeof config.timeoutMs === "number" && Number.isFinite(config.timeoutMs) && config.timeoutMs > 0) {
+    if (
+      typeof config.timeoutMs === "number" &&
+      Number.isFinite(config.timeoutMs) &&
+      config.timeoutMs > 0
+    ) {
       override.timeout_ms = Math.trunc(config.timeoutMs);
     }
 
     return Object.keys(override).length > 0 ? override : null;
   }
 
-  private async buildPythonMailProviderOverride(): Promise<Record<string, unknown> | null> {
+  private async buildPythonMailProviderOverride(): Promise<Record<
+    string,
+    unknown
+  > | null> {
     if (!this.mailProviderSettingsService) {
       return null;
     }
@@ -1242,7 +1602,6 @@ export class WorkflowRunExecutorService {
     if (config.provider === "resend") {
       override.resend_api_key = config.resendApiKey;
     }
-
     return override;
   }
 
@@ -1253,7 +1612,9 @@ export class WorkflowRunExecutorService {
     incomingOutputs: IncomingNodeOutputs,
   ): Record<string, unknown> {
     const contentField = this.toRecord(incomingOutputs.byTargetHandle.content);
-    const fileNameField = this.toRecord(incomingOutputs.byTargetHandle.file_name);
+    const fileNameField = this.toRecord(
+      incomingOutputs.byTargetHandle.file_name,
+    );
     return {
       ...nodeConfig,
       ...inputPayload,
@@ -1278,10 +1639,20 @@ export class WorkflowRunExecutorService {
         previousOutput.raw_output,
         previousOutput.extracted_text,
         previousOutput.structured_data,
-        ...this.pickIncomingValues(incomingOutputs.items, ["input_text", "inputText", "promptText", "reply", "text", "raw_output", "extracted_text", "structured_data"]),
+        ...this.pickIncomingValues(incomingOutputs.items, [
+          "input_text",
+          "inputText",
+          "promptText",
+          "reply",
+          "text",
+          "raw_output",
+          "extracted_text",
+          "structured_data",
+        ]),
       ),
       title: this.firstString(nodeConfig.title, inputPayload.title),
-      format: this.firstString(nodeConfig.format, inputPayload.format) || "docx",
+      format:
+        this.firstString(nodeConfig.format, inputPayload.format) || "docx",
       file_name: this.firstString(
         fileNameField.file_name,
         fileNameField.fileName,
@@ -1307,7 +1678,8 @@ export class WorkflowRunExecutorService {
     const output = this.unwrapPythonOutput(result);
     const base64 = this.firstString(output.document_base64);
     const fileName = this.firstString(output.file_name) || "documento";
-    const contentType = this.firstString(output.content_type) || "application/octet-stream";
+    const contentType =
+      this.firstString(output.content_type) || "application/octet-stream";
     if (!base64) {
       throw new Error("Il generatore non ha prodotto un file archiviabile.");
     }
@@ -1317,14 +1689,24 @@ export class WorkflowRunExecutorService {
     const extension = this.fileExtension(fileName);
     const storage = StorageSelector.create();
     const objectKey = GaragePath.buildObjectKey(
-      storage.storagePrefix(), context.workspaceId, "workflows", context.workflowKey,
-      "generated-document", checksum, fileName,
+      storage.storagePrefix(),
+      context.workspaceId,
+      "workflows",
+      context.workflowKey,
+      "generated-document",
+      checksum,
+      fileName,
     );
     const stored = await storage.putObject({
       objectKey,
       bytes,
       contentType,
-      metadata: { workspaceid: context.workspaceId, workflowkey: context.workflowKey, runid: context.runId, sha256: checksum },
+      metadata: {
+        workspaceid: context.workspaceId,
+        workflowkey: context.workflowKey,
+        runid: context.runId,
+        sha256: checksum,
+      },
     });
 
     const prisma = PrismaClientManager.getClient();
@@ -1340,11 +1722,24 @@ export class WorkflowRunExecutorService {
         create: { key: "uploaded" },
       }),
       prisma.node.upsert({
-        where: { workspace_id_path_cache: { workspace_id: context.workspaceId, path_cache: "/documents/workflows/generated" } },
+        where: {
+          workspace_id_path_cache: {
+            workspace_id: context.workspaceId,
+            path_cache: "/documents/workflows/generated",
+          },
+        },
         update: { deleted_at: null },
-        create: { workspace_id: context.workspaceId, name: "generated", path_cache: "/documents/workflows/generated", depth: 3 },
+        create: {
+          workspace_id: context.workspaceId,
+          name: "generated",
+          path_cache: "/documents/workflows/generated",
+          depth: 3,
+        },
       }),
-      prisma.module.findUnique({ where: { key: "workflow_management" }, select: { id: true } }),
+      prisma.module.findUnique({
+        where: { key: "workflow_management" },
+        select: { id: true },
+      }),
     ]);
     const document = await prisma.document.create({
       data: {
@@ -1364,12 +1759,26 @@ export class WorkflowRunExecutorService {
       },
       select: { id: true, storage_path: true },
     });
-    const knowledge = await this.documentIntelligenceService.refreshDocumentKnowledge(context.workspaceId, document.id);
-    return { archived: true, document_id: document.id, storage_path: document.storage_path, knowledge_document_id: knowledge.id };
+    const knowledge =
+      await this.documentIntelligenceService.refreshDocumentKnowledge(
+        context.workspaceId,
+        document.id,
+      );
+    return {
+      archived: true,
+      document_id: document.id,
+      storage_path: document.storage_path,
+      knowledge_document_id: knowledge.id,
+    };
   }
 
   private fileExtension(fileName: string): string {
-    const extension = fileName.split(".").pop()?.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    const extension = fileName
+      .split(".")
+      .pop()
+      ?.trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
     return extension || "bin";
   }
 
@@ -1380,6 +1789,8 @@ export class WorkflowRunExecutorService {
     previousOutput: Record<string, unknown>,
     incomingOutputs: IncomingNodeOutputs,
   ): Promise<Record<string, unknown>> {
+    const toField = this.toRecord(incomingOutputs.byTargetHandle.to);
+    const subjectField = this.toRecord(incomingOutputs.byTargetHandle.subject);
     const textField = this.toRecord(incomingOutputs.byTargetHandle.text);
     return {
       ...nodeConfig,
@@ -1387,8 +1798,25 @@ export class WorkflowRunExecutorService {
       previous_output: previousOutput,
       incoming_outputs: incomingOutputs.byNodeKey,
       mail_provider: await this.buildPythonMailProviderOverride(),
-      to: this.firstString(nodeConfig.to, inputPayload.to, context.clientEmail),
+      to: this.firstString(
+        toField.to,
+        toField.email,
+        toField.input_text,
+        toField.inputText,
+        toField.promptText,
+        toField.text,
+        toField.content,
+        nodeConfig.to,
+        inputPayload.to,
+        context.clientEmail,
+      ),
       subject: this.firstString(
+        subjectField.subject,
+        subjectField.input_text,
+        subjectField.inputText,
+        subjectField.promptText,
+        subjectField.text,
+        subjectField.content,
         nodeConfig.subject,
         inputPayload.subject,
         previousOutput.subject,
@@ -1409,9 +1837,21 @@ export class WorkflowRunExecutorService {
         previousOutput.text,
         previousOutput.reply,
         previousOutput.raw_output,
-        ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "text", "reply", "raw_output"]),
+        ...this.pickIncomingStrings(incomingOutputs.items, [
+          "input_text",
+          "inputText",
+          "promptText",
+          "text",
+          "reply",
+          "raw_output",
+        ]),
       ),
-      attachments: this.resolveMailAttachments(nodeConfig, inputPayload, previousOutput, incomingOutputs.items),
+      attachments: this.resolveMailAttachments(
+        nodeConfig,
+        inputPayload,
+        previousOutput,
+        incomingOutputs.items,
+      ),
     };
   }
 
@@ -1423,11 +1863,17 @@ export class WorkflowRunExecutorService {
     incomingOutputs: IncomingNodeOutputs,
   ): Promise<Record<string, unknown>> {
     const textField = this.toRecord(incomingOutputs.byTargetHandle.text);
-    const fallbackChatId = this.firstString(nodeConfig.chat_id, nodeConfig.chatId, inputPayload.chat_id, inputPayload.chatId);
-    const telegramChannelId = nodeConfig.telegram_channel_id
-      ?? nodeConfig.telegramChannelId
-      ?? inputPayload.telegram_channel_id
-      ?? inputPayload.telegramChannelId;
+    const fallbackChatId = this.firstString(
+      nodeConfig.chat_id,
+      nodeConfig.chatId,
+      inputPayload.chat_id,
+      inputPayload.chatId,
+    );
+    const telegramChannelId =
+      nodeConfig.telegram_channel_id ??
+      nodeConfig.telegramChannelId ??
+      inputPayload.telegram_channel_id ??
+      inputPayload.telegramChannelId;
     const chatId = this.connectedAppsService
       ? await this.connectedAppsService.resolveTelegramChatId({
           workspaceId: context.workspaceId,
@@ -1460,7 +1906,14 @@ export class WorkflowRunExecutorService {
         previousOutput.text,
         previousOutput.reply,
         previousOutput.raw_output,
-        ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "text", "reply", "raw_output"]),
+        ...this.pickIncomingStrings(incomingOutputs.items, [
+          "input_text",
+          "inputText",
+          "promptText",
+          "text",
+          "reply",
+          "raw_output",
+        ]),
       ),
     };
   }
@@ -1471,13 +1924,26 @@ export class WorkflowRunExecutorService {
     previousOutput: Record<string, unknown>,
     incomingOutputs: IncomingNodeOutputs,
   ): Record<string, unknown> {
+    const toField = this.toRecord(incomingOutputs.byTargetHandle.to);
     const textField = this.toRecord(incomingOutputs.byTargetHandle.text);
     return {
       ...nodeConfig,
       ...inputPayload,
       previous_output: previousOutput,
       incoming_outputs: incomingOutputs.byNodeKey,
-      to: this.firstString(nodeConfig.to, nodeConfig.phone, inputPayload.to, inputPayload.phone),
+      to: this.firstString(
+        toField.to,
+        toField.phone,
+        toField.input_text,
+        toField.inputText,
+        toField.promptText,
+        toField.text,
+        toField.content,
+        nodeConfig.to,
+        nodeConfig.phone,
+        inputPayload.to,
+        inputPayload.phone,
+      ),
       text: this.firstString(
         textField.input_text,
         textField.inputText,
@@ -1495,12 +1961,22 @@ export class WorkflowRunExecutorService {
         previousOutput.text,
         previousOutput.reply,
         previousOutput.raw_output,
-        ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "text", "reply", "raw_output"]),
+        ...this.pickIncomingStrings(incomingOutputs.items, [
+          "input_text",
+          "inputText",
+          "promptText",
+          "text",
+          "reply",
+          "raw_output",
+        ]),
       ),
     };
   }
 
-  private async executeScheduleTool(context: StepExecutionContext, node: WorkflowNodeRow): Promise<unknown> {
+  private async executeScheduleTool(
+    context: StepExecutionContext,
+    node: WorkflowNodeRow,
+  ): Promise<unknown> {
     if (!this.scheduledWorkflowDeliveryService) {
       throw new Error("Servizio scheduling workflow non configurato.");
     }
@@ -1526,7 +2002,12 @@ export class WorkflowRunExecutorService {
     const targetNodes = targetNodeKeys
       .map((key) => context.workflowNodesByKey.get(key) ?? null)
       .filter((target): target is WorkflowNodeRow => Boolean(target))
-      .filter((target) => this.deliveryChannelFromHandler(target.module_tool?.handler_key ?? null) !== null);
+      .filter(
+        (target) =>
+          this.deliveryChannelFromHandler(
+            target.module_tool?.handler_key ?? null,
+          ) !== null,
+      );
 
     if (targetNodes.length === 0) {
       return {
@@ -1536,7 +2017,10 @@ export class WorkflowRunExecutorService {
     }
 
     const previousOutput = this.toRecord(this.findLatestNodeOutput(context));
-    const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
+    const incomingOutputs = this.findIncomingNodeOutputs(
+      context,
+      node.node_key,
+    );
     const inputPayload = context.inputPayload ?? {};
     const repeatEverySeconds = this.resolveRepeatEverySeconds(nodeConfig);
     const scheduled = [];
@@ -1548,7 +2032,10 @@ export class WorkflowRunExecutorService {
         continue;
       }
       const targetConfig = this.toRecord(target.configuration);
-      const targetIncomingOutputs = this.findIncomingNodeOutputs(context, target.node_key);
+      const targetIncomingOutputs = this.findIncomingNodeOutputs(
+        context,
+        target.node_key,
+      );
       const delivery = await this.buildScheduledDeliveryPayload(
         context,
         channel,
@@ -1587,28 +2074,41 @@ export class WorkflowRunExecutorService {
   }
 
   private parseScheduleDateTime(value: string): Date | null {
-    const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    const match = value
+      .trim()
+      .match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
     if (!match) return null;
-    const [, yearText, monthText, dayText, hourText, minuteText, secondText = "0"] = match;
+    const [
+      ,
+      yearText,
+      monthText,
+      dayText,
+      hourText,
+      minuteText,
+      secondText = "0",
+    ] = match;
     const year = Number(yearText);
     const month = Number(monthText);
     const day = Number(dayText);
     const hour = Number(hourText);
     const minute = Number(minuteText);
     const second = Number(secondText);
-    const localAsUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+    const localAsUtc = new Date(
+      Date.UTC(year, month - 1, day, hour, minute, second),
+    );
     if (
-      localAsUtc.getUTCFullYear() !== year
-      || localAsUtc.getUTCMonth() !== month - 1
-      || localAsUtc.getUTCDate() !== day
-      || localAsUtc.getUTCHours() !== hour
-      || localAsUtc.getUTCMinutes() !== minute
-      || localAsUtc.getUTCSeconds() !== second
+      localAsUtc.getUTCFullYear() !== year ||
+      localAsUtc.getUTCMonth() !== month - 1 ||
+      localAsUtc.getUTCDate() !== day ||
+      localAsUtc.getUTCHours() !== hour ||
+      localAsUtc.getUTCMinutes() !== minute ||
+      localAsUtc.getUTCSeconds() !== second
     ) {
       return null;
     }
 
-    const timeZone = process.env.WORKFLOW_SCHEDULE_TIME_ZONE?.trim() || "Europe/Rome";
+    const timeZone =
+      process.env.WORKFLOW_SCHEDULE_TIME_ZONE?.trim() || "Europe/Rome";
     const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone,
       year: "numeric",
@@ -1619,8 +2119,17 @@ export class WorkflowRunExecutorService {
       second: "2-digit",
       hourCycle: "h23",
     }).formatToParts(localAsUtc);
-    const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((item) => item.type === type)?.value ?? "");
-    const offsetMs = Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second")) - localAsUtc.getTime();
+    const part = (type: Intl.DateTimeFormatPartTypes) =>
+      Number(parts.find((item) => item.type === type)?.value ?? "");
+    const offsetMs =
+      Date.UTC(
+        part("year"),
+        part("month") - 1,
+        part("day"),
+        part("hour"),
+        part("minute"),
+        part("second"),
+      ) - localAsUtc.getTime();
     return new Date(localAsUtc.getTime() - offsetMs);
   }
 
@@ -1639,10 +2148,19 @@ export class WorkflowRunExecutorService {
     providerPayload?: unknown;
   }> {
     if (channel === "email") {
-      const input = await this.buildGenericMailInput(context, nodeConfig, inputPayload, previousOutput, incomingOutputs);
+      const input = await this.buildGenericMailInput(
+        context,
+        nodeConfig,
+        inputPayload,
+        previousOutput,
+        incomingOutputs,
+      );
       return {
         recipient: String(input.to ?? ""),
-        subject: typeof input.subject === "string" ? input.subject : "Messaggio programmato",
+        subject:
+          typeof input.subject === "string"
+            ? input.subject
+            : "Messaggio programmato",
         message: String(input.text ?? ""),
         attachments: input.attachments,
         providerPayload: input.mail_provider,
@@ -1650,30 +2168,52 @@ export class WorkflowRunExecutorService {
     }
 
     if (channel === "telegram") {
-      const input = await this.buildTelegramInput(context, nodeConfig, inputPayload, previousOutput, incomingOutputs);
+      const input = await this.buildTelegramInput(
+        context,
+        nodeConfig,
+        inputPayload,
+        previousOutput,
+        incomingOutputs,
+      );
       return {
         recipient: String(input.chat_id ?? ""),
         message: String(input.text ?? ""),
       };
     }
 
-    const input = this.buildWhatsappInput(nodeConfig, inputPayload, previousOutput, incomingOutputs);
+    const input = this.buildWhatsappInput(
+      nodeConfig,
+      inputPayload,
+      previousOutput,
+      incomingOutputs,
+    );
     return {
       recipient: String(input.to ?? ""),
       message: String(input.text ?? ""),
     };
   }
 
-  private resolveRepeatEverySeconds(nodeConfig: Record<string, unknown>): number | null {
-    if (nodeConfig.scheduleRepeatEnabled === false || nodeConfig.repeat_enabled === false) {
+  private resolveRepeatEverySeconds(
+    nodeConfig: Record<string, unknown>,
+  ): number | null {
+    if (
+      nodeConfig.scheduleRepeatEnabled === false ||
+      nodeConfig.repeat_enabled === false
+    ) {
       return null;
     }
-    const explicit = Number(nodeConfig.repeat_every_seconds ?? nodeConfig.repeatEverySeconds);
+    const explicit = Number(
+      nodeConfig.repeat_every_seconds ?? nodeConfig.repeatEverySeconds,
+    );
     if (Number.isFinite(explicit) && explicit >= 60) {
       return Math.trunc(explicit);
     }
 
-    const value = Number(nodeConfig.scheduleRepeatValue ?? nodeConfig.repeat_value ?? nodeConfig.repeatValue);
+    const value = Number(
+      nodeConfig.scheduleRepeatValue ??
+        nodeConfig.repeat_value ??
+        nodeConfig.repeatValue,
+    );
     const unit = this.firstString(
       nodeConfig.scheduleRepeatUnit,
       nodeConfig.repeat_unit,
@@ -1688,7 +2228,9 @@ export class WorkflowRunExecutorService {
     return Math.trunc(value * 3_600);
   }
 
-  private deliveryChannelFromHandler(handlerKey: string | null): ScheduledDeliveryChannel | null {
+  private deliveryChannelFromHandler(
+    handlerKey: string | null,
+  ): ScheduledDeliveryChannel | null {
     if (handlerKey === "mail_engine.send_email") {
       return "email";
     }
@@ -1705,11 +2247,14 @@ export class WorkflowRunExecutorService {
     return handlerKey === "workflow_scheduler.schedule_report_delivery";
   }
 
-  private buildScheduledTargetSkipOutput(node: WorkflowNodeRow): Record<string, unknown> {
+  private buildScheduledTargetSkipOutput(
+    node: WorkflowNodeRow,
+  ): Record<string, unknown> {
     return {
       status: "scheduled_by_previous_schedule_node",
       nodeKey: node.node_key,
-      message: "Nodo pianificato da uno Schedule precedente: non inviato immediatamente.",
+      message:
+        "Nodo pianificato da uno Schedule precedente: non inviato immediatamente.",
     };
   }
 
@@ -1731,28 +2276,48 @@ export class WorkflowRunExecutorService {
     }
 
     if (handlerKey === "document_intelligence.refresh_document_knowledge") {
-      const documentId = context.documentId
-        ?? context.quotationSource?.documentId
-        ?? (await this.findDocumentIdFromDdt(context.ddtDocumentId))
-        ?? null;
+      const documentId =
+        context.documentId ??
+        context.quotationSource?.documentId ??
+        (await this.findDocumentIdFromDdt(context.ddtDocumentId)) ??
+        null;
       if (!documentId) {
         throw new Error("documentId mancante per refresh knowledge.");
       }
-      const knowledge = await this.documentIntelligenceService.refreshDocumentKnowledge(context.workspaceId, documentId);
+      const knowledge =
+        await this.documentIntelligenceService.refreshDocumentKnowledge(
+          context.workspaceId,
+          documentId,
+        );
       return {
         knowledgeDocumentId: knowledge.id,
       };
     }
 
     if (handlerKey === "document_intelligence.search_workspace_knowledge") {
-      const query = String(context.inputPayload?.query ?? "").trim();
+      const configuration = this.toRecord(node.configuration);
+      const queryField = this.toRecord(
+        this.findIncomingNodeOutputs(context, node.node_key).byTargetHandle
+          .query,
+      );
+      const query = this.firstString(
+        queryField.query,
+        queryField.input_text,
+        queryField.inputText,
+        queryField.promptText,
+        queryField.text,
+        queryField.content,
+        configuration.query,
+        context.inputPayload?.query,
+      );
       if (!query) {
         return { results: [] };
       }
-      const results = await this.documentIntelligenceService.searchWorkspaceKnowledge({
-        workspaceId: context.workspaceId,
-        query,
-      });
+      const results =
+        await this.documentIntelligenceService.searchWorkspaceKnowledge({
+          workspaceId: context.workspaceId,
+          query,
+        });
       return {
         results,
       };
@@ -1781,34 +2346,54 @@ export class WorkflowRunExecutorService {
     context: StepExecutionContext,
     node: WorkflowNodeRow,
   ): Promise<Record<string, unknown>> {
-    if (!this.brainywareClient) throw new Error("Client Brainyware non disponibile.");
+    if (!this.brainywareClient)
+      throw new Error("Client Brainyware non disponibile.");
     const configuration = this.toRecord(node.configuration);
     const incoming = this.findIncomingNodeOutputs(context, node.node_key);
     const latest = this.toRecord(this.findLatestNodeOutput(context));
     const input = context.inputPayload ?? {};
-    const message = this.firstString(
-      this.toRecord(incoming.byTargetHandle.input_text).value,
-      this.toRecord(incoming.byTargetHandle.input_text).text,
-      configuration.input_text,
-      input.input_text,
-      input.inputText,
-      input.prompt,
-      input.text,
-      latest.reply,
-      latest.text,
-      latest.raw_output,
-    ) || this.formatIncomingText(incoming.items);
-    if (!message) throw new Error("Collegare o inserire un testo per l'inferenza Brainyware.");
+    const message =
+      this.firstString(
+        this.toRecord(incoming.byTargetHandle.input_text).value,
+        this.toRecord(incoming.byTargetHandle.input_text).text,
+        configuration.input_text,
+        input.input_text,
+        input.inputText,
+        input.prompt,
+        input.text,
+        latest.reply,
+        latest.text,
+        latest.raw_output,
+      ) || this.formatIncomingText(incoming.items);
+    if (!message)
+      throw new Error(
+        "Collegare o inserire un testo per l'inferenza Brainyware.",
+      );
 
     const requestedMode = this.firstString(configuration.mode);
-    const result = requestedMode === "agent"
-      ? await this.executeBrainywareAgentSingleShot(context, configuration, message)
-      : await this.executeBrainywareStatelessInference(context, configuration, message, requestedMode);
+    const result =
+      requestedMode === "agent"
+        ? await this.executeBrainywareAgentSingleShot(
+            context,
+            configuration,
+            message,
+          )
+        : await this.executeBrainywareStatelessInference(
+            context,
+            configuration,
+            message,
+            requestedMode,
+          );
     return {
       ...result,
       text: result.reply,
       published_outputs: [
-        { key: "text", label: "Risposta Brainyware", kind: "text" as const, value: result.reply },
+        {
+          key: "text",
+          label: "Risposta Brainyware",
+          kind: "text" as const,
+          value: result.reply,
+        },
         {
           key: "metadata",
           label: "Metadati inferenza",
@@ -1824,13 +2409,30 @@ export class WorkflowRunExecutorService {
     };
   }
 
-  private async executeBrainywareStatelessInference(context: StepExecutionContext, configuration: Record<string, unknown>, message: string, requestedMode: string) {
-    if (!this.brainywareClient) throw new Error("Client Brainyware non disponibile.");
-    const mode = (requestedMode === "model" ? "model" : "database") as Exclude<BrainywareInferenceMode, "agent">;
-    const connectionId = this.firstString(configuration.connection_id, configuration.connectionId) || undefined;
+  private async executeBrainywareStatelessInference(
+    context: StepExecutionContext,
+    configuration: Record<string, unknown>,
+    message: string,
+    requestedMode: string,
+  ) {
+    if (!this.brainywareClient)
+      throw new Error("Client Brainyware non disponibile.");
+    const mode = (requestedMode === "model" ? "model" : "database") as Exclude<
+      BrainywareInferenceMode,
+      "agent"
+    >;
+    const connectionId =
+      this.firstString(
+        configuration.connection_id,
+        configuration.connectionId,
+      ) || undefined;
     if (mode === "database") {
-      if (!context.userId || !this.brainyWorkspaceDatabaseConnectionService) throw new Error("Un workflow con database Brainy deve essere avviato da un utente del workspace.");
-      if (!connectionId) throw new Error("Selezionare il database Brainy per il workflow.");
+      if (!context.userId || !this.brainyWorkspaceDatabaseConnectionService)
+        throw new Error(
+          "Un workflow con database Brainy deve essere avviato da un utente del workspace.",
+        );
+      if (!connectionId)
+        throw new Error("Selezionare il database Brainy per il workflow.");
       await this.brainyWorkspaceDatabaseConnectionService.requireBrainywareConnectionForWorkflowUser(
         context.workspaceId,
         context.userId,
@@ -1845,34 +2447,72 @@ export class WorkflowRunExecutorService {
       instructions: this.firstString(configuration.instructions) || undefined,
       locale: this.firstString(configuration.locale) || "italiano",
       temperature: this.numberValue(configuration.temperature),
-      maxTokens: this.numberValue(configuration.max_tokens, configuration.maxTokens),
+      maxTokens: this.numberValue(
+        configuration.max_tokens,
+        configuration.maxTokens,
+      ),
     });
   }
 
-  private async executeBrainywareAgentSingleShot(context: StepExecutionContext, configuration: Record<string, unknown>, message: string) {
-    if (!this.brainywareClient || !this.brainyWorkspaceAgentService) throw new Error("Client Brainyware non disponibile.");
-    if (!context.userId) throw new Error("Un workflow con agente Brainy deve essere avviato da un utente del workspace.");
-    const workspaceAgentId = this.firstString(configuration.agent_id, configuration.agentId);
-    if (!workspaceAgentId) throw new Error("Selezionare un agente Brainy per il workflow.");
-    const agent = await this.brainyWorkspaceAgentService.requireWorkflowAgentForUser(context.workspaceId, context.userId, workspaceAgentId);
+  private async executeBrainywareAgentSingleShot(
+    context: StepExecutionContext,
+    configuration: Record<string, unknown>,
+    message: string,
+  ) {
+    if (!this.brainywareClient || !this.brainyWorkspaceAgentService)
+      throw new Error("Client Brainyware non disponibile.");
+    if (!context.userId)
+      throw new Error(
+        "Un workflow con agente Brainy deve essere avviato da un utente del workspace.",
+      );
+    const workspaceAgentId = this.firstString(
+      configuration.agent_id,
+      configuration.agentId,
+    );
+    if (!workspaceAgentId)
+      throw new Error("Selezionare un agente Brainy per il workflow.");
+    const agent =
+      await this.brainyWorkspaceAgentService.requireWorkflowAgentForUser(
+        context.workspaceId,
+        context.userId,
+        workspaceAgentId,
+      );
     const instructions = this.firstString(configuration.instructions);
-    const completeMessage = instructions ? `${instructions}\n\n${message}` : message;
-    return this.brainywareClient.runAgentSingleShot({ agentId: agent.brainywareAgentId, message: completeMessage, sessionName: `Workflow ${context.workflowLabel}` });
+    const completeMessage = instructions
+      ? `${instructions}\n\n${message}`
+      : message;
+    return this.brainywareClient.runAgentSingleShot({
+      agentId: agent.brainywareAgentId,
+      message: completeMessage,
+      sessionName: `Workflow ${context.workflowLabel}`,
+    });
   }
 
-  private executeVerifyAndRouteTool(context: StepExecutionContext, node: WorkflowNodeRow): Record<string, unknown> {
+  private executeVerifyAndRouteTool(
+    context: StepExecutionContext,
+    node: WorkflowNodeRow,
+  ): Record<string, unknown> {
     const configuration = this.toRecord(node.configuration);
-    const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
-    const configuredRules = Array.isArray(configuration.rules) ? configuration.rules : [];
+    const incomingOutputs = this.findIncomingNodeOutputs(
+      context,
+      node.node_key,
+    );
+    const configuredRules = Array.isArray(configuration.rules)
+      ? configuration.rules
+      : [];
     const checkedFields = configuredRules.map((rawRule, index) => {
       const rule = this.toRecord(rawRule);
       return {
         key: `field_${index + 1}`,
         label: this.firstString(rule.label, rule.name) || `Valore ${index + 1}`,
-        value: this.resolveVerificationValue(this.toRecord(incomingOutputs.byTargetHandle[`rule_${index}`])),
+        value: this.resolveVerificationValue(
+          this.toRecord(incomingOutputs.byTargetHandle[`rule_${index}`]),
+        ),
       };
     });
-    const variables = Object.fromEntries(checkedFields.map((field, index) => [String(index + 1), field.value]));
+    const variables = Object.fromEntries(
+      checkedFields.map((field, index) => [String(index + 1), field.value]),
+    );
     const source = {
       input: context.inputPayload ?? {},
       previous: this.toRecord(this.findLatestNodeOutput(context)),
@@ -1887,11 +2527,19 @@ export class WorkflowRunExecutorService {
         documentId: context.documentId,
       },
     };
-    const rules = configuredRules.map((rule, index) => ({ ...this.toRecord(rule), path: `var.${index + 1}` }));
+    const rules = configuredRules.map((rule, index) => ({
+      ...this.toRecord(rule),
+      path: `var.${index + 1}`,
+    }));
     const result = this.ruleEngine.evaluate(rules, source);
-    const verifiedBundle = Object.fromEntries(checkedFields.map((field) => [field.label, field.value]));
+    const verifiedBundle = Object.fromEntries(
+      checkedFields.map((field) => [field.label, field.value]),
+    );
     const verifiedText = checkedFields
-      .map((field) => `[${field.label}]\n${this.serializeWorkflowValue(field.value)}`)
+      .map(
+        (field) =>
+          `[${field.label}]\n${this.serializeWorkflowValue(field.value)}`,
+      )
       .filter((section) => section.trim().length > 0)
       .join("\n\n");
     return {
@@ -1902,9 +2550,24 @@ export class WorkflowRunExecutorService {
       verified_bundle: verifiedBundle,
       text: verifiedText,
       published_outputs: [
-        { key: "text", label: "Tutti i dati verificati", kind: "text" as const, value: verifiedText },
-        { key: "bundle", label: "Raccolta dati verificati", kind: "data" as const, value: verifiedBundle },
-        ...checkedFields.map((field) => ({ key: field.key, label: field.label, kind: "data" as const, value: field.value })),
+        {
+          key: "text",
+          label: "Tutti i dati verificati",
+          kind: "text" as const,
+          value: verifiedText,
+        },
+        {
+          key: "bundle",
+          label: "Raccolta dati verificati",
+          kind: "data" as const,
+          value: verifiedBundle,
+        },
+        ...checkedFields.map((field) => ({
+          key: field.key,
+          label: field.label,
+          kind: "data" as const,
+          value: field.value,
+        })),
       ],
     };
   }
@@ -1915,7 +2578,9 @@ export class WorkflowRunExecutorService {
       return selected.value;
     }
 
-    const published = Array.isArray(output.published_outputs) ? output.published_outputs : [];
+    const published = Array.isArray(output.published_outputs)
+      ? output.published_outputs
+      : [];
     for (const item of published) {
       const candidate = this.toRecord(item);
       if ("value" in candidate) {
@@ -1923,7 +2588,15 @@ export class WorkflowRunExecutorService {
       }
     }
 
-    for (const key of ["text", "formatted_text", "reply", "extracted_text", "summary", "value", "structured_data"]) {
+    for (const key of [
+      "text",
+      "formatted_text",
+      "reply",
+      "extracted_text",
+      "summary",
+      "value",
+      "structured_data",
+    ]) {
       if (output[key] !== undefined && output[key] !== null) {
         return output[key];
       }
@@ -1931,19 +2604,41 @@ export class WorkflowRunExecutorService {
     return output;
   }
 
-  private executeTemplateFormattingTool(context: StepExecutionContext, node: WorkflowNodeRow): Record<string, unknown> {
+  private executeTemplateFormattingTool(
+    context: StepExecutionContext,
+    node: WorkflowNodeRow,
+  ): Record<string, unknown> {
     const configuration = this.toRecord(node.configuration);
-    const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
+    const incomingOutputs = this.findIncomingNodeOutputs(
+      context,
+      node.node_key,
+    );
     const contentField = this.toRecord(incomingOutputs.byTargetHandle.content);
-    const templateField = this.toRecord(incomingOutputs.byTargetHandle.template);
+    const templateField = this.toRecord(
+      incomingOutputs.byTargetHandle.template,
+    );
     const source = {
       input: context.inputPayload ?? {},
       previous: this.toRecord(this.findLatestNodeOutput(context)),
       incoming: incomingOutputs.byNodeKey,
       fields: incomingOutputs.byTargetHandle,
-      content: this.firstString(contentField.content, contentField.formatted_text, contentField.text, contentField.reply, contentField.raw_output, configuration.content),
+      content: this.firstString(
+        contentField.content,
+        contentField.formatted_text,
+        contentField.text,
+        contentField.reply,
+        contentField.raw_output,
+        configuration.content,
+      ),
     };
-    const template = this.firstString(templateField.template, templateField.text, templateField.content, templateField.formatted_text, templateField.raw_output, configuration.template);
+    const template = this.firstString(
+      templateField.template,
+      templateField.text,
+      templateField.content,
+      templateField.formatted_text,
+      templateField.raw_output,
+      configuration.template,
+    );
     if (!source.content) {
       throw new Error("Contenuto mancante per Applica template.");
     }
@@ -1952,34 +2647,73 @@ export class WorkflowRunExecutorService {
     }
 
     const missing: string[] = [];
-    const formattedText = template.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (_match, rawPath: string) => {
-      const value = this.readPath(source, rawPath.trim());
-      if (value === undefined || value === null) {
-        missing.push(rawPath.trim());
-        return "";
-      }
-      return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
-        ? String(value)
-        : JSON.stringify(value);
-    });
+    const formattedText = template.replace(
+      /\{\{\s*([^{}]+?)\s*\}\}/g,
+      (_match, rawPath: string) => {
+        const value = this.readPath(source, rawPath.trim());
+        if (value === undefined || value === null) {
+          missing.push(rawPath.trim());
+          return "";
+        }
+        return typeof value === "string" ||
+          typeof value === "number" ||
+          typeof value === "boolean"
+          ? String(value)
+          : JSON.stringify(value);
+      },
+    );
     if (missing.length > 0) {
-      throw new Error(`Valori template mancanti: ${Array.from(new Set(missing)).join(", ")}.`);
+      throw new Error(
+        `Valori template mancanti: ${Array.from(new Set(missing)).join(", ")}.`,
+      );
     }
-    return { formatted_text: formattedText, text: formattedText, template, mode: "deterministic" };
+    return {
+      formatted_text: formattedText,
+      text: formattedText,
+      template,
+      mode: "deterministic",
+    };
   }
 
-  private async executeHumanReviewTool(context: StepExecutionContext, node: WorkflowNodeRow): Promise<Record<string, unknown>> {
+  private async executeHumanReviewTool(
+    context: StepExecutionContext,
+    node: WorkflowNodeRow,
+  ): Promise<Record<string, unknown>> {
     const configuration = this.toRecord(node.configuration);
     const incoming = this.findIncomingNodeOutputs(context, node.node_key);
     const latest = this.toRecord(this.findLatestNodeOutput(context));
-    const title = this.firstString(configuration.title, configuration.review_title) || "Revisione workflow richiesta";
+    const titleField = this.toRecord(incoming.byTargetHandle.title);
+    const messageField = this.toRecord(incoming.byTargetHandle.message);
+    const title =
+      this.firstString(
+        titleField.title,
+        titleField.input_text,
+        titleField.inputText,
+        titleField.promptText,
+        titleField.text,
+        titleField.content,
+        configuration.title,
+        configuration.review_title,
+      ) || "Revisione workflow richiesta";
     const message = this.firstString(
+      messageField.message,
+      messageField.input_text,
+      messageField.inputText,
+      messageField.promptText,
+      messageField.text,
+      messageField.content,
       configuration.message,
       configuration.review_message,
       latest.message,
-      latest.status === "attention_required" ? "Una verifica del workflow richiede attenzione umana." : "Verifica manuale richiesta dal workflow.",
+      latest.status === "attention_required"
+        ? "Una verifica del workflow richiede attenzione umana."
+        : "Verifica manuale richiesta dal workflow.",
     );
-    const userId = this.firstString(configuration.assignee_user_id, configuration.assigneeUserId) || null;
+    const userId =
+      this.firstString(
+        configuration.assignee_user_id,
+        configuration.assigneeUserId,
+      ) || null;
 
     if (this.notificationService) {
       await this.notificationService.createInfo({
@@ -2000,22 +2734,53 @@ export class WorkflowRunExecutorService {
     };
   }
 
-  private async executeDecisionRequestTool(context: StepExecutionContext, node: WorkflowNodeRow): Promise<never> {
+  private async executeDecisionRequestTool(
+    context: StepExecutionContext,
+    node: WorkflowNodeRow,
+  ): Promise<never> {
     if (!this.humanInterventionService) {
       throw new Error("Servizio interventi umani non disponibile.");
     }
     const configuration = this.toRecord(node.configuration);
     const latest = this.toRecord(this.findLatestNodeOutput(context));
+    const incoming = this.findIncomingNodeOutputs(context, node.node_key);
+    const titleField = this.toRecord(incoming.byTargetHandle.title);
+    const messageField = this.toRecord(incoming.byTargetHandle.message);
     const request = await this.humanInterventionService.createDecisionRequest({
       workspaceId: context.workspaceId,
       workflowRunId: context.runId,
       workflowNodeId: node.id,
       createdByUserId: context.userId,
-      assignedUserId: this.firstString(configuration.assignee_user_id, configuration.assigneeUserId) || null,
-      title: this.firstString(configuration.title, configuration.decision_title) || "Decisione richiesta",
-      message: this.firstString(configuration.message, configuration.decision_message, latest.message) || "Il workflow richiede una decisione umana per proseguire.",
+      assignedUserId:
+        this.firstString(
+          configuration.assignee_user_id,
+          configuration.assigneeUserId,
+        ) || null,
+      title:
+        this.firstString(
+          titleField.title,
+          titleField.input_text,
+          titleField.inputText,
+          titleField.promptText,
+          titleField.text,
+          titleField.content,
+          configuration.title,
+          configuration.decision_title,
+        ) || "Decisione richiesta",
+      message:
+        this.firstString(
+          messageField.message,
+          messageField.input_text,
+          messageField.inputText,
+          messageField.promptText,
+          messageField.text,
+          messageField.content,
+          configuration.message,
+          configuration.decision_message,
+          latest.message,
+        ) || "Il workflow richiede una decisione umana per proseguire.",
       priority: this.firstString(configuration.priority) || "normal",
-      input: { latest, incoming: this.findIncomingNodeOutputs(context, node.node_key).byNodeKey },
+      input: { latest, incoming: incoming.byNodeKey },
     });
     throw new WorkflowDecisionRequiredError(request.id);
   }
@@ -2026,16 +2791,32 @@ export class WorkflowRunExecutorService {
   ): Promise<unknown> {
     const nodeConfig = this.toRecord(node.configuration);
     const previousOutput = this.toRecord(this.findLatestNodeOutput(context));
-    const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
+    const incomingOutputs = this.findIncomingNodeOutputs(
+      context,
+      node.node_key,
+    );
     const inputPayload = context.inputPayload ?? {};
+    const documentIdsField = this.toRecord(
+      incomingOutputs.byTargetHandle.documentIds,
+    );
+    const promptField = this.toRecord(incomingOutputs.byTargetHandle.prompt);
     const documentIds = this.firstStringArray(
+      documentIdsField.document_ids,
+      documentIdsField.documentIds,
+      documentIdsField.input_text,
+      documentIdsField.inputText,
+      documentIdsField.promptText,
+      documentIdsField.text,
       nodeConfig.document_ids,
       nodeConfig.documentIds,
       inputPayload.document_ids,
       inputPayload.documentIds,
       previousOutput.document_ids,
       previousOutput.documentIds,
-      ...this.pickIncomingValues(incomingOutputs.items, ["document_ids", "documentIds"]),
+      ...this.pickIncomingValues(incomingOutputs.items, [
+        "document_ids",
+        "documentIds",
+      ]),
     );
     const fallbackDocumentId = this.firstString(
       nodeConfig.document_id,
@@ -2044,8 +2825,20 @@ export class WorkflowRunExecutorService {
       inputPayload.documentId,
       context.documentId,
     );
-    const resolvedDocumentIds = documentIds.length > 0 ? documentIds : (fallbackDocumentId ? [fallbackDocumentId] : []);
+    const resolvedDocumentIds =
+      documentIds.length > 0
+        ? documentIds
+        : fallbackDocumentId
+          ? [fallbackDocumentId]
+          : [];
     const prompt = this.firstString(
+      promptField.prompt,
+      promptField.question,
+      promptField.input_text,
+      promptField.inputText,
+      promptField.promptText,
+      promptField.text,
+      promptField.reply,
       nodeConfig.currentPrompt,
       nodeConfig.current_prompt,
       nodeConfig.instructions,
@@ -2060,7 +2853,15 @@ export class WorkflowRunExecutorService {
       previousOutput.question,
       previousOutput.text,
       previousOutput.reply,
-      ...this.pickIncomingStrings(incomingOutputs.items, ["input_text", "inputText", "promptText", "prompt", "question", "text", "reply"]),
+      ...this.pickIncomingStrings(incomingOutputs.items, [
+        "input_text",
+        "inputText",
+        "promptText",
+        "prompt",
+        "question",
+        "text",
+        "reply",
+      ]),
       nodeConfig.defaultPrompt,
       nodeConfig.default_prompt,
       "Analizza i documenti collegati e produci una risposta chiara, citando gli elementi rilevanti.",
@@ -2071,7 +2872,9 @@ export class WorkflowRunExecutorService {
       documentIds: resolvedDocumentIds,
       prompt,
       knowledgeMode: context.knowledgeMode,
-      useDeepReasoning: nodeConfig.use_deep_reasoning === true || nodeConfig.useDeepReasoning === true,
+      useDeepReasoning:
+        nodeConfig.use_deep_reasoning === true ||
+        nodeConfig.useDeepReasoning === true,
       aiProvider: await this.buildPythonAiProviderOverride(),
     });
   }
@@ -2081,9 +2884,15 @@ export class WorkflowRunExecutorService {
     node: WorkflowNodeRow,
   ): Promise<unknown> {
     if (node.output_kind === "quotation_delivery") {
-      const docxOutputEnvelope = this.findNodeOutput(context, "quotation_docx_builder_tool") as Record<string, unknown> | null;
+      const docxOutputEnvelope = this.findNodeOutput(
+        context,
+        "quotation_docx_builder_tool",
+      ) as Record<string, unknown> | null;
       const docxOutput = this.unwrapPythonOutput(docxOutputEnvelope);
-      const docxBase64 = typeof docxOutput.docx_base64 === "string" ? docxOutput.docx_base64 : "";
+      const docxBase64 =
+        typeof docxOutput.docx_base64 === "string"
+          ? docxOutput.docx_base64
+          : "";
       if (!docxBase64 || !context.projectId || !context.projectVersionLabel) {
         return {
           persisted: false,
@@ -2099,7 +2908,8 @@ export class WorkflowRunExecutorService {
           versionLabel: context.projectVersionLabel,
           fileKind: FileKind.QUOTATION_DOCX,
           fileName: "preventivo.docx",
-          contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          contentType:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           bytes,
           uploadedByUserId: null,
         }),
@@ -2113,7 +2923,10 @@ export class WorkflowRunExecutorService {
     }
 
     if (node.output_kind === "ddt_analysis_result") {
-      const analysis = this.findNodeOutput(context, "ddt_analysis_agent") as DdtAnalysisInput | null;
+      const analysis = this.findNodeOutput(
+        context,
+        "ddt_analysis_agent",
+      ) as DdtAnalysisInput | null;
       if (!context.ddtDocumentId || !analysis) {
         return {
           persisted: false,
@@ -2121,7 +2934,11 @@ export class WorkflowRunExecutorService {
         };
       }
 
-      await this.persistDdtAnalysis(context.workspaceId, context.ddtDocumentId, analysis);
+      await this.persistDdtAnalysis(
+        context.workspaceId,
+        context.ddtDocumentId,
+        analysis,
+      );
       return {
         persisted: true,
         ddtDocumentId: context.ddtDocumentId,
@@ -2129,7 +2946,10 @@ export class WorkflowRunExecutorService {
     }
 
     if (node.output_kind === "measure_report_analysis_result") {
-      const analysis = this.findNodeOutput(context, "measure_report_analysis_agent") as MeasureReportAnalysisInput | null;
+      const analysis = this.findNodeOutput(
+        context,
+        "measure_report_analysis_agent",
+      ) as MeasureReportAnalysisInput | null;
       if (!context.measureReportDocumentId || !analysis) {
         return {
           persisted: false,
@@ -2137,7 +2957,11 @@ export class WorkflowRunExecutorService {
         };
       }
 
-      await this.persistMeasureReportAnalysis(context.workspaceId, context.measureReportDocumentId, analysis);
+      await this.persistMeasureReportAnalysis(
+        context.workspaceId,
+        context.measureReportDocumentId,
+        analysis,
+      );
       return {
         persisted: true,
         measureReportDocumentId: context.measureReportDocumentId,
@@ -2145,10 +2969,22 @@ export class WorkflowRunExecutorService {
     }
 
     const nodeConfig = this.toRecord(node.configuration);
-    const requestedKey = this.firstString(nodeConfig.output_key, nodeConfig.outputKey, nodeConfig.selected_output_key);
-    const incomingOutputs = this.findIncomingNodeOutputs(context, node.node_key);
-    const availableOutputs = this.collectPublishedOutputs(incomingOutputs.items);
-    const selectedOutput = availableOutputs.find((item) => item.key === requestedKey) ?? availableOutputs[0] ?? null;
+    const requestedKey = this.firstString(
+      nodeConfig.output_key,
+      nodeConfig.outputKey,
+      nodeConfig.selected_output_key,
+    );
+    const incomingOutputs = this.findIncomingNodeOutputs(
+      context,
+      node.node_key,
+    );
+    const availableOutputs = this.collectPublishedOutputs(
+      incomingOutputs.items,
+    );
+    const selectedOutput =
+      availableOutputs.find((item) => item.key === requestedKey) ??
+      availableOutputs[0] ??
+      null;
 
     return {
       nodeKey: node.node_key,
@@ -2159,14 +2995,20 @@ export class WorkflowRunExecutorService {
     };
   }
 
-  private publishNodeOutput(node: WorkflowNodeRow, value: unknown): Record<string, unknown> {
+  private publishNodeOutput(
+    node: WorkflowNodeRow,
+    value: unknown,
+  ): Record<string, unknown> {
     const output = this.toRecord(value);
     const published = this.collectPublishedOutputs([output]);
     if (published.length > 0) {
       return { ...output, published_outputs: published };
     }
 
-    return { ...output, published_outputs: this.inferPublishedOutputs(node, output, value) };
+    return {
+      ...output,
+      published_outputs: this.inferPublishedOutputs(node, output, value),
+    };
   }
 
   private inferPublishedOutputs(
@@ -2175,135 +3017,298 @@ export class WorkflowRunExecutorService {
     rawValue: unknown,
   ): PublishedNodeOutput[] {
     if (typeof rawValue === "string" && rawValue.trim()) {
-      return [{ key: "text", label: this.textOutputLabel(node), kind: "text", value: rawValue.trim() }];
+      return [
+        {
+          key: "text",
+          label: this.textOutputLabel(node),
+          kind: "text",
+          value: rawValue.trim(),
+        },
+      ];
     }
     if (Array.isArray(rawValue)) {
-      return [{ key: "data", label: "Dati prodotti", kind: "data", value: rawValue }];
+      return [
+        { key: "data", label: "Dati prodotti", kind: "data", value: rawValue },
+      ];
     }
 
     const unwrapped = this.unwrapPythonOutput(output);
-    const imageUrl = this.firstString(output.image_url, output.imageUrl, unwrapped.image_url, unwrapped.imageUrl);
+    const imageUrl = this.firstString(
+      output.image_url,
+      output.imageUrl,
+      unwrapped.image_url,
+      unwrapped.imageUrl,
+    );
     if (imageUrl) {
-      return [{ key: "image", label: "Immagine prodotta", kind: "image", value: imageUrl }];
+      return [
+        {
+          key: "image",
+          label: "Immagine prodotta",
+          kind: "image",
+          value: imageUrl,
+        },
+      ];
     }
 
     const structuredData = output.structured_data ?? unwrapped.structured_data;
     if (structuredData && typeof structuredData === "object") {
       const rawText = this.firstString(output.raw_output, unwrapped.raw_output);
       return [
-        { key: "structured_data", label: "Dati estratti", kind: "data", value: structuredData },
-        ...(rawText ? [{ key: "text", label: "Testo elaborato", kind: "text" as const, value: rawText }] : []),
+        {
+          key: "structured_data",
+          label: "Dati estratti",
+          kind: "data",
+          value: structuredData,
+        },
+        ...(rawText
+          ? [
+              {
+                key: "text",
+                label: "Testo elaborato",
+                kind: "text" as const,
+                value: rawText,
+              },
+            ]
+          : []),
       ];
     }
 
     const text = this.firstString(
-      output.reply, output.text, output.raw_output, output.extracted_text, output.summary,
-      unwrapped.reply, unwrapped.text, unwrapped.raw_output, unwrapped.extracted_text, unwrapped.summary,
+      output.reply,
+      output.text,
+      output.raw_output,
+      output.extracted_text,
+      output.summary,
+      unwrapped.reply,
+      unwrapped.text,
+      unwrapped.raw_output,
+      unwrapped.extracted_text,
+      unwrapped.summary,
     );
     const subject = this.firstString(output.subject, unwrapped.subject);
     if (subject && text) {
       return [
-        { key: "subject", label: "Oggetto email", kind: "text", value: subject },
-        { key: "text", label: this.textOutputLabel(node), kind: "text", value: text },
+        {
+          key: "subject",
+          label: "Oggetto email",
+          kind: "text",
+          value: subject,
+        },
+        {
+          key: "text",
+          label: this.textOutputLabel(node),
+          kind: "text",
+          value: text,
+        },
       ];
     }
     if (text) {
-      return [{ key: "text", label: this.textOutputLabel(node), kind: "text", value: text }];
+      return [
+        {
+          key: "text",
+          label: this.textOutputLabel(node),
+          kind: "text",
+          value: text,
+        },
+      ];
     }
 
-    const fileName = this.firstString(output.file_name, output.fileName, unwrapped.file_name, unwrapped.fileName);
-    const storagePath = this.firstString(output.storage_path, output.storagePath, unwrapped.storage_path, unwrapped.storagePath);
-    const encodedDocument = this.firstString(output.document_base64, output.docx_base64, unwrapped.document_base64, unwrapped.docx_base64);
-    if (fileName || storagePath || encodedDocument || output.persisted === true && node.output_kind === "quotation_delivery") {
-      return [{
-        key: "file",
-        label: "Documento generato",
-        kind: "file",
-        value: {
-          fileName: fileName ?? (output.docx_base64 || unwrapped.docx_base64 ? "documento.docx" : "Documento generato"),
-          storagePath: storagePath ?? null,
-          documentId: this.firstString(output.document_id, output.documentId, unwrapped.document_id, unwrapped.documentId) || null,
-          sizeBytes: output.size_bytes ?? output.sizeBytes ?? null,
-          downloadBase64: encodedDocument ?? null,
+    const fileName = this.firstString(
+      output.file_name,
+      output.fileName,
+      unwrapped.file_name,
+      unwrapped.fileName,
+    );
+    const storagePath = this.firstString(
+      output.storage_path,
+      output.storagePath,
+      unwrapped.storage_path,
+      unwrapped.storagePath,
+    );
+    const encodedDocument = this.firstString(
+      output.document_base64,
+      output.docx_base64,
+      unwrapped.document_base64,
+      unwrapped.docx_base64,
+    );
+    if (
+      fileName ||
+      storagePath ||
+      encodedDocument ||
+      (output.persisted === true && node.output_kind === "quotation_delivery")
+    ) {
+      return [
+        {
+          key: "file",
+          label: "Documento generato",
+          kind: "file",
+          value: {
+            fileName:
+              fileName ??
+              (output.docx_base64 || unwrapped.docx_base64
+                ? "documento.docx"
+                : "Documento generato"),
+            storagePath: storagePath ?? null,
+            documentId:
+              this.firstString(
+                output.document_id,
+                output.documentId,
+                unwrapped.document_id,
+                unwrapped.documentId,
+              ) || null,
+            sizeBytes: output.size_bytes ?? output.sizeBytes ?? null,
+            downloadBase64: encodedDocument ?? null,
+          },
+          mimeType:
+            this.firstString(
+              output.content_type,
+              output.contentType,
+              unwrapped.content_type,
+              unwrapped.contentType,
+            ) || null,
         },
-        mimeType: this.firstString(output.content_type, output.contentType, unwrapped.content_type, unwrapped.contentType) || null,
-      }];
+      ];
     }
 
     if (this.isDeliveryOutput(node, output)) {
       const deliveryStatus = this.firstString(output.status, unwrapped.status);
       const normalizedStatus = deliveryStatus.toLowerCase();
-      const sent = output.sent === true
-        || output.delivered === true
-        || output.persisted === true
-        || unwrapped.sent === true
-        || unwrapped.delivered === true
-        || ["sent", "delivered", "completed", "success"].includes(normalizedStatus);
-      return [{
-        key: "delivery_status",
-        label: "Esito invio",
-        kind: "delivery_status",
-        value: {
-          sent,
-          status: deliveryStatus || (sent ? "completed" : "not_sent"),
-          recipient: this.firstString(output.recipient, output.to, output.chat_id, unwrapped.recipient, unwrapped.to, unwrapped.chat_id) || null,
-          message: this.firstString(output.message, output.reason, output.error, unwrapped.message, unwrapped.reason, unwrapped.error) || null,
+      const sent =
+        output.sent === true ||
+        output.delivered === true ||
+        output.persisted === true ||
+        unwrapped.sent === true ||
+        unwrapped.delivered === true ||
+        ["sent", "delivered", "completed", "success"].includes(
+          normalizedStatus,
+        );
+      return [
+        {
+          key: "delivery_status",
+          label: "Esito invio",
+          kind: "delivery_status",
+          value: {
+            sent,
+            status: deliveryStatus || (sent ? "completed" : "not_sent"),
+            recipient:
+              this.firstString(
+                output.recipient,
+                output.to,
+                output.chat_id,
+                unwrapped.recipient,
+                unwrapped.to,
+                unwrapped.chat_id,
+              ) || null,
+            message:
+              this.firstString(
+                output.message,
+                output.reason,
+                output.error,
+                unwrapped.message,
+                unwrapped.reason,
+                unwrapped.error,
+              ) || null,
+          },
         },
-      }];
+      ];
     }
 
-    if (rawValue !== null && rawValue !== undefined && Object.keys(output).length > 0) {
-      return [{ key: "data", label: "Dati prodotti", kind: "data", value: rawValue }];
+    if (
+      rawValue !== null &&
+      rawValue !== undefined &&
+      Object.keys(output).length > 0
+    ) {
+      return [
+        { key: "data", label: "Dati prodotti", kind: "data", value: rawValue },
+      ];
     }
     return [];
   }
 
-  private collectPublishedOutputs(items: Array<Record<string, unknown>>): PublishedNodeOutput[] {
+  private collectPublishedOutputs(
+    items: Array<Record<string, unknown>>,
+  ): PublishedNodeOutput[] {
     return items.flatMap((item) => {
-      const candidates = Array.isArray(item.published_outputs) ? item.published_outputs : [];
+      const candidates = Array.isArray(item.published_outputs)
+        ? item.published_outputs
+        : [];
       return candidates.flatMap((candidate): PublishedNodeOutput[] => {
         const record = this.toRecord(candidate);
         const key = this.firstString(record.key);
         const label = this.firstString(record.label);
         const kind = this.firstString(record.kind);
-        if (!key || !label || !["text", "file", "image", "delivery_status", "data"].includes(kind)) {
+        if (
+          !key ||
+          !label ||
+          !["text", "file", "image", "delivery_status", "data"].includes(kind)
+        ) {
           return [];
         }
-        return [{ key, label, kind: kind as PublishedOutputKind, value: record.value, mimeType: this.firstString(record.mimeType, record.mime_type) || null }];
+        return [
+          {
+            key,
+            label,
+            kind: kind as PublishedOutputKind,
+            value: record.value,
+            mimeType:
+              this.firstString(record.mimeType, record.mime_type) || null,
+          },
+        ];
       });
     });
   }
 
-  private buildRunResultPayload(context: StepExecutionContext): Record<string, unknown> {
-    const finalOutputs = Array.from(context.nodeOutputs.entries()).flatMap(([nodeKey, value]) => {
-      const node = context.workflowNodesByKey.get(nodeKey);
-      if (node?.node_kind !== "OUTPUT") {
-        return [];
-      }
-      return this.collectPublishedOutputs([this.toRecord(value)]).map((output) => ({ ...output, nodeKey }));
-    });
-    return { workflowKey: context.workflowKey, final_outputs: finalOutputs, outputs: Object.fromEntries(context.nodeOutputs.entries()) };
+  private buildRunResultPayload(
+    context: StepExecutionContext,
+  ): Record<string, unknown> {
+    const finalOutputs = Array.from(context.nodeOutputs.entries()).flatMap(
+      ([nodeKey, value]) => {
+        const node = context.workflowNodesByKey.get(nodeKey);
+        if (node?.node_kind !== "OUTPUT") {
+          return [];
+        }
+        return this.collectPublishedOutputs([this.toRecord(value)]).map(
+          (output) => ({ ...output, nodeKey }),
+        );
+      },
+    );
+    return {
+      workflowKey: context.workflowKey,
+      final_outputs: finalOutputs,
+      outputs: Object.fromEntries(context.nodeOutputs.entries()),
+    };
   }
 
-  private textOutputLabel(node: Pick<WorkflowNodeRow, "node_key" | "node_kind" | "output_kind">): string {
+  private textOutputLabel(
+    node: Pick<WorkflowNodeRow, "node_key" | "node_kind" | "output_kind">,
+  ): string {
     if (node.node_kind === "AGENT") return "Risposta IA";
     if (node.node_key.includes("ocr")) return "Testo estratto";
     if (node.node_key.includes("analysis")) return "Analisi";
     return "Testo";
   }
 
-  private isDeliveryOutput(node: Pick<WorkflowNodeRow, "node_key" | "node_kind" | "output_kind">, output: Record<string, unknown>): boolean {
+  private isDeliveryOutput(
+    node: Pick<WorkflowNodeRow, "node_key" | "node_kind" | "output_kind">,
+    output: Record<string, unknown>,
+  ): boolean {
     const unwrapped = this.unwrapPythonOutput(output);
-    return node.output_kind?.includes("delivery") === true
-      || /mail|telegram|whatsapp|send/i.test(node.node_key)
-      || "sent" in output
-      || "delivered" in output
-      || "sent" in unwrapped
-      || "delivered" in unwrapped
-      || "status" in unwrapped;
+    return (
+      node.output_kind?.includes("delivery") === true ||
+      /mail|telegram|whatsapp|send/i.test(node.node_key) ||
+      "sent" in output ||
+      "delivered" in output ||
+      "sent" in unwrapped ||
+      "delivered" in unwrapped ||
+      "status" in unwrapped
+    );
   }
 
-  private async persistDdtAnalysis(workspaceId: string, ddtDocumentId: string, analysis: DdtAnalysisInput): Promise<void> {
+  private async persistDdtAnalysis(
+    workspaceId: string,
+    ddtDocumentId: string,
+    analysis: DdtAnalysisInput,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     await prisma.$transaction(async (tx) => {
       const result = await tx.ddtAnalysisResult.upsert({
@@ -2388,7 +3393,9 @@ export class WorkflowRunExecutorService {
           summary: analysis.summary,
           raw_output: analysis.rawOutput,
           raw_response: this.toInputJson(analysis.rawResponse ?? {}),
-          execution_metadata: this.toInputJson(analysis.executionMetadata ?? {}),
+          execution_metadata: this.toInputJson(
+            analysis.executionMetadata ?? {},
+          ),
         },
         create: {
           measure_report_document_id: measureReportDocumentId,
@@ -2398,7 +3405,9 @@ export class WorkflowRunExecutorService {
           summary: analysis.summary,
           raw_output: analysis.rawOutput,
           raw_response: this.toInputJson(analysis.rawResponse ?? {}),
-          execution_metadata: this.toInputJson(analysis.executionMetadata ?? {}),
+          execution_metadata: this.toInputJson(
+            analysis.executionMetadata ?? {},
+          ),
         },
         select: {
           id: true,
@@ -2431,36 +3440,64 @@ export class WorkflowRunExecutorService {
         data: {
           workspace_id: workspaceId,
           status: "READY",
-          document_type_effective: normalizeMeasureReportDocumentType(analysis.documentTypeUsed),
+          document_type_effective: normalizeMeasureReportDocumentType(
+            analysis.documentTypeUsed,
+          ),
           last_error: null,
         },
       });
     });
   }
 
-  private async handlePreStepStatus(context: StepExecutionContext, nodeKey: string): Promise<void> {
+  private async handlePreStepStatus(
+    context: StepExecutionContext,
+    nodeKey: string,
+  ): Promise<void> {
     if (context.ddtDocumentId) {
       if (nodeKey === "ddt_ocr_tool") {
-        await this.updateDdtDocumentStatus(context.ddtDocumentId, "OCR_PROCESSING");
+        await this.updateDdtDocumentStatus(
+          context.ddtDocumentId,
+          "OCR_PROCESSING",
+        );
         return;
       }
       if (nodeKey === "ddt_analysis_agent") {
-        await this.updateDdtDocumentStatus(context.ddtDocumentId, "AI_PROCESSING");
+        await this.updateDdtDocumentStatus(
+          context.ddtDocumentId,
+          "AI_PROCESSING",
+        );
         return;
       }
     }
 
-    if (context.measureReportDocumentId && nodeKey === "measure_report_analysis_agent") {
-      await this.updateMeasureReportDocumentStatus(context.measureReportDocumentId, "AI_PROCESSING");
+    if (
+      context.measureReportDocumentId &&
+      nodeKey === "measure_report_analysis_agent"
+    ) {
+      await this.updateMeasureReportDocumentStatus(
+        context.measureReportDocumentId,
+        "AI_PROCESSING",
+      );
     }
   }
 
-  private async handleRunFailureStatus(context: StepExecutionContext, message: string): Promise<void> {
+  private async handleRunFailureStatus(
+    context: StepExecutionContext,
+    message: string,
+  ): Promise<void> {
     if (context.ddtDocumentId) {
-      await this.updateDdtDocumentStatus(context.ddtDocumentId, "ERROR", message);
+      await this.updateDdtDocumentStatus(
+        context.ddtDocumentId,
+        "ERROR",
+        message,
+      );
     }
     if (context.measureReportDocumentId) {
-      await this.updateMeasureReportDocumentStatus(context.measureReportDocumentId, "ERROR", message);
+      await this.updateMeasureReportDocumentStatus(
+        context.measureReportDocumentId,
+        "ERROR",
+        message,
+      );
     }
   }
 
@@ -2498,7 +3535,9 @@ export class WorkflowRunExecutorService {
     });
   }
 
-  private async findDocumentIdFromDdt(ddtDocumentId: string | null): Promise<string | null> {
+  private async findDocumentIdFromDdt(
+    ddtDocumentId: string | null,
+  ): Promise<string | null> {
     if (!ddtDocumentId) {
       return null;
     }
@@ -2516,11 +3555,20 @@ export class WorkflowRunExecutorService {
     return row?.document_id ?? null;
   }
 
-  private evaluateCondition(payload: ConditionPayload | null, context: StepExecutionContext): boolean {
+  private evaluateCondition(
+    payload: ConditionPayload | null,
+    context: StepExecutionContext,
+  ): boolean {
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
       return true;
     }
-    if (!("op" in payload) && !("operator" in payload) && !("all" in payload) && !("any" in payload) && !("not" in payload)) {
+    if (
+      !("op" in payload) &&
+      !("operator" in payload) &&
+      !("all" in payload) &&
+      !("any" in payload) &&
+      !("not" in payload)
+    ) {
       return true;
     }
     const normalize = (value: unknown): unknown => {
@@ -2528,8 +3576,12 @@ export class WorkflowRunExecutorService {
       if (Array.isArray(record.all) || Array.isArray(record.any)) {
         return {
           ...record,
-          ...(Array.isArray(record.all) ? { all: record.all.map(normalize) } : {}),
-          ...(Array.isArray(record.any) ? { any: record.any.map(normalize) } : {}),
+          ...(Array.isArray(record.all)
+            ? { all: record.all.map(normalize) }
+            : {}),
+          ...(Array.isArray(record.any)
+            ? { any: record.any.map(normalize) }
+            : {}),
         };
       }
       if (record.not && typeof record.not === "object") {
@@ -2537,7 +3589,8 @@ export class WorkflowRunExecutorService {
       }
       return {
         ...record,
-        operator: typeof record.operator === "string" ? record.operator : record.op,
+        operator:
+          typeof record.operator === "string" ? record.operator : record.op,
       };
     };
 
@@ -2568,30 +3621,58 @@ export class WorkflowRunExecutorService {
 
   private shouldExecuteNode(
     nodeId: string,
-    edges: Array<{ source_node_id: string; target_node_id: string; source_handle: string | null; is_enabled: boolean; condition_payload: Prisma.JsonValue | null }>,
+    edges: Array<{
+      source_node_id: string;
+      target_node_id: string;
+      source_handle: string | null;
+      is_enabled: boolean;
+      condition_payload: Prisma.JsonValue | null;
+    }>,
     context: StepExecutionContext,
   ): boolean {
-    const incoming = edges.filter((edge) => edge.target_node_id === nodeId && edge.is_enabled);
-    return incoming.length === 0 || incoming.some((edge) => this.isIncomingEdgeSatisfied(edge, context));
+    const incoming = edges.filter(
+      (edge) => edge.target_node_id === nodeId && edge.is_enabled,
+    );
+    return (
+      incoming.length === 0 ||
+      incoming.some((edge) => this.isIncomingEdgeSatisfied(edge, context))
+    );
   }
 
   private isIncomingEdgeSatisfied(
-    edge: { source_node_id: string; source_handle: string | null; condition_payload: Prisma.JsonValue | null },
+    edge: {
+      source_node_id: string;
+      source_handle: string | null;
+      condition_payload: Prisma.JsonValue | null;
+    },
     context: StepExecutionContext,
   ): boolean {
-    if (!this.evaluateCondition(edge.condition_payload as ConditionPayload | null, context)) {
+    if (
+      !this.evaluateCondition(
+        edge.condition_payload as ConditionPayload | null,
+        context,
+      )
+    ) {
       return false;
     }
     if (edge.source_handle !== "valid" && edge.source_handle !== "invalid") {
       return true;
     }
 
-    const sourceNode = Array.from(context.workflowNodesByKey.values()).find((node) => node.id === edge.source_node_id);
-    if (sourceNode?.module_tool?.handler_key !== "workflow_logic.verify_and_route") {
+    const sourceNode = Array.from(context.workflowNodesByKey.values()).find(
+      (node) => node.id === edge.source_node_id,
+    );
+    if (
+      sourceNode?.module_tool?.handler_key !== "workflow_logic.verify_and_route"
+    ) {
       return true;
     }
-    const output = this.normalizeNodeOutput(context.nodeOutputs.get(sourceNode.node_key));
-    return edge.source_handle === "valid" ? output.valid === true : output.valid === false;
+    const output = this.normalizeNodeOutput(
+      context.nodeOutputs.get(sourceNode.node_key),
+    );
+    return edge.source_handle === "valid"
+      ? output.valid === true
+      : output.valid === false;
   }
 
   private findLatestNodeOutput(context: StepExecutionContext): unknown {
@@ -2602,21 +3683,33 @@ export class WorkflowRunExecutorService {
 
     const latest = values[values.length - 1];
     const latestRecord = this.toRecord(latest);
-    if (latestRecord.output && typeof latestRecord.output === "object" && !Array.isArray(latestRecord.output)) {
+    if (
+      latestRecord.output &&
+      typeof latestRecord.output === "object" &&
+      !Array.isArray(latestRecord.output)
+    ) {
       return latestRecord.output;
     }
     return latest;
   }
 
-  private findIncomingNodeOutputs(context: StepExecutionContext, nodeKey: string): IncomingNodeOutputs {
+  private findIncomingNodeOutputs(
+    context: StepExecutionContext,
+    nodeKey: string,
+  ): IncomingNodeOutputs {
     const sourceKeys = context.incomingNodeKeys.get(nodeKey) ?? [];
     const byNodeKey: Record<string, Record<string, unknown>> = {};
     const byTargetHandle: Record<string, Record<string, unknown>> = {};
-    const byTargetHandleItems: Record<string, Array<Record<string, unknown>>> = {};
+    const byTargetHandleItems: Record<
+      string,
+      Array<Record<string, unknown>>
+    > = {};
     const items: Array<Record<string, unknown>> = [];
 
     for (const sourceKey of sourceKeys) {
-      const output = this.normalizeNodeOutput(context.nodeOutputs.get(sourceKey));
+      const output = this.normalizeNodeOutput(
+        context.nodeOutputs.get(sourceKey),
+      );
       byNodeKey[sourceKey] = output;
       items.push(output);
     }
@@ -2624,9 +3717,15 @@ export class WorkflowRunExecutorService {
     const fields = context.incomingFieldBindings.get(nodeKey);
     for (const [field, bindings] of fields ?? []) {
       const fieldItems = bindings.map((binding) => {
-        const output = this.normalizeNodeOutput(context.nodeOutputs.get(binding.sourceKey));
+        const output = this.normalizeNodeOutput(
+          context.nodeOutputs.get(binding.sourceKey),
+        );
         return binding.selectedOutputKey
-          ? this.withSelectedPublishedOutput(output, binding.selectedOutputKey, binding.inputLabel ?? null)
+          ? this.withSelectedPublishedOutput(
+              output,
+              binding.selectedOutputKey,
+              binding.inputLabel ?? null,
+            )
           : this.withInputLabel(output, binding.inputLabel ?? null);
       });
       if (fieldItems.length > 0) {
@@ -2640,46 +3739,78 @@ export class WorkflowRunExecutorService {
 
   private normalizeNodeOutput(value: unknown): Record<string, unknown> {
     const record = this.toRecord(value);
-    if (record.output && typeof record.output === "object" && !Array.isArray(record.output)) {
+    if (
+      record.output &&
+      typeof record.output === "object" &&
+      !Array.isArray(record.output)
+    ) {
       return {
         ...(record.output as Record<string, unknown>),
-        published_outputs: record.published_outputs ?? (record.output as Record<string, unknown>).published_outputs,
+        published_outputs:
+          record.published_outputs ??
+          (record.output as Record<string, unknown>).published_outputs,
       };
     }
     return record;
   }
 
-  private withSelectedPublishedOutput(output: Record<string, unknown>, outputKey: string, inputLabel: string | null = null): Record<string, unknown> {
-    const selected = this.collectPublishedOutputs([output]).find((item) => item.key === outputKey);
+  private withSelectedPublishedOutput(
+    output: Record<string, unknown>,
+    outputKey: string,
+    inputLabel: string | null = null,
+  ): Record<string, unknown> {
+    const selected = this.collectPublishedOutputs([output]).find(
+      (item) => item.key === outputKey,
+    );
     if (!selected) {
       return this.withInputLabel(output, inputLabel);
     }
     if (typeof selected.value === "string") {
-      return this.withInputLabel({ ...output, selected_output: selected, text: selected.value, content: selected.value }, inputLabel || selected.label);
+      return this.withInputLabel(
+        {
+          ...output,
+          selected_output: selected,
+          text: selected.value,
+          content: selected.value,
+        },
+        inputLabel || selected.label,
+      );
     }
-    return this.withInputLabel({ ...output, selected_output: selected }, inputLabel || selected.label);
+    return this.withInputLabel(
+      { ...output, selected_output: selected },
+      inputLabel || selected.label,
+    );
   }
 
-  private withInputLabel(output: Record<string, unknown>, inputLabel: string | null): Record<string, unknown> {
+  private withInputLabel(
+    output: Record<string, unknown>,
+    inputLabel: string | null,
+  ): Record<string, unknown> {
     return inputLabel ? { ...output, input_label: inputLabel } : output;
   }
 
   private formatIncomingText(outputs: Array<Record<string, unknown>>): string {
     const sections = outputs.flatMap((output, index) => {
       const selected = this.toRecord(output.selected_output);
-      const value = this.firstString(
-        output.input_text,
-        output.inputText,
-        output.promptText,
-        output.text,
-        output.content,
-        output.reply,
-        output.extracted_text,
-        output.raw_output,
-        selected.value,
-      ) || this.serializeWorkflowValue(selected.value ?? output.checked_fields ?? output.structured_data);
+      const value =
+        this.firstString(
+          output.input_text,
+          output.inputText,
+          output.promptText,
+          output.text,
+          output.content,
+          output.reply,
+          output.extracted_text,
+          output.raw_output,
+          selected.value,
+        ) ||
+        this.serializeWorkflowValue(
+          selected.value ?? output.checked_fields ?? output.structured_data,
+        );
       if (!value) return [];
-      const label = this.firstString(output.input_label, selected.label) || `Contenuto ${index + 1}`;
+      const label =
+        this.firstString(output.input_label, selected.label) ||
+        `Contenuto ${index + 1}`;
       return [`[${label}]\n${value}`];
     });
     return sections.join("\n\n");
@@ -2722,21 +3853,26 @@ export class WorkflowRunExecutorService {
     return undefined;
   }
 
-  private resolveKnowledgeMode(inputPayloadRaw: unknown, workflowConfigurationRaw: unknown): KnowledgeMode {
+  private resolveKnowledgeMode(
+    inputPayloadRaw: unknown,
+    workflowConfigurationRaw: unknown,
+  ): KnowledgeMode {
     const inputPayload = this.toRecord(inputPayloadRaw);
     const workflowConfiguration = this.toRecord(workflowConfigurationRaw);
     const inputContextPolicy = this.toRecord(inputPayload.contextPolicy);
-    const workflowContextPolicy = this.toRecord(workflowConfiguration.contextPolicy);
+    const workflowContextPolicy = this.toRecord(
+      workflowConfiguration.contextPolicy,
+    );
 
     return normalizeKnowledgeMode(
-      inputPayload.knowledgeMode
-        ?? inputPayload.knowledge_mode
-        ?? inputContextPolicy.knowledgeMode
-        ?? inputContextPolicy.knowledge_mode
-        ?? workflowConfiguration.knowledgeMode
-        ?? workflowConfiguration.knowledge_mode
-        ?? workflowContextPolicy.knowledgeMode
-        ?? workflowContextPolicy.knowledge_mode,
+      inputPayload.knowledgeMode ??
+        inputPayload.knowledge_mode ??
+        inputContextPolicy.knowledgeMode ??
+        inputContextPolicy.knowledge_mode ??
+        workflowConfiguration.knowledgeMode ??
+        workflowConfiguration.knowledge_mode ??
+        workflowContextPolicy.knowledgeMode ??
+        workflowContextPolicy.knowledge_mode,
       DEFAULT_KNOWLEDGE_MODE,
     );
   }
@@ -2759,7 +3895,10 @@ export class WorkflowRunExecutorService {
     previousOutput: Record<string, unknown>,
     incomingOutputs: Array<Record<string, unknown>>,
   ): Array<Record<string, unknown>> {
-    const configured = this.firstArray(nodeConfig.attachments, inputPayload.attachments);
+    const configured = this.firstArray(
+      nodeConfig.attachments,
+      inputPayload.attachments,
+    );
     if (configured.length > 0) {
       return configured;
     }
@@ -2767,19 +3906,25 @@ export class WorkflowRunExecutorService {
     const documentBase64 = this.firstString(
       previousOutput.document_base64,
       previousOutput.docx_base64,
-      ...this.pickIncomingStrings(incomingOutputs, ["document_base64", "docx_base64"]),
+      ...this.pickIncomingStrings(incomingOutputs, [
+        "document_base64",
+        "docx_base64",
+      ]),
     );
     if (!documentBase64) {
       return [];
     }
 
-    return [{
-      file_name: this.firstString(
-        previousOutput.file_name,
-        ...this.pickIncomingStrings(incomingOutputs, ["file_name"]),
-      ) || "documento.docx",
-      content_base64: documentBase64,
-    }];
+    return [
+      {
+        file_name:
+          this.firstString(
+            previousOutput.file_name,
+            ...this.pickIncomingStrings(incomingOutputs, ["file_name"]),
+          ) || "documento.docx",
+        content_base64: documentBase64,
+      },
+    ];
   }
 
   private firstArray(...values: unknown[]): Array<Record<string, unknown>> {
@@ -2787,8 +3932,9 @@ export class WorkflowRunExecutorService {
       if (!Array.isArray(value)) {
         continue;
       }
-      return value.filter((item): item is Record<string, unknown> =>
-        Boolean(item) && typeof item === "object" && !Array.isArray(item),
+      return value.filter(
+        (item): item is Record<string, unknown> =>
+          Boolean(item) && typeof item === "object" && !Array.isArray(item),
       );
     }
     return [];
@@ -2798,7 +3944,7 @@ export class WorkflowRunExecutorService {
     for (const value of values) {
       if (Array.isArray(value)) {
         const items = value
-          .map((item) => typeof item === "string" ? item.trim() : "")
+          .map((item) => (typeof item === "string" ? item.trim() : ""))
           .filter((item) => item.length > 0);
         if (items.length > 0) {
           return items;
@@ -2817,13 +3963,20 @@ export class WorkflowRunExecutorService {
     return [];
   }
 
-  private pickIncomingStrings(outputs: Array<Record<string, unknown>>, keys: string[]): string[] {
-    return this.pickIncomingValues(outputs, keys).filter((value): value is string =>
-      typeof value === "string" && value.trim().length > 0,
+  private pickIncomingStrings(
+    outputs: Array<Record<string, unknown>>,
+    keys: string[],
+  ): string[] {
+    return this.pickIncomingValues(outputs, keys).filter(
+      (value): value is string =>
+        typeof value === "string" && value.trim().length > 0,
     );
   }
 
-  private pickIncomingValues(outputs: Array<Record<string, unknown>>, keys: string[]): unknown[] {
+  private pickIncomingValues(
+    outputs: Array<Record<string, unknown>>,
+    keys: string[],
+  ): unknown[] {
     const values: unknown[] = [];
     for (const output of outputs) {
       for (const key of keys) {
@@ -2833,7 +3986,9 @@ export class WorkflowRunExecutorService {
     return values;
   }
 
-  private unwrapPythonOutput(envelope: Record<string, unknown> | null): Record<string, unknown> {
+  private unwrapPythonOutput(
+    envelope: Record<string, unknown> | null,
+  ): Record<string, unknown> {
     if (!envelope || typeof envelope !== "object") {
       return {};
     }
@@ -2869,7 +4024,11 @@ export class WorkflowRunExecutorService {
     }
 
     const moduleKey = context.moduleKey ?? ModuleKey.WORKFLOW_MANAGEMENT;
-    const notification = this.composeWorkflowNotification(context, status, error);
+    const notification = this.composeWorkflowNotification(
+      context,
+      status,
+      error,
+    );
 
     try {
       await this.notificationService.createInfo({
@@ -2880,11 +4039,14 @@ export class WorkflowRunExecutorService {
         message: notification.message,
       });
     } catch (notifyError) {
-      console.error("[WorkflowRunExecutorService] Unable to notify workflow status", {
-        runId: context.runId,
-        status,
-        notifyError,
-      });
+      console.error(
+        "[WorkflowRunExecutorService] Unable to notify workflow status",
+        {
+          runId: context.runId,
+          status,
+          notifyError,
+        },
+      );
     }
   }
 
@@ -2893,26 +4055,42 @@ export class WorkflowRunExecutorService {
     status: "completed" | "failed" | "waiting_for_decision",
     error?: string,
   ): { title: string; message: string } {
-    const workflowName = context.workflowLabel.trim() || context.workflowKey || "Workflow";
+    const workflowName =
+      context.workflowLabel.trim() || context.workflowKey || "Workflow";
     if (status === "waiting_for_decision") {
-      return { title: workflowName, message: "Esecuzione in attesa di una decisione umana." };
+      return {
+        title: workflowName,
+        message: "Esecuzione in attesa di una decisione umana.",
+      };
     }
     if (context.moduleKey === ModuleKey.DDT_PROCESSING) {
       const documentName = context.ddtSource?.fileName ?? "document.pdf";
       return status === "completed"
         ? { title: workflowName, message: `DDT analizzato: "${documentName}".` }
-        : { title: workflowName, message: `Analisi DDT fallita su "${documentName}": ${error ?? "errore sconosciuto"}` };
+        : {
+            title: workflowName,
+            message: `Analisi DDT fallita su "${documentName}": ${error ?? "errore sconosciuto"}`,
+          };
     }
 
     if (context.moduleKey === ModuleKey.MEASURE_REPORT) {
-      const documentName = context.measureReportSource?.fileName ?? "document.pdf";
+      const documentName =
+        context.measureReportSource?.fileName ?? "document.pdf";
       return status === "completed"
-        ? { title: workflowName, message: `Measure Report analizzato: "${documentName}".` }
-        : { title: workflowName, message: `Analisi Measure Report fallita su "${documentName}": ${error ?? "errore sconosciuto"}` };
+        ? {
+            title: workflowName,
+            message: `Measure Report analizzato: "${documentName}".`,
+          }
+        : {
+            title: workflowName,
+            message: `Analisi Measure Report fallita su "${documentName}": ${error ?? "errore sconosciuto"}`,
+          };
     }
 
     if (context.projectName) {
-      const versionLabel = context.projectVersionLabel ? ` ${context.projectVersionLabel.toUpperCase()}` : "";
+      const versionLabel = context.projectVersionLabel
+        ? ` ${context.projectVersionLabel.toUpperCase()}`
+        : "";
       if (status === "completed") {
         return {
           title: workflowName,
@@ -2928,6 +4106,9 @@ export class WorkflowRunExecutorService {
 
     return status === "completed"
       ? { title: workflowName, message: "Esecuzione completata." }
-      : { title: workflowName, message: `Esecuzione fallita: ${error ?? "errore sconosciuto"}` };
+      : {
+          title: workflowName,
+          message: `Esecuzione fallita: ${error ?? "errore sconosciuto"}`,
+        };
   }
 }

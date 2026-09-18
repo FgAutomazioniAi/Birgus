@@ -334,7 +334,16 @@
 
 /* Some legacy feature views still use Tailwind's fixed rounded utilities.
    Keep the personal corner preference authoritative for framed UI elements. */
-[data-corners="square"] :is(.rounded, .rounded-sm, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl) {
+[data-corners="square"]
+  :is(
+    .rounded,
+    .rounded-sm,
+    .rounded-md,
+    .rounded-lg,
+    .rounded-xl,
+    .rounded-2xl,
+    .rounded-3xl
+  ) {
   border-radius: 0;
 }
 

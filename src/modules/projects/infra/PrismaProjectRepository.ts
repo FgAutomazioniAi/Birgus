@@ -57,25 +57,35 @@ export class PrismaProjectRepository implements ProjectRepository {
       },
     });
 
-    return rows.map((row) => new ProjectEntity({
-      id: row.id,
-      workspaceId: row.workspace_id,
-      name: row.name,
-      statusKey: row.status.key,
-      clientId: row.project_clients[0]?.client_id ?? null,
-      authorId: row.author?.id ?? null,
-      authorName: row.author?.display_name ?? [row.author?.first_name ?? "", row.author?.last_name ?? ""].join(" ").trim(),
-      revisionId: row.revision?.id ?? null,
-      revisionCode: row.revision?.code ?? "",
-      publisherName: row.publisher_name ?? "",
-      publicationDate: row.publication_date,
-      authorDate: row.author_date,
-      createdAt: row.created_at,
-      versionsCount: row.project_versions.length,
-    }));
+    return rows.map(
+      (row) =>
+        new ProjectEntity({
+          id: row.id,
+          workspaceId: row.workspace_id,
+          name: row.name,
+          statusKey: row.status.key,
+          clientId: row.project_clients[0]?.client_id ?? null,
+          authorId: row.author?.id ?? null,
+          authorName:
+            row.author?.display_name ??
+            [row.author?.first_name ?? "", row.author?.last_name ?? ""]
+              .join(" ")
+              .trim(),
+          revisionId: row.revision?.id ?? null,
+          revisionCode: row.revision?.code ?? "",
+          publisherName: row.publisher_name ?? "",
+          publicationDate: row.publication_date,
+          authorDate: row.author_date,
+          createdAt: row.created_at,
+          versionsCount: row.project_versions.length,
+        }),
+    );
   }
 
-  public async findProjectById(workspaceId: string, projectId: string): Promise<ProjectEntity | null> {
+  public async findProjectById(
+    workspaceId: string,
+    projectId: string,
+  ): Promise<ProjectEntity | null> {
     const prisma = PrismaClientManager.getClient();
 
     const row = await prisma.project.findFirst({
@@ -136,7 +146,11 @@ export class PrismaProjectRepository implements ProjectRepository {
       statusKey: row.status.key,
       clientId: row.project_clients[0]?.client_id ?? null,
       authorId: row.author?.id ?? null,
-      authorName: row.author?.display_name ?? [row.author?.first_name ?? "", row.author?.last_name ?? ""].join(" ").trim(),
+      authorName:
+        row.author?.display_name ??
+        [row.author?.first_name ?? "", row.author?.last_name ?? ""]
+          .join(" ")
+          .trim(),
       revisionId: row.revision?.id ?? null,
       revisionCode: row.revision?.code ?? "",
       publisherName: row.publisher_name ?? "",
@@ -159,7 +173,10 @@ export class PrismaProjectRepository implements ProjectRepository {
     authorDate: Date | null;
   }): Promise<ProjectEntity | null> {
     const prisma = PrismaClientManager.getClient();
-    const existing = await this.findProjectById(params.workspaceId, params.projectId);
+    const existing = await this.findProjectById(
+      params.workspaceId,
+      params.projectId,
+    );
     if (!existing) {
       return null;
     }
@@ -176,7 +193,11 @@ export class PrismaProjectRepository implements ProjectRepository {
     });
 
     if (!status) {
-      throw new AppError(`Project status '${params.statusKey}' not found.`, "PROJECT_STATUS_NOT_FOUND", 404);
+      throw new AppError(
+        `Project status '${params.statusKey}' not found.`,
+        "PROJECT_STATUS_NOT_FOUND",
+        404,
+      );
     }
 
     if (params.authorId !== null) {
@@ -190,7 +211,11 @@ export class PrismaProjectRepository implements ProjectRepository {
       });
 
       if (!author) {
-        throw new AppError("Project author not found.", "PROJECT_AUTHOR_NOT_FOUND", 404);
+        throw new AppError(
+          "Project author not found.",
+          "PROJECT_AUTHOR_NOT_FOUND",
+          404,
+        );
       }
     }
 
@@ -204,7 +229,11 @@ export class PrismaProjectRepository implements ProjectRepository {
       });
 
       if (!revision) {
-        throw new AppError("Project revision not found.", "PROJECT_REVISION_NOT_FOUND", 404);
+        throw new AppError(
+          "Project revision not found.",
+          "PROJECT_REVISION_NOT_FOUND",
+          404,
+        );
       }
     }
 
@@ -230,9 +259,11 @@ export class PrismaProjectRepository implements ProjectRepository {
       statusKey: status.key,
       clientId: existing.clientId,
       authorId: params.authorId,
-      authorName: existing.authorId === params.authorId ? existing.authorName : "",
+      authorName:
+        existing.authorId === params.authorId ? existing.authorName : "",
       revisionId: params.revisionId,
-      revisionCode: existing.revisionId === params.revisionId ? existing.revisionCode : "",
+      revisionCode:
+        existing.revisionId === params.revisionId ? existing.revisionCode : "",
       publisherName: row.publisher_name ?? "",
       publicationDate: row.publication_date,
       authorDate: row.author_date,
@@ -241,7 +272,11 @@ export class PrismaProjectRepository implements ProjectRepository {
     });
   }
 
-  public async setProjectPrimaryClient(workspaceId: string, projectId: string, clientId: string): Promise<void> {
+  public async setProjectPrimaryClient(
+    workspaceId: string,
+    projectId: string,
+    clientId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
 
     await prisma.projectClient.updateMany({
@@ -278,7 +313,10 @@ export class PrismaProjectRepository implements ProjectRepository {
     });
   }
 
-  public async softDeleteProject(workspaceId: string, projectId: string): Promise<boolean> {
+  public async softDeleteProject(
+    workspaceId: string,
+    projectId: string,
+  ): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
     const result = await prisma.$transaction(async (tx) => {
       const projectUpdate = await tx.project.updateMany({
@@ -350,7 +388,11 @@ export class PrismaProjectRepository implements ProjectRepository {
     });
 
     if (!status) {
-      throw new AppError(`Project status '${params.statusKey}' not found.`, "PROJECT_STATUS_NOT_FOUND", 404);
+      throw new AppError(
+        `Project status '${params.statusKey}' not found.`,
+        "PROJECT_STATUS_NOT_FOUND",
+        404,
+      );
     }
 
     if (params.authorId !== null) {
@@ -364,7 +406,11 @@ export class PrismaProjectRepository implements ProjectRepository {
       });
 
       if (!author) {
-        throw new AppError("Project author not found.", "PROJECT_AUTHOR_NOT_FOUND", 404);
+        throw new AppError(
+          "Project author not found.",
+          "PROJECT_AUTHOR_NOT_FOUND",
+          404,
+        );
       }
     }
 
@@ -378,7 +424,11 @@ export class PrismaProjectRepository implements ProjectRepository {
       });
 
       if (!revision) {
-        throw new AppError("Project revision not found.", "PROJECT_REVISION_NOT_FOUND", 404);
+        throw new AppError(
+          "Project revision not found.",
+          "PROJECT_REVISION_NOT_FOUND",
+          404,
+        );
       }
     }
 
@@ -423,7 +473,11 @@ export class PrismaProjectRepository implements ProjectRepository {
       name: row.name,
       statusKey: row.status.key,
       authorId: row.author?.id ?? null,
-      authorName: row.author?.display_name ?? [row.author?.first_name ?? "", row.author?.last_name ?? ""].join(" ").trim(),
+      authorName:
+        row.author?.display_name ??
+        [row.author?.first_name ?? "", row.author?.last_name ?? ""]
+          .join(" ")
+          .trim(),
       revisionId: row.revision?.id ?? null,
       revisionCode: row.revision?.code ?? "",
       publisherName: row.publisher_name ?? "",
@@ -434,7 +488,11 @@ export class PrismaProjectRepository implements ProjectRepository {
     });
   }
 
-  public async linkProjectClient(workspaceId: string, projectId: string, clientId: string): Promise<void> {
+  public async linkProjectClient(
+    workspaceId: string,
+    projectId: string,
+    clientId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
 
     await prisma.projectClient.upsert({
@@ -456,7 +514,10 @@ export class PrismaProjectRepository implements ProjectRepository {
     });
   }
 
-  public async listVersions(workspaceId: string, projectId: string): Promise<ProjectVersionEntity[]> {
+  public async listVersions(
+    workspaceId: string,
+    projectId: string,
+  ): Promise<ProjectVersionEntity[]> {
     const prisma = PrismaClientManager.getClient();
 
     const rows = await prisma.projectVersion.findMany({
@@ -478,10 +539,7 @@ export class PrismaProjectRepository implements ProjectRepository {
           },
         },
       },
-      orderBy: [
-        { created_at: "asc" },
-        { id: "asc" },
-      ],
+      orderBy: [{ created_at: "asc" }, { id: "asc" }],
     });
 
     return rows.map((row) => this.mapProjectVersion(row));
@@ -523,7 +581,10 @@ export class PrismaProjectRepository implements ProjectRepository {
     return this.mapProjectVersion(row);
   }
 
-  public async countActiveVersions(workspaceId: string, projectId: string): Promise<number> {
+  public async countActiveVersions(
+    workspaceId: string,
+    projectId: string,
+  ): Promise<number> {
     const prisma = PrismaClientManager.getClient();
 
     return prisma.projectVersion.count({
@@ -557,7 +618,11 @@ export class PrismaProjectRepository implements ProjectRepository {
     });
 
     if (!status) {
-      throw new AppError(`Project status '${params.statusKey}' not found.`, "PROJECT_STATUS_NOT_FOUND", 404);
+      throw new AppError(
+        `Project status '${params.statusKey}' not found.`,
+        "PROJECT_STATUS_NOT_FOUND",
+        404,
+      );
     }
 
     const row = await prisma.projectVersion.create({
@@ -588,7 +653,10 @@ export class PrismaProjectRepository implements ProjectRepository {
     return this.mapProjectVersion(row);
   }
 
-  public async clearDefaultVersionFlags(workspaceId: string, projectId: string): Promise<void> {
+  public async clearDefaultVersionFlags(
+    workspaceId: string,
+    projectId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
 
     await prisma.projectVersion.updateMany({
@@ -630,7 +698,10 @@ export class PrismaProjectRepository implements ProjectRepository {
     });
   }
 
-  public async findMostRecentActiveVersion(workspaceId: string, projectId: string): Promise<ProjectVersionEntity | null> {
+  public async findMostRecentActiveVersion(
+    workspaceId: string,
+    projectId: string,
+  ): Promise<ProjectVersionEntity | null> {
     const prisma = PrismaClientManager.getClient();
 
     const row = await prisma.projectVersion.findFirst({
@@ -652,10 +723,7 @@ export class PrismaProjectRepository implements ProjectRepository {
           },
         },
       },
-      orderBy: [
-        { created_at: "desc" },
-        { id: "desc" },
-      ],
+      orderBy: [{ created_at: "desc" }, { id: "desc" }],
     });
 
     if (!row) {
@@ -666,17 +734,17 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   private mapProjectVersion(row: {
-      id: number;
-      workspace_id: string;
-      project_id: string;
-      version_label: string;
-      description: string;
-      client_id: string | null;
-      is_default: boolean;
-      created_at: Date;
-      client: { first_name: string; last_name: string | null } | null;
-      status: { key: string } | null;
-    }): ProjectVersionEntity {
+    id: number;
+    workspace_id: string;
+    project_id: string;
+    version_label: string;
+    description: string;
+    client_id: string | null;
+    is_default: boolean;
+    created_at: Date;
+    client: { first_name: string; last_name: string | null } | null;
+    status: { key: string } | null;
+  }): ProjectVersionEntity {
     return new ProjectVersionEntity({
       id: row.id,
       workspaceId: row.workspace_id,
@@ -684,7 +752,9 @@ export class PrismaProjectRepository implements ProjectRepository {
       versionLabel: row.version_label,
       description: row.description,
       clientId: row.client_id,
-      clientName: row.client ? [row.client.first_name, row.client.last_name ?? ""].join(" ").trim() : null,
+      clientName: row.client
+        ? [row.client.first_name, row.client.last_name ?? ""].join(" ").trim()
+        : null,
       statusKey: row.status?.key ?? null,
       isDefault: row.is_default,
       createdAt: row.created_at,

@@ -11,7 +11,13 @@ export interface FormFieldProps {
   label: string;
 }
 
-export function FormField({ children, className, error, icon, label }: FormFieldProps) {
+export function FormField({
+  children,
+  className,
+  error,
+  icon,
+  label,
+}: FormFieldProps) {
   return (
     <div className={className}>
       <Label className="mb-2 flex items-center gap-2 font-bold">
@@ -19,7 +25,11 @@ export function FormField({ children, className, error, icon, label }: FormField
         {label}
       </Label>
       {children}
-      {error ? <p className={cn("mt-1 text-xs font-medium text-status-danger-text")}>{error}</p> : null}
+      {error ? (
+        <p className={cn("mt-1 text-xs font-medium text-status-danger-text")}>
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

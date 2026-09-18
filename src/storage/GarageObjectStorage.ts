@@ -10,14 +10,21 @@ import {
 } from "@aws-sdk/client-s3";
 
 import { GarageConfig } from "./GarageConfig.js";
-import { GetObjectOutput, ObjectDescriptor, ObjectStorage, PutObjectInput } from "./ObjectStorage.js";
+import {
+  GetObjectOutput,
+  ObjectDescriptor,
+  ObjectStorage,
+  PutObjectInput,
+} from "./ObjectStorage.js";
 import { ProjectBinaryStorage } from "./ProjectBinaryStorage.js";
 
 interface TransformToByteArray {
   transformToByteArray: () => Promise<Uint8Array>;
 }
 
-export class GarageObjectStorage implements ObjectStorage, ProjectBinaryStorage {
+export class GarageObjectStorage
+  implements ObjectStorage, ProjectBinaryStorage
+{
   private readonly config: GarageConfig;
   private readonly client: S3Client;
 
@@ -36,7 +43,9 @@ export class GarageObjectStorage implements ObjectStorage, ProjectBinaryStorage 
 
   public async putObject(input: PutObjectInput): Promise<ObjectDescriptor> {
     const bucket = input.bucket ?? this.config.bucket;
-    const payload = Buffer.isBuffer(input.bytes) ? input.bytes : Buffer.from(input.bytes);
+    const payload = Buffer.isBuffer(input.bytes)
+      ? input.bytes
+      : Buffer.from(input.bytes);
 
     const response = await this.client.send(
       new PutObjectCommand({
@@ -57,7 +66,10 @@ export class GarageObjectStorage implements ObjectStorage, ProjectBinaryStorage 
     };
   }
 
-  public async getObject(bucket: string, objectKey: string): Promise<GetObjectOutput> {
+  public async getObject(
+    bucket: string,
+    objectKey: string,
+  ): Promise<GetObjectOutput> {
     const response = await this.client.send(
       new GetObjectCommand({
         Bucket: bucket,
@@ -78,7 +90,10 @@ export class GarageObjectStorage implements ObjectStorage, ProjectBinaryStorage 
     };
   }
 
-  public async headObject(bucket: string, objectKey: string): Promise<ObjectDescriptor> {
+  public async headObject(
+    bucket: string,
+    objectKey: string,
+  ): Promise<ObjectDescriptor> {
     const response = await this.client.send(
       new HeadObjectCommand({
         Bucket: bucket,
@@ -144,12 +159,15 @@ export class GarageObjectStorage implements ObjectStorage, ProjectBinaryStorage 
     throw new Error("Unsupported S3 body type.");
   }
 
-  private hasTransformToByteArray(value: unknown): value is TransformToByteArray {
+  private hasTransformToByteArray(
+    value: unknown,
+  ): value is TransformToByteArray {
     return (
-      typeof value === "object"
-      && value !== null
-      && "transformToByteArray" in value
-      && typeof (value as { transformToByteArray?: unknown }).transformToByteArray === "function"
+      typeof value === "object" &&
+      value !== null &&
+      "transformToByteArray" in value &&
+      typeof (value as { transformToByteArray?: unknown })
+        .transformToByteArray === "function"
     );
   }
 

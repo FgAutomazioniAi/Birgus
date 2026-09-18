@@ -11,15 +11,26 @@ export interface CustomerGeoPoint {
   longitude: number;
 }
 
-const escapeHtml = (value: string): string => value.replace(/[&<>'"]/g, (character) => ({
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  "'": "&#39;",
-  "\"": "&quot;",
-})[character] ?? character);
+const escapeHtml = (value: string): string =>
+  value.replace(
+    /[&<>'"]/g,
+    (character) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "'": "&#39;",
+        '"': "&quot;",
+      })[character] ?? character,
+  );
 
-export function CustomerGeoMap({ points, selectedId }: { points: CustomerGeoPoint[]; selectedId: string | null }) {
+export function CustomerGeoMap({
+  points,
+  selectedId,
+}: {
+  points: CustomerGeoPoint[];
+  selectedId: string | null;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const selected = points.find((point) => point.id === selectedId) ?? points[0];
 
@@ -33,9 +44,13 @@ export function CustomerGeoMap({ points, selectedId }: { points: CustomerGeoPoin
     delete (container as HTMLDivElement & { _leaflet_id?: number })._leaflet_id;
     container.replaceChildren();
 
-    const map = L.map(container, { scrollWheelZoom: true }).setView([selected.latitude, selected.longitude], 8);
+    const map = L.map(container, { scrollWheelZoom: true }).setView(
+      [selected.latitude, selected.longitude],
+      8,
+    );
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
 
     for (const point of points) {
@@ -47,7 +62,9 @@ export function CustomerGeoMap({ points, selectedId }: { points: CustomerGeoPoin
         color,
         fillColor: color,
         fillOpacity: 0.78,
-      }).addTo(map).bindPopup(popup);
+      })
+        .addTo(map)
+        .bindPopup(popup);
     }
 
     return () => {
@@ -56,8 +73,18 @@ export function CustomerGeoMap({ points, selectedId }: { points: CustomerGeoPoin
   }, [points, selected]);
 
   if (!selected) {
-    return <div className="flex h-full items-center justify-center text-sm text-text-muted">Nessun punto geocodificato.</div>;
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-text-muted">
+        Nessun punto geocodificato.
+      </div>
+    );
   }
 
-  return <div ref={containerRef} className="h-full w-full" aria-label="Mappa clienti" />;
+  return (
+    <div
+      ref={containerRef}
+      className="h-full w-full"
+      aria-label="Mappa clienti"
+    />
+  );
 }

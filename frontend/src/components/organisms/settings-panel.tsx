@@ -1,19 +1,42 @@
 "use client";
 
-import { Bot, CheckCircle2, ChevronDown, Cpu, FileSearch, Loader2, Mail, PlugZap, RefreshCw, Save, SlidersHorizontal, Trash2 } from "lucide-react";
+import {
+  Bot,
+  CheckCircle2,
+  ChevronDown,
+  Cpu,
+  FileSearch,
+  Loader2,
+  Mail,
+  PlugZap,
+  RefreshCw,
+  Save,
+  SlidersHorizontal,
+  Trash2,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Checkbox, Input, Label, Text } from "@/components/atoms";
-import { BirgusDialog, PageHelpHint, SelectDropdown } from "@/components/molecules";
+import {
+  BirgusDialog,
+  PageHelpHint,
+  SelectDropdown,
+} from "@/components/molecules";
 import { useLanguage } from "@/components/organisms/language-provider";
 import { aiProviderErrorMessage } from "@/lib/language";
 import { cn } from "@/lib/cn";
 import { useModuleAccess } from "@/lib/module-access";
+import { ExternalDatabaseConnectionsSettings } from "./external-database-connections-settings";
 
 interface AiProviderSettings {
-  availableProviders: Array<{ id: string; label: string; protocol: string; defaultBaseUrl?: string }>;
+  availableProviders: Array<{
+    id: string;
+    label: string;
+    protocol: string;
+    defaultBaseUrl?: string;
+  }>;
   baseUrl: string;
   chatModel: string;
   provider: string;
@@ -44,6 +67,7 @@ interface MailProviderSettings {
   smtpUser: string;
   smtpConfigured: boolean;
   resendConfigured: boolean;
+  allowedProviders: string[];
 }
 
 interface WorkspaceModuleSettings {
@@ -52,7 +76,14 @@ interface WorkspaceModuleSettings {
 }
 
 const defaultAiProviderSettings: AiProviderSettings = {
-  availableProviders: [{ id: "vllm", label: "Internal AI - vLLM", protocol: "openai_compatible", defaultBaseUrl: "http://internal-ai-vllm:8000/v1" }],
+  availableProviders: [
+    {
+      id: "vllm",
+      label: "Internal AI - vLLM",
+      protocol: "openai_compatible",
+      defaultBaseUrl: "http://internal-ai-vllm:8000/v1",
+    },
+  ],
   baseUrl: "http://internal-ai-vllm:8000/v1",
   chatModel: "birgus-vl",
   provider: "openai_compatible",
@@ -78,10 +109,14 @@ const defaultMailProviderSettings: MailProviderSettings = {
   smtpUser: "",
   smtpConfigured: false,
   resendConfigured: false,
+  allowedProviders: ["smtp", "resend"],
 };
 
 class ApiRequestError extends Error {
-  public constructor(public readonly code: string | null, message: string) {
+  public constructor(
+    public readonly code: string | null,
+    message: string,
+  ) {
     super(message);
     this.name = "ApiRequestError";
   }
@@ -163,12 +198,20 @@ export function SettingsPanel() {
   const canConfigureMailProvider = hasModule("notification_center");
   const canControlAiRuntime = hasModule("ai_runtime_control");
   const canConfigureBrainy = hasModule("brainy");
-  const [aiSettings, setAiSettings] = useState<AiProviderSettings>(defaultAiProviderSettings);
+  const canConfigureExternalDatabases = hasModule("commission_details");
+  const [aiSettings, setAiSettings] = useState<AiProviderSettings>(
+    defaultAiProviderSettings,
+  );
   const [models, setModels] = useState<AiModelItem[]>([]);
   const [aiStatus, setAiStatus] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [mailSettings, setMailSettings] = useState<MailProviderSettings>(defaultMailProviderSettings);
-  const [mailSecretPatch, setMailSecretPatch] = useState({ smtpPass: "", resendApiKey: "" });
+  const [mailSettings, setMailSettings] = useState<MailProviderSettings>(
+    defaultMailProviderSettings,
+  );
+  const [mailSecretPatch, setMailSecretPatch] = useState({
+    smtpPass: "",
+    resendApiKey: "",
+  });
   const [mailStatus, setMailStatus] = useState<string | null>(null);
   const [mailError, setMailError] = useState<string | null>(null);
   const [loadingSettings, setLoadingSettings] = useState(true);
@@ -178,35 +221,67 @@ export function SettingsPanel() {
   const [validatingMail, setValidatingMail] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingMail, setSavingMail] = useState(false);
-  const [ocrModuleEnabled, setOcrModuleEnabled] = useState<boolean | null>(null);
+  const [ocrModuleEnabled, setOcrModuleEnabled] = useState<boolean | null>(
+    null,
+  );
   const [loadingOcrModule, setLoadingOcrModule] = useState(true);
   const [savingOcrModule, setSavingOcrModule] = useState(false);
   const [testingOcrModule, setTestingOcrModule] = useState(false);
   const [ocrModuleError, setOcrModuleError] = useState<string | null>(null);
   const [ocrModuleStatus, setOcrModuleStatus] = useState<string | null>(null);
-  const [vllmRuntime, setVllmRuntime] = useState<VllmRuntimeStatus | null>(null);
+  const [vllmRuntime, setVllmRuntime] = useState<VllmRuntimeStatus | null>(
+    null,
+  );
   const [vllmMaxModelLen, setVllmMaxModelLen] = useState<number>(8192);
   const [loadingVllmRuntime, setLoadingVllmRuntime] = useState(false);
   const [savingVllmRuntime, setSavingVllmRuntime] = useState(false);
   const [vllmRuntimeError, setVllmRuntimeError] = useState<string | null>(null);
   const [brainyAgents, setBrainyAgents] = useState<BrainyWorkspaceAgent[]>([]);
-  const [availableBrainyAgents, setAvailableBrainyAgents] = useState<Array<{ id: string; label: string }>>([]);
-  const [brainyAgentDraft, setBrainyAgentDraft] = useState({ id: "", brainywareAgentId: "", label: "", isEnabled: true, isDefault: false, isWorkflowEnabled: false, accessMode: "ALL" as const, roleIds: [] as number[] });
-  const [brainyAgentAccessOptions, setBrainyAgentAccessOptions] = useState<BrainyAgentAccessOptions>({ roles: [] });
-  const [brainyDatabaseAccessOptions, setBrainyDatabaseAccessOptions] = useState<BrainyAgentAccessOptions>({ roles: [] });
-  const [brainyAgentAccessTarget, setBrainyAgentAccessTarget] = useState<BrainyWorkspaceAgent | null>(null);
-  const [brainyDatabaseAccessTarget, setBrainyDatabaseAccessTarget] = useState<BrainyDatabaseConnection | null>(null);
+  const [availableBrainyAgents, setAvailableBrainyAgents] = useState<
+    Array<{ id: string; label: string }>
+  >([]);
+  const [brainyAgentDraft, setBrainyAgentDraft] = useState({
+    id: "",
+    brainywareAgentId: "",
+    label: "",
+    isEnabled: true,
+    isDefault: false,
+    isWorkflowEnabled: false,
+    accessMode: "ALL" as const,
+    roleIds: [] as number[],
+  });
+  const [brainyAgentAccessOptions, setBrainyAgentAccessOptions] =
+    useState<BrainyAgentAccessOptions>({ roles: [] });
+  const [brainyDatabaseAccessOptions, setBrainyDatabaseAccessOptions] =
+    useState<BrainyAgentAccessOptions>({ roles: [] });
+  const [brainyAgentAccessTarget, setBrainyAgentAccessTarget] =
+    useState<BrainyWorkspaceAgent | null>(null);
+  const [brainyDatabaseAccessTarget, setBrainyDatabaseAccessTarget] =
+    useState<BrainyDatabaseConnection | null>(null);
   const [loadingBrainyAgents, setLoadingBrainyAgents] = useState(false);
   const [savingBrainyAgent, setSavingBrainyAgent] = useState(false);
   const [brainyAgentError, setBrainyAgentError] = useState<string | null>(null);
-  const [brainyAgentToArchive, setBrainyAgentToArchive] = useState<BrainyWorkspaceAgent | null>(null);
-  const [brainyDatabaseConnections, setBrainyDatabaseConnections] = useState<BrainyDatabaseConnection[]>([]);
-  const [availableBrainyDatabaseConnections, setAvailableBrainyDatabaseConnections] = useState<BrainyDatabaseConnection[]>([]);
-  const [brainyDatabaseError, setBrainyDatabaseError] = useState<string | null>(null);
-  const [brainyDatabaseToArchive, setBrainyDatabaseToArchive] = useState<BrainyDatabaseConnection | null>(null);
-  const [savingBrainyDatabaseId, setSavingBrainyDatabaseId] = useState<string | null>(null);
+  const [brainyAgentToArchive, setBrainyAgentToArchive] =
+    useState<BrainyWorkspaceAgent | null>(null);
+  const [brainyDatabaseConnections, setBrainyDatabaseConnections] = useState<
+    BrainyDatabaseConnection[]
+  >([]);
+  const [
+    availableBrainyDatabaseConnections,
+    setAvailableBrainyDatabaseConnections,
+  ] = useState<BrainyDatabaseConnection[]>([]);
+  const [brainyDatabaseError, setBrainyDatabaseError] = useState<string | null>(
+    null,
+  );
+  const [brainyDatabaseToArchive, setBrainyDatabaseToArchive] =
+    useState<BrainyDatabaseConnection | null>(null);
+  const [savingBrainyDatabaseId, setSavingBrainyDatabaseId] = useState<
+    string | null
+  >(null);
   const [selectedBrainyDatabaseId, setSelectedBrainyDatabaseId] = useState("");
-  const [activeSettingsTab, setActiveSettingsTab] = useState<"ai" | "general">("ai");
+  const [activeSettingsTab, setActiveSettingsTab] = useState<
+    "ai" | "general" | "databases"
+  >("ai");
   const [isGenerationOpen, setIsGenerationOpen] = useState(false);
   const [isRuntimeOpen, setIsRuntimeOpen] = useState(false);
   const [isBrainyAgentsOpen, setIsBrainyAgentsOpen] = useState(true);
@@ -227,10 +302,14 @@ export function SettingsPanel() {
 
     const loadSettings = async () => {
       try {
-        const payload = await fetchJson<{ settings: AiProviderSettings }>("/api/settings/ai-provider");
+        const payload = await fetchJson<{ settings: AiProviderSettings }>(
+          "/api/settings/ai-provider",
+        );
         setAiSettings(payload.settings);
       } catch (error) {
-        setAiError(error instanceof Error ? error.message : t("settings.ai.loadFailed"));
+        setAiError(
+          error instanceof Error ? error.message : t("settings.ai.loadFailed"),
+        );
       } finally {
         setLoadingSettings(false);
       }
@@ -247,10 +326,20 @@ export function SettingsPanel() {
 
     const loadMailSettings = async () => {
       try {
-        const payload = await fetchJson<{ settings: MailProviderSettings }>("/api/settings/mail-provider");
-        setMailSettings(payload.settings);
+        const payload = await fetchJson<{
+          settings: MailProviderSettings;
+          allowedProviders?: string[];
+        }>("/api/settings/mail-provider");
+        setMailSettings({
+          ...payload.settings,
+          allowedProviders: payload.allowedProviders ?? [],
+        });
       } catch (error) {
-        setMailError(error instanceof Error ? error.message : "Impossibile leggere le impostazioni email.");
+        setMailError(
+          error instanceof Error
+            ? error.message
+            : "Impossibile leggere le impostazioni email.",
+        );
       } finally {
         setLoadingMailSettings(false);
       }
@@ -262,11 +351,17 @@ export function SettingsPanel() {
   const loadBrainyAgents = async () => {
     setLoadingBrainyAgents(true);
     try {
-      const payload = await fetchJson<{ agents: BrainyWorkspaceAgent[] }>("/api/brainy/settings/agents");
+      const payload = await fetchJson<{ agents: BrainyWorkspaceAgent[] }>(
+        "/api/brainy/settings/agents",
+      );
       setBrainyAgents(payload.agents);
       setBrainyAgentError(null);
     } catch (error) {
-      setBrainyAgentError(error instanceof Error ? error.message : "Impossibile leggere gli agenti Brainy.");
+      setBrainyAgentError(
+        error instanceof Error
+          ? error.message
+          : "Impossibile leggere gli agenti Brainy.",
+      );
     } finally {
       setLoadingBrainyAgents(false);
     }
@@ -274,31 +369,71 @@ export function SettingsPanel() {
 
   const loadAvailableBrainyAgents = async () => {
     try {
-      const payload = await fetchJson<{ agents: Array<{ id: string; label: string }> }>("/api/brainy/settings/agents/available");
+      const payload = await fetchJson<{
+        agents: Array<{ id: string; label: string }>;
+      }>("/api/brainy/settings/agents/available");
       setAvailableBrainyAgents(payload.agents);
-    } catch (error) { setBrainyAgentError(error instanceof Error ? error.message : "Impossibile leggere gli agenti Brainyware."); }
+    } catch (error) {
+      setBrainyAgentError(
+        error instanceof Error
+          ? error.message
+          : "Impossibile leggere gli agenti Brainyware.",
+      );
+    }
   };
 
   const loadBrainyAgentAccessOptions = async () => {
-    try { setBrainyAgentAccessOptions(await fetchJson<BrainyAgentAccessOptions>("/api/brainy/settings/agents/access-options")); }
-    catch (error) { setBrainyAgentError(error instanceof Error ? error.message : "Impossibile leggere ruoli e utenti del workspace."); }
+    try {
+      setBrainyAgentAccessOptions(
+        await fetchJson<BrainyAgentAccessOptions>(
+          "/api/brainy/settings/agents/access-options",
+        ),
+      );
+    } catch (error) {
+      setBrainyAgentError(
+        error instanceof Error
+          ? error.message
+          : "Impossibile leggere ruoli e utenti del workspace.",
+      );
+    }
   };
 
   const loadBrainyDatabaseAccessOptions = async () => {
-    try { setBrainyDatabaseAccessOptions(await fetchJson<BrainyAgentAccessOptions>("/api/brainy/settings/database-connections/access-options")); }
-    catch (error) { setBrainyDatabaseError(error instanceof Error ? error.message : "Impossibile leggere i ruoli del workspace."); }
+    try {
+      setBrainyDatabaseAccessOptions(
+        await fetchJson<BrainyAgentAccessOptions>(
+          "/api/brainy/settings/database-connections/access-options",
+        ),
+      );
+    } catch (error) {
+      setBrainyDatabaseError(
+        error instanceof Error
+          ? error.message
+          : "Impossibile leggere i ruoli del workspace.",
+      );
+    }
   };
 
   const loadBrainyDatabaseConnections = async () => {
     try {
       const [configured, available] = await Promise.all([
-        fetchJson<{ connections: BrainyDatabaseConnection[] }>("/api/brainy/settings/database-connections"),
-        fetchJson<{ connections: BrainyDatabaseConnection[] }>("/api/brainy/settings/database-connections/available"),
+        fetchJson<{ connections: BrainyDatabaseConnection[] }>(
+          "/api/brainy/settings/database-connections",
+        ),
+        fetchJson<{ connections: BrainyDatabaseConnection[] }>(
+          "/api/brainy/settings/database-connections/available",
+        ),
       ]);
       setBrainyDatabaseConnections(configured.connections);
       setAvailableBrainyDatabaseConnections(available.connections);
       setBrainyDatabaseError(null);
-    } catch (error) { setBrainyDatabaseError(error instanceof Error ? error.message : "Impossibile leggere le connessioni database Brainy."); }
+    } catch (error) {
+      setBrainyDatabaseError(
+        error instanceof Error
+          ? error.message
+          : "Impossibile leggere le connessioni database Brainy.",
+      );
+    }
   };
 
   useEffect(() => {
@@ -328,7 +463,12 @@ export function SettingsPanel() {
         }
       })
       .catch((error) => {
-        if (active) setVllmRuntimeError(error instanceof Error ? error.message : t("settings.vllm.loadFailed"));
+        if (active)
+          setVllmRuntimeError(
+            error instanceof Error
+              ? error.message
+              : t("settings.vllm.loadFailed"),
+          );
       })
       .finally(() => {
         if (active) setLoadingVllmRuntime(false);
@@ -343,8 +483,12 @@ export function SettingsPanel() {
 
     const loadOcrModule = async () => {
       try {
-        const payload = await fetchJson<{ modules: WorkspaceModuleSettings[] }>("/api/modules/workspace-settings");
-        const ocrModule = payload.modules.find((item) => item.moduleKey === "ddt_processing");
+        const payload = await fetchJson<{ modules: WorkspaceModuleSettings[] }>(
+          "/api/modules/workspace-settings",
+        );
+        const ocrModule = payload.modules.find(
+          (item) => item.moduleKey === "ddt_processing",
+        );
         if (active) {
           setOcrModuleEnabled(ocrModule?.enabled ?? null);
         }
@@ -374,14 +518,20 @@ export function SettingsPanel() {
       });
 
     if (aiSettings.chatModel && !ids.has(aiSettings.chatModel)) {
-      return [{ value: aiSettings.chatModel, label: aiSettings.chatModel }, ...optionsFromModels];
+      return [
+        { value: aiSettings.chatModel, label: aiSettings.chatModel },
+        ...optionsFromModels,
+      ];
     }
 
     return optionsFromModels;
   }, [aiSettings.chatModel, models]);
 
   const selectedAiProvider = useMemo(
-    () => aiSettings.availableProviders.find((provider) => provider.id === aiSettings.provider) ?? null,
+    () =>
+      aiSettings.availableProviders.find(
+        (provider) => provider.id === aiSettings.provider,
+      ) ?? null,
     [aiSettings.availableProviders, aiSettings.provider],
   );
 
@@ -397,7 +547,10 @@ export function SettingsPanel() {
     minP: Number(aiSettings.minP),
     repetitionPenalty: Number(aiSettings.repetitionPenalty),
     seed: aiSettings.seed === null ? null : Number(aiSettings.seed),
-    contextTokenLimit: aiSettings.contextTokenLimit === null ? null : Number(aiSettings.contextTokenLimit),
+    contextTokenLimit:
+      aiSettings.contextTokenLimit === null
+        ? null
+        : Number(aiSettings.contextTokenLimit),
   });
 
   const buildMailProviderPayload = () => ({
@@ -407,8 +560,12 @@ export function SettingsPanel() {
     smtpPort: Number(mailSettings.smtpPort),
     smtpSecure: Boolean(mailSettings.smtpSecure),
     smtpUser: mailSettings.smtpUser,
-    ...(mailSecretPatch.smtpPass.trim() ? { smtpPass: mailSecretPatch.smtpPass } : {}),
-    ...(mailSecretPatch.resendApiKey.trim() ? { resendApiKey: mailSecretPatch.resendApiKey } : {}),
+    ...(mailSecretPatch.smtpPass.trim()
+      ? { smtpPass: mailSecretPatch.smtpPass }
+      : {}),
+    ...(mailSecretPatch.resendApiKey.trim()
+      ? { resendApiKey: mailSecretPatch.resendApiKey }
+      : {}),
   });
 
   const handleLoadModels = async () => {
@@ -416,19 +573,24 @@ export function SettingsPanel() {
     setAiError(null);
     setAiStatus(null);
     try {
-      const payload = await fetchJson<{ models: AiModelItem[] }>("/api/settings/ai-provider/models", {
-        method: "POST",
-        body: JSON.stringify(buildAiProviderPayload()),
-      });
+      const payload = await fetchJson<{ models: AiModelItem[] }>(
+        "/api/settings/ai-provider/models",
+        {
+          method: "POST",
+          body: JSON.stringify(buildAiProviderPayload()),
+        },
+      );
       setModels(payload.models);
       if (payload.models.length === 1) {
         const onlyModel = payload.models[0]?.id ?? "";
         setAiSettings((prev) => ({ ...prev, chatModel: onlyModel }));
         setAiStatus(t("settings.ai.modelsOne", { model: onlyModel }));
       } else {
-        setAiStatus(payload.models.length > 0
-          ? t("settings.ai.modelsMany", { count: payload.models.length })
-          : t("settings.ai.modelsEmpty"));
+        setAiStatus(
+          payload.models.length > 0
+            ? t("settings.ai.modelsMany", { count: payload.models.length })
+            : t("settings.ai.modelsEmpty"),
+        );
       }
     } catch (error) {
       setAiError(describeAiProviderError(error));
@@ -442,14 +604,25 @@ export function SettingsPanel() {
     setAiError(null);
     setAiStatus(null);
     try {
-      const payload = await fetchJson<{ ok: boolean; model: string | null; error: string | null }>("/api/settings/ai-provider/validate", {
+      const payload = await fetchJson<{
+        ok: boolean;
+        model: string | null;
+        error: string | null;
+      }>("/api/settings/ai-provider/validate", {
         method: "POST",
         body: JSON.stringify(buildAiProviderPayload()),
       });
       if (!payload.ok) {
-        throw new ApiRequestError(payload.error, payload.error ?? "AI_PROVIDER_REQUEST_FAILED");
+        throw new ApiRequestError(
+          payload.error,
+          payload.error ?? "AI_PROVIDER_REQUEST_FAILED",
+        );
       }
-      setAiStatus(t("settings.ai.valid", { model: payload.model ?? aiSettings.chatModel }));
+      setAiStatus(
+        t("settings.ai.valid", {
+          model: payload.model ?? aiSettings.chatModel,
+        }),
+      );
     } catch (error) {
       setAiError(describeAiProviderError(error));
     } finally {
@@ -462,10 +635,13 @@ export function SettingsPanel() {
     setAiError(null);
     setAiStatus(null);
     try {
-      const payload = await fetchJson<{ settings: AiProviderSettings }>("/api/settings/ai-provider", {
-        method: "PATCH",
-        body: JSON.stringify(buildAiProviderPayload()),
-      });
+      const payload = await fetchJson<{ settings: AiProviderSettings }>(
+        "/api/settings/ai-provider",
+        {
+          method: "PATCH",
+          body: JSON.stringify(buildAiProviderPayload()),
+        },
+      );
       setAiSettings(payload.settings);
       setAiStatus(t("settings.ai.saved"));
     } catch (error) {
@@ -480,16 +656,21 @@ export function SettingsPanel() {
     setMailError(null);
     setMailStatus(null);
     try {
-      const payload = await fetchJson<{ ok: boolean; error: string | null }>("/api/settings/mail-provider/validate", {
-        method: "POST",
-        body: JSON.stringify(buildMailProviderPayload()),
-      });
+      const payload = await fetchJson<{ ok: boolean; error: string | null }>(
+        "/api/settings/mail-provider/validate",
+        {
+          method: "POST",
+          body: JSON.stringify(buildMailProviderPayload()),
+        },
+      );
       if (!payload.ok) {
         throw new Error(payload.error ?? "Configurazione email non valida.");
       }
       setMailStatus("Configurazione email valida.");
     } catch (error) {
-      setMailError(error instanceof Error ? error.message : "Validazione email fallita.");
+      setMailError(
+        error instanceof Error ? error.message : "Validazione email fallita.",
+      );
     } finally {
       setValidatingMail(false);
     }
@@ -500,15 +681,20 @@ export function SettingsPanel() {
     setMailError(null);
     setMailStatus(null);
     try {
-      const payload = await fetchJson<{ settings: MailProviderSettings }>("/api/settings/mail-provider", {
-        method: "PATCH",
-        body: JSON.stringify(buildMailProviderPayload()),
-      });
+      const payload = await fetchJson<{ settings: MailProviderSettings }>(
+        "/api/settings/mail-provider",
+        {
+          method: "PATCH",
+          body: JSON.stringify(buildMailProviderPayload()),
+        },
+      );
       setMailSettings(payload.settings);
       setMailSecretPatch({ smtpPass: "", resendApiKey: "" });
       setMailStatus("Configurazione email salvata.");
     } catch (error) {
-      setMailError(error instanceof Error ? error.message : "Salvataggio email fallito.");
+      setMailError(
+        error instanceof Error ? error.message : "Salvataggio email fallito.",
+      );
     } finally {
       setSavingMail(false);
     }
@@ -524,10 +710,13 @@ export function SettingsPanel() {
     setOcrModuleError(null);
     setOcrModuleStatus(null);
     try {
-      const response = await fetchJson<OcrModuleToggleResponse>(`/api/modules/ddt_processing/${enabled ? "enable" : "disable"}`, {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
+      const response = await fetchJson<OcrModuleToggleResponse>(
+        `/api/modules/ddt_processing/${enabled ? "enable" : "disable"}`,
+        {
+          method: "POST",
+          body: JSON.stringify({}),
+        },
+      );
       setOcrModuleEnabled(enabled);
       if (!enabled && response.ocrRuntime) {
         if (response.ocrRuntime.error) {
@@ -535,16 +724,22 @@ export function SettingsPanel() {
         } else if (response.ocrRuntime.shared) {
           setOcrModuleStatus(t("settings.ocr.sharedRunning"));
         } else {
-          setOcrModuleStatus(response.ocrRuntime.running
-            ? t("settings.ocr.stopFailed")
-            : t("settings.ocr.containerStopped"));
+          setOcrModuleStatus(
+            response.ocrRuntime.running
+              ? t("settings.ocr.stopFailed")
+              : t("settings.ocr.containerStopped"),
+          );
         }
       } else if (enabled) {
         setOcrModuleStatus(t("settings.ocr.started"));
       }
       router.refresh();
     } catch (error) {
-      setOcrModuleError(error instanceof Error ? error.message : "Impossibile aggiornare il modulo OCR.");
+      setOcrModuleError(
+        error instanceof Error
+          ? error.message
+          : "Impossibile aggiornare il modulo OCR.",
+      );
     } finally {
       setSavingOcrModule(false);
     }
@@ -554,36 +749,60 @@ export function SettingsPanel() {
     setSavingVllmRuntime(true);
     setVllmRuntimeError(null);
     try {
-      const payload = await fetchJson<{ runtime: VllmRuntimeStatus }>("/api/settings/vllm-runtime/max-model-len", {
-        method: "POST",
-        body: JSON.stringify({ maxModelLen: Number(vllmMaxModelLen) }),
-      });
+      const payload = await fetchJson<{ runtime: VllmRuntimeStatus }>(
+        "/api/settings/vllm-runtime/max-model-len",
+        {
+          method: "POST",
+          body: JSON.stringify({ maxModelLen: Number(vllmMaxModelLen) }),
+        },
+      );
       setVllmRuntime(payload.runtime);
-      setVllmMaxModelLen(payload.runtime.configuredMaxModelLen ?? vllmMaxModelLen);
+      setVllmMaxModelLen(
+        payload.runtime.configuredMaxModelLen ?? vllmMaxModelLen,
+      );
       toast.success(t("settings.vllm.updated"));
     } catch (error) {
-      setVllmRuntimeError(error instanceof Error ? error.message : t("settings.vllm.loadFailed"));
+      setVllmRuntimeError(
+        error instanceof Error ? error.message : t("settings.vllm.loadFailed"),
+      );
     } finally {
       setSavingVllmRuntime(false);
     }
   };
 
-  const resetBrainyAgentDraft = () => setBrainyAgentDraft({ id: "", brainywareAgentId: "", label: "", isEnabled: true, isDefault: brainyAgents.length === 0, isWorkflowEnabled: false, accessMode: "ALL", roleIds: [] });
+  const resetBrainyAgentDraft = () =>
+    setBrainyAgentDraft({
+      id: "",
+      brainywareAgentId: "",
+      label: "",
+      isEnabled: true,
+      isDefault: brainyAgents.length === 0,
+      isWorkflowEnabled: false,
+      accessMode: "ALL",
+      roleIds: [],
+    });
 
   const handleSaveBrainyAgent = async () => {
     setSavingBrainyAgent(true);
     setBrainyAgentError(null);
     try {
       const { id, ...body } = brainyAgentDraft;
-      await fetchJson(`/api/brainy/settings/agents${id ? `/${encodeURIComponent(id)}` : ""}`, {
-        method: id ? "PATCH" : "POST",
-        body: JSON.stringify(body),
-      });
+      await fetchJson(
+        `/api/brainy/settings/agents${id ? `/${encodeURIComponent(id)}` : ""}`,
+        {
+          method: id ? "PATCH" : "POST",
+          body: JSON.stringify(body),
+        },
+      );
       await loadBrainyAgents();
       resetBrainyAgentDraft();
       toast.success("Configurazione Brainy aggiornata.");
     } catch (error) {
-      setBrainyAgentError(error instanceof Error ? error.message : "Impossibile salvare l'agente Brainy.");
+      setBrainyAgentError(
+        error instanceof Error
+          ? error.message
+          : "Impossibile salvare l'agente Brainy.",
+      );
     } finally {
       setSavingBrainyAgent(false);
     }
@@ -592,11 +811,18 @@ export function SettingsPanel() {
   const handleRemoveBrainyAgent = async (agent: BrainyWorkspaceAgent) => {
     setBrainyAgentError(null);
     try {
-      await fetchJson(`/api/brainy/settings/agents/${encodeURIComponent(agent.id)}`, { method: "DELETE" });
+      await fetchJson(
+        `/api/brainy/settings/agents/${encodeURIComponent(agent.id)}`,
+        { method: "DELETE" },
+      );
       await loadBrainyAgents();
       if (brainyAgentDraft.id === agent.id) resetBrainyAgentDraft();
     } catch (error) {
-      setBrainyAgentError(error instanceof Error ? error.message : "Impossibile eliminare l'agente Brainy.");
+      setBrainyAgentError(
+        error instanceof Error
+          ? error.message
+          : "Impossibile eliminare l'agente Brainy.",
+      );
     }
   };
 
@@ -604,24 +830,37 @@ export function SettingsPanel() {
     setSavingBrainyAgent(true);
     setBrainyAgentError(null);
     try {
-      await fetchJson(`/api/brainy/settings/agents/${encodeURIComponent(agent.id)}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          brainywareAgentId: agent.brainywareAgentId,
-          label: agent.label,
-          isEnabled: !agent.isEnabled,
-          isDefault: agent.isEnabled ? false : agent.isDefault,
-          isWorkflowEnabled: agent.isEnabled ? false : agent.isWorkflowEnabled,
-          accessMode: agent.accessMode,
-          roleIds: agent.assignments.map((assignment) => assignment.id),
-        }),
-      });
+      await fetchJson(
+        `/api/brainy/settings/agents/${encodeURIComponent(agent.id)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            brainywareAgentId: agent.brainywareAgentId,
+            label: agent.label,
+            isEnabled: !agent.isEnabled,
+            isDefault: agent.isEnabled ? false : agent.isDefault,
+            isWorkflowEnabled: agent.isEnabled
+              ? false
+              : agent.isWorkflowEnabled,
+            accessMode: agent.accessMode,
+            roleIds: agent.assignments.map((assignment) => assignment.id),
+          }),
+        },
+      );
       await loadBrainyAgents();
       if (brainyAgentDraft.id === agent.id) {
-        setBrainyAgentDraft((draft) => ({ ...draft, isEnabled: !agent.isEnabled, isDefault: agent.isEnabled ? false : draft.isDefault }));
+        setBrainyAgentDraft((draft) => ({
+          ...draft,
+          isEnabled: !agent.isEnabled,
+          isDefault: agent.isEnabled ? false : draft.isDefault,
+        }));
       }
     } catch (error) {
-      setBrainyAgentError(error instanceof Error ? error.message : "Impossibile aggiornare lo stato dell'agente Brainy.");
+      setBrainyAgentError(
+        error instanceof Error
+          ? error.message
+          : "Impossibile aggiornare lo stato dell'agente Brainy.",
+      );
     } finally {
       setSavingBrainyAgent(false);
     }
@@ -636,11 +875,32 @@ export function SettingsPanel() {
     setSavingBrainyAgent(true);
     setBrainyAgentError(null);
     try {
-      await fetchJson(`/api/brainy/settings/agents/${encodeURIComponent(agent.id)}`, { method: "PATCH", body: JSON.stringify({ brainywareAgentId: agent.brainywareAgentId, label: agent.label, isEnabled: agent.isEnabled, isDefault: agent.isDefault, isWorkflowEnabled, accessMode, roleIds }) });
+      await fetchJson(
+        `/api/brainy/settings/agents/${encodeURIComponent(agent.id)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            brainywareAgentId: agent.brainywareAgentId,
+            label: agent.label,
+            isEnabled: agent.isEnabled,
+            isDefault: agent.isDefault,
+            isWorkflowEnabled,
+            accessMode,
+            roleIds,
+          }),
+        },
+      );
       await loadBrainyAgents();
       toast.success("Accessi agente Brainy aggiornati.");
-    } catch (error) { setBrainyAgentError(error instanceof Error ? error.message : "Impossibile aggiornare gli accessi dell'agente Brainy."); }
-    finally { setSavingBrainyAgent(false); }
+    } catch (error) {
+      setBrainyAgentError(
+        error instanceof Error
+          ? error.message
+          : "Impossibile aggiornare gli accessi dell'agente Brainy.",
+      );
+    } finally {
+      setSavingBrainyAgent(false);
+    }
   };
 
   const handleSaveBrainyDatabaseAccess = async (
@@ -652,37 +912,92 @@ export function SettingsPanel() {
     setSavingBrainyDatabaseId(connection.id);
     setBrainyDatabaseError(null);
     try {
-      await fetchJson(`/api/brainy/settings/database-connections/${encodeURIComponent(connection.id)}/access`, { method: "PATCH", body: JSON.stringify({ accessMode, roleIds, isWorkflowEnabled }) });
+      await fetchJson(
+        `/api/brainy/settings/database-connections/${encodeURIComponent(connection.id)}/access`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ accessMode, roleIds, isWorkflowEnabled }),
+        },
+      );
       await loadBrainyDatabaseConnections();
       toast.success("Accessi database Brainy aggiornati.");
-    } catch (error) { setBrainyDatabaseError(error instanceof Error ? error.message : "Impossibile aggiornare gli accessi del database Brainy."); }
-    finally { setSavingBrainyDatabaseId(null); }
+    } catch (error) {
+      setBrainyDatabaseError(
+        error instanceof Error
+          ? error.message
+          : "Impossibile aggiornare gli accessi del database Brainy.",
+      );
+    } finally {
+      setSavingBrainyDatabaseId(null);
+    }
   };
 
-  const handleEnableBrainyDatabaseConnection = async (connection: BrainyDatabaseConnection) => {
+  const handleEnableBrainyDatabaseConnection = async (
+    connection: BrainyDatabaseConnection,
+  ) => {
     setSavingBrainyDatabaseId(connection.id);
     try {
-      await fetchJson("/api/brainy/settings/database-connections", { method: "POST", body: JSON.stringify({ brainywareConnectionId: connection.id }) });
+      await fetchJson("/api/brainy/settings/database-connections", {
+        method: "POST",
+        body: JSON.stringify({ brainywareConnectionId: connection.id }),
+      });
       await loadBrainyDatabaseConnections();
       setSelectedBrainyDatabaseId("");
-    } catch (error) { setBrainyDatabaseError(error instanceof Error ? error.message : "Impossibile abilitare la connessione database."); } finally { setSavingBrainyDatabaseId(null); }
+    } catch (error) {
+      setBrainyDatabaseError(
+        error instanceof Error
+          ? error.message
+          : "Impossibile abilitare la connessione database.",
+      );
+    } finally {
+      setSavingBrainyDatabaseId(null);
+    }
   };
 
-  const handleToggleBrainyDatabaseConnection = async (connection: BrainyDatabaseConnection) => {
+  const handleToggleBrainyDatabaseConnection = async (
+    connection: BrainyDatabaseConnection,
+  ) => {
     setSavingBrainyDatabaseId(connection.id);
     setBrainyDatabaseError(null);
     try {
-      await fetchJson(`/api/brainy/settings/database-connections/${encodeURIComponent(connection.id)}`, { method: "PATCH", body: JSON.stringify({ isEnabled: !connection.isEnabled }) });
+      await fetchJson(
+        `/api/brainy/settings/database-connections/${encodeURIComponent(connection.id)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ isEnabled: !connection.isEnabled }),
+        },
+      );
       await loadBrainyDatabaseConnections();
-    } catch (error) { setBrainyDatabaseError(error instanceof Error ? error.message : "Impossibile aggiornare lo stato della connessione database."); } finally { setSavingBrainyDatabaseId(null); }
+    } catch (error) {
+      setBrainyDatabaseError(
+        error instanceof Error
+          ? error.message
+          : "Impossibile aggiornare lo stato della connessione database.",
+      );
+    } finally {
+      setSavingBrainyDatabaseId(null);
+    }
   };
 
-  const handleArchiveBrainyDatabaseConnection = async (connection: BrainyDatabaseConnection) => {
+  const handleArchiveBrainyDatabaseConnection = async (
+    connection: BrainyDatabaseConnection,
+  ) => {
     setSavingBrainyDatabaseId(connection.id);
     try {
-      await fetchJson(`/api/brainy/settings/database-connections/${encodeURIComponent(connection.id)}`, { method: "DELETE" });
+      await fetchJson(
+        `/api/brainy/settings/database-connections/${encodeURIComponent(connection.id)}`,
+        { method: "DELETE" },
+      );
       await loadBrainyDatabaseConnections();
-    } catch (error) { setBrainyDatabaseError(error instanceof Error ? error.message : "Impossibile archiviare la connessione database."); } finally { setSavingBrainyDatabaseId(null); }
+    } catch (error) {
+      setBrainyDatabaseError(
+        error instanceof Error
+          ? error.message
+          : "Impossibile archiviare la connessione database.",
+      );
+    } finally {
+      setSavingBrainyDatabaseId(null);
+    }
   };
 
   const handleTestOcrModule = async () => {
@@ -697,16 +1012,24 @@ export function SettingsPanel() {
     setOcrModuleError(null);
     setOcrModuleStatus(null);
     try {
-      const runtime = await fetchJson<OcrRuntimeStatus>("/api/modules/ddt_processing/runtime");
+      const runtime = await fetchJson<OcrRuntimeStatus>(
+        "/api/modules/ddt_processing/runtime",
+      );
       if (runtime.state === "ready") {
         setOcrModuleStatus(t("settings.ocr.ready"));
       } else if (runtime.state === "failed") {
-        setOcrModuleError(runtime.error ? `${t("settings.ocr.readyFailed")} ${runtime.error}` : t("settings.ocr.readyFailed"));
+        setOcrModuleError(
+          runtime.error
+            ? `${t("settings.ocr.readyFailed")} ${runtime.error}`
+            : t("settings.ocr.readyFailed"),
+        );
       } else {
         setOcrModuleStatus(t("settings.ocr.notReady"));
       }
     } catch (error) {
-      setOcrModuleError(error instanceof Error ? error.message : t("settings.ocr.readyFailed"));
+      setOcrModuleError(
+        error instanceof Error ? error.message : t("settings.ocr.readyFailed"),
+      );
     } finally {
       setTestingOcrModule(false);
     }
@@ -724,13 +1047,22 @@ export function SettingsPanel() {
         <Text variant="caption">{t("settings.subtitle")}</Text>
       </div>
 
-      <div className="flex border-b border-border-subtle" role="tablist" aria-label="Categorie impostazioni">
+      <div
+        className="flex border-b border-border-subtle"
+        role="tablist"
+        aria-label="Categorie impostazioni"
+      >
         <button
           type="button"
           role="tab"
           aria-selected={activeSettingsTab === "ai"}
           onClick={() => setActiveSettingsTab("ai")}
-          className={cn("border-b-2 px-4 py-2 text-sm font-semibold", activeSettingsTab === "ai" ? "border-brand-primary text-brand-primary" : "border-transparent text-text-muted hover:text-text-primary")}
+          className={cn(
+            "border-b-2 px-4 py-2 text-sm font-semibold",
+            activeSettingsTab === "ai"
+              ? "border-brand-primary text-brand-primary"
+              : "border-transparent text-text-muted hover:text-text-primary",
+          )}
         >
           AI settings
         </button>
@@ -739,528 +1071,1249 @@ export function SettingsPanel() {
           role="tab"
           aria-selected={activeSettingsTab === "general"}
           onClick={() => setActiveSettingsTab("general")}
-          className={cn("border-b-2 px-4 py-2 text-sm font-semibold", activeSettingsTab === "general" ? "border-brand-primary text-brand-primary" : "border-transparent text-text-muted hover:text-text-primary")}
+          className={cn(
+            "border-b-2 px-4 py-2 text-sm font-semibold",
+            activeSettingsTab === "general"
+              ? "border-brand-primary text-brand-primary"
+              : "border-transparent text-text-muted hover:text-text-primary",
+          )}
         >
           Generali
         </button>
-      </div>
-
-      <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-[minmax(240px,0.62fr)_minmax(360px,1fr)_minmax(420px,1.1fr)]">
-      {activeSettingsTab === "ai" && canConfigureBrainy ? (
-        <Card id="brainy" className="self-start space-y-3 p-3 md:col-span-2 xl:col-span-2 [&_input]:h-9">
-          <div>
-            <div>
-              <div className="flex items-center gap-2">
-                <Bot size={18} className="text-brand-primary" />
-                <Text as="h2" variant="h2" className="text-base">Brainy</Text>
-              </div>
-              <Text variant="caption" className="mt-1 block">Connetti agente Brainy a Birgus.</Text>
-            </div>
-          </div>
-          {brainyAgentError ? <div className="rounded-[var(--radius-md)] border border-status-danger-border bg-status-danger-bg px-3 py-2 text-sm font-semibold text-status-danger-text">{brainyAgentError}</div> : null}
-          <section className="border-t border-border-subtle pt-3">
-            <button type="button" onClick={() => setIsBrainyAgentsOpen((open) => !open)} className="flex w-full items-center justify-between gap-3 text-left"><div><Text as="h3" variant="h2" className="text-sm">Agenti</Text><Text variant="caption">Seleziona un agente Brainyware da rendere disponibile nel workspace.</Text></div>{isBrainyAgentsOpen ? <ChevronDown size={17} /> : <ChevronDown size={17} className="-rotate-90" />}</button>
-            {isBrainyAgentsOpen ? <div className="mt-3 space-y-3">
-              <div className="flex gap-2"><SelectDropdown id="brainy-agent-select" value={brainyAgentDraft.brainywareAgentId} options={availableBrainyAgents.filter((agent) => !brainyAgents.some((configured) => configured.brainywareAgentId === agent.id)).map((agent) => ({ value: agent.id, label: agent.label }))} onChange={(value) => { const agent = availableBrainyAgents.find((item) => item.id === value); if (agent) setBrainyAgentDraft((draft) => ({ ...draft, id: "", brainywareAgentId: agent.id, label: agent.label, isEnabled: true, isDefault: brainyAgents.length === 0 })); }} placeholder="Seleziona agente" /><Button size="sm" className="shrink-0" onClick={() => void handleSaveBrainyAgent()} disabled={savingBrainyAgent || !brainyAgentDraft.brainywareAgentId.trim()}>{savingBrainyAgent ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}Aggiungi</Button></div>
-              {brainyAgents.map((agent) => (
-                <div key={agent.id} className="flex items-center gap-2 border-b border-border-subtle pb-2 last:border-0 last:pb-0">
-                  <div className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-text-primary">
-                      {agent.label}{agent.isDefault ? " (predefinito)" : ""}
-                    </span>
-                  </div>
-                  <Button size="sm" variant="outline" disabled={savingBrainyAgent} onClick={() => setBrainyAgentAccessTarget(agent)}>
-                    Accessi
-                  </Button>
-                  <BrainyEnableSwitch checked={agent.isEnabled} disabled={savingBrainyAgent} label={`Stato agente ${agent.label}`} onChange={() => void handleToggleBrainyAgent(agent)} />
-                  <Button size="sm" variant="ghost" className="h-8 w-8 shrink-0 px-0 text-status-danger-text" title="Elimina agente" onClick={() => setBrainyAgentToArchive(agent)}>
-                    <Trash2 size={15} />
-                  </Button>
-                </div>
-              ))}
-              {!loadingBrainyAgents && brainyAgents.length === 0 && !brainyAgentError ? <Text variant="caption">Nessun agente configurato.</Text> : null}
-            </div> : null}
-          </section>
-          <section className="border-t border-border-subtle pt-3">
-            <button type="button" onClick={() => setIsBrainyDatabasesOpen((open) => !open)} className="flex w-full items-center justify-between gap-3 text-left"><div><Text as="h3" variant="h2" className="text-sm">Database</Text><Text variant="caption">Sono selezionabili solo connessioni Brainyware in sola lettura.</Text></div>{isBrainyDatabasesOpen ? <ChevronDown size={17} /> : <ChevronDown size={17} className="-rotate-90" />}</button>
-            {isBrainyDatabasesOpen ? <div className="mt-3 space-y-3">
-              {brainyDatabaseError ? <div className="text-sm font-semibold text-status-danger-text">{brainyDatabaseError}</div> : null}
-              <div className="flex gap-2"><SelectDropdown id="brainy-database-select" value={selectedBrainyDatabaseId} options={availableBrainyDatabaseConnections.filter((connection) => !brainyDatabaseConnections.some((configured) => configured.brainywareConnectionId === connection.id)).map((connection) => ({ value: connection.id, label: connection.label }))} onChange={setSelectedBrainyDatabaseId} placeholder="Seleziona database" /><Button size="sm" className="shrink-0" disabled={!selectedBrainyDatabaseId || savingBrainyDatabaseId !== null} onClick={() => { const connection = availableBrainyDatabaseConnections.find((item) => item.id === selectedBrainyDatabaseId); if (connection) void handleEnableBrainyDatabaseConnection(connection); }}><Save size={16} />Aggiungi</Button></div>
-              {brainyDatabaseConnections.map((connection) => (
-                <div key={connection.id} className="flex items-center gap-2 border-b border-border-subtle pb-2 last:border-0 last:pb-0">
-                  <div className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-text-primary">{connection.label}</span>
-                  </div>
-                  <Button size="sm" variant="outline" disabled={savingBrainyDatabaseId === connection.id} onClick={() => setBrainyDatabaseAccessTarget(connection)}>
-                    Accessi
-                  </Button>
-                  <BrainyEnableSwitch checked={connection.isEnabled !== false} disabled={savingBrainyDatabaseId === connection.id} label={`Stato database ${connection.label}`} onChange={() => void handleToggleBrainyDatabaseConnection(connection)} />
-                  <Button size="sm" variant="ghost" className="h-8 w-8 shrink-0 px-0 text-status-danger-text" title="Archivia database" disabled={savingBrainyDatabaseId === connection.id} onClick={() => setBrainyDatabaseToArchive(connection)}>
-                    <Trash2 size={15} />
-                  </Button>
-                </div>
-              ))}
-              {!availableBrainyDatabaseConnections.length && !brainyDatabaseError ? <Text variant="caption">Nessuna connessione READ_ONLY accessibile al service account.</Text> : null}
-              {!loadingBrainyAgents && brainyDatabaseConnections.length === 0 && availableBrainyDatabaseConnections.length > 0 ? <Text variant="caption">Nessun database configurato.</Text> : null}
-            </div> : null}
-          </section>
-        </Card>
-      ) : null}
-      {activeSettingsTab === "general" && !loadingOcrModule && ocrModuleEnabled !== null ? (
-        <Card className="self-start space-y-3 p-3 md:col-span-1 xl:col-span-1">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <FileSearch size={18} className="text-brand-primary" />
-                <Text as="h2" variant="h2" className="text-base">{t("settings.ocr.title")}</Text>
-              </div>
-              <Text variant="caption" className="mt-1 block">{t("settings.ocr.description")}</Text>
-            </div>
-            <button
-              id="ocr-module-enabled"
-              name="ocr-module-enabled"
-              type="button"
-              role="switch"
-              aria-checked={ocrModuleEnabled}
-              aria-label={t("settings.ocr.toggle")}
-              title={t("settings.ocr.toggle")}
-              disabled={savingOcrModule}
-              onClick={() => void handleToggleOcrModule()}
-              className="group inline-flex h-9 items-center rounded-md border border-border-default bg-bg-page px-2 text-xs font-semibold text-text-secondary transition-colors hover:border-brand-primary hover:bg-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "relative inline-flex h-6 w-[3.25rem] items-center rounded-full border p-0.5 shadow-inner transition-colors",
-                  ocrModuleEnabled ? "border-brand-primary bg-brand-primary" : "border-border-default bg-bg-surface",
-                )}
-              >
-                <span className={cn("absolute text-[9px] font-bold leading-none transition-opacity", ocrModuleEnabled ? "left-2 text-text-inverse" : "right-1.5 text-text-muted")}>
-                  {ocrModuleEnabled ? "ON" : "OFF"}
-                </span>
-                <span className={cn("relative z-10 h-5 w-5 rounded-full border border-black/10 bg-white shadow-sm transition-transform", ocrModuleEnabled ? "translate-x-6" : "translate-x-0")} />
-              </span>
-            </button>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-subtle pt-3">
-            <div className="flex items-center gap-2 text-xs text-text-secondary">
-              <span className={cn("h-2 w-2 rounded-full", ocrModuleEnabled ? "bg-status-success-text" : "bg-text-muted")} aria-hidden="true" />
-              <span>{t("settings.ocr.switchHint")}</span>
-            </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => void handleTestOcrModule()} disabled={!ocrModuleEnabled || savingOcrModule || testingOcrModule}>
-              {testingOcrModule ? t("settings.ocr.testing") : t("settings.ocr.test")}
-            </Button>
-          </div>
-          {ocrModuleError ? (
-            <div className="rounded-[var(--radius-md)] border border-status-danger-border bg-status-danger-bg px-3 py-2 text-sm font-semibold text-status-danger-text">
-              {ocrModuleError}
-            </div>
-          ) : null}
-          {ocrModuleStatus ? (
-            <div className="rounded-[var(--radius-md)] border border-status-success-border bg-status-success-bg px-3 py-2 text-sm font-semibold text-status-success-text">
-              {ocrModuleStatus}
-            </div>
-          ) : null}
-        </Card>
-      ) : null}
-
-      {activeSettingsTab === "ai" && canConfigureAiProvider ? (
-      <Card className="self-start space-y-3 p-3 md:col-span-1 xl:col-span-1 [&_input]:h-9">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <Bot size={18} className="text-brand-primary" />
-              <Text as="h2" variant="h2" className="text-base">
-                {t("settings.ai.title")}
-              </Text>
-            </div>
-            <Text variant="caption">
-              {t("settings.ai.description")}
-            </Text>
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-[minmax(180px,0.8fr)_minmax(280px,1.2fr)]">
-          <div className="space-y-1">
-            <Label className="text-xs" htmlFor="ai-provider-kind">Provider</Label>
-            <SelectDropdown
-              id="ai-provider-kind"
-              value={aiSettings.provider}
-              disabled={loadingSettings}
-              size="sm"
-              options={aiSettings.availableProviders.map((provider) => ({ value: provider.id, label: provider.label }))}
-              onChange={(value) => setAiSettings((prev) => {
-                const provider = prev.availableProviders.find((item) => item.id === value);
-                const shouldApplyDefault = !prev.baseUrl.trim()
-                  || prev.baseUrl === "http://vllm:8000/v1"
-                  || prev.baseUrl === "http://internal-ai-vllm:8000/v1";
-                return {
-                  ...prev,
-                  provider: value,
-                  baseUrl: shouldApplyDefault ? provider?.defaultBaseUrl ?? prev.baseUrl : prev.baseUrl,
-                };
-              })}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs" htmlFor="ai-provider-base-url">Base URL</Label>
-            <Input
-              id="ai-provider-base-url"
-              name="ai-provider-base-url"
-              value={aiSettings.baseUrl}
-              disabled={loadingSettings}
-              className="h-9 px-3"
-              placeholder="http://internal-ai-vllm:8000/v1"
-              onChange={(event) => setAiSettings((prev) => ({ ...prev, baseUrl: event.target.value }))}
-            />
-            {selectedAiProvider?.defaultBaseUrl ? (
-              <button
-                type="button"
-                className="text-xs font-semibold text-brand-primary hover:text-brand-accent-hover"
-                onClick={() => setAiSettings((prev) => ({ ...prev, baseUrl: selectedAiProvider.defaultBaseUrl ?? prev.baseUrl }))}
-              >
-                {t("settings.ai.useInternalEndpoint")}
-              </button>
-            ) : null}
-          </div>
-
-          <div className="space-y-1 sm:col-span-2">
-            <Label className="text-xs" htmlFor="ai-provider-chat-model">{t("settings.ai.model")}</Label>
-            <div className="flex gap-2">
-              <SelectDropdown
-                id="ai-provider-chat-model"
-                className="min-w-0 flex-1"
-                size="sm"
-                value={aiSettings.chatModel}
-                placeholder={t("settings.ai.selectModel")}
-                options={modelOptions.length > 0 ? modelOptions : [{ value: aiSettings.chatModel, label: aiSettings.chatModel || t("settings.ai.noModels") }]}
-                onChange={(value) => setAiSettings((prev) => ({ ...prev, chatModel: value }))}
-              />
-              <Button className="shrink-0" size="sm" variant="outline" onClick={handleLoadModels} disabled={loadingSettings || loadingModels}>
-                {loadingModels ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                {t("settings.ai.loadModels")}
-              </Button>
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs" htmlFor="ai-provider-timeout-ms">Timeout ms</Label>
-            <Input
-              id="ai-provider-timeout-ms"
-              name="ai-provider-timeout-ms"
-              type="number"
-              min={1000}
-              max={900000}
-              value={aiSettings.timeoutMs}
-              disabled={loadingSettings}
-              className="h-9 px-3"
-              onChange={(event) => setAiSettings((prev) => ({ ...prev, timeoutMs: Number(event.target.value) }))}
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs" htmlFor="ai-provider-temperature">Temperature</Label>
-            <Input
-              id="ai-provider-temperature"
-              name="ai-provider-temperature"
-              type="number"
-              min={0}
-              max={2}
-              step={0.1}
-              value={aiSettings.temperature}
-              disabled={loadingSettings}
-              className="h-9 px-3"
-              onChange={(event) => setAiSettings((prev) => ({ ...prev, temperature: Number(event.target.value) }))}
-            />
-          </div>
-        </div>
-
-        <section className="space-y-3 border-t border-border-subtle pt-3">
-          <button type="button" className="flex w-full items-start gap-2 text-left" onClick={() => setIsGenerationOpen((current) => !current)} aria-expanded={isGenerationOpen}>
-            <SlidersHorizontal size={16} className="mt-0.5 shrink-0 text-brand-primary" />
-            <div className="min-w-0 flex-1">
-              <Text as="h3" variant="body" className="font-semibold">{t("settings.ai.generation")}</Text>
-              <Text variant="caption">{t("settings.ai.generationHint")}</Text>
-            </div>
-            <ChevronDown size={16} className={cn("mt-0.5 shrink-0 transition-transform", isGenerationOpen ? "rotate-180" : "")} />
+        {canConfigureExternalDatabases ? (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeSettingsTab === "databases"}
+            onClick={() => setActiveSettingsTab("databases")}
+            className={cn(
+              "border-b-2 px-4 py-2 text-sm font-semibold",
+              activeSettingsTab === "databases"
+                ? "border-brand-primary text-brand-primary"
+                : "border-transparent text-text-muted hover:text-text-primary",
+            )}
+          >
+            Connessioni database
           </button>
-          {isGenerationOpen ? <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label className="text-xs" htmlFor="ai-provider-max-output-tokens">{t("settings.ai.maxOutputTokens")}</Label>
-              <Input id="ai-provider-max-output-tokens" name="ai-provider-max-output-tokens" type="number" min={1} max={2048} value={Math.min(aiSettings.maxOutputTokens, 2048)} disabled={loadingSettings} className="h-9 px-3" onChange={(event) => setAiSettings((prev) => ({ ...prev, maxOutputTokens: Number(event.target.value) }))} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs" htmlFor="ai-provider-context-token-limit">{t("settings.ai.contextTokenLimit")}</Label>
-              <Input id="ai-provider-context-token-limit" name="ai-provider-context-token-limit" type="number" min={256} max={8192} value={aiSettings.contextTokenLimit ?? ""} disabled={loadingSettings} className="h-9 px-3" placeholder="8192" onChange={(event) => setAiSettings((prev) => ({ ...prev, contextTokenLimit: event.target.value === "" ? null : Number(event.target.value) }))} />
-              <Text variant="caption">{t("settings.ai.contextTokenLimitHint")}</Text>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs" htmlFor="ai-provider-top-p">{t("settings.ai.topP")}</Label>
-              <Input id="ai-provider-top-p" name="ai-provider-top-p" type="number" min={0} max={1} step={0.01} value={aiSettings.topP} disabled={loadingSettings} className="h-9 px-3" onChange={(event) => setAiSettings((prev) => ({ ...prev, topP: Number(event.target.value) }))} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs" htmlFor="ai-provider-top-k">{t("settings.ai.topK")}</Label>
-              <Input id="ai-provider-top-k" name="ai-provider-top-k" type="number" min={-1} max={1000} step={1} value={aiSettings.topK} disabled={loadingSettings} className="h-9 px-3" onChange={(event) => setAiSettings((prev) => ({ ...prev, topK: Number(event.target.value) }))} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs" htmlFor="ai-provider-min-p">{t("settings.ai.minP")}</Label>
-              <Input id="ai-provider-min-p" name="ai-provider-min-p" type="number" min={0} max={1} step={0.01} value={aiSettings.minP} disabled={loadingSettings} className="h-9 px-3" onChange={(event) => setAiSettings((prev) => ({ ...prev, minP: Number(event.target.value) }))} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs" htmlFor="ai-provider-repetition-penalty">{t("settings.ai.repetitionPenalty")}</Label>
-              <Input id="ai-provider-repetition-penalty" name="ai-provider-repetition-penalty" type="number" min={0.1} max={2} step={0.01} value={aiSettings.repetitionPenalty} disabled={loadingSettings} className="h-9 px-3" onChange={(event) => setAiSettings((prev) => ({ ...prev, repetitionPenalty: Number(event.target.value) }))} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs" htmlFor="ai-provider-seed">{t("settings.ai.seed")}</Label>
-              <Input id="ai-provider-seed" name="ai-provider-seed" type="number" min={0} max={2147483647} step={1} value={aiSettings.seed ?? ""} disabled={loadingSettings} className="h-9 px-3" placeholder={t("settings.ai.seedHint")} onChange={(event) => setAiSettings((prev) => ({ ...prev, seed: event.target.value === "" ? null : Number(event.target.value) }))} />
-            </div>
-          </div> : null}
-        </section>
+        ) : null}
+      </div>
 
-        {canControlAiRuntime ? (
-          <section className="space-y-2 border-t border-border-subtle pt-3">
-            <button type="button" className="flex w-full items-start justify-between gap-3 text-left" onClick={() => setIsRuntimeOpen((current) => !current)} aria-expanded={isRuntimeOpen}>
-              <div className="flex min-w-0 items-center gap-2">
-                <Cpu size={16} className="shrink-0 text-brand-primary" />
+      {activeSettingsTab === "databases" && canConfigureExternalDatabases ? (
+        <ExternalDatabaseConnectionsSettings />
+      ) : null}
+
+      {activeSettingsTab !== "databases" ? (
+        <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-[minmax(240px,0.62fr)_minmax(360px,1fr)_minmax(420px,1.1fr)]">
+          {activeSettingsTab === "ai" && canConfigureBrainy ? (
+            <Card
+              id="brainy"
+              className="self-start space-y-3 p-3 md:col-span-2 xl:col-span-2 [&_input]:h-9"
+            >
+              <div>
                 <div>
-                  <Text as="h3" variant="body" className="font-semibold">{t("settings.vllm.runtime")}</Text>
-                  <Text variant="caption">{t("settings.vllm.runtimeHint")}</Text>
+                  <div className="flex items-center gap-2">
+                    <Bot size={18} className="text-brand-primary" />
+                    <Text as="h2" variant="h2" className="text-base">
+                      Brainy
+                    </Text>
+                  </div>
+                  <Text variant="caption" className="mt-1 block">
+                    Connetti agente Brainy a Birgus.
+                  </Text>
                 </div>
               </div>
-              {vllmRuntime ? (
-                <span className="flex shrink-0 items-center gap-2"><span className={cn("text-xs font-semibold", vllmRuntime.containerRunning ? "text-status-success-text" : "text-text-muted")}>{vllmRuntime.containerRunning ? t("settings.vllm.containerRunning") : t("settings.vllm.containerStopped")}</span><ChevronDown size={16} className={cn("transition-transform", isRuntimeOpen ? "rotate-180" : "")} /></span>
-              ) : <ChevronDown size={16} className={cn("shrink-0 transition-transform", isRuntimeOpen ? "rotate-180" : "")} />}
-            </button>
-            {isRuntimeOpen ? <><div className="flex flex-wrap items-end gap-2">
-              <div className="w-full space-y-1 sm:w-48">
-                <Label className="text-xs" htmlFor="vllm-max-model-len">{t("settings.vllm.contextWindow")}</Label>
-                <Input
-                  id="vllm-max-model-len"
-                  name="vllm-max-model-len"
-                  type="number"
-                  min={1024}
-                  max={32768}
-                  step={256}
-                  value={vllmMaxModelLen}
-                  disabled={loadingVllmRuntime || savingVllmRuntime}
-                  className="h-9 px-3"
-                  onChange={(event) => setVllmMaxModelLen(Number(event.target.value))}
-                />
+              {brainyAgentError ? (
+                <div className="rounded-[var(--radius-md)] border border-status-danger-border bg-status-danger-bg px-3 py-2 text-sm font-semibold text-status-danger-text">
+                  {brainyAgentError}
+                </div>
+              ) : null}
+              <section className="border-t border-border-subtle pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsBrainyAgentsOpen((open) => !open)}
+                  className="flex w-full items-center justify-between gap-3 text-left"
+                >
+                  <div>
+                    <Text as="h3" variant="h2" className="text-sm">
+                      Agenti
+                    </Text>
+                    <Text variant="caption">
+                      Seleziona un agente Brainyware da rendere disponibile nel
+                      workspace.
+                    </Text>
+                  </div>
+                  {isBrainyAgentsOpen ? (
+                    <ChevronDown size={17} />
+                  ) : (
+                    <ChevronDown size={17} className="-rotate-90" />
+                  )}
+                </button>
+                {isBrainyAgentsOpen ? (
+                  <div className="mt-3 space-y-3">
+                    <div className="flex gap-2">
+                      <SelectDropdown
+                        id="brainy-agent-select"
+                        value={brainyAgentDraft.brainywareAgentId}
+                        options={availableBrainyAgents
+                          .filter(
+                            (agent) =>
+                              !brainyAgents.some(
+                                (configured) =>
+                                  configured.brainywareAgentId === agent.id,
+                              ),
+                          )
+                          .map((agent) => ({
+                            value: agent.id,
+                            label: agent.label,
+                          }))}
+                        onChange={(value) => {
+                          const agent = availableBrainyAgents.find(
+                            (item) => item.id === value,
+                          );
+                          if (agent)
+                            setBrainyAgentDraft((draft) => ({
+                              ...draft,
+                              id: "",
+                              brainywareAgentId: agent.id,
+                              label: agent.label,
+                              isEnabled: true,
+                              isDefault: brainyAgents.length === 0,
+                            }));
+                        }}
+                        placeholder="Seleziona agente"
+                      />
+                      <Button
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => void handleSaveBrainyAgent()}
+                        disabled={
+                          savingBrainyAgent ||
+                          !brainyAgentDraft.brainywareAgentId.trim()
+                        }
+                      >
+                        {savingBrainyAgent ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Save size={16} />
+                        )}
+                        Aggiungi
+                      </Button>
+                    </div>
+                    {brainyAgents.map((agent) => (
+                      <div
+                        key={agent.id}
+                        className="flex items-center gap-2 border-b border-border-subtle pb-2 last:border-0 last:pb-0"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-text-primary">
+                            {agent.label}
+                            {agent.isDefault ? " (predefinito)" : ""}
+                          </span>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={savingBrainyAgent}
+                          onClick={() => setBrainyAgentAccessTarget(agent)}
+                        >
+                          Accessi
+                        </Button>
+                        <BrainyEnableSwitch
+                          checked={agent.isEnabled}
+                          disabled={savingBrainyAgent}
+                          label={`Stato agente ${agent.label}`}
+                          onChange={() => void handleToggleBrainyAgent(agent)}
+                        />
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 shrink-0 px-0 text-status-danger-text"
+                          title="Elimina agente"
+                          onClick={() => setBrainyAgentToArchive(agent)}
+                        >
+                          <Trash2 size={15} />
+                        </Button>
+                      </div>
+                    ))}
+                    {!loadingBrainyAgents &&
+                    brainyAgents.length === 0 &&
+                    !brainyAgentError ? (
+                      <Text variant="caption">Nessun agente configurato.</Text>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
+              <section className="border-t border-border-subtle pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsBrainyDatabasesOpen((open) => !open)}
+                  className="flex w-full items-center justify-between gap-3 text-left"
+                >
+                  <div>
+                    <Text as="h3" variant="h2" className="text-sm">
+                      Database
+                    </Text>
+                    <Text variant="caption">
+                      Sono selezionabili solo connessioni Brainyware in sola
+                      lettura.
+                    </Text>
+                  </div>
+                  {isBrainyDatabasesOpen ? (
+                    <ChevronDown size={17} />
+                  ) : (
+                    <ChevronDown size={17} className="-rotate-90" />
+                  )}
+                </button>
+                {isBrainyDatabasesOpen ? (
+                  <div className="mt-3 space-y-3">
+                    {brainyDatabaseError ? (
+                      <div className="text-sm font-semibold text-status-danger-text">
+                        {brainyDatabaseError}
+                      </div>
+                    ) : null}
+                    <div className="flex gap-2">
+                      <SelectDropdown
+                        id="brainy-database-select"
+                        value={selectedBrainyDatabaseId}
+                        options={availableBrainyDatabaseConnections
+                          .filter(
+                            (connection) =>
+                              !brainyDatabaseConnections.some(
+                                (configured) =>
+                                  configured.brainywareConnectionId ===
+                                  connection.id,
+                              ),
+                          )
+                          .map((connection) => ({
+                            value: connection.id,
+                            label: connection.label,
+                          }))}
+                        onChange={setSelectedBrainyDatabaseId}
+                        placeholder="Seleziona database"
+                      />
+                      <Button
+                        size="sm"
+                        className="shrink-0"
+                        disabled={
+                          !selectedBrainyDatabaseId ||
+                          savingBrainyDatabaseId !== null
+                        }
+                        onClick={() => {
+                          const connection =
+                            availableBrainyDatabaseConnections.find(
+                              (item) => item.id === selectedBrainyDatabaseId,
+                            );
+                          if (connection)
+                            void handleEnableBrainyDatabaseConnection(
+                              connection,
+                            );
+                        }}
+                      >
+                        <Save size={16} />
+                        Aggiungi
+                      </Button>
+                    </div>
+                    {brainyDatabaseConnections.map((connection) => (
+                      <div
+                        key={connection.id}
+                        className="flex items-center gap-2 border-b border-border-subtle pb-2 last:border-0 last:pb-0"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-text-primary">
+                            {connection.label}
+                          </span>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={savingBrainyDatabaseId === connection.id}
+                          onClick={() =>
+                            setBrainyDatabaseAccessTarget(connection)
+                          }
+                        >
+                          Accessi
+                        </Button>
+                        <BrainyEnableSwitch
+                          checked={connection.isEnabled !== false}
+                          disabled={savingBrainyDatabaseId === connection.id}
+                          label={`Stato database ${connection.label}`}
+                          onChange={() =>
+                            void handleToggleBrainyDatabaseConnection(
+                              connection,
+                            )
+                          }
+                        />
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 shrink-0 px-0 text-status-danger-text"
+                          title="Archivia database"
+                          disabled={savingBrainyDatabaseId === connection.id}
+                          onClick={() => setBrainyDatabaseToArchive(connection)}
+                        >
+                          <Trash2 size={15} />
+                        </Button>
+                      </div>
+                    ))}
+                    {!availableBrainyDatabaseConnections.length &&
+                    !brainyDatabaseError ? (
+                      <Text variant="caption">
+                        Nessuna connessione READ_ONLY accessibile al service
+                        account.
+                      </Text>
+                    ) : null}
+                    {!loadingBrainyAgents &&
+                    brainyDatabaseConnections.length === 0 &&
+                    availableBrainyDatabaseConnections.length > 0 ? (
+                      <Text variant="caption">
+                        Nessun database configurato.
+                      </Text>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
+            </Card>
+          ) : null}
+          {activeSettingsTab === "general" &&
+          !loadingOcrModule &&
+          ocrModuleEnabled !== null ? (
+            <Card className="self-start space-y-3 p-3 md:col-span-1 xl:col-span-1">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <FileSearch size={18} className="text-brand-primary" />
+                    <Text as="h2" variant="h2" className="text-base">
+                      {t("settings.ocr.title")}
+                    </Text>
+                  </div>
+                  <Text variant="caption" className="mt-1 block">
+                    {t("settings.ocr.description")}
+                  </Text>
+                </div>
+                <button
+                  id="ocr-module-enabled"
+                  name="ocr-module-enabled"
+                  type="button"
+                  role="switch"
+                  aria-checked={ocrModuleEnabled}
+                  aria-label={t("settings.ocr.toggle")}
+                  title={t("settings.ocr.toggle")}
+                  disabled={savingOcrModule}
+                  onClick={() => void handleToggleOcrModule()}
+                  className="group inline-flex h-9 items-center rounded-md border border-border-default bg-bg-page px-2 text-xs font-semibold text-text-secondary transition-colors hover:border-brand-primary hover:bg-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "relative inline-flex h-6 w-[3.25rem] items-center rounded-full border p-0.5 shadow-inner transition-colors",
+                      ocrModuleEnabled
+                        ? "border-brand-primary bg-brand-primary"
+                        : "border-border-default bg-bg-surface",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "absolute text-[9px] font-bold leading-none transition-opacity",
+                        ocrModuleEnabled
+                          ? "left-2 text-text-inverse"
+                          : "right-1.5 text-text-muted",
+                      )}
+                    >
+                      {ocrModuleEnabled ? "ON" : "OFF"}
+                    </span>
+                    <span
+                      className={cn(
+                        "relative z-10 h-5 w-5 rounded-full border border-black/10 bg-white shadow-sm transition-transform",
+                        ocrModuleEnabled ? "translate-x-6" : "translate-x-0",
+                      )}
+                    />
+                  </span>
+                </button>
               </div>
-              <Button type="button" size="sm" onClick={() => void handleUpdateVllmMaxModelLen()} disabled={loadingVllmRuntime || savingVllmRuntime}>
-                {savingVllmRuntime ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                {savingVllmRuntime ? t("settings.vllm.restarting") : t("settings.vllm.applyRestart")}
-              </Button>
-            </div>
-            {vllmRuntimeError ? <Text className="text-xs font-semibold text-status-danger-text">{vllmRuntimeError}</Text> : null}</> : null}
-          </section>
-        ) : null}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-subtle pt-3">
+                <div className="flex items-center gap-2 text-xs text-text-secondary">
+                  <span
+                    className={cn(
+                      "h-2 w-2 rounded-full",
+                      ocrModuleEnabled
+                        ? "bg-status-success-text"
+                        : "bg-text-muted",
+                    )}
+                    aria-hidden="true"
+                  />
+                  <span>{t("settings.ocr.switchHint")}</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleTestOcrModule()}
+                  disabled={
+                    !ocrModuleEnabled || savingOcrModule || testingOcrModule
+                  }
+                >
+                  {testingOcrModule
+                    ? t("settings.ocr.testing")
+                    : t("settings.ocr.test")}
+                </Button>
+              </div>
+              {ocrModuleError ? (
+                <div className="rounded-[var(--radius-md)] border border-status-danger-border bg-status-danger-bg px-3 py-2 text-sm font-semibold text-status-danger-text">
+                  {ocrModuleError}
+                </div>
+              ) : null}
+              {ocrModuleStatus ? (
+                <div className="rounded-[var(--radius-md)] border border-status-success-border bg-status-success-bg px-3 py-2 text-sm font-semibold text-status-success-text">
+                  {ocrModuleStatus}
+                </div>
+              ) : null}
+            </Card>
+          ) : null}
 
-        {aiStatus ? (
-          <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-status-success-border bg-status-success-bg px-3 py-2 text-sm font-semibold text-status-success-text">
-            <CheckCircle2 size={16} />
-            {aiStatus}
-          </div>
-        ) : null}
-        {aiError ? (
-          <div className="rounded-[var(--radius-md)] border border-status-danger-border bg-status-danger-bg px-3 py-2 text-sm font-semibold text-status-danger-text">
-            {aiError}
-          </div>
-        ) : null}
+          {activeSettingsTab === "ai" && canConfigureAiProvider ? (
+            <Card className="self-start space-y-3 p-3 md:col-span-1 xl:col-span-1 [&_input]:h-9">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Bot size={18} className="text-brand-primary" />
+                    <Text as="h2" variant="h2" className="text-base">
+                      {t("settings.ai.title")}
+                    </Text>
+                  </div>
+                  <Text variant="caption">{t("settings.ai.description")}</Text>
+                </div>
+              </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" onClick={handleValidate} disabled={loadingSettings || validating}>
-            {validating ? <Loader2 size={16} className="animate-spin" /> : <PlugZap size={16} />}
-            {t("settings.validate")}
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={loadingSettings || saving}>
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            {t("settings.save")}
-          </Button>
+              <div className="grid gap-3 sm:grid-cols-[minmax(180px,0.8fr)_minmax(280px,1.2fr)]">
+                <div className="space-y-1">
+                  <Label className="text-xs" htmlFor="ai-provider-kind">
+                    Provider
+                  </Label>
+                  <SelectDropdown
+                    id="ai-provider-kind"
+                    value={aiSettings.provider}
+                    disabled={loadingSettings}
+                    size="sm"
+                    options={aiSettings.availableProviders.map((provider) => ({
+                      value: provider.id,
+                      label: provider.label,
+                    }))}
+                    onChange={(value) =>
+                      setAiSettings((prev) => {
+                        const provider = prev.availableProviders.find(
+                          (item) => item.id === value,
+                        );
+                        const shouldApplyDefault =
+                          !prev.baseUrl.trim() ||
+                          prev.baseUrl === "http://vllm:8000/v1" ||
+                          prev.baseUrl === "http://internal-ai-vllm:8000/v1";
+                        return {
+                          ...prev,
+                          provider: value,
+                          baseUrl: shouldApplyDefault
+                            ? (provider?.defaultBaseUrl ?? prev.baseUrl)
+                            : prev.baseUrl,
+                        };
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs" htmlFor="ai-provider-base-url">
+                    Base URL
+                  </Label>
+                  <Input
+                    id="ai-provider-base-url"
+                    name="ai-provider-base-url"
+                    value={aiSettings.baseUrl}
+                    disabled={loadingSettings}
+                    className="h-9 px-3"
+                    placeholder="http://internal-ai-vllm:8000/v1"
+                    onChange={(event) =>
+                      setAiSettings((prev) => ({
+                        ...prev,
+                        baseUrl: event.target.value,
+                      }))
+                    }
+                  />
+                  {selectedAiProvider?.defaultBaseUrl ? (
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-brand-primary hover:text-brand-accent-hover"
+                      onClick={() =>
+                        setAiSettings((prev) => ({
+                          ...prev,
+                          baseUrl:
+                            selectedAiProvider.defaultBaseUrl ?? prev.baseUrl,
+                        }))
+                      }
+                    >
+                      {t("settings.ai.useInternalEndpoint")}
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <Label className="text-xs" htmlFor="ai-provider-chat-model">
+                    {t("settings.ai.model")}
+                  </Label>
+                  <div className="flex gap-2">
+                    <SelectDropdown
+                      id="ai-provider-chat-model"
+                      className="min-w-0 flex-1"
+                      size="sm"
+                      value={aiSettings.chatModel}
+                      placeholder={t("settings.ai.selectModel")}
+                      options={
+                        modelOptions.length > 0
+                          ? modelOptions
+                          : [
+                              {
+                                value: aiSettings.chatModel,
+                                label:
+                                  aiSettings.chatModel ||
+                                  t("settings.ai.noModels"),
+                              },
+                            ]
+                      }
+                      onChange={(value) =>
+                        setAiSettings((prev) => ({ ...prev, chatModel: value }))
+                      }
+                    />
+                    <Button
+                      className="shrink-0"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleLoadModels}
+                      disabled={loadingSettings || loadingModels}
+                    >
+                      {loadingModels ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={16} />
+                      )}
+                      {t("settings.ai.loadModels")}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs" htmlFor="ai-provider-timeout-ms">
+                    Timeout ms
+                  </Label>
+                  <Input
+                    id="ai-provider-timeout-ms"
+                    name="ai-provider-timeout-ms"
+                    type="number"
+                    min={1000}
+                    max={900000}
+                    value={aiSettings.timeoutMs}
+                    disabled={loadingSettings}
+                    className="h-9 px-3"
+                    onChange={(event) =>
+                      setAiSettings((prev) => ({
+                        ...prev,
+                        timeoutMs: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs" htmlFor="ai-provider-temperature">
+                    Temperature
+                  </Label>
+                  <Input
+                    id="ai-provider-temperature"
+                    name="ai-provider-temperature"
+                    type="number"
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    value={aiSettings.temperature}
+                    disabled={loadingSettings}
+                    className="h-9 px-3"
+                    onChange={(event) =>
+                      setAiSettings((prev) => ({
+                        ...prev,
+                        temperature: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <section className="space-y-3 border-t border-border-subtle pt-3">
+                <button
+                  type="button"
+                  className="flex w-full items-start gap-2 text-left"
+                  onClick={() => setIsGenerationOpen((current) => !current)}
+                  aria-expanded={isGenerationOpen}
+                >
+                  <SlidersHorizontal
+                    size={16}
+                    className="mt-0.5 shrink-0 text-brand-primary"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <Text as="h3" variant="body" className="font-semibold">
+                      {t("settings.ai.generation")}
+                    </Text>
+                    <Text variant="caption">
+                      {t("settings.ai.generationHint")}
+                    </Text>
+                  </div>
+                  <ChevronDown
+                    size={16}
+                    className={cn(
+                      "mt-0.5 shrink-0 transition-transform",
+                      isGenerationOpen ? "rotate-180" : "",
+                    )}
+                  />
+                </button>
+                {isGenerationOpen ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label
+                        className="text-xs"
+                        htmlFor="ai-provider-max-output-tokens"
+                      >
+                        {t("settings.ai.maxOutputTokens")}
+                      </Label>
+                      <Input
+                        id="ai-provider-max-output-tokens"
+                        name="ai-provider-max-output-tokens"
+                        type="number"
+                        min={1}
+                        max={2048}
+                        value={Math.min(aiSettings.maxOutputTokens, 2048)}
+                        disabled={loadingSettings}
+                        className="h-9 px-3"
+                        onChange={(event) =>
+                          setAiSettings((prev) => ({
+                            ...prev,
+                            maxOutputTokens: Number(event.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label
+                        className="text-xs"
+                        htmlFor="ai-provider-context-token-limit"
+                      >
+                        {t("settings.ai.contextTokenLimit")}
+                      </Label>
+                      <Input
+                        id="ai-provider-context-token-limit"
+                        name="ai-provider-context-token-limit"
+                        type="number"
+                        min={256}
+                        max={8192}
+                        value={aiSettings.contextTokenLimit ?? ""}
+                        disabled={loadingSettings}
+                        className="h-9 px-3"
+                        placeholder="8192"
+                        onChange={(event) =>
+                          setAiSettings((prev) => ({
+                            ...prev,
+                            contextTokenLimit:
+                              event.target.value === ""
+                                ? null
+                                : Number(event.target.value),
+                          }))
+                        }
+                      />
+                      <Text variant="caption">
+                        {t("settings.ai.contextTokenLimitHint")}
+                      </Text>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs" htmlFor="ai-provider-top-p">
+                        {t("settings.ai.topP")}
+                      </Label>
+                      <Input
+                        id="ai-provider-top-p"
+                        name="ai-provider-top-p"
+                        type="number"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={aiSettings.topP}
+                        disabled={loadingSettings}
+                        className="h-9 px-3"
+                        onChange={(event) =>
+                          setAiSettings((prev) => ({
+                            ...prev,
+                            topP: Number(event.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs" htmlFor="ai-provider-top-k">
+                        {t("settings.ai.topK")}
+                      </Label>
+                      <Input
+                        id="ai-provider-top-k"
+                        name="ai-provider-top-k"
+                        type="number"
+                        min={-1}
+                        max={1000}
+                        step={1}
+                        value={aiSettings.topK}
+                        disabled={loadingSettings}
+                        className="h-9 px-3"
+                        onChange={(event) =>
+                          setAiSettings((prev) => ({
+                            ...prev,
+                            topK: Number(event.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs" htmlFor="ai-provider-min-p">
+                        {t("settings.ai.minP")}
+                      </Label>
+                      <Input
+                        id="ai-provider-min-p"
+                        name="ai-provider-min-p"
+                        type="number"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={aiSettings.minP}
+                        disabled={loadingSettings}
+                        className="h-9 px-3"
+                        onChange={(event) =>
+                          setAiSettings((prev) => ({
+                            ...prev,
+                            minP: Number(event.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label
+                        className="text-xs"
+                        htmlFor="ai-provider-repetition-penalty"
+                      >
+                        {t("settings.ai.repetitionPenalty")}
+                      </Label>
+                      <Input
+                        id="ai-provider-repetition-penalty"
+                        name="ai-provider-repetition-penalty"
+                        type="number"
+                        min={0.1}
+                        max={2}
+                        step={0.01}
+                        value={aiSettings.repetitionPenalty}
+                        disabled={loadingSettings}
+                        className="h-9 px-3"
+                        onChange={(event) =>
+                          setAiSettings((prev) => ({
+                            ...prev,
+                            repetitionPenalty: Number(event.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs" htmlFor="ai-provider-seed">
+                        {t("settings.ai.seed")}
+                      </Label>
+                      <Input
+                        id="ai-provider-seed"
+                        name="ai-provider-seed"
+                        type="number"
+                        min={0}
+                        max={2147483647}
+                        step={1}
+                        value={aiSettings.seed ?? ""}
+                        disabled={loadingSettings}
+                        className="h-9 px-3"
+                        placeholder={t("settings.ai.seedHint")}
+                        onChange={(event) =>
+                          setAiSettings((prev) => ({
+                            ...prev,
+                            seed:
+                              event.target.value === ""
+                                ? null
+                                : Number(event.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+
+              {canControlAiRuntime ? (
+                <section className="space-y-2 border-t border-border-subtle pt-3">
+                  <button
+                    type="button"
+                    className="flex w-full items-start justify-between gap-3 text-left"
+                    onClick={() => setIsRuntimeOpen((current) => !current)}
+                    aria-expanded={isRuntimeOpen}
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Cpu size={16} className="shrink-0 text-brand-primary" />
+                      <div>
+                        <Text as="h3" variant="body" className="font-semibold">
+                          {t("settings.vllm.runtime")}
+                        </Text>
+                        <Text variant="caption">
+                          {t("settings.vllm.runtimeHint")}
+                        </Text>
+                      </div>
+                    </div>
+                    {vllmRuntime ? (
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span
+                          className={cn(
+                            "text-xs font-semibold",
+                            vllmRuntime.containerRunning
+                              ? "text-status-success-text"
+                              : "text-text-muted",
+                          )}
+                        >
+                          {vllmRuntime.containerRunning
+                            ? t("settings.vllm.containerRunning")
+                            : t("settings.vllm.containerStopped")}
+                        </span>
+                        <ChevronDown
+                          size={16}
+                          className={cn(
+                            "transition-transform",
+                            isRuntimeOpen ? "rotate-180" : "",
+                          )}
+                        />
+                      </span>
+                    ) : (
+                      <ChevronDown
+                        size={16}
+                        className={cn(
+                          "shrink-0 transition-transform",
+                          isRuntimeOpen ? "rotate-180" : "",
+                        )}
+                      />
+                    )}
+                  </button>
+                  {isRuntimeOpen ? (
+                    <>
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div className="w-full space-y-1 sm:w-48">
+                          <Label
+                            className="text-xs"
+                            htmlFor="vllm-max-model-len"
+                          >
+                            {t("settings.vllm.contextWindow")}
+                          </Label>
+                          <Input
+                            id="vllm-max-model-len"
+                            name="vllm-max-model-len"
+                            type="number"
+                            min={1024}
+                            max={32768}
+                            step={256}
+                            value={vllmMaxModelLen}
+                            disabled={loadingVllmRuntime || savingVllmRuntime}
+                            className="h-9 px-3"
+                            onChange={(event) =>
+                              setVllmMaxModelLen(Number(event.target.value))
+                            }
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => void handleUpdateVllmMaxModelLen()}
+                          disabled={loadingVllmRuntime || savingVllmRuntime}
+                        >
+                          {savingVllmRuntime ? (
+                            <Loader2 size={16} className="animate-spin" />
+                          ) : (
+                            <RefreshCw size={16} />
+                          )}
+                          {savingVllmRuntime
+                            ? t("settings.vllm.restarting")
+                            : t("settings.vllm.applyRestart")}
+                        </Button>
+                      </div>
+                      {vllmRuntimeError ? (
+                        <Text className="text-xs font-semibold text-status-danger-text">
+                          {vllmRuntimeError}
+                        </Text>
+                      ) : null}
+                    </>
+                  ) : null}
+                </section>
+              ) : null}
+
+              {aiStatus ? (
+                <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-status-success-border bg-status-success-bg px-3 py-2 text-sm font-semibold text-status-success-text">
+                  <CheckCircle2 size={16} />
+                  {aiStatus}
+                </div>
+              ) : null}
+              {aiError ? (
+                <div className="rounded-[var(--radius-md)] border border-status-danger-border bg-status-danger-bg px-3 py-2 text-sm font-semibold text-status-danger-text">
+                  {aiError}
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleValidate}
+                  disabled={loadingSettings || validating}
+                >
+                  {validating ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <PlugZap size={16} />
+                  )}
+                  {t("settings.validate")}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={loadingSettings || saving}
+                >
+                  {saving ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <Save size={16} />
+                  )}
+                  {t("settings.save")}
+                </Button>
+              </div>
+            </Card>
+          ) : null}
+
+          {activeSettingsTab === "general" && canConfigureMailProvider ? (
+            <Card className="self-start space-y-3 p-3 md:col-span-2 xl:col-span-1 [&_input]:h-9">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Mail size={18} className="text-brand-primary" />
+                    <Text as="h2" variant="h2" className="text-base">
+                      {t("settings.mail.title")}
+                    </Text>
+                  </div>
+                  <Text variant="caption">
+                    {t("settings.mail.description")}
+                  </Text>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-xs" htmlFor="mail-provider-kind">
+                    Provider
+                  </Label>
+                  <SelectDropdown
+                    id="mail-provider-kind"
+                    value={mailSettings.provider}
+                    disabled={loadingMailSettings}
+                    size="sm"
+                    options={[
+                      { value: "smtp", label: "Relay SMTP" },
+                      { value: "resend", label: "Resend API" },
+                    ].filter((option) =>
+                      mailSettings.allowedProviders.includes(option.value),
+                    )}
+                    onChange={(value) =>
+                      setMailSettings((prev) => ({
+                        ...prev,
+                        provider: value as MailProviderSettings["provider"],
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs" htmlFor="mail-provider-from">
+                    From
+                  </Label>
+                  <Input
+                    id="mail-provider-from"
+                    name="mail-provider-from"
+                    value={mailSettings.from}
+                    disabled={loadingMailSettings}
+                    className="h-9 px-3"
+                    placeholder="support@azienda.it"
+                    onChange={(event) =>
+                      setMailSettings((prev) => ({
+                        ...prev,
+                        from: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                {mailSettings.provider === "smtp" ? (
+                  <>
+                    <div className="space-y-1">
+                      <Label
+                        className="text-xs"
+                        htmlFor="mail-provider-smtp-host"
+                      >
+                        SMTP host
+                      </Label>
+                      <Input
+                        id="mail-provider-smtp-host"
+                        name="mail-provider-smtp-host"
+                        value={mailSettings.smtpHost}
+                        disabled={loadingMailSettings}
+                        className="h-9 px-3"
+                        placeholder="smtp.azienda.it"
+                        onChange={(event) =>
+                          setMailSettings((prev) => ({
+                            ...prev,
+                            smtpHost: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label
+                        className="text-xs"
+                        htmlFor="mail-provider-smtp-port"
+                      >
+                        SMTP port
+                      </Label>
+                      <Input
+                        id="mail-provider-smtp-port"
+                        name="mail-provider-smtp-port"
+                        type="number"
+                        min={1}
+                        max={65535}
+                        value={mailSettings.smtpPort}
+                        disabled={loadingMailSettings}
+                        className="h-9 px-3"
+                        onChange={(event) =>
+                          setMailSettings((prev) => ({
+                            ...prev,
+                            smtpPort: Number(event.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label
+                        className="text-xs"
+                        htmlFor="mail-provider-smtp-user"
+                      >
+                        SMTP user
+                      </Label>
+                      <Input
+                        id="mail-provider-smtp-user"
+                        name="mail-provider-smtp-user"
+                        value={mailSettings.smtpUser}
+                        disabled={loadingMailSettings}
+                        className="h-9 px-3"
+                        placeholder="utente"
+                        onChange={(event) =>
+                          setMailSettings((prev) => ({
+                            ...prev,
+                            smtpUser: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label
+                        className="text-xs"
+                        htmlFor="mail-provider-smtp-pass"
+                      >
+                        SMTP password
+                      </Label>
+                      <Input
+                        id="mail-provider-smtp-pass"
+                        name="mail-provider-smtp-pass"
+                        type="password"
+                        value={mailSecretPatch.smtpPass}
+                        disabled={loadingMailSettings}
+                        className="h-9 px-3"
+                        placeholder={
+                          mailSettings.smtpConfigured
+                            ? "Lascia vuoto per non cambiare"
+                            : "Password"
+                        }
+                        onChange={(event) =>
+                          setMailSecretPatch((prev) => ({
+                            ...prev,
+                            smtpPass: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <Checkbox
+                      id="mail-provider-smtp-secure"
+                      name="mail-provider-smtp-secure"
+                      checked={mailSettings.smtpSecure}
+                      disabled={loadingMailSettings}
+                      onChange={(event) =>
+                        setMailSettings((prev) => ({
+                          ...prev,
+                          smtpSecure: event.target.checked,
+                        }))
+                      }
+                      label="SMTP SSL diretto"
+                      labelClassName="font-semibold"
+                    />
+                  </>
+                ) : mailSettings.provider === "resend" ? (
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label
+                      className="text-xs"
+                      htmlFor="mail-provider-resend-api-key"
+                    >
+                      Resend API key
+                    </Label>
+                    <Input
+                      id="mail-provider-resend-api-key"
+                      name="mail-provider-resend-api-key"
+                      type="password"
+                      value={mailSecretPatch.resendApiKey}
+                      disabled={loadingMailSettings}
+                      className="h-9 px-3"
+                      placeholder={
+                        mailSettings.resendConfigured
+                          ? "Lascia vuoto per non cambiare"
+                          : "re_..."
+                      }
+                      onChange={(event) =>
+                        setMailSecretPatch((prev) => ({
+                          ...prev,
+                          resendApiKey: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              {mailStatus ? (
+                <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-status-success-border bg-status-success-bg px-3 py-2 text-sm font-semibold text-status-success-text">
+                  <CheckCircle2 size={16} />
+                  {mailStatus}
+                </div>
+              ) : null}
+              {mailError ? (
+                <div className="rounded-[var(--radius-md)] border border-status-danger-border bg-status-danger-bg px-3 py-2 text-sm font-semibold text-status-danger-text">
+                  {mailError}
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleValidateMail}
+                  disabled={loadingMailSettings || validatingMail}
+                >
+                  {validatingMail ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <PlugZap size={16} />
+                  )}
+                  Valida
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveMail}
+                  disabled={loadingMailSettings || savingMail}
+                >
+                  {savingMail ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <Save size={16} />
+                  )}
+                  Salva
+                </Button>
+              </div>
+            </Card>
+          ) : null}
         </div>
-      </Card>
       ) : null}
-
-      {activeSettingsTab === "general" && canConfigureMailProvider ? (
-      <Card className="self-start space-y-3 p-3 md:col-span-2 xl:col-span-1 [&_input]:h-9">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <Mail size={18} className="text-brand-primary" />
-              <Text as="h2" variant="h2" className="text-base">
-                {t("settings.mail.title")}
-              </Text>
-            </div>
-            <Text variant="caption">{t("settings.mail.description")}</Text>
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <Label className="text-xs" htmlFor="mail-provider-kind">Provider</Label>
-            <SelectDropdown
-              id="mail-provider-kind"
-              value={mailSettings.provider}
-              disabled={loadingMailSettings}
-              size="sm"
-              options={[
-                { value: "smtp", label: "SMTP" },
-                { value: "resend", label: "Resend API" },
-              ]}
-              onChange={(value) => setMailSettings((prev) => ({ ...prev, provider: value as MailProviderSettings["provider"] }))}
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs" htmlFor="mail-provider-from">From</Label>
-            <Input
-              id="mail-provider-from"
-              name="mail-provider-from"
-              value={mailSettings.from}
-              disabled={loadingMailSettings}
-              className="h-9 px-3"
-              placeholder="support@azienda.it"
-              onChange={(event) => setMailSettings((prev) => ({ ...prev, from: event.target.value }))}
-            />
-          </div>
-
-          {mailSettings.provider === "smtp" ? (
-            <>
-              <div className="space-y-1">
-                <Label className="text-xs" htmlFor="mail-provider-smtp-host">SMTP host</Label>
-                <Input
-                  id="mail-provider-smtp-host"
-                  name="mail-provider-smtp-host"
-                  value={mailSettings.smtpHost}
-                  disabled={loadingMailSettings}
-                  className="h-9 px-3"
-                  placeholder="smtp.azienda.it"
-                  onChange={(event) => setMailSettings((prev) => ({ ...prev, smtpHost: event.target.value }))}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs" htmlFor="mail-provider-smtp-port">SMTP port</Label>
-                <Input
-                  id="mail-provider-smtp-port"
-                  name="mail-provider-smtp-port"
-                  type="number"
-                  min={1}
-                  max={65535}
-                  value={mailSettings.smtpPort}
-                  disabled={loadingMailSettings}
-                  className="h-9 px-3"
-                  onChange={(event) => setMailSettings((prev) => ({ ...prev, smtpPort: Number(event.target.value) }))}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs" htmlFor="mail-provider-smtp-user">SMTP user</Label>
-                <Input
-                  id="mail-provider-smtp-user"
-                  name="mail-provider-smtp-user"
-                  value={mailSettings.smtpUser}
-                  disabled={loadingMailSettings}
-                  className="h-9 px-3"
-                  placeholder="utente"
-                  onChange={(event) => setMailSettings((prev) => ({ ...prev, smtpUser: event.target.value }))}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs" htmlFor="mail-provider-smtp-pass">SMTP password</Label>
-                <Input
-                  id="mail-provider-smtp-pass"
-                  name="mail-provider-smtp-pass"
-                  type="password"
-                  value={mailSecretPatch.smtpPass}
-                  disabled={loadingMailSettings}
-                  className="h-9 px-3"
-                  placeholder={mailSettings.smtpConfigured ? "Lascia vuoto per non cambiare" : "Password"}
-                  onChange={(event) => setMailSecretPatch((prev) => ({ ...prev, smtpPass: event.target.value }))}
-                />
-              </div>
-              <Checkbox
-                id="mail-provider-smtp-secure"
-                name="mail-provider-smtp-secure"
-                checked={mailSettings.smtpSecure}
-                disabled={loadingMailSettings}
-                onChange={(event) => setMailSettings((prev) => ({ ...prev, smtpSecure: event.target.checked }))}
-                label="SMTP SSL diretto"
-                labelClassName="font-semibold"
-              />
-            </>
-          ) : (
-            <div className="space-y-1 sm:col-span-2">
-              <Label className="text-xs" htmlFor="mail-provider-resend-api-key">Resend API key</Label>
-              <Input
-                id="mail-provider-resend-api-key"
-                name="mail-provider-resend-api-key"
-                type="password"
-                value={mailSecretPatch.resendApiKey}
-                disabled={loadingMailSettings}
-                className="h-9 px-3"
-                placeholder={mailSettings.resendConfigured ? "Lascia vuoto per non cambiare" : "re_..."}
-                onChange={(event) => setMailSecretPatch((prev) => ({ ...prev, resendApiKey: event.target.value }))}
-              />
-            </div>
+      <BirgusDialog
+        open={brainyAgentToArchive !== null}
+        message={
+          brainyAgentToArchive
+            ? `Eliminare l'agente "${brainyAgentToArchive.label}"? Le relative chat saranno nascoste finche' non verra' aggiunto nuovamente.`
+            : ""
+        }
+        confirmLabel="Elimina"
+        onCancel={() => setBrainyAgentToArchive(null)}
+        onConfirm={() => {
+          const agent = brainyAgentToArchive;
+          setBrainyAgentToArchive(null);
+          if (agent) void handleRemoveBrainyAgent(agent);
+        }}
+      />
+      <BirgusDialog
+        open={brainyDatabaseToArchive !== null}
+        message={
+          brainyDatabaseToArchive
+            ? `Archiviare il database "${brainyDatabaseToArchive.label}"?`
+            : ""
+        }
+        confirmLabel="Archivia"
+        onCancel={() => setBrainyDatabaseToArchive(null)}
+        onConfirm={() => {
+          const connection = brainyDatabaseToArchive;
+          setBrainyDatabaseToArchive(null);
+          if (connection)
+            void handleArchiveBrainyDatabaseConnection(connection);
+        }}
+      />
+      {brainyAgentAccessTarget ? (
+        <BrainyRoleAccessDialog
+          resourceLabel={`agente ${brainyAgentAccessTarget.label}`}
+          accessMode={brainyAgentAccessTarget.accessMode}
+          roleIds={brainyAgentAccessTarget.assignments.map(
+            (assignment) => assignment.id,
           )}
-        </div>
-
-        {mailStatus ? (
-          <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-status-success-border bg-status-success-bg px-3 py-2 text-sm font-semibold text-status-success-text">
-            <CheckCircle2 size={16} />
-            {mailStatus}
-          </div>
-        ) : null}
-        {mailError ? (
-          <div className="rounded-[var(--radius-md)] border border-status-danger-border bg-status-danger-bg px-3 py-2 text-sm font-semibold text-status-danger-text">
-            {mailError}
-          </div>
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" onClick={handleValidateMail} disabled={loadingMailSettings || validatingMail}>
-            {validatingMail ? <Loader2 size={16} className="animate-spin" /> : <PlugZap size={16} />}
-            Valida
-          </Button>
-          <Button size="sm" onClick={handleSaveMail} disabled={loadingMailSettings || savingMail}>
-            {savingMail ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            Salva
-          </Button>
-        </div>
-      </Card>
+          isWorkflowEnabled={brainyAgentAccessTarget.isWorkflowEnabled}
+          options={brainyAgentAccessOptions}
+          disabled={savingBrainyAgent}
+          onCancel={() => setBrainyAgentAccessTarget(null)}
+          onSave={(accessMode, roleIds, isWorkflowEnabled) => {
+            void handleSaveBrainyAgentAccess(
+              brainyAgentAccessTarget,
+              accessMode,
+              roleIds,
+              isWorkflowEnabled,
+            );
+            setBrainyAgentAccessTarget(null);
+          }}
+        />
       ) : null}
-      </div>
-    <BirgusDialog open={brainyAgentToArchive !== null} message={brainyAgentToArchive ? `Eliminare l'agente "${brainyAgentToArchive.label}"? Le relative chat saranno nascoste finche' non verra' aggiunto nuovamente.` : ""} confirmLabel="Elimina" onCancel={() => setBrainyAgentToArchive(null)} onConfirm={() => { const agent = brainyAgentToArchive; setBrainyAgentToArchive(null); if (agent) void handleRemoveBrainyAgent(agent); }} />
-    <BirgusDialog open={brainyDatabaseToArchive !== null} message={brainyDatabaseToArchive ? `Archiviare il database "${brainyDatabaseToArchive.label}"?` : ""} confirmLabel="Archivia" onCancel={() => setBrainyDatabaseToArchive(null)} onConfirm={() => { const connection = brainyDatabaseToArchive; setBrainyDatabaseToArchive(null); if (connection) void handleArchiveBrainyDatabaseConnection(connection); }} />
-    {brainyAgentAccessTarget ? (
-      <BrainyRoleAccessDialog
-        resourceLabel={`agente ${brainyAgentAccessTarget.label}`}
-        accessMode={brainyAgentAccessTarget.accessMode}
-        roleIds={brainyAgentAccessTarget.assignments.map((assignment) => assignment.id)}
-        isWorkflowEnabled={brainyAgentAccessTarget.isWorkflowEnabled}
-        options={brainyAgentAccessOptions}
-        disabled={savingBrainyAgent}
-        onCancel={() => setBrainyAgentAccessTarget(null)}
-        onSave={(accessMode, roleIds, isWorkflowEnabled) => {
-          void handleSaveBrainyAgentAccess(brainyAgentAccessTarget, accessMode, roleIds, isWorkflowEnabled);
-          setBrainyAgentAccessTarget(null);
-        }}
-      />
-    ) : null}
-    {brainyDatabaseAccessTarget ? (
-      <BrainyRoleAccessDialog
-        resourceLabel={`database ${brainyDatabaseAccessTarget.label}`}
-        accessMode={brainyDatabaseAccessTarget.accessMode ?? "ALL"}
-        roleIds={brainyDatabaseAccessTarget.roleIds ?? []}
-        isWorkflowEnabled={brainyDatabaseAccessTarget.isWorkflowEnabled === true}
-        options={brainyDatabaseAccessOptions}
-        disabled={savingBrainyDatabaseId === brainyDatabaseAccessTarget.id}
-        onCancel={() => setBrainyDatabaseAccessTarget(null)}
-        onSave={(accessMode, roleIds, isWorkflowEnabled) => {
-          void handleSaveBrainyDatabaseAccess(brainyDatabaseAccessTarget, accessMode, roleIds, isWorkflowEnabled);
-          setBrainyDatabaseAccessTarget(null);
-        }}
-      />
-    ) : null}
+      {brainyDatabaseAccessTarget ? (
+        <BrainyRoleAccessDialog
+          resourceLabel={`database ${brainyDatabaseAccessTarget.label}`}
+          accessMode={brainyDatabaseAccessTarget.accessMode ?? "ALL"}
+          roleIds={brainyDatabaseAccessTarget.roleIds ?? []}
+          isWorkflowEnabled={
+            brainyDatabaseAccessTarget.isWorkflowEnabled === true
+          }
+          options={brainyDatabaseAccessOptions}
+          disabled={savingBrainyDatabaseId === brainyDatabaseAccessTarget.id}
+          onCancel={() => setBrainyDatabaseAccessTarget(null)}
+          onSave={(accessMode, roleIds, isWorkflowEnabled) => {
+            void handleSaveBrainyDatabaseAccess(
+              brainyDatabaseAccessTarget,
+              accessMode,
+              roleIds,
+              isWorkflowEnabled,
+            );
+            setBrainyDatabaseAccessTarget(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1282,11 +2335,19 @@ function BrainyRoleAccessDialog({
   options: BrainyAgentAccessOptions;
   disabled: boolean;
   onCancel: () => void;
-  onSave: (accessMode: "ALL" | "ASSIGNED", roleIds: number[], isWorkflowEnabled: boolean) => void;
+  onSave: (
+    accessMode: "ALL" | "ASSIGNED",
+    roleIds: number[],
+    isWorkflowEnabled: boolean,
+  ) => void;
 }) {
-  const [accessMode, setAccessMode] = useState<"ALL" | "ASSIGNED">(initialAccessMode);
+  const [accessMode, setAccessMode] = useState<"ALL" | "ASSIGNED">(
+    initialAccessMode,
+  );
   const [roleIds, setRoleIds] = useState<number[]>(initialRoleIds);
-  const [isWorkflowEnabled, setIsWorkflowEnabled] = useState(initialWorkflowEnabled);
+  const [isWorkflowEnabled, setIsWorkflowEnabled] = useState(
+    initialWorkflowEnabled,
+  );
   useEffect(() => {
     setAccessMode(initialAccessMode);
     setRoleIds(initialRoleIds);
@@ -1301,22 +2362,36 @@ function BrainyRoleAccessDialog({
     );
   };
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-label={`Accessi ${resourceLabel}`}>
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-bg-overlay p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Accessi ${resourceLabel}`}
+    >
       <Card className="w-full max-w-lg p-0 shadow-elevated">
         <div className="border-b border-border-subtle p-4">
-          <Text as="h2" variant="h2">Birgus dice:</Text>
-          <p className="mt-1 text-sm text-text-secondary">Configura gli accessi per {resourceLabel}.</p>
+          <Text as="h2" variant="h2">
+            Birgus dice:
+          </Text>
+          <p className="mt-1 text-sm text-text-secondary">
+            Configura gli accessi per {resourceLabel}.
+          </p>
         </div>
         <div className="space-y-4 p-4">
           <SelectDropdown
             value={accessMode}
-            options={[{ value: "ALL", label: "Tutti gli utenti Brainy" }, { value: "ASSIGNED", label: "Solo ruoli selezionati" }]}
+            options={[
+              { value: "ALL", label: "Tutti gli utenti Brainy" },
+              { value: "ASSIGNED", label: "Solo ruoli selezionati" },
+            ]}
             disabled={disabled}
             onChange={(value) => setAccessMode(value as "ALL" | "ASSIGNED")}
           />
           {accessMode === "ASSIGNED" ? (
             <div className="space-y-2">
-              <Text variant="caption" className="block">Ruoli autorizzati</Text>
+              <Text variant="caption" className="block">
+                Ruoli autorizzati
+              </Text>
               {options.roles.map((role) => (
                 <Checkbox
                   key={role.id}
@@ -1333,7 +2408,9 @@ function BrainyRoleAccessDialog({
           <div className="flex items-center justify-between gap-4 border-t border-border-subtle pt-4">
             <div>
               <Text className="text-sm font-semibold">Workflow</Text>
-              <Text variant="caption" className="block">Rende la risorsa selezionabile nei workflow.</Text>
+              <Text variant="caption" className="block">
+                Rende la risorsa selezionabile nei workflow.
+              </Text>
             </div>
             <BrainyEnableSwitch
               checked={isWorkflowEnabled}
@@ -1344,8 +2421,13 @@ function BrainyRoleAccessDialog({
           </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-border-subtle p-4">
-          <Button variant="outline" disabled={disabled} onClick={onCancel}>Annulla</Button>
-          <Button disabled={disabled} onClick={() => onSave(accessMode, roleIds, isWorkflowEnabled)}>
+          <Button variant="outline" disabled={disabled} onClick={onCancel}>
+            Annulla
+          </Button>
+          <Button
+            disabled={disabled}
+            onClick={() => onSave(accessMode, roleIds, isWorkflowEnabled)}
+          >
             <Save size={16} />
             Salva accessi
           </Button>
@@ -1375,9 +2457,19 @@ function BrainyEnableSwitch({
       title={checked ? "Disabilita" : "Abilita"}
       disabled={disabled}
       onClick={onChange}
-      className={cn("relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60", checked ? "border-brand-primary bg-brand-primary" : "border-border-default bg-bg-muted")}
+      className={cn(
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60",
+        checked
+          ? "border-brand-primary bg-brand-primary"
+          : "border-border-default bg-bg-muted",
+      )}
     >
-      <span className={cn("h-4 w-4 rounded-full bg-white shadow-sm transition-transform", checked ? "translate-x-5" : "translate-x-0")} />
+      <span
+        className={cn(
+          "h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+          checked ? "translate-x-5" : "translate-x-0",
+        )}
+      />
     </button>
   );
 }

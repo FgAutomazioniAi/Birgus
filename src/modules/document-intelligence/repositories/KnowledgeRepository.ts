@@ -29,8 +29,15 @@ export interface KnowledgeChunkWriteModel {
 }
 
 export interface KnowledgeRepository {
-  findSourceDocumentById(workspaceId: string, documentId: string): Promise<SourceDocumentRecord | null>;
-  findKnowledgeDocumentByDocumentId(workspaceId: string, documentId: string, representationKey: string): Promise<KnowledgeDocumentEntity | null>;
+  findSourceDocumentById(
+    workspaceId: string,
+    documentId: string,
+  ): Promise<SourceDocumentRecord | null>;
+  findKnowledgeDocumentByDocumentId(
+    workspaceId: string,
+    documentId: string,
+    representationKey: string,
+  ): Promise<KnowledgeDocumentEntity | null>;
   upsertKnowledgeDocument(params: {
     workspaceId: string;
     documentId: string | null;
@@ -49,7 +56,11 @@ export interface KnowledgeRepository {
     lastError: string | null;
     extractedAt: Date | null;
   }): Promise<KnowledgeDocumentEntity>;
-  replaceKnowledgeChunks(workspaceId: string, knowledgeDocumentId: string, chunks: KnowledgeChunkWriteModel[]): Promise<void>;
+  replaceKnowledgeChunks(
+    workspaceId: string,
+    knowledgeDocumentId: string,
+    chunks: KnowledgeChunkWriteModel[],
+  ): Promise<void>;
   semanticSearch(params: {
     workspaceId: string;
     queryVector: number[];

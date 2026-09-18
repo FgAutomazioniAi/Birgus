@@ -1,7 +1,10 @@
 import nodemailer, { Transporter } from "nodemailer";
 
 import { AppError } from "../../../core/errors/AppError.js";
-import { MailProviderSettingsService, type MailProviderRuntimeConfig } from "../../mail-runtime/services/MailProviderSettingsService.js";
+import {
+  MailProviderSettingsService,
+  type MailProviderRuntimeConfig,
+} from "../../mail-runtime/services/MailProviderSettingsService.js";
 import { PasswordResetNotifier } from "./PasswordResetNotifier.js";
 
 type SmtpConfig = {
@@ -17,7 +20,9 @@ export class SmtpPasswordResetNotifier implements PasswordResetNotifier {
   private readonly config: SmtpConfig;
   private transporter: Transporter | null = null;
 
-  public constructor(private readonly mailProviderSettingsService?: MailProviderSettingsService | null) {
+  public constructor(
+    private readonly mailProviderSettingsService?: MailProviderSettingsService | null,
+  ) {
     this.config = this.readConfig();
   }
 
@@ -40,15 +45,23 @@ export class SmtpPasswordResetNotifier implements PasswordResetNotifier {
       ].join("\n");
 
       if (this.mailProviderSettingsService) {
-        await this.sendWithRuntimeProvider(await this.mailProviderSettingsService.getRuntimeConfig(), {
-          to: params.email,
-          subject,
-          text,
-        });
+        await this.sendWithRuntimeProvider(
+          await this.mailProviderSettingsService.getRuntimeConfig(),
+          {
+            to: params.email,
+            subject,
+            text,
+          },
+        );
         return;
       }
 
-      await this.getTransporter().sendMail({ from: this.config.from, to: params.email, subject, text });
+      await this.getTransporter().sendMail({
+        from: this.config.from,
+        to: params.email,
+        subject,
+        text,
+      });
     } catch (error) {
       throw new AppError(
         "Invio email non riuscito. Avvisa il tuo amministratore oppure contatta support.ai@fgautomazioni.it.",
@@ -71,12 +84,13 @@ export class SmtpPasswordResetNotifier implements PasswordResetNotifier {
       host: config.smtpHost,
       port: config.smtpPort,
       secure: config.smtpSecure,
-      auth: config.smtpUser && config.smtpPass
-        ? {
-            user: config.smtpUser,
-            pass: config.smtpPass,
-          }
-        : undefined,
+      auth:
+        config.smtpUser && config.smtpPass
+          ? {
+              user: config.smtpUser,
+              pass: config.smtpPass,
+            }
+          : undefined,
     });
 
     await transporter.sendMail({
@@ -120,7 +134,11 @@ export class SmtpPasswordResetNotifier implements PasswordResetNotifier {
     }
 
     if (!this.config.host || !this.config.from) {
-      throw new AppError("Configurazione SMTP mancante.", "SMTP_CONFIG_MISSING", 500);
+      throw new AppError(
+        "Configurazione SMTP mancante.",
+        "SMTP_CONFIG_MISSING",
+        500,
+      );
     }
 
     this.transporter = nodemailer.createTransport({
@@ -138,7 +156,8 @@ export class SmtpPasswordResetNotifier implements PasswordResetNotifier {
 
   private readConfig(): SmtpConfig {
     const host = this.readOptional("SMTP_HOST");
-    const from = this.readOptional("SMTP_FROM") || this.readOptional("MAIL_FROM");
+    const from =
+      this.readOptional("SMTP_FROM") || this.readOptional("MAIL_FROM");
     const user = this.readOptional("SMTP_USER");
     const pass = this.readOptional("SMTP_PASS");
 
@@ -149,7 +168,11 @@ export class SmtpPasswordResetNotifier implements PasswordResetNotifier {
     }
 
     const secureRaw = process.env.SMTP_SECURE?.trim().toLowerCase() || "false";
-    const secure = secureRaw === "1" || secureRaw === "true" || secureRaw === "yes" || secureRaw === "on";
+    const secure =
+      secureRaw === "1" ||
+      secureRaw === "true" ||
+      secureRaw === "yes" ||
+      secureRaw === "on";
 
     return {
       host,

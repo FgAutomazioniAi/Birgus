@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from "@nestjs/common";
 import { FastifyReply, FastifyRequest } from "fastify";
 
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
@@ -6,7 +19,10 @@ import { AppError } from "../../core/errors/AppError.js";
 import { ModuleKey } from "../../core/module-access/ModuleKey.js";
 import { RequestContext } from "../../core/tenancy/RequestContext.js";
 import { PrismaClientManager } from "../../database/PrismaClientManager.js";
-import { FileKind, FileKindValue } from "../../modules/document-archive/domain/FileKind.js";
+import {
+  FileKind,
+  FileKindValue,
+} from "../../modules/document-archive/domain/FileKind.js";
 import { PutProjectFileCommand } from "../../modules/document-archive/dto/PutProjectFileCommand.js";
 import { DocumentArchiveService } from "../../modules/document-archive/services/DocumentArchiveService.js";
 import { ProjectService } from "../../modules/projects/services/ProjectService.js";
@@ -23,18 +39,30 @@ const QUOTATION_WORKFLOW_KEY = "quotation_document_pipeline";
 const deleteConfirmationSchema = {
   parse: (value: unknown): { confirmText: string } => {
     if (!value || typeof value !== "object") {
-      throw new AppError("Conferma eliminazione mancante.", "DELETE_CONFIRMATION_REQUIRED", 400);
+      throw new AppError(
+        "Conferma eliminazione mancante.",
+        "DELETE_CONFIRMATION_REQUIRED",
+        400,
+      );
     }
     const record = value as Record<string, unknown>;
-    const confirmText = typeof record.confirmText === "string" ? record.confirmText.trim() : "";
+    const confirmText =
+      typeof record.confirmText === "string" ? record.confirmText.trim() : "";
     if (confirmText !== "cancella") {
-      throw new AppError("Conferma eliminazione non valida: digita 'cancella'.", "DELETE_CONFIRMATION_INVALID", 400);
+      throw new AppError(
+        "Conferma eliminazione non valida: digita 'cancella'.",
+        "DELETE_CONFIRMATION_INVALID",
+        400,
+      );
     }
     return { confirmText };
   },
 };
 
-const FILE_KIND_META: Record<FileKindValue, { defaultFileName: string; extension: string; contentType: string }> = {
+const FILE_KIND_META: Record<
+  FileKindValue,
+  { defaultFileName: string; extension: string; contentType: string }
+> = {
   "email-pdf": {
     defaultFileName: "email.pdf",
     extension: "pdf",
@@ -43,7 +71,8 @@ const FILE_KIND_META: Record<FileKindValue, { defaultFileName: string; extension
   "quotation-docx": {
     defaultFileName: "preventivo.docx",
     extension: "docx",
-    contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    contentType:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   },
   "quotation-pdf": {
     defaultFileName: "preventivo.pdf",
@@ -53,7 +82,8 @@ const FILE_KIND_META: Record<FileKindValue, { defaultFileName: string; extension
   "quotation-xlsx": {
     defaultFileName: "preventivo.xlsx",
     extension: "xlsx",
-    contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    contentType:
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   },
   "tech-pdf": {
     defaultFileName: "specifica-tecnica.pdf",
@@ -154,12 +184,13 @@ export class NestProjectAssetsController {
       this.normalizeOptionalString(versionRaw),
     );
 
-    const document = await this.documentArchiveService.getCurrentProjectVersionFile({
-      workspaceId,
-      projectId,
-      versionLabel,
-      fileKind,
-    });
+    const document =
+      await this.documentArchiveService.getCurrentProjectVersionFile({
+        workspaceId,
+        projectId,
+        versionLabel,
+        fileKind,
+      });
 
     if (!document) {
       return {
@@ -198,13 +229,19 @@ export class NestProjectAssetsController {
     const meta = FILE_KIND_META[fileKind];
 
     const multipart = await MultipartFormReader.read(request);
-    const uploaded = multipart.files.find((item) => item.fieldName === "file") ?? multipart.files[0];
+    const uploaded =
+      multipart.files.find((item) => item.fieldName === "file") ??
+      multipart.files[0];
     if (!uploaded) {
       throw new AppError("File mancante.", "FILE_REQUIRED", 400);
     }
 
     if (!this.isAllowedFileByKind(uploaded.fileName, meta.extension)) {
-      throw new AppError(`Formato non valido: atteso .${meta.extension}`, "FILE_EXTENSION_INVALID", 400);
+      throw new AppError(
+        `Formato non valido: atteso .${meta.extension}`,
+        "FILE_EXTENSION_INVALID",
+        400,
+      );
     }
 
     const versionLabel = await this.resolveVersionLabel(
@@ -258,12 +295,13 @@ export class NestProjectAssetsController {
       this.normalizeOptionalString(versionRaw),
     );
 
-    const existing = await this.documentArchiveService.getCurrentProjectVersionFile({
-      workspaceId,
-      projectId,
-      versionLabel,
-      fileKind,
-    });
+    const existing =
+      await this.documentArchiveService.getCurrentProjectVersionFile({
+        workspaceId,
+        projectId,
+        versionLabel,
+        fileKind,
+      });
 
     if (!existing) {
       return { ok: true, removed: false };
@@ -298,12 +336,13 @@ export class NestProjectAssetsController {
       this.normalizeOptionalString(versionRaw),
     );
 
-    const payload = await this.documentArchiveService.getProjectVersionFileBinary({
-      workspaceId,
-      projectId,
-      versionLabel,
-      fileKind,
-    });
+    const payload =
+      await this.documentArchiveService.getProjectVersionFileBinary({
+        workspaceId,
+        projectId,
+        versionLabel,
+        fileKind,
+      });
 
     if (!payload) {
       reply.code(404).send({ message: "File non trovato." });
@@ -311,8 +350,14 @@ export class NestProjectAssetsController {
     }
 
     reply
-      .header("Content-Disposition", `inline; filename=\"${payload.document.filename ?? FILE_KIND_META[fileKind].defaultFileName}\"`)
-      .header("Content-Type", payload.contentType ?? FILE_KIND_META[fileKind].contentType)
+      .header(
+        "Content-Disposition",
+        `inline; filename=\"${payload.document.filename ?? FILE_KIND_META[fileKind].defaultFileName}\"`,
+      )
+      .header(
+        "Content-Type",
+        payload.contentType ?? FILE_KIND_META[fileKind].contentType,
+      )
       .send(payload.bytes);
   }
 
@@ -332,12 +377,13 @@ export class NestProjectAssetsController {
       this.normalizeOptionalString(versionRaw),
     );
 
-    const document = await this.documentArchiveService.getCurrentProjectVersionFile({
-      workspaceId,
-      projectId,
-      versionLabel,
-      fileKind: FileKind.QUOTATION_PDF,
-    });
+    const document =
+      await this.documentArchiveService.getCurrentProjectVersionFile({
+        workspaceId,
+        projectId,
+        versionLabel,
+        fileKind: FileKind.QUOTATION_PDF,
+      });
 
     if (!document) {
       return { found: false };
@@ -369,13 +415,19 @@ export class NestProjectAssetsController {
     await this.projectService.getProject(workspaceId, projectId);
 
     const multipart = await MultipartFormReader.read(request);
-    const uploaded = multipart.files.find((item) => item.fieldName === "file") ?? multipart.files[0];
+    const uploaded =
+      multipart.files.find((item) => item.fieldName === "file") ??
+      multipart.files[0];
     if (!uploaded) {
       throw new AppError("File mancante.", "FILE_REQUIRED", 400);
     }
 
     if (!this.isPdfFile(uploaded.fileName, uploaded.mimeType, uploaded.bytes)) {
-      throw new AppError("E' consentito solo il formato PDF.", "FILE_EXTENSION_INVALID", 400);
+      throw new AppError(
+        "E' consentito solo il formato PDF.",
+        "FILE_EXTENSION_INVALID",
+        400,
+      );
     }
 
     const versionLabel = await this.resolveVersionLabel(
@@ -435,12 +487,13 @@ export class NestProjectAssetsController {
       this.normalizeOptionalString(versionRaw),
     );
 
-    const existing = await this.documentArchiveService.getCurrentProjectVersionFile({
-      workspaceId,
-      projectId,
-      versionLabel,
-      fileKind: FileKind.QUOTATION_PDF,
-    });
+    const existing =
+      await this.documentArchiveService.getCurrentProjectVersionFile({
+        workspaceId,
+        projectId,
+        versionLabel,
+        fileKind: FileKind.QUOTATION_PDF,
+      });
 
     if (!existing) {
       return { ok: true, removed: false };
@@ -473,12 +526,13 @@ export class NestProjectAssetsController {
       this.normalizeOptionalString(versionRaw),
     );
 
-    const payload = await this.documentArchiveService.getProjectVersionFileBinary({
-      workspaceId,
-      projectId,
-      versionLabel,
-      fileKind: FileKind.QUOTATION_PDF,
-    });
+    const payload =
+      await this.documentArchiveService.getProjectVersionFileBinary({
+        workspaceId,
+        projectId,
+        versionLabel,
+        fileKind: FileKind.QUOTATION_PDF,
+      });
 
     if (!payload) {
       reply.code(404).send({ message: "File non trovato." });
@@ -486,7 +540,10 @@ export class NestProjectAssetsController {
     }
 
     reply
-      .header("Content-Disposition", `inline; filename=\"${payload.document.filename ?? QUOTATION_FILE_NAME}\"`)
+      .header(
+        "Content-Disposition",
+        `inline; filename=\"${payload.document.filename ?? QUOTATION_FILE_NAME}\"`,
+      )
       .header("Content-Type", payload.contentType ?? "application/pdf")
       .send(payload.bytes);
   }
@@ -511,19 +568,28 @@ export class NestProjectAssetsController {
       this.normalizeOptionalString(versionRaw),
     );
 
-    const quotation = await this.documentArchiveService.getCurrentProjectVersionFile({
-      workspaceId,
-      projectId,
-      versionLabel,
-      fileKind: FileKind.QUOTATION_PDF,
-    });
+    const quotation =
+      await this.documentArchiveService.getCurrentProjectVersionFile({
+        workspaceId,
+        projectId,
+        versionLabel,
+        fileKind: FileKind.QUOTATION_PDF,
+      });
 
     if (!quotation) {
-      throw new AppError("PDF preventivo non trovato per questo progetto.", "QUOTATION_FILE_NOT_FOUND", 404);
+      throw new AppError(
+        "PDF preventivo non trovato per questo progetto.",
+        "QUOTATION_FILE_NOT_FOUND",
+        404,
+      );
     }
 
     if (!quotation.storagePath.startsWith("garage://")) {
-      throw new AppError("PDF preventivo non migrato su Garage. Eseguire la migrazione storage.", "QUOTATION_NOT_GARAGE", 409);
+      throw new AppError(
+        "PDF preventivo non migrato su Garage. Eseguire la migrazione storage.",
+        "QUOTATION_NOT_GARAGE",
+        409,
+      );
     }
 
     const workflowRun = await this.queueQuotationWorkflowRun({
@@ -568,10 +634,18 @@ export class NestProjectAssetsController {
     ]);
 
     if (!workflow) {
-      throw new AppError("Workflow preventivo progetto non configurato.", "PROJECT_QUOTATION_WORKFLOW_NOT_FOUND", 503);
+      throw new AppError(
+        "Workflow preventivo progetto non configurato.",
+        "PROJECT_QUOTATION_WORKFLOW_NOT_FOUND",
+        503,
+      );
     }
     if (!version) {
-      throw new AppError("Versione progetto non trovata.", "PROJECT_VERSION_NOT_FOUND", 404);
+      throw new AppError(
+        "Versione progetto non trovata.",
+        "PROJECT_VERSION_NOT_FOUND",
+        404,
+      );
     }
 
     return this.workflowService.createWorkflowRun({
@@ -610,7 +684,9 @@ export class NestProjectAssetsController {
     return fileKind as FileKindValue;
   }
 
-  private normalizeOptionalString(value: string | null | undefined): string | null {
+  private normalizeOptionalString(
+    value: string | null | undefined,
+  ): string | null {
     if (!value || !value.trim()) {
       return null;
     }
@@ -627,8 +703,12 @@ export class NestProjectAssetsController {
       return this.normalizeVersionLabel(explicitVersionLabel);
     }
 
-    const versions = await this.projectService.listProjectVersions(workspaceId, projectId);
-    const defaultVersion = versions.find((item) => item.isDefault) ?? versions[0] ?? null;
+    const versions = await this.projectService.listProjectVersions(
+      workspaceId,
+      projectId,
+    );
+    const defaultVersion =
+      versions.find((item) => item.isDefault) ?? versions[0] ?? null;
     return this.normalizeVersionLabel(defaultVersion?.versionLabel ?? "v1");
   }
 
@@ -658,9 +738,16 @@ export class NestProjectAssetsController {
     return fileName.toLowerCase().endsWith(`.${extension.toLowerCase()}`);
   }
 
-  private isPdfFile(fileName: string, mimeType: string, bytes: Buffer): boolean {
-    const hasPdfNameOrMime = mimeType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
-    return hasPdfNameOrMime && bytes.subarray(0, 5).toString("latin1") === "%PDF-";
+  private isPdfFile(
+    fileName: string,
+    mimeType: string,
+    bytes: Buffer,
+  ): boolean {
+    const hasPdfNameOrMime =
+      mimeType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
+    return (
+      hasPdfNameOrMime && bytes.subarray(0, 5).toString("latin1") === "%PDF-"
+    );
   }
 
   private toNullableNumber(value: bigint | null): number | null {
@@ -676,11 +763,15 @@ export class NestProjectAssetsController {
     projectId: string,
     versionLabel: string,
   ): Promise<string | null> {
-    const versions = await this.projectService.listProjectVersions(workspaceId, projectId);
-    const targetVersion = versions.find((item) => item.versionLabel === versionLabel)
-      ?? versions.find((item) => item.isDefault)
-      ?? versions[0]
-      ?? null;
+    const versions = await this.projectService.listProjectVersions(
+      workspaceId,
+      projectId,
+    );
+    const targetVersion =
+      versions.find((item) => item.versionLabel === versionLabel) ??
+      versions.find((item) => item.isDefault) ??
+      versions[0] ??
+      null;
 
     return targetVersion?.clientName ?? null;
   }

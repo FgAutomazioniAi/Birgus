@@ -2,6 +2,7 @@
 key: maintenance_proposals
 ui: Proposte manutenzione
 ---
+
 # maintenance_proposals
 
 Gestione delle proposte di manutenzione da valutare, approvare o trasformare in pianificazione.

@@ -16,7 +16,8 @@ import { COMMISSION_INTAKE_TEMPLATE_SNAPSHOT } from "./commission-intake-templat
 
 const TEMPLATE_IDENTITY_KEY = "system:commission_intake_standard";
 const TEMPLATE_KEY = "commission_intake_standard";
-const FORM_SOURCE_RELATIVE_PATH = "Obsidian/Birgus data/Drafts/INFORMAZIONI GENERALI PROGETTO.md";
+const FORM_SOURCE_RELATIVE_PATH =
+  "Obsidian/Birgus data/Drafts/INFORMAZIONI GENERALI PROGETTO.md";
 
 const LEGACY_GENERAL_FIELD_KEYS = [
   "general_commission_number",
@@ -121,17 +122,27 @@ const normalizeComparable = (value: string): string =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "");
 
-const pageTitleIndex = new Map(FALLBACK_PAGE_TITLES.map((title) => [normalizeComparable(title), title]));
-const pageSortOrder = new Map(FALLBACK_PAGE_TITLES.map((title, index) => [normalizeComparable(title), index + 1]));
+const pageTitleIndex = new Map(
+  FALLBACK_PAGE_TITLES.map((title) => [normalizeComparable(title), title]),
+);
+const pageSortOrder = new Map(
+  FALLBACK_PAGE_TITLES.map((title, index) => [
+    normalizeComparable(title),
+    index + 1,
+  ]),
+);
 
-export async function ensureCommissionIntakeSystemTemplate(prisma: PrismaClient): Promise<void> {
+export async function ensureCommissionIntakeSystemTemplate(
+  prisma: PrismaClient,
+): Promise<void> {
   const parsedForm = loadCommissionIntakeForm();
   const template = await prisma.commissionFormTemplate.upsert({
     where: { identity_key: TEMPLATE_IDENTITY_KEY },
     update: {
       key: TEMPLATE_KEY,
-      name: "Checklist raccolta dati",
-      description: "Template standard per raccolta dati a step finalizzata alla generazione commesse.",
+      name: "Checklist preventivazione",
+      description:
+        "Template standard per la raccolta dati di preventivazione collegata alle commesse.",
       scope: CommissionTemplateScope.SYSTEM,
       is_active: true,
       deleted_at: null,
@@ -140,8 +151,9 @@ export async function ensureCommissionIntakeSystemTemplate(prisma: PrismaClient)
       workspace_id: null,
       key: TEMPLATE_KEY,
       identity_key: TEMPLATE_IDENTITY_KEY,
-      name: "Checklist raccolta dati",
-      description: "Template standard per raccolta dati a step finalizzata alla generazione commesse.",
+      name: "Checklist preventivazione",
+      description:
+        "Template standard per la raccolta dati di preventivazione collegata alle commesse.",
       scope: CommissionTemplateScope.SYSTEM,
       is_active: true,
     },
@@ -156,7 +168,7 @@ export async function ensureCommissionIntakeSystemTemplate(prisma: PrismaClient)
     },
     update: {
       status: CommissionTemplateVersionStatus.PUBLISHED,
-      title: "Checklist raccolta dati v1",
+      title: "Checklist preventivazione v1",
       schema_json: {
         source: parsedForm.sourcePath,
         sourceHash: parsedForm.sourceHash,
@@ -170,7 +182,7 @@ export async function ensureCommissionIntakeSystemTemplate(prisma: PrismaClient)
       template_id: template.id,
       version: 1,
       status: CommissionTemplateVersionStatus.PUBLISHED,
-      title: "Checklist raccolta dati v1",
+      title: "Checklist preventivazione v1",
       schema_json: {
         source: parsedForm.sourcePath,
         sourceHash: parsedForm.sourceHash,
@@ -186,25 +198,25 @@ export async function ensureCommissionIntakeSystemTemplate(prisma: PrismaClient)
     const existingPage = existingPages.get(pageDefinition.key);
     const page = existingPage
       ? await prisma.commissionFormPage.update({
-        where: { id: existingPage.id },
-        data: {
-          key: pageDefinition.key,
-          page_number: pageDefinition.pageNumber,
-          title: pageDefinition.title,
-          description: null,
-          sort_order: pageDefinition.sortOrder,
-        },
-      })
+          where: { id: existingPage.id },
+          data: {
+            key: pageDefinition.key,
+            page_number: pageDefinition.pageNumber,
+            title: pageDefinition.title,
+            description: null,
+            sort_order: pageDefinition.sortOrder,
+          },
+        })
       : await prisma.commissionFormPage.create({
-        data: {
-          workspace_id: null,
-          version_id: version.id,
-          page_number: pageDefinition.pageNumber,
-          key: pageDefinition.key,
-          title: pageDefinition.title,
-          sort_order: pageDefinition.sortOrder,
-        },
-      });
+          data: {
+            workspace_id: null,
+            version_id: version.id,
+            page_number: pageDefinition.pageNumber,
+            key: pageDefinition.key,
+            title: pageDefinition.title,
+            sort_order: pageDefinition.sortOrder,
+          },
+        });
 
     for (const sectionDefinition of pageDefinition.sections) {
       const section = await prisma.commissionFormSection.upsert({
@@ -230,11 +242,19 @@ export async function ensureCommissionIntakeSystemTemplate(prisma: PrismaClient)
       });
 
       for (const fieldDefinition of sectionDefinition.fields) {
-        await upsertField(prisma, version.id, page.id, section.id, fieldDefinition);
+        await upsertField(
+          prisma,
+          version.id,
+          page.id,
+          section.id,
+          fieldDefinition,
+        );
       }
     }
 
-    const desiredSectionKeys = pageDefinition.sections.map((section) => section.key);
+    const desiredSectionKeys = pageDefinition.sections.map(
+      (section) => section.key,
+    );
     await prisma.commissionFormSection.deleteMany({
       where: {
         page_id: page.id,
@@ -247,7 +267,13 @@ export async function ensureCommissionIntakeSystemTemplate(prisma: PrismaClient)
   await pruneObsoleteTemplateShape(
     prisma,
     version.id,
-    new Set(parsedForm.pages.flatMap((page) => page.sections.flatMap((section) => section.fields.map((field) => field.key)))),
+    new Set(
+      parsedForm.pages.flatMap((page) =>
+        page.sections.flatMap((section) =>
+          section.fields.map((field) => field.key),
+        ),
+      ),
+    ),
   );
 }
 
@@ -294,10 +320,7 @@ async function pruneObsoleteTemplateShape(
       version_id: versionId,
       key: { notIn: [...desiredFieldKeys] },
       section_id: { not: null },
-      OR: [
-        { values: { some: {} } },
-        { table_cells: { some: {} } },
-      ],
+      OR: [{ values: { some: {} } }, { table_cells: { some: {} } }],
     },
     data: {
       section_id: null,
@@ -343,9 +366,12 @@ function prepareCommissionIntakeForm(form: ParsedForm): ParsedForm {
           required: false,
           table: field.table
             ? {
-              ...field.table,
-              columns: field.table.columns.map((column) => ({ ...column, required: false })),
-            }
+                ...field.table,
+                columns: field.table.columns.map((column) => ({
+                  ...column,
+                  required: false,
+                })),
+              }
             : null,
         })),
       })),
@@ -360,8 +386,10 @@ function prepareCommissionIntakeForm(form: ParsedForm): ParsedForm {
 
 function orderCommissionIntakePages(form: ParsedForm): void {
   form.pages.sort((left, right) => {
-    const leftOrder = pageSortOrder.get(normalizeComparable(left.title)) ?? left.sortOrder;
-    const rightOrder = pageSortOrder.get(normalizeComparable(right.title)) ?? right.sortOrder;
+    const leftOrder =
+      pageSortOrder.get(normalizeComparable(left.title)) ?? left.sortOrder;
+    const rightOrder =
+      pageSortOrder.get(normalizeComparable(right.title)) ?? right.sortOrder;
     return leftOrder - rightOrder;
   });
   form.pages.forEach((page, index) => {
@@ -396,26 +424,32 @@ function applyCommissionIntakeTemplateCorrections(form: ParsedForm): void {
     dataKind: CommissionDataKind.STRING,
     placeholder: null,
     options: ["Sì", "No"],
-    helpText: "Carica il file corrispondente nella scheda Documentazione e allegati.",
+    helpText:
+      "Carica il file corrispondente nella scheda Documentazione e allegati.",
   });
   setField(section51, "Foto area disponibili", {
     fieldType: CommissionFieldType.SELECT,
     dataKind: CommissionDataKind.STRING,
     placeholder: null,
     options: ["Sì", "No"],
-    helpText: "Carica il file corrispondente nella scheda Documentazione e allegati.",
+    helpText:
+      "Carica il file corrispondente nella scheda Documentazione e allegati.",
   });
   setField(section51, "Planimetria allegata e Foto area disponibili ", {
     fieldType: CommissionFieldType.SELECT,
     dataKind: CommissionDataKind.STRING,
     placeholder: null,
     options: ["Sì", "No"],
-    helpText: "Carica i file corrispondenti nella scheda Documentazione e allegati.",
+    helpText:
+      "Carica i file corrispondenti nella scheda Documentazione e allegati.",
   });
   const page6 = findPage(form, 6);
   const section62 = findSection(page6, "6.2 ");
   replaceFieldWithFields(section62, "Qualit", [
-    textField("p06_s02_qualita_aria_classe_solidi", "Qualità aria - Classe solidi"),
+    textField(
+      "p06_s02_qualita_aria_classe_solidi",
+      "Qualità aria - Classe solidi",
+    ),
     textField("p06_s02_qualita_aria_acqua", "Qualità aria - Acqua"),
     textField("p06_s02_qualita_aria_olio", "Qualità aria - Olio"),
   ]);
@@ -461,22 +495,38 @@ function applyCommissionIntakeTemplateCorrections(form: ParsedForm): void {
     placeholder: null,
     options: ["Siemens", "Allen-Bradley", "Omron", "Altro"],
   });
-  insertFieldAfter(section71, "PLC esistente in plant", textField("p07_s01_altro_plc_nome", "Nome PLC altro"));
-  insertFieldAfter(section71, "Nome PLC altro", textField("p07_s01_plc_quantita", "Quantità PLC"));
+  insertFieldAfter(
+    section71,
+    "PLC esistente in plant",
+    textField("p07_s01_altro_plc_nome", "Nome PLC altro"),
+  );
+  insertFieldAfter(
+    section71,
+    "Nome PLC altro",
+    textField("p07_s01_plc_quantita", "Quantità PLC"),
+  );
   setField(section71, "HMI richiesto", {
     fieldType: CommissionFieldType.CHECKBOX_GROUP,
     dataKind: CommissionDataKind.JSON,
     placeholder: null,
     options: ["Touch panel locale", "PC industriale", "Entrambi"],
   });
-  insertFieldAfter(section71, "HMI richiesto", textField("p07_s01_hmi_quantita", "Quantità HMI"));
+  insertFieldAfter(
+    section71,
+    "HMI richiesto",
+    textField("p07_s01_hmi_quantita", "Quantità HMI"),
+  );
   setField(section71, "Dimensione HMI preferita", {
     fieldType: CommissionFieldType.CHECKBOX_GROUP,
     dataKind: CommissionDataKind.JSON,
     placeholder: null,
-    options: ["7\"", "10\"", "15\"", "21\"", "Altro"],
+    options: ['7"', '10"', '15"', '21"', "Altro"],
   });
-  insertFieldAfter(section71, "Dimensione HMI preferita", textField("p07_s01_dimensione_hmi_altra", "Dimensione HMI altra"));
+  insertFieldAfter(
+    section71,
+    "Dimensione HMI preferita",
+    textField("p07_s01_dimensione_hmi_altra", "Dimensione HMI altra"),
+  );
 
   const section72 = findSection(page7, "7.2 ");
   setField(section72, "VPN per assistenza remota", {
@@ -490,28 +540,39 @@ function applyCommissionIntakeTemplateCorrections(form: ParsedForm): void {
   const section94 = findSection(page9, "9.4 ");
   if (section94) {
     section94.title = "9.4 Vendor List componenti";
-    const vendorField = section94.fields.find((field) => field.fieldType === CommissionFieldType.TABLE);
+    const vendorField = section94.fields.find(
+      (field) => field.fieldType === CommissionFieldType.TABLE,
+    );
     if (vendorField) {
       vendorField.label = "Componenti";
       vendorField.placeholder = null;
-      const noteColumn = vendorField.table?.columns.find((column) => column.key === "col_5_altro");
+      const noteColumn = vendorField.table?.columns.find(
+        (column) => column.key === "col_5_altro",
+      );
       if (noteColumn) {
         noteColumn.label = "Note";
       }
       const rows = vendorField.table?.defaultRows ?? [];
       for (const row of rows) {
         const currentReferenceBrands = row.col_3_marche_di_riferimento;
-        if (typeof currentReferenceBrands === "string" && currentReferenceBrands.trim().length > 0) {
+        if (
+          typeof currentReferenceBrands === "string" &&
+          currentReferenceBrands.trim().length > 0
+        ) {
           row._placeholder_col_3_marche_di_riferimento = currentReferenceBrands;
           row.col_3_marche_di_riferimento = "";
         }
       }
-      if (vendorField.table && !rows.some((row) => row.col_1_categoria === "Altro")) {
+      if (
+        vendorField.table &&
+        !rows.some((row) => row.col_1_categoria === "Altro")
+      ) {
         vendorField.table.defaultRows.push({
           col_1_categoria: "Altro",
           col_2_componente: "",
           col_3_marche_di_riferimento: "",
-          _placeholder_col_3_marche_di_riferimento: "Marca o fornitore di riferimento",
+          _placeholder_col_3_marche_di_riferimento:
+            "Marca o fornitore di riferimento",
           col_4_confermato: "",
           col_5_altro: "",
         });
@@ -531,12 +592,15 @@ function applyCommissionIntakeTemplateCorrections(form: ParsedForm): void {
 
   const page15 = findPage(form, 15);
   for (const section of page15?.sections ?? []) {
-    section.fields = section.fields.filter((field) => !["Compilato da", "Data", "Firma"].includes(field.label));
+    section.fields = section.fields.filter(
+      (field) => !["Compilato da", "Data", "Firma"].includes(field.label),
+    );
     reindexFields(section);
   }
 
   const page16 = findPage(form, 16);
-  const notesSection = findSection(page16, "NOTE E OSSERVAZIONI") ?? page16?.sections[0] ?? null;
+  const notesSection =
+    findSection(page16, "NOTE E OSSERVAZIONI") ?? page16?.sections[0] ?? null;
   insertFieldAfter(notesSection, "Annotazioni", {
     ...textField("p16_notes_data_presa_visione", "Data"),
     fieldType: CommissionFieldType.DATE,
@@ -628,44 +692,91 @@ function findPage(form: ParsedForm, pageNumber: number): ParsedPage | null {
   return form.pages.find((page) => page.pageNumber === pageNumber) ?? null;
 }
 
-function findSection(page: ParsedPage | null, titlePrefix: string): ParsedSection | null {
+function findSection(
+  page: ParsedPage | null,
+  titlePrefix: string,
+): ParsedSection | null {
   if (!page) return null;
-  return page.sections.find((section) => section.title.startsWith(titlePrefix) || section.title === titlePrefix) ?? null;
+  return (
+    page.sections.find(
+      (section) =>
+        section.title.startsWith(titlePrefix) || section.title === titlePrefix,
+    ) ?? null
+  );
 }
 
-function findField(section: ParsedSection | null, labelIncludes: string): ParsedField | null {
+function findField(
+  section: ParsedSection | null,
+  labelIncludes: string,
+): ParsedField | null {
   if (!section) return null;
   const needle = normalizeComparable(labelIncludes);
-  return section.fields.find((field) => normalizeComparable(field.label).includes(needle)) ?? null;
+  return (
+    section.fields.find((field) =>
+      normalizeComparable(field.label).includes(needle),
+    ) ?? null
+  );
 }
 
-function setField(section: ParsedSection | null, labelIncludes: string, patch: Partial<ParsedField>): void {
+function setField(
+  section: ParsedSection | null,
+  labelIncludes: string,
+  patch: Partial<ParsedField>,
+): void {
   const field = findField(section, labelIncludes);
   if (!field) return;
   Object.assign(field, { ...patch, required: false });
 }
 
-function insertFieldAfter(section: ParsedSection | null, labelIncludes: string, field: ParsedField): void {
+function insertFieldAfter(
+  section: ParsedSection | null,
+  labelIncludes: string,
+  field: ParsedField,
+): void {
   if (!section || section.fields.some((item) => item.key === field.key)) return;
-  const index = section.fields.findIndex((item) => normalizeComparable(item.label).includes(normalizeComparable(labelIncludes)));
-  section.fields.splice(index >= 0 ? index + 1 : section.fields.length, 0, field);
+  const index = section.fields.findIndex((item) =>
+    normalizeComparable(item.label).includes(
+      normalizeComparable(labelIncludes),
+    ),
+  );
+  section.fields.splice(
+    index >= 0 ? index + 1 : section.fields.length,
+    0,
+    field,
+  );
   reindexFields(section);
 }
 
-function replaceFieldWithFields(section: ParsedSection | null, labelIncludes: string, fields: ParsedField[]): void {
+function replaceFieldWithFields(
+  section: ParsedSection | null,
+  labelIncludes: string,
+  fields: ParsedField[],
+): void {
   if (!section) return;
   const replacementKeys = new Set(fields.map((field) => field.key));
-  const allReplacementFieldsExist = fields.every((field) => section.fields.some((item) => item.key === field.key));
+  const allReplacementFieldsExist = fields.every((field) =>
+    section.fields.some((item) => item.key === field.key),
+  );
   if (allReplacementFieldsExist) {
-    section.fields = section.fields.filter((field) => (
-      replacementKeys.has(field.key) || !normalizeComparable(field.label).includes(normalizeComparable(labelIncludes))
-    ));
+    section.fields = section.fields.filter(
+      (field) =>
+        replacementKeys.has(field.key) ||
+        !normalizeComparable(field.label).includes(
+          normalizeComparable(labelIncludes),
+        ),
+    );
     reindexFields(section);
     return;
   }
 
-  const index = section.fields.findIndex((field) => normalizeComparable(field.label).includes(normalizeComparable(labelIncludes)));
-  const missingFields = fields.filter((field) => !section.fields.some((item) => item.key === field.key));
+  const index = section.fields.findIndex((field) =>
+    normalizeComparable(field.label).includes(
+      normalizeComparable(labelIncludes),
+    ),
+  );
+  const missingFields = fields.filter(
+    (field) => !section.fields.some((item) => item.key === field.key),
+  );
   if (index < 0) {
     section.fields.push(...missingFields);
     reindexFields(section);
@@ -732,7 +843,8 @@ function parseCommissionIntakeForm(source: string): ParsedPage[] {
     if (!currentSection) {
       currentSection = {
         key: "main",
-        title: currentPage.pageNumber === 1 ? "Dati generali" : currentPage.title,
+        title:
+          currentPage.pageNumber === 1 ? "Dati generali" : currentPage.title,
         description: null,
         sortOrder: 1,
         fields: [],
@@ -749,9 +861,22 @@ function parseCommissionIntakeForm(source: string): ParsedPage[] {
     const label = currentTable.title || "Tabella";
     const columns = currentTable.columns.length
       ? currentTable.columns
-      : [{ key: "col_1", label: "Valore", placeholder: null, dataKind: CommissionDataKind.STRING, required: false, sortOrder: 1 }];
+      : [
+          {
+            key: "col_1",
+            label: "Valore",
+            placeholder: null,
+            dataKind: CommissionDataKind.STRING,
+            required: false,
+            sortOrder: 1,
+          },
+        ];
     section.fields.push({
-      key: fieldKeyFor(currentPage?.pageNumber ?? 0, section.fields.length + 1, label),
+      key: fieldKeyFor(
+        currentPage?.pageNumber ?? 0,
+        section.fields.length + 1,
+        label,
+      ),
       label,
       placeholder: null,
       helpText: null,
@@ -764,7 +889,12 @@ function parseCommissionIntakeForm(source: string): ParsedPage[] {
       table: {
         columns,
         defaultRows: currentTable.rows.map((row) =>
-          Object.fromEntries(columns.map((column, index) => [column.key, cleanTableCell(row[index] ?? "")])),
+          Object.fromEntries(
+            columns.map((column, index) => [
+              column.key,
+              cleanTableCell(row[index] ?? ""),
+            ]),
+          ),
         ),
       },
     });
@@ -790,7 +920,9 @@ function parseCommissionIntakeForm(source: string): ParsedPage[] {
     }
 
     const pageTitle = pageTitleIndex.get(normalizeComparable(originalLine));
-    const sectionMatch = originalLine.match(/^(?:num\s+)?(\d+(?:\.\d+)*)\s+(.+)$/i);
+    const sectionMatch = originalLine.match(
+      /^(?:num\s+)?(\d+(?:\.\d+)*)\s+(.+)$/i,
+    );
     if (pageTitle || sectionMatch) {
       appendTable();
     }
@@ -865,7 +997,11 @@ function parseCommissionIntakeForm(source: string): ParsedPage[] {
     }
 
     const section = ensureSection();
-    const fields = parseFieldsFromLine(lineWithoutComment, requiredBlock, pendingPrompt);
+    const fields = parseFieldsFromLine(
+      lineWithoutComment,
+      requiredBlock,
+      pendingPrompt,
+    );
     pendingPrompt = fields.pendingPrompt;
     for (const field of fields.items) {
       const sortOrder = section.fields.length + 1;
@@ -879,7 +1015,11 @@ function parseCommissionIntakeForm(source: string): ParsedPage[] {
 
   appendTable();
   return pages
-    .sort((left, right) => (pageSortOrder.get(normalizeComparable(left.title)) ?? 999) - (pageSortOrder.get(normalizeComparable(right.title)) ?? 999))
+    .sort(
+      (left, right) =>
+        (pageSortOrder.get(normalizeComparable(left.title)) ?? 999) -
+        (pageSortOrder.get(normalizeComparable(right.title)) ?? 999),
+    )
     .map((page, index) => ({
       ...page,
       pageNumber: index + 1,
@@ -891,7 +1031,10 @@ function parseFieldsFromLine(
   line: string,
   requiredBlock: boolean,
   pendingPrompt: string | null,
-): { items: Omit<ParsedField, "key" | "sortOrder">[]; pendingPrompt: string | null } {
+): {
+  items: Omit<ParsedField, "key" | "sortOrder">[];
+  pendingPrompt: string | null;
+} {
   const inlineRequired = line.startsWith("_") && line.endsWith("_");
   const required = requiredBlock || inlineRequired;
   const normalizedLine = trimRequiredMarkers(line);
@@ -913,7 +1056,10 @@ function parseFieldPart(
   part: string,
   required: boolean,
   pendingPrompt: string | null,
-): { items: Omit<ParsedField, "key" | "sortOrder">[]; pendingPrompt: string | null } {
+): {
+  items: Omit<ParsedField, "key" | "sortOrder">[];
+  pendingPrompt: string | null;
+} {
   const normalized = trimRequiredMarkers(part).trim();
   if (!normalized) return { items: [], pendingPrompt: null };
 
@@ -993,7 +1139,8 @@ function parseFieldPart(
   }
 
   if (textPlaceholders.length > 0 || /txt\s*\(/i.test(normalized)) {
-    const placeholder = textPlaceholders[0] || label || pendingPrompt || "Valore";
+    const placeholder =
+      textPlaceholders[0] || label || pendingPrompt || "Valore";
     return {
       pendingPrompt: null,
       items: [
@@ -1115,12 +1262,20 @@ async function upsertField(
   await syncTableDefinition(prisma, field.id, fieldDefinition);
 }
 
-async function syncFieldOptions(prisma: PrismaClient, fieldId: string, options: string[]): Promise<void> {
-  const desiredValues = options.map((option, index) => slugify(option) || `option_${index + 1}`);
+async function syncFieldOptions(
+  prisma: PrismaClient,
+  fieldId: string,
+  options: string[],
+): Promise<void> {
+  const desiredValues = options.map(
+    (option, index) => slugify(option) || `option_${index + 1}`,
+  );
   await prisma.commissionFieldOption.deleteMany({
     where: {
       field_id: fieldId,
-      value: { notIn: desiredValues.length ? desiredValues : ["__no_options__"] },
+      value: {
+        notIn: desiredValues.length ? desiredValues : ["__no_options__"],
+      },
     },
   });
 
@@ -1216,7 +1371,11 @@ async function syncTableDefinition(
   }
 }
 
-function fieldKeyFor(pageNumber: number, sortOrder: number, label: string): string {
+function fieldKeyFor(
+  pageNumber: number,
+  sortOrder: number,
+  label: string,
+): string {
   if (pageNumber === 1 && sortOrder <= LEGACY_GENERAL_FIELD_KEYS.length) {
     return LEGACY_GENERAL_FIELD_KEYS[sortOrder - 1];
   }
@@ -1235,7 +1394,11 @@ function stripInlineComment(value: string): string {
 }
 
 function trimRequiredMarkers(value: string): string {
-  return value.trim().replace(/^_+\s*/, "").replace(/\s*_+$/g, "").trim();
+  return value
+    .trim()
+    .replace(/^_+\s*/, "")
+    .replace(/\s*_+$/g, "")
+    .trim();
 }
 
 function cleanLabel(value: string): string {
@@ -1249,7 +1412,9 @@ function cleanLabel(value: string): string {
 }
 
 function cleanColumnLabel(value: string): string {
-  return cleanLabel(replaceTextExpressions(value).replace(/sel\s*\(([^)]*)\)/gi, "$1"));
+  return cleanLabel(
+    replaceTextExpressions(value).replace(/sel\s*\(([^)]*)\)/gi, "$1"),
+  );
 }
 
 function cleanTableCell(value: string): string {
@@ -1261,7 +1426,9 @@ function extractTextPlaceholder(value: string): string | null {
 }
 
 function extractTextPlaceholders(value: string): string[] {
-  return extractFunctionArguments(value, "txt").map((placeholder) => cleanLabel(placeholder));
+  return extractFunctionArguments(value, "txt").map((placeholder) =>
+    cleanLabel(placeholder),
+  );
 }
 
 function extractSelectOptions(value: string): string[] {
@@ -1271,7 +1438,10 @@ function extractSelectOptions(value: string): string[] {
 }
 
 function extractCheckboxOptions(value: string): string[] {
-  const withoutPromptCheckbox = value.replace(/^\[\]\s*[^[]*?(?=\[\]|txt\s*\(|$)/i, "");
+  const withoutPromptCheckbox = value.replace(
+    /^\[\]\s*[^[]*?(?=\[\]|txt\s*\(|$)/i,
+    "",
+  );
   const options: string[] = [];
   for (const match of withoutPromptCheckbox.matchAll(/\[\]\s*([^[]+)/g)) {
     const option = cleanLabel(match[1].replace(/txt\s*\([^)]*\)/gi, ""));
@@ -1287,7 +1457,10 @@ function splitOptions(value: string): string[] {
     .filter(Boolean);
 }
 
-function extractFunctionArguments(value: string, functionName: string): string[] {
+function extractFunctionArguments(
+  value: string,
+  functionName: string,
+): string[] {
   const args: string[] = [];
   let searchIndex = 0;
   const matcher = new RegExp(`${functionName}\\s*\\(`, "gi");
@@ -1315,7 +1488,10 @@ function extractFunctionArguments(value: string, functionName: string): string[]
   return args;
 }
 
-function replaceTextExpressions(value: string, emptyReplacement?: string): string {
+function replaceTextExpressions(
+  value: string,
+  emptyReplacement?: string,
+): string {
   let result = "";
   let cursor = 0;
   const matcher = /txt\s*\(/gi;
@@ -1340,7 +1516,8 @@ function replaceTextExpressions(value: string, emptyReplacement?: string): strin
 
     if (depth === 0) {
       const argument = cleanLabel(value.slice(argStart, end - 1));
-      result += typeof emptyReplacement === "string" ? emptyReplacement : argument;
+      result +=
+        typeof emptyReplacement === "string" ? emptyReplacement : argument;
       cursor = end;
     } else {
       result += value.slice(match.index);

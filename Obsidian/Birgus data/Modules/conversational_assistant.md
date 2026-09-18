@@ -2,6 +2,7 @@
 key: conversational_assistant
 ui: Chatbot
 ---
+
 # conversational_assistant
 
 Assistente conversazionale del workspace con conversazioni persistenti, allegati, strumenti AI e uso facoltativo della knowledge.

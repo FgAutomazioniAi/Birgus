@@ -12,18 +12,33 @@ export class VllmLifecycleService {
   private readonly timeoutMs: number;
 
   public constructor() {
-    this.baseUrl = (process.env.VLLM_LIFECYCLE_BASE_URL ?? "http://vllm_lifecycle:8203").replace(/\/+$/, "");
+    this.baseUrl = (
+      process.env.VLLM_LIFECYCLE_BASE_URL ?? "http://vllm_lifecycle:8203"
+    ).replace(/\/+$/, "");
     this.token = (process.env.VLLM_LIFECYCLE_TOKEN ?? "").trim();
-    this.timeoutMs = this.toPositiveInt(process.env.VLLM_LIFECYCLE_TIMEOUT_MS, 190_000);
+    this.timeoutMs = this.toPositiveInt(
+      process.env.VLLM_LIFECYCLE_TIMEOUT_MS,
+      190_000,
+    );
   }
 
   public async getRuntimeStatus(): Promise<VllmRuntimeStatus> {
     return this.request("/v1/vllm/status", { method: "GET" });
   }
 
-  public async updateMaxModelLen(maxModelLen: number): Promise<VllmRuntimeStatus> {
-    if (!Number.isInteger(maxModelLen) || maxModelLen < 1024 || maxModelLen > 32768) {
-      throw new AppError("Il contesto vLLM deve essere compreso tra 1024 e 32768 token.", "VLLM_CONTEXT_LIMIT_INVALID", 400);
+  public async updateMaxModelLen(
+    maxModelLen: number,
+  ): Promise<VllmRuntimeStatus> {
+    if (
+      !Number.isInteger(maxModelLen) ||
+      maxModelLen < 1024 ||
+      maxModelLen > 32768
+    ) {
+      throw new AppError(
+        "Il contesto vLLM deve essere compreso tra 1024 e 32768 token.",
+        "VLLM_CONTEXT_LIMIT_INVALID",
+        400,
+      );
     }
     return this.request("/v1/vllm/max-model-len", {
       method: "POST",
@@ -31,9 +46,16 @@ export class VllmLifecycleService {
     });
   }
 
-  private async request(path: string, init: RequestInit): Promise<VllmRuntimeStatus> {
+  private async request(
+    path: string,
+    init: RequestInit,
+  ): Promise<VllmRuntimeStatus> {
     if (!this.token) {
-      throw new AppError("Lifecycle vLLM non configurato.", "VLLM_LIFECYCLE_NOT_CONFIGURED", 503);
+      throw new AppError(
+        "Lifecycle vLLM non configurato.",
+        "VLLM_LIFECYCLE_NOT_CONFIGURED",
+        503,
+      );
     }
 
     let response: Response;
@@ -49,22 +71,37 @@ export class VllmLifecycleService {
         cache: "no-store",
       });
     } catch {
-      throw new AppError("Lifecycle vLLM non raggiungibile.", "VLLM_LIFECYCLE_UNAVAILABLE", 503);
+      throw new AppError(
+        "Lifecycle vLLM non raggiungibile.",
+        "VLLM_LIFECYCLE_UNAVAILABLE",
+        503,
+      );
     }
 
-    const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+    const payload = (await response.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >;
     if (!response.ok) {
       throw new AppError(
-        typeof payload.detail === "string" ? payload.detail : "Lifecycle vLLM non disponibile.",
+        typeof payload.detail === "string"
+          ? payload.detail
+          : "Lifecycle vLLM non disponibile.",
         "VLLM_LIFECYCLE_REQUEST_FAILED",
         response.status >= 400 && response.status < 500 ? response.status : 503,
       );
     }
 
     return {
-      configuredMaxModelLen: typeof payload.configured_max_model_len === "number" ? payload.configured_max_model_len : null,
+      configuredMaxModelLen:
+        typeof payload.configured_max_model_len === "number"
+          ? payload.configured_max_model_len
+          : null,
       containerRunning: payload.container_running === true,
-      targetContainer: typeof payload.target_container === "string" ? payload.target_container : "birgus_vllm",
+      targetContainer:
+        typeof payload.target_container === "string"
+          ? payload.target_container
+          : "birgus_vllm",
     };
   }
 

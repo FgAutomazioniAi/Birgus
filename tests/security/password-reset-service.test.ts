@@ -91,10 +91,16 @@ test("PasswordResetService counts failed one-time-code attempts", async () => {
   );
 
   await assert.rejects(
-    service.resetPassword({ email: user.email, code: "000000", newPassword: "ValidPass1" }),
+    service.resetPassword({
+      email: user.email,
+      code: "000000",
+      newPassword: "ValidPass1",
+    }),
     { code: "AUTH_PASSWORD_RESET_CODE_INVALID" },
   );
-  assert.deepEqual(codeRepository.failedAttempts, [{ userId: user.id, maxAttempts: 4 }]);
+  assert.deepEqual(codeRepository.failedAttempts, [
+    { userId: user.id, maxAttempts: 4 },
+  ]);
 });
 
 class StaticUserAccountRepository implements UserAccountRepository {
@@ -121,13 +127,26 @@ class StaticUserAccountRepository implements UserAccountRepository {
   public async markTwoFactorVerified(): Promise<void> {}
 }
 
-class InMemoryPasswordResetCodeRepository implements PasswordResetCodeRepository {
-  public readonly createdCodes: Array<{ userId: string; codeHash: string; expiresAt: Date }> = [];
-  public readonly failedAttempts: Array<{ userId: string; maxAttempts: number }> = [];
+class InMemoryPasswordResetCodeRepository
+  implements PasswordResetCodeRepository
+{
+  public readonly createdCodes: Array<{
+    userId: string;
+    codeHash: string;
+    expiresAt: Date;
+  }> = [];
+  public readonly failedAttempts: Array<{
+    userId: string;
+    maxAttempts: number;
+  }> = [];
 
   public async invalidateActiveCodesForUser(): Promise<void> {}
 
-  public async createCode(userId: string, codeHash: string, expiresAt: Date): Promise<void> {
+  public async createCode(
+    userId: string,
+    codeHash: string,
+    expiresAt: Date,
+  ): Promise<void> {
     this.createdCodes.push({ userId, codeHash, expiresAt });
   }
 
@@ -137,7 +156,10 @@ class InMemoryPasswordResetCodeRepository implements PasswordResetCodeRepository
 
   public async markCodeUsed(): Promise<void> {}
 
-  public async recordFailedAttempt(userId: string, maxAttempts: number): Promise<void> {
+  public async recordFailedAttempt(
+    userId: string,
+    maxAttempts: number,
+  ): Promise<void> {
     this.failedAttempts.push({ userId, maxAttempts });
   }
 }

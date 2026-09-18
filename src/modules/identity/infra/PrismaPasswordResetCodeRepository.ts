@@ -1,7 +1,12 @@
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
-import { PasswordResetCodeRecord, PasswordResetCodeRepository } from "../repositories/PasswordResetCodeRepository.js";
+import {
+  PasswordResetCodeRecord,
+  PasswordResetCodeRepository,
+} from "../repositories/PasswordResetCodeRepository.js";
 
-export class PrismaPasswordResetCodeRepository implements PasswordResetCodeRepository {
+export class PrismaPasswordResetCodeRepository
+  implements PasswordResetCodeRepository
+{
   public async invalidateActiveCodesForUser(userId: string): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     await prisma.passwordResetCode.updateMany({
@@ -15,7 +20,11 @@ export class PrismaPasswordResetCodeRepository implements PasswordResetCodeRepos
     });
   }
 
-  public async createCode(userId: string, codeHash: string, expiresAt: Date): Promise<void> {
+  public async createCode(
+    userId: string,
+    codeHash: string,
+    expiresAt: Date,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     await prisma.passwordResetCode.create({
       data: {
@@ -26,7 +35,11 @@ export class PrismaPasswordResetCodeRepository implements PasswordResetCodeRepos
     });
   }
 
-  public async findValidCode(userId: string, codeHash: string, now: Date): Promise<PasswordResetCodeRecord | null> {
+  public async findValidCode(
+    userId: string,
+    codeHash: string,
+    now: Date,
+  ): Promise<PasswordResetCodeRecord | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.passwordResetCode.findFirst({
       where: {
@@ -63,7 +76,10 @@ export class PrismaPasswordResetCodeRepository implements PasswordResetCodeRepos
     };
   }
 
-  public async recordFailedAttempt(userId: string, maxAttempts: number): Promise<void> {
+  public async recordFailedAttempt(
+    userId: string,
+    maxAttempts: number,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     const now = new Date();
 

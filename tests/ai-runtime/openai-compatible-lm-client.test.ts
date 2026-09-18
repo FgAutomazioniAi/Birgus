@@ -11,14 +11,23 @@ afterEach(() => {
 });
 
 test("OpenAiCompatibleLmClient calls OpenAI-compatible models and chat endpoints with Bearer auth", async () => {
-  const calls: Array<{ url: string; authorization: string | null; body: Record<string, unknown> | null }> = [];
-  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+  const calls: Array<{
+    url: string;
+    authorization: string | null;
+    body: Record<string, unknown> | null;
+  }> = [];
+  globalThis.fetch = (async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     const url = String(input);
     const headers = new Headers(init?.headers);
     calls.push({
       url,
       authorization: headers.get("authorization"),
-      body: init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : null,
+      body: init?.body
+        ? (JSON.parse(String(init.body)) as Record<string, unknown>)
+        : null,
     });
 
     if (url.endsWith("/v1/models")) {
@@ -28,7 +37,7 @@ test("OpenAiCompatibleLmClient calls OpenAI-compatible models and chat endpoints
     return Response.json({
       id: "chatcmpl-test",
       model: "qwen-test",
-      choices: [{ message: { role: "assistant", content: "{\"ok\":true}" } }],
+      choices: [{ message: { role: "assistant", content: '{"ok":true}' } }],
       usage: { prompt_tokens: 10, completion_tokens: 3 },
     });
   }) as typeof fetch;
@@ -45,15 +54,19 @@ test("OpenAiCompatibleLmClient calls OpenAI-compatible models and chat endpoints
     systemPrompt: "Rispondi in JSON.",
     userContext: "test",
     schemaName: "smoke",
-    schema: { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"] },
+    schema: {
+      type: "object",
+      properties: { ok: { type: "boolean" } },
+      required: ["ok"],
+    },
   });
 
   assert.equal(result.model, "qwen-test");
-  assert.equal(result.content, "{\"ok\":true}");
-  assert.deepEqual(calls.map((call) => call.url), [
-    "http://vllm:8000/v1/models",
-    "http://vllm:8000/v1/chat/completions",
-  ]);
+  assert.equal(result.content, '{"ok":true}');
+  assert.deepEqual(
+    calls.map((call) => call.url),
+    ["http://vllm:8000/v1/models", "http://vllm:8000/v1/chat/completions"],
+  );
   assert.equal(calls[0]?.authorization, "Bearer secret-token");
   assert.equal(calls[1]?.authorization, "Bearer secret-token");
   assert.equal(calls[1]?.body?.model, "qwen-test");
@@ -62,7 +75,11 @@ test("OpenAiCompatibleLmClient calls OpenAI-compatible models and chat endpoints
     json_schema: {
       name: "smoke",
       strict: true,
-      schema: { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"] },
+      schema: {
+        type: "object",
+        properties: { ok: { type: "boolean" } },
+        required: ["ok"],
+      },
     },
   });
 });
@@ -105,7 +122,10 @@ test("OpenAiCompatibleLmClient reports provider HTTP failures without response p
       return Response.json({ data: [] });
     }
 
-    return Response.json({ error: "sensitive provider payload" }, { status: 401 });
+    return Response.json(
+      { error: "sensitive provider payload" },
+      { status: 401 },
+    );
   }) as typeof fetch;
 
   const client = new OpenAiCompatibleLmClient({
@@ -114,12 +134,13 @@ test("OpenAiCompatibleLmClient reports provider HTTP failures without response p
   });
 
   await assert.rejects(
-    () => client.completeJsonSchema({
-      systemPrompt: "system",
-      userContext: "user",
-      schemaName: "schema",
-      schema: { type: "object" },
-    }),
+    () =>
+      client.completeJsonSchema({
+        systemPrompt: "system",
+        userContext: "user",
+        schemaName: "schema",
+        schema: { type: "object" },
+      }),
     (error) => {
       assert.ok(error instanceof Error);
       assert.equal(error.message, "AI_PROVIDER_UNAUTHORIZED");
@@ -157,12 +178,18 @@ test("OpenAiCompatibleLmClient reports timeout without low-level details", async
 
 test("OpenAiCompatibleLmClient caps an unsafe completion limit before calling the provider", async () => {
   let completionBody: Record<string, unknown> | null = null;
-  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = (async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     if (String(input).endsWith("/v1/models")) {
       return new Response("down", { status: 503 });
     }
 
-    completionBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    completionBody = JSON.parse(String(init?.body ?? "{}")) as Record<
+      string,
+      unknown
+    >;
     return Response.json({
       id: "chatcmpl-test",
       choices: [{ message: { role: "assistant", content: "ok" } }],
@@ -226,13 +253,18 @@ test("OpenAiCompatibleLmClient rejects empty assistant responses", async () => {
 
 test("OpenAiCompatibleToolChatClient omits tool fields for plain chat", async () => {
   const completionBodies: Record<string, unknown>[] = [];
-  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = (async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     const url = String(input);
     if (url.endsWith("/v1/models")) {
       return new Response("not available", { status: 503 });
     }
 
-    completionBodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+    completionBodies.push(
+      JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+    );
     return Response.json({
       id: "chatcmpl-test",
       choices: [{ message: { role: "assistant", content: "ciao" } }],

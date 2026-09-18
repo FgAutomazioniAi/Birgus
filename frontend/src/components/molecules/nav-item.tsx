@@ -12,7 +12,14 @@ export interface NavItemProps {
   href: string;
 }
 
-export function NavItem({ collapsed, icon: Icon, isActive, label, onClick, href }: NavItemProps) {
+export function NavItem({
+  collapsed,
+  icon: Icon,
+  isActive,
+  label,
+  onClick,
+  href,
+}: NavItemProps) {
   return (
     <Link
       href={href}
@@ -26,7 +33,10 @@ export function NavItem({ collapsed, icon: Icon, isActive, label, onClick, href 
         collapsed && "lg:justify-center",
       )}
     >
-      <Icon size={20} className={cn(isActive ? "text-brand-accent" : "text-text-muted")} />
+      <Icon
+        size={20}
+        className={cn(isActive ? "text-brand-accent" : "text-text-muted")}
+      />
       {!collapsed && <span>{label}</span>}
     </Link>
   );

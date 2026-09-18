@@ -29,7 +29,8 @@ import { PrismaService } from "../prisma/prisma.service.js";
     },
     {
       provide: AiProviderSettingsService,
-      useFactory: (prisma: PrismaService) => new AiProviderSettingsService(prisma),
+      useFactory: (prisma: PrismaService) =>
+        new AiProviderSettingsService(prisma),
       inject: [PrismaService],
     },
     {
@@ -38,20 +39,24 @@ import { PrismaService } from "../prisma/prisma.service.js";
     },
     {
       provide: MailProviderSettingsService,
-      useFactory: (prisma: PrismaService) => new MailProviderSettingsService(prisma),
+      useFactory: (prisma: PrismaService) =>
+        new MailProviderSettingsService(prisma),
       inject: [PrismaService],
     },
     {
       provide: OpenAiCompatibleLmClient,
       useFactory: (settingsService: AiProviderSettingsService) => {
-        OpenAiCompatibleLmClient.setRuntimeConfigResolver(() => settingsService.getRuntimeConfig());
+        OpenAiCompatibleLmClient.setRuntimeConfigResolver(() =>
+          settingsService.getRuntimeConfig(),
+        );
         return new OpenAiCompatibleLmClient();
       },
       inject: [AiProviderSettingsService],
     },
     {
       provide: AiGatewayService,
-      useFactory: (lmClient: OpenAiCompatibleLmClient) => new AiGatewayService(lmClient),
+      useFactory: (lmClient: OpenAiCompatibleLmClient) =>
+        new AiGatewayService(lmClient),
       inject: [OpenAiCompatibleLmClient],
     },
     {

@@ -8,8 +8,16 @@ export class ModuleAccessPolicy {
     this.moduleAccessReader = moduleAccessReader;
   }
 
-  public async ensureEnabled(workspaceId: string, userId: string, moduleKey: string): Promise<void> {
-    const enabled = await this.moduleAccessReader.isModuleEnabledForUser(workspaceId, userId, moduleKey);
+  public async ensureEnabled(
+    workspaceId: string,
+    userId: string,
+    moduleKey: string,
+  ): Promise<void> {
+    const enabled = await this.moduleAccessReader.isModuleEnabledForUser(
+      workspaceId,
+      userId,
+      moduleKey,
+    );
 
     if (!enabled) {
       throw new AppError(
@@ -20,8 +28,14 @@ export class ModuleAccessPolicy {
     }
   }
 
-  public async ensureEnabledForWorkspace(workspaceId: string, moduleKey: string): Promise<void> {
-    const enabled = await this.moduleAccessReader.isModuleEnabledForWorkspace(workspaceId, moduleKey);
+  public async ensureEnabledForWorkspace(
+    workspaceId: string,
+    moduleKey: string,
+  ): Promise<void> {
+    const enabled = await this.moduleAccessReader.isModuleEnabledForWorkspace(
+      workspaceId,
+      moduleKey,
+    );
     if (!enabled) {
       throw new AppError(
         `Module '${moduleKey}' is disabled for this workspace.`,

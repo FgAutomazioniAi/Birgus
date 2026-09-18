@@ -23,10 +23,15 @@ export type WorkflowTransferDocument = {
     label: string;
     description: string | null;
     configuration: unknown | null;
-    nodes: Array<Omit<WorkflowDefinitionInput["nodes"][number], "id" | "moduleAgentId" | "moduleToolId"> & {
-      agent?: WorkflowResourceReference;
-      tool?: WorkflowResourceReference;
-    }>;
+    nodes: Array<
+      Omit<
+        WorkflowDefinitionInput["nodes"][number],
+        "id" | "moduleAgentId" | "moduleToolId"
+      > & {
+        agent?: WorkflowResourceReference;
+        tool?: WorkflowResourceReference;
+      }
+    >;
     edges: Array<Omit<WorkflowDefinitionInput["edges"][number], "id">>;
   };
 };
@@ -38,11 +43,27 @@ export class WorkflowTransferService {
     private readonly moduleAccessPolicy: ModuleAccessPolicy,
   ) {}
 
-  public async exportWorkflow(workspaceId: string, workflowId: string): Promise<WorkflowTransferDocument> {
-    const workflow = await this.workflowService.getWorkflow(workspaceId, workflowId);
-    const agentReferences = await this.findResourceReferences(workspaceId, "agent", workflow.nodes.map((node) => node.moduleAgentId));
-    const toolReferences = await this.findResourceReferences(workspaceId, "tool", workflow.nodes.map((node) => node.moduleToolId));
-    const nodeKeyById = new Map(workflow.nodes.map((node) => [node.id, node.nodeKey]));
+  public async exportWorkflow(
+    workspaceId: string,
+    workflowId: string,
+  ): Promise<WorkflowTransferDocument> {
+    const workflow = await this.workflowService.getWorkflow(
+      workspaceId,
+      workflowId,
+    );
+    const agentReferences = await this.findResourceReferences(
+      workspaceId,
+      "agent",
+      workflow.nodes.map((node) => node.moduleAgentId),
+    );
+    const toolReferences = await this.findResourceReferences(
+      workspaceId,
+      "tool",
+      workflow.nodes.map((node) => node.moduleToolId),
+    );
+    const nodeKeyById = new Map(
+      workflow.nodes.map((node) => [node.id, node.nodeKey]),
+    );
 
     return {
       format: WORKFLOW_TRANSFER_FORMAT,
@@ -68,14 +89,34 @@ export class WorkflowTransferService {
           outputSchema: node.outputSchema,
           isEnabled: node.isEnabled,
           isRequired: node.isRequired,
-          ...(node.moduleAgentId ? { agent: this.requireReference(agentReferences, node.moduleAgentId, "agente") } : {}),
-          ...(node.moduleToolId ? { tool: this.requireReference(toolReferences, node.moduleToolId, "strumento") } : {}),
+          ...(node.moduleAgentId
+            ? {
+                agent: this.requireReference(
+                  agentReferences,
+                  node.moduleAgentId,
+                  "agente",
+                ),
+              }
+            : {}),
+          ...(node.moduleToolId
+            ? {
+                tool: this.requireReference(
+                  toolReferences,
+                  node.moduleToolId,
+                  "strumento",
+                ),
+              }
+            : {}),
         })),
         edges: workflow.edges.map((edge) => {
           const sourceNodeKey = nodeKeyById.get(edge.sourceNodeId);
           const targetNodeKey = nodeKeyById.get(edge.targetNodeId);
           if (!sourceNodeKey || !targetNodeKey) {
-            throw new AppError("Il workflow contiene un collegamento non esportabile.", "WORKFLOW_EXPORT_EDGE_INVALID", 409);
+            throw new AppError(
+              "Il workflow contiene un collegamento non esportabile.",
+              "WORKFLOW_EXPORT_EDGE_INVALID",
+              409,
+            );
           }
           return {
             sourceNodeKey,
@@ -107,7 +148,10 @@ export class WorkflowTransferService {
     const unavailableModules: string[] = [];
     for (const moduleKey of requiredModules) {
       try {
-        await this.moduleAccessPolicy.ensureEnabledForWorkspace(params.workspaceId, moduleKey);
+        await this.moduleAccessPolicy.ensureEnabledForWorkspace(
+          params.workspaceId,
+          moduleKey,
+        );
       } catch {
         unavailableModules.push(moduleKey);
       }
@@ -120,8 +164,15 @@ export class WorkflowTransferService {
       );
     }
 
-    const resourceIds = await this.resolveResources(params.workspaceId, document.workflow.nodes);
-    const importKey = await this.nextImportKey(params.workspaceId, document.workflow.moduleKey, document.workflow.key);
+    const resourceIds = await this.resolveResources(
+      params.workspaceId,
+      document.workflow.nodes,
+    );
+    const importKey = await this.nextImportKey(
+      params.workspaceId,
+      document.workflow.moduleKey,
+      document.workflow.key,
+    );
     const saved = await this.workflowService.saveWorkflowDefinition({
       workflowId: null,
       workspaceId: params.workspaceId,
@@ -141,8 +192,12 @@ export class WorkflowTransferService {
         label: node.label,
         positionX: node.positionX,
         positionY: node.positionY,
-        moduleAgentId: node.agent ? resourceIds.agents.get(this.referenceKey(node.agent)) ?? null : null,
-        moduleToolId: node.tool ? resourceIds.tools.get(this.referenceKey(node.tool)) ?? null : null,
+        moduleAgentId: node.agent
+          ? (resourceIds.agents.get(this.referenceKey(node.agent)) ?? null)
+          : null,
+        moduleToolId: node.tool
+          ? (resourceIds.tools.get(this.referenceKey(node.tool)) ?? null)
+          : null,
         inputKind: node.inputKind,
         outputKind: node.outputKind,
         configuration: node.configuration,
@@ -167,16 +222,41 @@ export class WorkflowTransferService {
     if (ids.length === 0) return references;
 
     const prisma = PrismaClientManager.getClient();
-    const rows = kind === "agent"
-      ? await prisma.moduleAgent.findMany({ where: { id: { in: ids }, workspace_id: workspaceId, deleted_at: null }, include: { module: { select: { key: true } } } })
-      : await prisma.moduleTool.findMany({ where: { id: { in: ids }, workspace_id: workspaceId, deleted_at: null }, include: { module: { select: { key: true } } } });
-    for (const row of rows) references.set(row.id, { moduleKey: row.module.key, key: row.key });
+    const rows =
+      kind === "agent"
+        ? await prisma.moduleAgent.findMany({
+            where: {
+              id: { in: ids },
+              workspace_id: workspaceId,
+              deleted_at: null,
+            },
+            include: { module: { select: { key: true } } },
+          })
+        : await prisma.moduleTool.findMany({
+            where: {
+              id: { in: ids },
+              workspace_id: workspaceId,
+              deleted_at: null,
+            },
+            include: { module: { select: { key: true } } },
+          });
+    for (const row of rows)
+      references.set(row.id, { moduleKey: row.module.key, key: row.key });
     return references;
   }
 
-  private requireReference(references: Map<string, WorkflowResourceReference>, id: string, kind: string): WorkflowResourceReference {
+  private requireReference(
+    references: Map<string, WorkflowResourceReference>,
+    id: string,
+    kind: string,
+  ): WorkflowResourceReference {
     const reference = references.get(id);
-    if (!reference) throw new AppError(`Il workflow fa riferimento a un ${kind} non disponibile.`, "WORKFLOW_EXPORT_RESOURCE_MISSING", 409);
+    if (!reference)
+      throw new AppError(
+        `Il workflow fa riferimento a un ${kind} non disponibile.`,
+        "WORKFLOW_EXPORT_RESOURCE_MISSING",
+        409,
+      );
     return reference;
   }
 
@@ -184,29 +264,79 @@ export class WorkflowTransferService {
     workspaceId: string,
     nodes: WorkflowTransferDocument["workflow"]["nodes"],
   ): Promise<{ agents: Map<string, string>; tools: Map<string, string> }> {
-    const agentRefs = nodes.flatMap((node) => node.agent ? [node.agent] : []);
-    const toolRefs = nodes.flatMap((node) => node.tool ? [node.tool] : []);
+    const agentRefs = nodes.flatMap((node) => (node.agent ? [node.agent] : []));
+    const toolRefs = nodes.flatMap((node) => (node.tool ? [node.tool] : []));
     const prisma = PrismaClientManager.getClient();
     const [agents, tools] = await Promise.all([
-      agentRefs.length > 0 ? prisma.moduleAgent.findMany({ where: { workspace_id: workspaceId, deleted_at: null, is_enabled: true }, include: { module: { select: { key: true } } } }) : [],
-      toolRefs.length > 0 ? prisma.moduleTool.findMany({ where: { workspace_id: workspaceId, deleted_at: null, is_enabled: true }, include: { module: { select: { key: true } } } }) : [],
+      agentRefs.length > 0
+        ? prisma.moduleAgent.findMany({
+            where: {
+              workspace_id: workspaceId,
+              deleted_at: null,
+              is_enabled: true,
+            },
+            include: { module: { select: { key: true } } },
+          })
+        : [],
+      toolRefs.length > 0
+        ? prisma.moduleTool.findMany({
+            where: {
+              workspace_id: workspaceId,
+              deleted_at: null,
+              is_enabled: true,
+            },
+            include: { module: { select: { key: true } } },
+          })
+        : [],
     ]);
-    const agentIds = new Map(agents.map((item) => [this.referenceKey({ moduleKey: item.module.key, key: item.key }), item.id]));
-    const toolIds = new Map(tools.map((item) => [this.referenceKey({ moduleKey: item.module.key, key: item.key }), item.id]));
+    const agentIds = new Map(
+      agents.map((item) => [
+        this.referenceKey({ moduleKey: item.module.key, key: item.key }),
+        item.id,
+      ]),
+    );
+    const toolIds = new Map(
+      tools.map((item) => [
+        this.referenceKey({ moduleKey: item.module.key, key: item.key }),
+        item.id,
+      ]),
+    );
     const missing = [
-      ...agentRefs.filter((reference) => !agentIds.has(this.referenceKey(reference))).map((reference) => `agente ${reference.moduleKey}/${reference.key}`),
-      ...toolRefs.filter((reference) => !toolIds.has(this.referenceKey(reference))).map((reference) => `strumento ${reference.moduleKey}/${reference.key}`),
+      ...agentRefs
+        .filter((reference) => !agentIds.has(this.referenceKey(reference)))
+        .map((reference) => `agente ${reference.moduleKey}/${reference.key}`),
+      ...toolRefs
+        .filter((reference) => !toolIds.has(this.referenceKey(reference)))
+        .map(
+          (reference) => `strumento ${reference.moduleKey}/${reference.key}`,
+        ),
     ];
     if (missing.length > 0) {
-      throw new AppError(`Importazione non possibile: mancano o sono disabilitati ${[...new Set(missing)].join(", ")}.`, "WORKFLOW_IMPORT_RESOURCES_MISSING", 409);
+      throw new AppError(
+        `Importazione non possibile: mancano o sono disabilitati ${[...new Set(missing)].join(", ")}.`,
+        "WORKFLOW_IMPORT_RESOURCES_MISSING",
+        409,
+      );
     }
     return { agents: agentIds, tools: toolIds };
   }
 
-  private async nextImportKey(workspaceId: string, moduleKey: string, sourceKey: string): Promise<string> {
-    const normalized = sourceKey.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "") || "workflow";
+  private async nextImportKey(
+    workspaceId: string,
+    moduleKey: string,
+    sourceKey: string,
+  ): Promise<string> {
+    const normalized =
+      sourceKey
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, "_")
+        .replace(/^_+|_+$/g, "") || "workflow";
     const key = `imported_${normalized}_${Date.now().toString(36)}`;
-    const existing = await this.workflowService.findWorkflowByKey(workspaceId, moduleKey, key);
+    const existing = await this.workflowService.findWorkflowByKey(
+      workspaceId,
+      moduleKey,
+      key,
+    );
     return existing ? `${key}_${Math.random().toString(36).slice(2, 6)}` : key;
   }
 

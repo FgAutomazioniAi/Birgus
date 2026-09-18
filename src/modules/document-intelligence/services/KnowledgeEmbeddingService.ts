@@ -15,20 +15,40 @@ export class KnowledgeEmbeddingService {
   private readonly timeoutMs: number;
 
   public constructor() {
-    this.provider = (process.env.KNOWLEDGE_EMBEDDING_PROVIDER ?? "local-hash").trim().toLowerCase();
-    this.dimensions = this.toPositiveInt(process.env.KNOWLEDGE_EMBEDDING_DIMENSIONS, 256);
-    this.baseUrl = (process.env.AI_PROVIDER_BASE_URL ?? "http://internal-ai-vllm:8000/v1").replace(/\/+$/, "");
-    this.embeddingsPath = this.normalizePath(process.env.KNOWLEDGE_LM_EMBEDDINGS_PATH ?? "/v1/embeddings");
+    this.provider = (process.env.KNOWLEDGE_EMBEDDING_PROVIDER ?? "local-hash")
+      .trim()
+      .toLowerCase();
+    this.dimensions = this.toPositiveInt(
+      process.env.KNOWLEDGE_EMBEDDING_DIMENSIONS,
+      256,
+    );
+    this.baseUrl = (
+      process.env.AI_PROVIDER_BASE_URL ?? "http://internal-ai-vllm:8000/v1"
+    ).replace(/\/+$/, "");
+    this.embeddingsPath = this.normalizePath(
+      process.env.KNOWLEDGE_LM_EMBEDDINGS_PATH ?? "/v1/embeddings",
+    );
     this.model = (process.env.KNOWLEDGE_EMBEDDING_MODEL ?? "").trim() || null;
-    this.timeoutMs = this.toPositiveInt(process.env.AI_PROVIDER_TIMEOUT_MS, 600000);
+    this.timeoutMs = this.toPositiveInt(
+      process.env.AI_PROVIDER_TIMEOUT_MS,
+      600000,
+    );
   }
 
   public async embed(text: string): Promise<EmbeddingResult> {
-    if (["ai_provider", "openai_compatible", "lm_studio"].includes(this.provider) && this.model) {
+    if (
+      ["ai_provider", "openai_compatible", "lm_studio"].includes(
+        this.provider,
+      ) &&
+      this.model
+    ) {
       try {
         return await this.embedWithAiProvider(text);
       } catch (error) {
-        console.warn("[KnowledgeEmbeddingService] AI provider embeddings failed, fallback to local-hash", error);
+        console.warn(
+          "[KnowledgeEmbeddingService] AI provider embeddings failed, fallback to local-hash",
+          error,
+        );
       }
     }
 
@@ -55,15 +75,24 @@ export class KnowledgeEmbeddingService {
       throw new Error(`AI provider embeddings HTTP ${response.status}`);
     }
 
-    const first = Array.isArray((payload as { data?: unknown[] }).data) ? (payload as { data: unknown[] }).data[0] : null;
-    const embedding = first && typeof first === "object" ? (first as { embedding?: unknown }).embedding : null;
+    const first = Array.isArray((payload as { data?: unknown[] }).data)
+      ? (payload as { data: unknown[] }).data[0]
+      : null;
+    const embedding =
+      first && typeof first === "object"
+        ? (first as { embedding?: unknown }).embedding
+        : null;
     if (!Array.isArray(embedding) || embedding.length === 0) {
       throw new Error("AI provider embeddings response missing vector.");
     }
 
-    const vector = embedding.map((value) => Number(value)).filter((value) => Number.isFinite(value));
+    const vector = embedding
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value));
     if (vector.length === 0) {
-      throw new Error("AI provider embeddings response contained invalid values.");
+      throw new Error(
+        "AI provider embeddings response contained invalid values.",
+      );
     }
 
     return {
@@ -101,7 +130,9 @@ export class KnowledgeEmbeddingService {
   }
 
   private normalizeVector(vector: number[]): number[] {
-    const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + (value * value), 0));
+    const magnitude = Math.sqrt(
+      vector.reduce((sum, value) => sum + value * value, 0),
+    );
     if (!Number.isFinite(magnitude) || magnitude <= 0) {
       return vector.map(() => 0);
     }
@@ -112,7 +143,7 @@ export class KnowledgeEmbeddingService {
   private hashToken(value: string): number {
     let hash = 0;
     for (let index = 0; index < value.length; index += 1) {
-      hash = ((hash << 5) - hash) + value.charCodeAt(index);
+      hash = (hash << 5) - hash + value.charCodeAt(index);
       hash |= 0;
     }
     return hash;

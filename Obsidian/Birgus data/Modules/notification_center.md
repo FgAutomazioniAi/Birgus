@@ -2,6 +2,7 @@
 key: notification_center
 ui: Notifiche
 ---
+
 # notification_center
 
 Centro notifiche persistenti del workspace e configurazione della consegna email applicativa.

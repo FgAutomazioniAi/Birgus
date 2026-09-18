@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { z } from "zod";
 
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
@@ -6,10 +18,20 @@ import { AppError } from "../../core/errors/AppError.js";
 import { ModuleKey } from "../../core/module-access/ModuleKey.js";
 import { RequestContext } from "../../core/tenancy/RequestContext.js";
 import { WorkflowService } from "../../modules/workflows/services/WorkflowService.js";
-import { WORKFLOW_TRANSFER_FORMAT, WORKFLOW_TRANSFER_VERSION, WorkflowTransferService, type WorkflowTransferDocument } from "../../modules/workflows/services/WorkflowTransferService.js";
+import { AuditLogService } from "../../modules/audit/services/AuditLogService.js";
+import {
+  WORKFLOW_TRANSFER_FORMAT,
+  WORKFLOW_TRANSFER_VERSION,
+  WorkflowTransferService,
+  type WorkflowTransferDocument,
+} from "../../modules/workflows/services/WorkflowTransferService.js";
 import { WorkflowRunExecutorService } from "../../modules/workflows/services/WorkflowRunExecutorService.js";
+import { ScheduledWorkflowExecutionService } from "../../modules/workflows/services/ScheduledWorkflowExecutionService.js";
 import { HumanInterventionService } from "../../modules/workflows/services/HumanInterventionService.js";
-import { jsonObjectSchema, jsonValueSchema } from "../../shared/validation/json.js";
+import {
+  jsonObjectSchema,
+  jsonValueSchema,
+} from "../../shared/validation/json.js";
 import { AccessPolicyGuard } from "../auth/access-policy.guard.js";
 import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
 import { CurrentRequestContext } from "../common/decorators/request-context.decorator.js";
@@ -92,66 +114,103 @@ const workflowResourceReferenceSchema = z.object({
   key: z.string().min(1),
 });
 
-const workflowTransferNodeSchema = z.object({
-  nodeKey: z.string().min(1),
-  nodeKind: z.enum(["INPUT", "AGENT", "TOOL", "OUTPUT"]),
-  label: z.string().min(1),
-  positionX: z.number(),
-  positionY: z.number(),
-  inputKind: z.string().nullable().optional(),
-  outputKind: z.string().nullable().optional(),
-  configuration: jsonObjectSchema.nullable().optional(),
-  inputSchema: jsonObjectSchema.nullable().optional(),
-  outputSchema: jsonObjectSchema.nullable().optional(),
-  isEnabled: z.boolean().default(true),
-  isRequired: z.boolean().default(false),
-  agent: workflowResourceReferenceSchema.optional(),
-  tool: workflowResourceReferenceSchema.optional(),
-}).superRefine((node, ctx) => {
-  if (node.nodeKind === "AGENT" && !node.agent) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["agent"], message: "agent is required for AGENT nodes." });
-  }
-  if (node.nodeKind === "TOOL" && !node.tool) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["tool"], message: "tool is required for TOOL nodes." });
-  }
-  if (node.nodeKind !== "AGENT" && node.agent) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["agent"], message: "agent is only valid for AGENT nodes." });
-  }
-  if (node.nodeKind !== "TOOL" && node.tool) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["tool"], message: "tool is only valid for TOOL nodes." });
-  }
-});
-
-const workflowTransferSchema = z.object({
-  format: z.literal(WORKFLOW_TRANSFER_FORMAT),
-  version: z.literal(WORKFLOW_TRANSFER_VERSION),
-  exportedAt: z.string().datetime(),
-  workflow: z.object({
-    moduleKey: z.string().min(1),
-    key: z.string().min(1),
-    name: z.string().min(1),
+const workflowTransferNodeSchema = z
+  .object({
+    nodeKey: z.string().min(1),
+    nodeKind: z.enum(["INPUT", "AGENT", "TOOL", "OUTPUT"]),
     label: z.string().min(1),
-    description: z.string().nullable(),
-    configuration: jsonObjectSchema.nullable(),
-    nodes: z.array(workflowTransferNodeSchema).min(1),
-    edges: z.array(workflowEdgeSchema.omit({ id: true })),
-  }),
-}).superRefine((document, ctx) => {
-  const nodeKeys = new Set<string>();
-  for (const [index, node] of document.workflow.nodes.entries()) {
-    if (nodeKeys.has(node.nodeKey)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["workflow", "nodes", index, "nodeKey"], message: "nodeKey must be unique." });
+    positionX: z.number(),
+    positionY: z.number(),
+    inputKind: z.string().nullable().optional(),
+    outputKind: z.string().nullable().optional(),
+    configuration: jsonObjectSchema.nullable().optional(),
+    inputSchema: jsonObjectSchema.nullable().optional(),
+    outputSchema: jsonObjectSchema.nullable().optional(),
+    isEnabled: z.boolean().default(true),
+    isRequired: z.boolean().default(false),
+    agent: workflowResourceReferenceSchema.optional(),
+    tool: workflowResourceReferenceSchema.optional(),
+  })
+  .superRefine((node, ctx) => {
+    if (node.nodeKind === "AGENT" && !node.agent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["agent"],
+        message: "agent is required for AGENT nodes.",
+      });
     }
-    nodeKeys.add(node.nodeKey);
-  }
-  for (const [index, edge] of document.workflow.edges.entries()) {
-    if (!nodeKeys.has(edge.sourceNodeKey) || !nodeKeys.has(edge.targetNodeKey)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["workflow", "edges", index], message: "edge references an unknown node." });
+    if (node.nodeKind === "TOOL" && !node.tool) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["tool"],
+        message: "tool is required for TOOL nodes.",
+      });
     }
-  }
-});
+    if (node.nodeKind !== "AGENT" && node.agent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["agent"],
+        message: "agent is only valid for AGENT nodes.",
+      });
+    }
+    if (node.nodeKind !== "TOOL" && node.tool) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["tool"],
+        message: "tool is only valid for TOOL nodes.",
+      });
+    }
+  });
 
-type WorkflowRunJsonValue = string | number | boolean | null | WorkflowRunJsonValue[] | { [key: string]: WorkflowRunJsonValue };
+const workflowTransferSchema = z
+  .object({
+    format: z.literal(WORKFLOW_TRANSFER_FORMAT),
+    version: z.literal(WORKFLOW_TRANSFER_VERSION),
+    exportedAt: z.string().datetime(),
+    workflow: z.object({
+      moduleKey: z.string().min(1),
+      key: z.string().min(1),
+      name: z.string().min(1),
+      label: z.string().min(1),
+      description: z.string().nullable(),
+      configuration: jsonObjectSchema.nullable(),
+      nodes: z.array(workflowTransferNodeSchema).min(1),
+      edges: z.array(workflowEdgeSchema.omit({ id: true })),
+    }),
+  })
+  .superRefine((document, ctx) => {
+    const nodeKeys = new Set<string>();
+    for (const [index, node] of document.workflow.nodes.entries()) {
+      if (nodeKeys.has(node.nodeKey)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["workflow", "nodes", index, "nodeKey"],
+          message: "nodeKey must be unique.",
+        });
+      }
+      nodeKeys.add(node.nodeKey);
+    }
+    for (const [index, edge] of document.workflow.edges.entries()) {
+      if (
+        !nodeKeys.has(edge.sourceNodeKey) ||
+        !nodeKeys.has(edge.targetNodeKey)
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["workflow", "edges", index],
+          message: "edge references an unknown node.",
+        });
+      }
+    }
+  });
+
+type WorkflowRunJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | WorkflowRunJsonValue[]
+  | { [key: string]: WorkflowRunJsonValue };
 
 const workflowRunJsonValueSchema: z.ZodType<WorkflowRunJsonValue> = z.lazy(() =>
   z.union([
@@ -177,6 +236,17 @@ const createWorkflowRunSchema = z.object({
   inputPayload: workflowRunJsonValueSchema.nullable().optional(),
 });
 
+const createWorkflowScheduleSchema = z.object({
+  label: z.string().trim().min(1).max(120).nullable().optional(),
+  startsAt: z.string().datetime(),
+  repeatEverySeconds: z.number().int().min(300).max(31_536_000),
+  inputPayload: workflowRunJsonValueSchema.nullable().optional(),
+});
+
+const updateWorkflowScheduleSchema = z.object({
+  paused: z.boolean(),
+});
+
 const decideHumanInterventionSchema = z.object({
   decision: z.enum(["APPROVED", "REJECTED", "CHANGES_REQUIRED"]),
   note: z.string().max(4000).nullable().optional(),
@@ -195,6 +265,10 @@ export class NestWorkflowsController {
     private readonly workflowRunExecutorService: WorkflowRunExecutorService,
     @Inject(WorkflowTransferService)
     private readonly workflowTransferService: WorkflowTransferService,
+    @Inject(ScheduledWorkflowExecutionService)
+    private readonly scheduledWorkflowExecutionService: ScheduledWorkflowExecutionService,
+    @Inject(AuditLogService)
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   @Get("workflow-interventions")
@@ -219,7 +293,12 @@ export class NestWorkflowsController {
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Record<string, number>> {
     const { workspaceId, userId } = requestContext.workspace;
-    return { count: await this.humanInterventionService.countOpenForUser(workspaceId, userId) };
+    return {
+      count: await this.humanInterventionService.countOpenForUser(
+        workspaceId,
+        userId,
+      ),
+    };
   }
 
   @Patch("workflow-interventions/:id/decision")
@@ -238,7 +317,9 @@ export class NestWorkflowsController {
       note: body.note ?? null,
     });
     if (result.resumed) {
-      await this.workflowRunExecutorService.resumeAfterDecision(result.workflowRunId);
+      await this.workflowRunExecutorService.resumeAfterDecision(
+        result.workflowRunId,
+      );
     }
     return { ...result, status: "queued" };
   }
@@ -251,7 +332,10 @@ export class NestWorkflowsController {
   ): Promise<Record<string, unknown>> {
     const workspaceId = requestContext.workspace.workspaceId;
     const moduleKey = this.normalizeOptionalString(moduleKeyRaw);
-    const tools = await this.service.listModuleTools(workspaceId, moduleKey ?? undefined);
+    const tools = await this.service.listModuleTools(
+      workspaceId,
+      moduleKey ?? undefined,
+    );
 
     return {
       tools: tools.map((item) => ({
@@ -280,7 +364,10 @@ export class NestWorkflowsController {
   ): Promise<Record<string, unknown>> {
     const workspaceId = requestContext.workspace.workspaceId;
     const moduleKey = this.normalizeOptionalString(moduleKeyRaw);
-    const workflows = await this.service.listWorkflows(workspaceId, moduleKey ?? undefined);
+    const workflows = await this.service.listWorkflows(
+      workspaceId,
+      moduleKey ?? undefined,
+    );
 
     return {
       workflows: workflows.map((item) => ({
@@ -325,6 +412,16 @@ export class NestWorkflowsController {
       edges: body.edges,
     });
 
+    await this.auditLogService.record({
+      workspaceId,
+      userId,
+      moduleKey: ModuleKey.WORKFLOW_MANAGEMENT,
+      action: "workflow.created",
+      entityType: "Workflow",
+      entityId: saved.id,
+      payload: { label: saved.label, key: saved.key },
+    });
+
     return this.serializeWorkflow(saved);
   }
 
@@ -335,7 +432,10 @@ export class NestWorkflowsController {
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Record<string, unknown>> {
     const workspaceId = requestContext.workspace.workspaceId;
-    const workflow = await this.service.getWorkflow(workspaceId, this.getPathId(workflowIdRaw, "workflowId"));
+    const workflow = await this.service.getWorkflow(
+      workspaceId,
+      this.getPathId(workflowIdRaw, "workflowId"),
+    );
     return this.serializeWorkflow(workflow);
   }
 
@@ -411,42 +511,68 @@ export class NestWorkflowsController {
       isDefault: body.isDefault ?? current.isDefault,
       incrementVersion: body.incrementVersion ?? true,
       actorUserId: userId,
-      nodes: body.nodes ?? current.nodes.map((node) => ({
-        id: node.id,
-        nodeKey: node.nodeKey,
-        nodeKind: node.nodeKind,
-        label: node.label,
-        positionX: node.positionX,
-        positionY: node.positionY,
-        moduleAgentId: node.moduleAgentId,
-        moduleToolId: node.moduleToolId,
-        inputKind: node.inputKind,
-        outputKind: node.outputKind,
-        configuration: node.configuration,
-        inputSchema: node.inputSchema,
-        outputSchema: node.outputSchema,
-        isEnabled: node.isEnabled,
-        isRequired: node.isRequired,
-      })),
-      edges: body.edges ?? current.edges.map((edge) => {
-        const sourceNode = current.nodes.find((node) => node.id === edge.sourceNodeId);
-        const targetNode = current.nodes.find((node) => node.id === edge.targetNodeId);
-        if (!sourceNode || !targetNode) {
-          throw new AppError("Workflow edge references missing nodes.", "WORKFLOW_EDGE_INVALID", 400);
-        }
+      nodes:
+        body.nodes ??
+        current.nodes.map((node) => ({
+          id: node.id,
+          nodeKey: node.nodeKey,
+          nodeKind: node.nodeKind,
+          label: node.label,
+          positionX: node.positionX,
+          positionY: node.positionY,
+          moduleAgentId: node.moduleAgentId,
+          moduleToolId: node.moduleToolId,
+          inputKind: node.inputKind,
+          outputKind: node.outputKind,
+          configuration: node.configuration,
+          inputSchema: node.inputSchema,
+          outputSchema: node.outputSchema,
+          isEnabled: node.isEnabled,
+          isRequired: node.isRequired,
+        })),
+      edges:
+        body.edges ??
+        current.edges.map((edge) => {
+          const sourceNode = current.nodes.find(
+            (node) => node.id === edge.sourceNodeId,
+          );
+          const targetNode = current.nodes.find(
+            (node) => node.id === edge.targetNodeId,
+          );
+          if (!sourceNode || !targetNode) {
+            throw new AppError(
+              "Workflow edge references missing nodes.",
+              "WORKFLOW_EDGE_INVALID",
+              400,
+            );
+          }
 
-        return {
-          id: edge.id,
-          sourceNodeKey: sourceNode.nodeKey,
-          targetNodeKey: targetNode.nodeKey,
-          sourceHandle: edge.sourceHandle,
-          targetHandle: edge.targetHandle,
-          label: edge.label,
-          conditionPayload: edge.conditionPayload,
-          orderNo: edge.orderNo,
-          isEnabled: edge.isEnabled,
-        };
-      }),
+          return {
+            id: edge.id,
+            sourceNodeKey: sourceNode.nodeKey,
+            targetNodeKey: targetNode.nodeKey,
+            sourceHandle: edge.sourceHandle,
+            targetHandle: edge.targetHandle,
+            label: edge.label,
+            conditionPayload: edge.conditionPayload,
+            orderNo: edge.orderNo,
+            isEnabled: edge.isEnabled,
+          };
+        }),
+    });
+
+    await this.auditLogService.record({
+      workspaceId,
+      userId,
+      moduleKey: ModuleKey.WORKFLOW_MANAGEMENT,
+      action: "workflow.updated",
+      entityType: "Workflow",
+      entityId: saved.id,
+      payload: {
+        label: saved.label,
+        key: saved.key,
+        versionNo: saved.versionNo,
+      },
     });
 
     return this.serializeWorkflow(saved);
@@ -471,7 +597,9 @@ export class NestWorkflowsController {
     @Body() bodyRaw: unknown,
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Record<string, unknown>> {
-    const document = workflowTransferSchema.parse(bodyRaw) as WorkflowTransferDocument;
+    const document = workflowTransferSchema.parse(
+      bodyRaw,
+    ) as WorkflowTransferDocument;
     const saved = await this.workflowTransferService.importWorkflow({
       workspaceId: requestContext.workspace.workspaceId,
       actorUserId: requestContext.workspace.userId,
@@ -487,11 +615,20 @@ export class NestWorkflowsController {
     @Param("workflowId") workflowIdRaw: string,
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<void> {
+    const workflowId = this.getPathId(workflowIdRaw, "workflowId");
     await this.service.deletePersonalWorkflow(
       requestContext.workspace.workspaceId,
-      this.getPathId(workflowIdRaw, "workflowId"),
+      workflowId,
       requestContext.workspace.userId,
     );
+    await this.auditLogService.record({
+      workspaceId: requestContext.workspace.workspaceId,
+      userId: requestContext.workspace.userId,
+      moduleKey: ModuleKey.WORKFLOW_MANAGEMENT,
+      action: "workflow.deleted",
+      entityType: "Workflow",
+      entityId: workflowId,
+    });
   }
 
   @Get("workflows/:workflowId/runs")
@@ -558,6 +695,70 @@ export class NestWorkflowsController {
     return this.serializeRun(run);
   }
 
+  @Get("workflow-schedules/mine")
+  @RequirePermission(PermissionKey.WORKFLOWS_READ)
+  public async listMyWorkflowSchedules(
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const schedules = await this.scheduledWorkflowExecutionService.listMine(
+      requestContext.workspace.workspaceId,
+      requestContext.workspace.userId,
+    );
+    return {
+      schedules: schedules.map((schedule) => this.serializeSchedule(schedule)),
+    };
+  }
+
+  @Post("workflows/:workflowId/schedules")
+  @HttpCode(201)
+  @RequirePermission(PermissionKey.WORKFLOWS_CONFIGURE)
+  public async createWorkflowSchedule(
+    @Param("workflowId") workflowIdRaw: string,
+    @Body() bodyRaw: unknown,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const body = createWorkflowScheduleSchema.parse(bodyRaw);
+    const schedule = await this.scheduledWorkflowExecutionService.create({
+      workspaceId: requestContext.workspace.workspaceId,
+      workflowId: this.getPathId(workflowIdRaw, "workflowId"),
+      createdByUserId: requestContext.workspace.userId,
+      label: body.label ?? null,
+      startsAt: new Date(body.startsAt),
+      repeatEverySeconds: body.repeatEverySeconds,
+      inputPayload: body.inputPayload ?? null,
+    });
+    return this.serializeSchedule(schedule);
+  }
+
+  @Patch("workflow-schedules/:scheduleId")
+  @RequirePermission(PermissionKey.WORKFLOWS_CONFIGURE)
+  public async updateWorkflowSchedule(
+    @Param("scheduleId") scheduleIdRaw: string,
+    @Body() bodyRaw: unknown,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<{ ok: true }> {
+    const body = updateWorkflowScheduleSchema.parse(bodyRaw);
+    await this.scheduledWorkflowExecutionService.setPaused(
+      requestContext.workspace.workspaceId,
+      this.getPathId(scheduleIdRaw, "scheduleId"),
+      body.paused,
+    );
+    return { ok: true };
+  }
+
+  @Delete("workflow-schedules/:scheduleId")
+  @HttpCode(204)
+  @RequirePermission(PermissionKey.WORKFLOWS_CONFIGURE)
+  public async deleteWorkflowSchedule(
+    @Param("scheduleId") scheduleIdRaw: string,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<void> {
+    await this.scheduledWorkflowExecutionService.remove(
+      requestContext.workspace.workspaceId,
+      this.getPathId(scheduleIdRaw, "scheduleId"),
+    );
+  }
+
   @Get("workflow-runs/:runId")
   @RequirePermission(PermissionKey.WORKFLOWS_READ)
   public async getWorkflowRun(
@@ -570,7 +771,9 @@ export class NestWorkflowsController {
     return this.serializeRun(run);
   }
 
-  private serializeWorkflow(workflow: Awaited<ReturnType<WorkflowService["getWorkflow"]>>): Record<string, unknown> {
+  private serializeWorkflow(
+    workflow: Awaited<ReturnType<WorkflowService["getWorkflow"]>>,
+  ): Record<string, unknown> {
     return {
       id: workflow.id,
       moduleKey: workflow.moduleKey,
@@ -588,7 +791,9 @@ export class NestWorkflowsController {
     };
   }
 
-  private serializeRun(run: Awaited<ReturnType<WorkflowService["getWorkflowRun"]>>): Record<string, unknown> {
+  private serializeRun(
+    run: Awaited<ReturnType<WorkflowService["getWorkflowRun"]>>,
+  ): Record<string, unknown> {
     return {
       id: run.id,
       workflowId: run.workflowId,
@@ -614,13 +819,33 @@ export class NestWorkflowsController {
     };
   }
 
+  private serializeSchedule(schedule: {
+    id: string;
+    workflowId: string;
+    workflowLabel: string;
+    label: string | null;
+    repeatEverySeconds: number;
+    status: string;
+    nextRunAt: Date;
+    lastRunAt: Date | null;
+    lastWorkflowRunId: string | null;
+    lastError: string | null;
+    createdAt: Date;
+  }): Record<string, unknown> {
+    return { ...schedule };
+  }
+
   private normalizeOptionalString(value: string | undefined): string | null {
     return typeof value === "string" && value.trim() ? value.trim() : null;
   }
 
   private getPathId(value: string, key: string): string {
     if (!value || !value.trim()) {
-      throw new AppError(`${key} is required.`, "WORKFLOW_PATH_PARAM_REQUIRED", 400);
+      throw new AppError(
+        `${key} is required.`,
+        "WORKFLOW_PATH_PARAM_REQUIRED",
+        400,
+      );
     }
 
     return value.trim();

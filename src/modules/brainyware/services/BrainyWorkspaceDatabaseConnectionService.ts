@@ -24,19 +24,22 @@ export class BrainyWorkspaceDatabaseConnectionService {
     @Inject(BrainywareClient) private readonly client: BrainywareClient,
   ) {}
 
-  public async list(workspaceId: string): Promise<BrainyDatabaseConnectionView[]> {
-    const connections = await this.prisma.brainyWorkspaceDatabaseConnection.findMany({
-      where: { workspace_id: workspaceId, deleted_at: null },
-      include: {
-        role_accesses: {
-          include: {
-            role: { select: { id: true, key: true, label: true } },
+  public async list(
+    workspaceId: string,
+  ): Promise<BrainyDatabaseConnectionView[]> {
+    const connections =
+      await this.prisma.brainyWorkspaceDatabaseConnection.findMany({
+        where: { workspace_id: workspaceId, deleted_at: null },
+        include: {
+          role_accesses: {
+            include: {
+              role: { select: { id: true, key: true, label: true } },
+            },
+            orderBy: { created_at: "asc" },
           },
-          orderBy: { created_at: "asc" },
         },
-      },
-      orderBy: { label: "asc" },
-    });
+        orderBy: { label: "asc" },
+      });
 
     return connections.map((connection) => this.toView(connection));
   }
@@ -44,7 +47,9 @@ export class BrainyWorkspaceDatabaseConnectionService {
   public async listForUser(
     workspaceId: string,
     userId: string,
-  ): Promise<Array<{ id: string; brainywareConnectionId: string; label: string }>> {
+  ): Promise<
+    Array<{ id: string; brainywareConnectionId: string; label: string }>
+  > {
     const [connections, userRoles] = await Promise.all([
       this.prisma.brainyWorkspaceDatabaseConnection.findMany({
         where: {
@@ -91,27 +96,30 @@ export class BrainyWorkspaceDatabaseConnectionService {
   public async listForWorkflowUser(
     workspaceId: string,
     userId: string,
-  ): Promise<Array<{ id: string; brainywareConnectionId: string; label: string }>> {
+  ): Promise<
+    Array<{ id: string; brainywareConnectionId: string; label: string }>
+  > {
     const accessibleConnections = await this.listForUser(workspaceId, userId);
     if (accessibleConnections.length === 0) {
       return [];
     }
 
-    const connections = await this.prisma.brainyWorkspaceDatabaseConnection.findMany({
-      where: {
-        workspace_id: workspaceId,
-        id: { in: accessibleConnections.map((connection) => connection.id) },
-        deleted_at: null,
-        is_enabled: true,
-        is_workflow_enabled: true,
-      },
-      select: {
-        id: true,
-        brainyware_connection_id: true,
-        label: true,
-      },
-      orderBy: { label: "asc" },
-    });
+    const connections =
+      await this.prisma.brainyWorkspaceDatabaseConnection.findMany({
+        where: {
+          workspace_id: workspaceId,
+          id: { in: accessibleConnections.map((connection) => connection.id) },
+          deleted_at: null,
+          is_enabled: true,
+          is_workflow_enabled: true,
+        },
+        select: {
+          id: true,
+          brainyware_connection_id: true,
+          label: true,
+        },
+        orderBy: { label: "asc" },
+      });
 
     return connections.map((connection) => ({
       id: connection.id,
@@ -126,7 +134,9 @@ export class BrainyWorkspaceDatabaseConnectionService {
     const connections = await this.client.listDatabaseConnections();
 
     return connections
-      .filter((connection) => connection.accessMode?.toUpperCase() === "READ_ONLY")
+      .filter(
+        (connection) => connection.accessMode?.toUpperCase() === "READ_ONLY",
+      )
       .map((connection) => ({
         id: connection.id,
         label: connection.name,
@@ -221,10 +231,11 @@ export class BrainyWorkspaceDatabaseConnectionService {
     id: string,
     isEnabled: boolean,
   ): Promise<void> {
-    const result = await this.prisma.brainyWorkspaceDatabaseConnection.updateMany({
-      where: { id, workspace_id: workspaceId, deleted_at: null },
-      data: { is_enabled: isEnabled },
-    });
+    const result =
+      await this.prisma.brainyWorkspaceDatabaseConnection.updateMany({
+        where: { id, workspace_id: workspaceId, deleted_at: null },
+        data: { is_enabled: isEnabled },
+      });
 
     if (result.count === 0) {
       throw new AppError(
@@ -243,7 +254,9 @@ export class BrainyWorkspaceDatabaseConnectionService {
     isWorkflowEnabled: boolean,
   ): Promise<void> {
     const requestedRoleIds = [...new Set(roleIds)];
-    if (requestedRoleIds.some((roleId) => !Number.isInteger(roleId) || roleId < 1)) {
+    if (
+      requestedRoleIds.some((roleId) => !Number.isInteger(roleId) || roleId < 1)
+    ) {
       throw new AppError(
         "I ruoli selezionati non sono validi.",
         "BRAINY_DATABASE_ACCESS_INVALID",
@@ -251,10 +264,11 @@ export class BrainyWorkspaceDatabaseConnectionService {
       );
     }
 
-    const connection = await this.prisma.brainyWorkspaceDatabaseConnection.findFirst({
-      where: { id, workspace_id: workspaceId, deleted_at: null },
-      select: { id: true },
-    });
+    const connection =
+      await this.prisma.brainyWorkspaceDatabaseConnection.findFirst({
+        where: { id, workspace_id: workspaceId, deleted_at: null },
+        select: { id: true },
+      });
     if (!connection) {
       throw new AppError(
         "Connessione database Brainy non trovata.",
@@ -295,13 +309,15 @@ export class BrainyWorkspaceDatabaseConnectionService {
       });
 
       if (validRoles.length > 0) {
-        await transaction.brainyWorkspaceDatabaseConnectionRoleAccess.createMany({
-          data: validRoles.map((role) => ({
-            workspace_database_connection_id: id,
-            workspace_id: workspaceId,
-            role_id: role.id,
-          })),
-        });
+        await transaction.brainyWorkspaceDatabaseConnectionRoleAccess.createMany(
+          {
+            data: validRoles.map((role) => ({
+              workspace_database_connection_id: id,
+              workspace_id: workspaceId,
+              role_id: role.id,
+            })),
+          },
+        );
       }
     });
   }
@@ -333,7 +349,8 @@ export class BrainyWorkspaceDatabaseConnectionService {
     const connection = (
       await this.listForWorkflowUser(workspaceId, userId)
     ).find(
-      (candidate) => candidate.brainywareConnectionId === brainywareConnectionId,
+      (candidate) =>
+        candidate.brainywareConnectionId === brainywareConnectionId,
     );
     if (!connection) {
       throw new AppError(
@@ -347,10 +364,11 @@ export class BrainyWorkspaceDatabaseConnectionService {
   }
 
   public async archive(workspaceId: string, id: string): Promise<void> {
-    const result = await this.prisma.brainyWorkspaceDatabaseConnection.updateMany({
-      where: { id, workspace_id: workspaceId, deleted_at: null },
-      data: { deleted_at: new Date() },
-    });
+    const result =
+      await this.prisma.brainyWorkspaceDatabaseConnection.updateMany({
+        where: { id, workspace_id: workspaceId, deleted_at: null },
+        data: { deleted_at: new Date() },
+      });
     if (result.count === 0) {
       throw new AppError(
         "Connessione database Brainy non trovata.",

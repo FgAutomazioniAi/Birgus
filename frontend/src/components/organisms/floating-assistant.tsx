@@ -1,7 +1,16 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { FileText, Loader2, Maximize2, MessageSquarePlus, Minus, Paperclip, Send, X } from "lucide-react";
+import {
+  FileText,
+  Loader2,
+  Maximize2,
+  MessageSquarePlus,
+  Minus,
+  Paperclip,
+  Send,
+  X,
+} from "lucide-react";
 
 import { useTheme } from "@/components/organisms/theme-provider";
 import { useLanguage } from "@/components/organisms/language-provider";
@@ -75,7 +84,8 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [input, setInput] = useState("");
-  const [knowledgeMode, setKnowledgeMode] = useState<KnowledgeMode>("on_demand");
+  const [knowledgeMode, setKnowledgeMode] =
+    useState<KnowledgeMode>("on_demand");
   const [isSending, setIsSending] = useState(false);
   const [isSavingKnowledgeMode, setIsSavingKnowledgeMode] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -84,13 +94,20 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
-  const assistantLogoSrc = assistantLogoByTheme[theme] ?? assistantLogoByTheme.predefinito;
-  const assistantLogoSurface = assistantLogoSurfaceByTheme[theme] ?? assistantLogoSurfaceByTheme.predefinito;
-  const assistantLogoImage = assistantLogoImageByTheme[theme] ?? assistantLogoImageByTheme.predefinito;
+  const assistantLogoSrc =
+    assistantLogoByTheme[theme] ?? assistantLogoByTheme.predefinito;
+  const assistantLogoSurface =
+    assistantLogoSurfaceByTheme[theme] ??
+    assistantLogoSurfaceByTheme.predefinito;
+  const assistantLogoImage =
+    assistantLogoImageByTheme[theme] ?? assistantLogoImageByTheme.predefinito;
   const isWorkspaceKnowledgeEnabled = knowledgeMode === "hybrid";
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
   }, [messages, isOpen]);
 
   useEffect(() => {
@@ -135,8 +152,13 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
 
     const payload = (await response.json()) as AssistantSessionResponse;
     setSessionId(payload.id);
-    if (payload.knowledgeMode && ["hybrid", "on_demand", "saved"].includes(payload.knowledgeMode)) {
-      setKnowledgeMode(payload.knowledgeMode === "saved" ? "on_demand" : payload.knowledgeMode);
+    if (
+      payload.knowledgeMode &&
+      ["hybrid", "on_demand", "saved"].includes(payload.knowledgeMode)
+    ) {
+      setKnowledgeMode(
+        payload.knowledgeMode === "saved" ? "on_demand" : payload.knowledgeMode,
+      );
     }
     return payload.id;
   };
@@ -147,17 +169,31 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
     setIsSavingKnowledgeMode(true);
     try {
       const activeSessionId = await ensureSession();
-      const response = await fetch(`/api/assistant/sessions/${activeSessionId}/preferences`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ knowledgeMode: nextMode }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as { knowledgeMode?: KnowledgeMode; message?: string };
+      const response = await fetch(
+        `/api/assistant/sessions/${activeSessionId}/preferences`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ knowledgeMode: nextMode }),
+        },
+      );
+      const payload = (await response.json().catch(() => ({}))) as {
+        knowledgeMode?: KnowledgeMode;
+        message?: string;
+      };
       if (!response.ok) {
-        throw new Error(typeof payload.message === "string" ? payload.message : "Modalita knowledge non aggiornata.");
+        throw new Error(
+          typeof payload.message === "string"
+            ? payload.message
+            : "Modalita knowledge non aggiornata.",
+        );
       }
       if (payload.knowledgeMode) {
-        setKnowledgeMode(payload.knowledgeMode === "saved" ? "on_demand" : payload.knowledgeMode);
+        setKnowledgeMode(
+          payload.knowledgeMode === "saved"
+            ? "on_demand"
+            : payload.knowledgeMode,
+        );
       }
     } catch (error) {
       setKnowledgeMode(previousMode);
@@ -176,16 +212,28 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
       const activeSessionId = await ensureSession();
       const body = new FormData();
       body.append("file", file);
-      const response = await fetch(`/api/assistant/sessions/${activeSessionId}/documents`, {
-        method: "POST",
-        body,
-      });
-      const payload = (await response.json().catch(() => ({}))) as AssistantDocumentResponse & { message?: string };
+      const response = await fetch(
+        `/api/assistant/sessions/${activeSessionId}/documents`,
+        {
+          method: "POST",
+          body,
+        },
+      );
+      const payload = (await response
+        .json()
+        .catch(() => ({}))) as AssistantDocumentResponse & { message?: string };
       if (!response.ok || !payload.document) {
-        throw new Error(typeof payload.message === "string" ? payload.message : "Caricamento documento non riuscito.");
+        throw new Error(
+          typeof payload.message === "string"
+            ? payload.message
+            : "Caricamento documento non riuscito.",
+        );
       }
 
-      setDocuments((current) => [...current.filter((item) => item.id !== payload.document?.id), payload.document as AssistantDocument]);
+      setDocuments((current) => [
+        ...current.filter((item) => item.id !== payload.document?.id),
+        payload.document as AssistantDocument,
+      ]);
     } catch {
       // Keep chatbot upload failures silent; the user can retry without a popup.
     } finally {
@@ -231,14 +279,23 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
 
     try {
       const activeSessionId = await ensureSession();
-      const response = await fetch(`/api/assistant/sessions/${activeSessionId}/messages/stream`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ content }),
-      });
+      const response = await fetch(
+        `/api/assistant/sessions/${activeSessionId}/messages/stream`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ content }),
+        },
+      );
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as { message?: string };
-        throw new Error(typeof payload.message === "string" ? payload.message : "Risposta assistente non riuscita.");
+        const payload = (await response.json().catch(() => ({}))) as {
+          message?: string;
+        };
+        throw new Error(
+          typeof payload.message === "string"
+            ? payload.message
+            : "Risposta assistente non riuscita.",
+        );
       }
       if (!response.body) throw new Error("Streaming non disponibile.");
       const reader = response.body.getReader();
@@ -246,13 +303,34 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
       let buffer = "";
       let hasStreamingMessage = false;
       const handleEvent = (raw: string) => {
-        const eventName = raw.match(/^event:\s*(.+)$/m)?.[1]?.trim() ?? "message";
+        const eventName =
+          raw.match(/^event:\s*(.+)$/m)?.[1]?.trim() ?? "message";
         const data = raw.match(/^data:\s*(.+)$/m)?.[1];
         if (!data) return;
-        const payload = JSON.parse(data) as { message?: string; text?: string; assistantMessage?: AssistantMessage; id?: string; role?: string; contentText?: string };
-        if (eventName === "error") throw new Error(payload.message ?? "Risposta assistente non riuscita.");
+        const payload = JSON.parse(data) as {
+          message?: string;
+          text?: string;
+          assistantMessage?: AssistantMessage;
+          id?: string;
+          role?: string;
+          contentText?: string;
+        };
+        if (eventName === "error")
+          throw new Error(
+            payload.message ?? "Risposta assistente non riuscita.",
+          );
         if (eventName === "user") {
-          setMessages((current) => current.map((message) => message.id === optimisticMessage.id ? { id: payload.id ?? message.id, role: payload.role ?? message.role, contentText: payload.contentText ?? message.contentText } : message));
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === optimisticMessage.id
+                ? {
+                    id: payload.id ?? message.id,
+                    role: payload.role ?? message.role,
+                    contentText: payload.contentText ?? message.contentText,
+                  }
+                : message,
+            ),
+          );
           return;
         }
         if (eventName === "delta" && typeof payload.text === "string") {
@@ -260,13 +338,28 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
             hasStreamingMessage = true;
             setMessages((current) => [...current, streamingMessage]);
           }
-          setMessages((current) => current.map((message) => message.id === streamingMessage.id ? { ...message, contentText: `${message.contentText ?? ""}${payload.text}` } : message));
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === streamingMessage.id
+                ? {
+                    ...message,
+                    contentText: `${message.contentText ?? ""}${payload.text}`,
+                  }
+                : message,
+            ),
+          );
           return;
         }
         if (eventName === "done" && payload.assistantMessage) {
-          setMessages((current) => hasStreamingMessage
-            ? current.map((message) => message.id === streamingMessage.id ? payload.assistantMessage! : message)
-            : [...current, payload.assistantMessage!]);
+          setMessages((current) =>
+            hasStreamingMessage
+              ? current.map((message) =>
+                  message.id === streamingMessage.id
+                    ? payload.assistantMessage!
+                    : message,
+                )
+              : [...current, payload.assistantMessage!],
+          );
         }
       };
       while (true) {
@@ -280,27 +373,44 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
       if (buffer.trim()) handleEvent(buffer);
       receivedResponse = true;
     } catch {
-      setMessages((current) => current.filter((message) => message.id !== optimisticMessage.id && message.id !== streamingMessage.id));
+      setMessages((current) =>
+        current.filter(
+          (message) =>
+            message.id !== optimisticMessage.id &&
+            message.id !== streamingMessage.id,
+        ),
+      );
       setInput(content);
     } finally {
       setIsSending(false);
-      if (receivedResponse && isOpen) requestAnimationFrame(() => messageInputRef.current?.focus());
+      if (receivedResponse && isOpen)
+        requestAnimationFrame(() => messageInputRef.current?.focus());
     }
   };
 
   return (
-    <div ref={rootRef} className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
+    <div
+      ref={rootRef}
+      className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3"
+    >
       {isOpen ? (
         <section
           className={cn(
             "flex flex-col overflow-hidden rounded-lg border border-border-default bg-bg-surface shadow-2xl",
-            isExpanded ? "h-[min(760px,calc(100vh-4rem))] w-[min(760px,calc(100vw-2rem))]" : "h-[560px] w-[380px] max-w-[calc(100vw-2rem)]",
+            isExpanded
+              ? "h-[min(760px,calc(100vh-4rem))] w-[min(760px,calc(100vw-2rem))]"
+              : "h-[560px] w-[380px] max-w-[calc(100vw-2rem)]",
           )}
           aria-label={t("chat.assistant")}
         >
           <header className="flex items-center justify-between border-b border-border-default bg-bg-page px-4 py-3">
             <div className="flex items-center gap-3">
-              <div className={cn("flex h-9 w-9 items-center justify-center overflow-hidden rounded-md", assistantLogoSurface)}>
+              <div
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center overflow-hidden rounded-md",
+                  assistantLogoSurface,
+                )}
+              >
                 <img
                   src={assistantLogoSrc}
                   alt={t("chat.assistant")}
@@ -308,7 +418,9 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
                 />
               </div>
               <div>
-                <p className="text-sm font-semibold text-text-primary">Birgus</p>
+                <p className="text-sm font-semibold text-text-primary">
+                  Birgus
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -328,7 +440,11 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
                 onClick={() => setIsExpanded((current) => !current)}
                 aria-label={isExpanded ? t("chat.reduce") : t("chat.expand")}
               >
-                {isExpanded ? <Minus className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                {isExpanded ? (
+                  <Minus className="h-4 w-4" />
+                ) : (
+                  <Maximize2 className="h-4 w-4" />
+                )}
               </button>
               <button
                 type="button"
@@ -351,7 +467,9 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
                     title={document.fileName}
                   >
                     <FileText className="h-3.5 w-3.5 shrink-0 text-brand-primary" />
-                    <span className="max-w-40 truncate">{document.fileName}</span>
+                    <span className="max-w-40 truncate">
+                      {document.fileName}
+                    </span>
                     {document.extractionStatus ? (
                       <span className="rounded bg-bg-muted px-1.5 py-0.5 text-[10px] uppercase text-text-muted">
                         {document.extractionStatus}
@@ -369,7 +487,13 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
             {messages.map((message) => {
               const isUser = message.role === "USER";
               return (
-                <div key={message.id} className={cn("flex", isUser ? "justify-end" : "justify-start")}>
+                <div
+                  key={message.id}
+                  className={cn(
+                    "flex",
+                    isUser ? "justify-end" : "justify-start",
+                  )}
+                >
                   <div
                     className={cn(
                       "w-fit max-w-[85%] break-words whitespace-pre-wrap rounded-lg px-3 py-2 text-sm leading-relaxed",
@@ -394,8 +518,13 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
             <div ref={messagesEndRef} />
           </div>
 
-          <form className="shrink-0 space-y-2 border-t border-border-default bg-bg-surface p-3" onSubmit={sendMessage}>
-            <label className="sr-only" htmlFor="floating-assistant-message">{t("chat.message")}</label>
+          <form
+            className="shrink-0 space-y-2 border-t border-border-default bg-bg-surface p-3"
+            onSubmit={sendMessage}
+          >
+            <label className="sr-only" htmlFor="floating-assistant-message">
+              {t("chat.message")}
+            </label>
             <input
               ref={fileInputRef}
               id="floating-assistant-document"
@@ -403,7 +532,9 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
               type="file"
               accept=".pdf,.txt,.md,.csv,.json,text/*,application/pdf"
               className="hidden"
-              onChange={(event) => void uploadDocument(event.target.files?.[0] ?? null)}
+              onChange={(event) =>
+                void uploadDocument(event.target.files?.[0] ?? null)
+              }
             />
             <textarea
               ref={messageInputRef}
@@ -430,7 +561,11 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
                   aria-label={t("chat.attachDocument")}
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                  {isUploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Paperclip className="h-4 w-4" />
+                  )}
                   <span>{t("chat.attach")}</span>
                 </button>
                 <button
@@ -438,9 +573,17 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
                   role="switch"
                   aria-checked={isWorkspaceKnowledgeEnabled}
                   disabled={isSavingKnowledgeMode}
-                  title={isWorkspaceKnowledgeEnabled ? t("chat.knowledgeOn") : t("chat.knowledgeOff")}
+                  title={
+                    isWorkspaceKnowledgeEnabled
+                      ? t("chat.knowledgeOn")
+                      : t("chat.knowledgeOff")
+                  }
                   className="group flex h-9 shrink-0 items-center gap-2 rounded-md border border-transparent px-2 text-xs font-semibold text-text-secondary transition-colors hover:border-border-default hover:bg-bg-muted focus-visible:border-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={() => void updateKnowledgeMode(isWorkspaceKnowledgeEnabled ? "on_demand" : "hybrid")}
+                  onClick={() =>
+                    void updateKnowledgeMode(
+                      isWorkspaceKnowledgeEnabled ? "on_demand" : "hybrid",
+                    )
+                  }
                 >
                   <span>{t("chat.knowledge")}</span>
                   <span
@@ -455,7 +598,9 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
                     <span
                       className={cn(
                         "absolute text-[9px] font-bold leading-none transition-opacity",
-                        isWorkspaceKnowledgeEnabled ? "left-2 text-text-inverse" : "right-1.5 text-text-muted",
+                        isWorkspaceKnowledgeEnabled
+                          ? "left-2 text-text-inverse"
+                          : "right-1.5 text-text-muted",
                       )}
                     >
                       {isWorkspaceKnowledgeEnabled ? "ON" : "OFF"}
@@ -463,7 +608,9 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
                     <span
                       className={cn(
                         "relative z-10 h-5 w-5 rounded-full border border-black/10 bg-white shadow-sm transition-transform",
-                        isWorkspaceKnowledgeEnabled ? "translate-x-6" : "translate-x-0",
+                        isWorkspaceKnowledgeEnabled
+                          ? "translate-x-6"
+                          : "translate-x-0",
                       )}
                     />
                   </span>
@@ -475,7 +622,11 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
                 className="flex h-9 items-center gap-2 rounded-md bg-brand-primary px-3 text-xs font-semibold text-text-inverse hover:bg-brand-primary-hover disabled:opacity-50"
                 aria-label={t("chat.send")}
               >
-                {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {isSending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
                 <span>{t("chat.send")}</span>
               </button>
             </div>
@@ -501,7 +652,9 @@ export function FloatingAssistant({ enabled }: FloatingAssistantProps) {
           className={cn(
             "h-full w-full transition-transform duration-300 ease-out",
             assistantLogoImage,
-            isOpen ? "rotate-[0deg]" : "rotate-[45deg] group-hover:rotate-[0deg]",
+            isOpen
+              ? "rotate-[0deg]"
+              : "rotate-[45deg] group-hover:rotate-[0deg]",
           )}
           aria-hidden="true"
         />

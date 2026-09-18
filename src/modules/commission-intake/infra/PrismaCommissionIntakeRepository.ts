@@ -39,7 +39,9 @@ type CommissionRecordWithDisplay = CommissionRecord & {
   company?: { name: string } | null;
 };
 
-export class PrismaCommissionIntakeRepository implements CommissionIntakeRepository {
+export class PrismaCommissionIntakeRepository
+  implements CommissionIntakeRepository
+{
   public async listRecords(params: {
     workspaceId: string;
     userId: string;
@@ -51,28 +53,54 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       workspace_id: params.workspaceId,
       deleted_at: null,
       ...(params.status ? { status: params.status } : {}),
-      ...(params.search ? {
-        OR: [
-          { code: { contains: params.search, mode: "insensitive" } },
-          { title: { contains: params.search, mode: "insensitive" } },
-          { search_text: { contains: params.search, mode: "insensitive" } },
-          { company: { is: { name: { contains: params.search, mode: "insensitive" } } } },
-          { client: { is: { first_name: { contains: params.search, mode: "insensitive" } } } },
-          { client: { is: { last_name: { contains: params.search, mode: "insensitive" } } } },
-        ],
-      } : {}),
+      ...(params.search
+        ? {
+            OR: [
+              { code: { contains: params.search, mode: "insensitive" } },
+              { title: { contains: params.search, mode: "insensitive" } },
+              { search_text: { contains: params.search, mode: "insensitive" } },
+              {
+                company: {
+                  is: {
+                    name: { contains: params.search, mode: "insensitive" },
+                  },
+                },
+              },
+              {
+                client: {
+                  is: {
+                    first_name: {
+                      contains: params.search,
+                      mode: "insensitive",
+                    },
+                  },
+                },
+              },
+              {
+                client: {
+                  is: {
+                    last_name: { contains: params.search, mode: "insensitive" },
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
     };
 
     const rows = await prisma.commissionRecord.findMany({
       where,
       include: {
-        client: { select: { first_name: true, last_name: true, company: { select: { name: true } } } },
+        client: {
+          select: {
+            first_name: true,
+            last_name: true,
+            company: { select: { name: true } },
+          },
+        },
         company: { select: { name: true } },
       },
-      orderBy: [
-        { updated_at: "desc" },
-        { created_at: "desc" },
-      ],
+      orderBy: [{ updated_at: "desc" }, { created_at: "desc" }],
       take: 200,
     });
 
@@ -92,7 +120,13 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         deleted_at: null,
       },
       include: {
-        client: { select: { first_name: true, last_name: true, company: { select: { name: true } } } },
+        client: {
+          select: {
+            first_name: true,
+            last_name: true,
+            company: { select: { name: true } },
+          },
+        },
         company: { select: { name: true } },
       },
     });
@@ -100,14 +134,26 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     return row ? this.mapRecord(row) : null;
   }
 
-  public async createRecord(params: CommissionRecordWriteParams): Promise<CommissionRecordEntity> {
+  public async createRecord(
+    params: CommissionRecordWriteParams,
+  ): Promise<CommissionRecordEntity> {
     const prisma = PrismaClientManager.getClient();
 
     try {
       const row = await prisma.$transaction(async (tx) => {
-        const companyId = params.companyId ?? await this.findOrCreateCompanyByName(tx, params.workspaceId, params.companyName ?? null);
+        const companyId =
+          params.companyId ??
+          (await this.findOrCreateCompanyByName(
+            tx,
+            params.workspaceId,
+            params.companyName ?? null,
+          ));
         await this.ensureRelatedEntities(tx, { ...params, companyId });
-        await this.ensureUserActiveInWorkspace(tx, params.workspaceId, params.ownerUserId ?? params.actorUserId);
+        await this.ensureUserActiveInWorkspace(
+          tx,
+          params.workspaceId,
+          params.ownerUserId ?? params.actorUserId,
+        );
 
         const record = await tx.commissionRecord.create({
           data: {
@@ -152,9 +198,17 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
 
         let currentChecklistId: string | null = null;
         if (params.formVersionId) {
-          const version = await this.findPublishedTemplateVersion(tx, params.workspaceId, params.formVersionId);
+          const version = await this.findPublishedTemplateVersion(
+            tx,
+            params.workspaceId,
+            params.formVersionId,
+          );
           if (!version) {
-            throw new AppError("Template checklist non trovato o non pubblicato.", "COMMISSION_TEMPLATE_VERSION_NOT_FOUND", 404);
+            throw new AppError(
+              "Template checklist non trovato o non pubblicato.",
+              "COMMISSION_TEMPLATE_VERSION_NOT_FOUND",
+              404,
+            );
           }
 
           const checklist = await tx.commissionChecklist.create({
@@ -167,7 +221,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
               created_by_user_id: params.actorUserId,
               updated_by_user_id: params.actorUserId,
               metadata: this.toNullableJson({
-                vendorList: await this.resolveVendorListSnapshot(tx, params.workspaceId, version.id),
+                vendorList: await this.resolveVendorListSnapshot(
+                  tx,
+                  params.workspaceId,
+                  version.id,
+                ),
               }),
             },
           });
@@ -191,7 +249,13 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         return tx.commissionRecord.findUniqueOrThrow({
           where: { id: record.id },
           include: {
-            client: { select: { first_name: true, last_name: true, company: { select: { name: true } } } },
+            client: {
+              select: {
+                first_name: true,
+                last_name: true,
+                company: { select: { name: true } },
+              },
+            },
             company: { select: { name: true } },
           },
         });
@@ -200,16 +264,26 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       return this.mapRecord(row);
     } catch (error) {
       if (this.isUniqueConstraintError(error)) {
-        throw new AppError("Esiste già una commessa con questo codice nel workspace.", "COMMISSION_CODE_ALREADY_EXISTS", 409);
+        throw new AppError(
+          "Esiste già una commessa con questo codice nel workspace.",
+          "COMMISSION_CODE_ALREADY_EXISTS",
+          409,
+        );
       }
 
       throw error;
     }
   }
 
-  public async updateRecord(params: CommissionRecordUpdateParams): Promise<CommissionRecordEntity | null> {
+  public async updateRecord(
+    params: CommissionRecordUpdateParams,
+  ): Promise<CommissionRecordEntity | null> {
     const prisma = PrismaClientManager.getClient();
-    await this.ensureCanWrite(params.workspaceId, params.recordId, params.actorUserId);
+    await this.ensureCanWrite(
+      params.workspaceId,
+      params.recordId,
+      params.actorUserId,
+    );
 
     const updated = await prisma.$transaction(async (tx) => {
       await this.ensureRelatedEntities(tx, params);
@@ -231,7 +305,12 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       if (!existing) {
         return null;
       }
-      await this.ensureNoBlockingLock(tx, params.workspaceId, params.recordId, params.actorUserId);
+      await this.ensureNoBlockingLock(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.actorUserId,
+      );
 
       if (params.code !== undefined && params.code !== existing.code) {
         const duplicate = await tx.commissionRecord.findFirst({
@@ -254,34 +333,63 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       const data: Prisma.CommissionRecordUncheckedUpdateInput = {
         ...(params.code !== undefined ? { code: params.code } : {}),
         ...(params.title !== undefined ? { title: params.title } : {}),
-        ...(params.description !== undefined ? { description: params.description } : {}),
+        ...(params.description !== undefined
+          ? { description: params.description }
+          : {}),
         ...(params.status !== undefined ? { status: params.status } : {}),
-        ...(params.statusLabel !== undefined ? { status_label: params.statusLabel } : {}),
+        ...(params.statusLabel !== undefined
+          ? { status_label: params.statusLabel }
+          : {}),
         ...(params.priority !== undefined ? { priority: params.priority } : {}),
-        ...(params.companyId !== undefined ? { company_id: params.companyId } : {}),
-        ...(params.clientId !== undefined ? { client_id: params.clientId } : {}),
-        ...(params.projectId !== undefined ? { project_id: params.projectId } : {}),
-        ...(params.sourceSystem !== undefined ? { source_system: params.sourceSystem } : {}),
-        ...(params.externalReference !== undefined ? { external_reference: params.externalReference } : {}),
-        ...(params.expectedDeliveryAt !== undefined ? { expected_delivery_at: params.expectedDeliveryAt } : {}),
-        ...(params.estimatedBudgetAmount !== undefined ? { estimated_budget_amount: params.estimatedBudgetAmount } : {}),
+        ...(params.companyId !== undefined
+          ? { company_id: params.companyId }
+          : {}),
+        ...(params.clientId !== undefined
+          ? { client_id: params.clientId }
+          : {}),
+        ...(params.projectId !== undefined
+          ? { project_id: params.projectId }
+          : {}),
+        ...(params.sourceSystem !== undefined
+          ? { source_system: params.sourceSystem }
+          : {}),
+        ...(params.externalReference !== undefined
+          ? { external_reference: params.externalReference }
+          : {}),
+        ...(params.expectedDeliveryAt !== undefined
+          ? { expected_delivery_at: params.expectedDeliveryAt }
+          : {}),
+        ...(params.estimatedBudgetAmount !== undefined
+          ? { estimated_budget_amount: params.estimatedBudgetAmount }
+          : {}),
         ...(params.currency !== undefined ? { currency: params.currency } : {}),
-        ...(params.metadata !== undefined ? { metadata: this.toNullableJson(params.metadata) } : {}),
+        ...(params.metadata !== undefined
+          ? { metadata: this.toNullableJson(params.metadata) }
+          : {}),
         updated_by_user_id: params.actorUserId,
       };
       if (
-        params.code !== undefined
-        || params.title !== undefined
-        || params.description !== undefined
-        || params.sourceSystem !== undefined
-        || params.externalReference !== undefined
+        params.code !== undefined ||
+        params.title !== undefined ||
+        params.description !== undefined ||
+        params.sourceSystem !== undefined ||
+        params.externalReference !== undefined
       ) {
         data.search_text = this.buildSearchText({
           code: params.code ?? existing.code,
           title: params.title ?? existing.title,
-          description: params.description === undefined ? existing.description : params.description,
-          sourceSystem: params.sourceSystem === undefined ? existing.source_system : params.sourceSystem,
-          externalReference: params.externalReference === undefined ? existing.external_reference : params.externalReference,
+          description:
+            params.description === undefined
+              ? existing.description
+              : params.description,
+          sourceSystem:
+            params.sourceSystem === undefined
+              ? existing.source_system
+              : params.sourceSystem,
+          externalReference:
+            params.externalReference === undefined
+              ? existing.external_reference
+              : params.externalReference,
         });
       }
 
@@ -312,11 +420,20 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     actorUserId: string;
   }): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
-    await this.ensureCanWrite(params.workspaceId, params.recordId, params.actorUserId);
+    await this.ensureCanWrite(
+      params.workspaceId,
+      params.recordId,
+      params.actorUserId,
+    );
 
     const now = new Date();
     const result = await prisma.$transaction(async (tx) => {
-      await this.ensureNoBlockingLock(tx, params.workspaceId, params.recordId, params.actorUserId);
+      await this.ensureNoBlockingLock(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.actorUserId,
+      );
       const update = await tx.commissionRecord.updateMany({
         where: {
           id: params.recordId,
@@ -386,7 +503,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     recordId: string;
     limit: number;
   }): Promise<CommissionEventListItem[]> {
-    await this.ensureCanRead(params.workspaceId, params.recordId, params.userId);
+    await this.ensureCanRead(
+      params.workspaceId,
+      params.recordId,
+      params.userId,
+    );
     const prisma = PrismaClientManager.getClient();
     const rows = await prisma.commissionEvent.findMany({
       where: {
@@ -415,7 +536,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     const prisma = PrismaClientManager.getClient();
     const record = await this.findRecordById(params);
     if (!record) {
-      throw new AppError("Commessa non trovata o non accessibile.", "COMMISSION_RECORD_NOT_FOUND", 404);
+      throw new AppError(
+        "Commessa non trovata o non accessibile.",
+        "COMMISSION_RECORD_NOT_FOUND",
+        404,
+      );
     }
 
     const [currentUser, canReopenSignedChecklist] = await Promise.all([
@@ -444,7 +569,20 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     });
 
     if (!checklist) {
-      return { record, currentUser: { ...currentUser, canReopenSignedChecklist, canConfigureVendorList: canReopenSignedChecklist }, checklist: null, pages: [], values: [], tableRows: [], attachments: [], signatures: [] };
+      return {
+        record,
+        currentUser: {
+          ...currentUser,
+          canReopenSignedChecklist,
+          canConfigureVendorList: canReopenSignedChecklist,
+        },
+        checklist: null,
+        pages: [],
+        values: [],
+        tableRows: [],
+        attachments: [],
+        signatures: [],
+      };
     }
 
     const pages = await prisma.commissionFormPage.findMany({
@@ -460,78 +598,113 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       },
     });
     const pageIds = pages.map((page) => page.id);
-    const [sections, fields, values, tableRows, attachments, signatures] = await Promise.all([
-      prisma.commissionFormSection.findMany({
-        where: { page_id: { in: pageIds } },
-        orderBy: [{ page: { sort_order: "asc" } }, { sort_order: "asc" }],
-        select: {
-          id: true,
-          page_id: true,
-          key: true,
-          title: true,
-          description: true,
-          sort_order: true,
-        },
-      }),
-      prisma.commissionFormField.findMany({
-        where: { version_id: checklist.form_version_id, page_id: { in: pageIds } },
-        orderBy: [{ page: { sort_order: "asc" } }, { sort_order: "asc" }],
-        include: {
-          options: { orderBy: { sort_order: "asc" } },
-          table_definition: {
-            include: {
-              columns: { orderBy: { sort_order: "asc" } },
+    const [sections, fields, values, tableRows, attachments, signatures] =
+      await Promise.all([
+        prisma.commissionFormSection.findMany({
+          where: { page_id: { in: pageIds } },
+          orderBy: [{ page: { sort_order: "asc" } }, { sort_order: "asc" }],
+          select: {
+            id: true,
+            page_id: true,
+            key: true,
+            title: true,
+            description: true,
+            sort_order: true,
+          },
+        }),
+        prisma.commissionFormField.findMany({
+          where: {
+            version_id: checklist.form_version_id,
+            page_id: { in: pageIds },
+          },
+          orderBy: [{ page: { sort_order: "asc" } }, { sort_order: "asc" }],
+          include: {
+            options: { orderBy: { sort_order: "asc" } },
+            table_definition: {
+              include: {
+                columns: { orderBy: { sort_order: "asc" } },
+              },
             },
           },
-        },
-      }),
-      prisma.commissionFieldValue.findMany({
-        where: { workspace_id: params.workspaceId, record_id: params.recordId, checklist_id: checklist.id },
-        orderBy: { updated_at: "desc" },
-      }),
-      prisma.commissionTableRow.findMany({
-        where: { workspace_id: params.workspaceId, record_id: params.recordId, checklist_id: checklist.id, deleted_at: null },
-        orderBy: [{ table_definition_id: "asc" }, { row_index: "asc" }],
-        include: { cells: { orderBy: { column_key: "asc" } } },
-      }),
-      prisma.commissionAttachment.findMany({
-        where: { workspace_id: params.workspaceId, record_id: params.recordId, checklist_id: checklist.id, deleted_at: null },
-        orderBy: { created_at: "desc" },
-        include: {
-          document: {
-            select: {
-              id: true,
-              filename: true,
-              file_type: { select: { mime_type: true } },
-              size_bytes: true,
+        }),
+        prisma.commissionFieldValue.findMany({
+          where: {
+            workspace_id: params.workspaceId,
+            record_id: params.recordId,
+            checklist_id: checklist.id,
+          },
+          orderBy: { updated_at: "desc" },
+        }),
+        prisma.commissionTableRow.findMany({
+          where: {
+            workspace_id: params.workspaceId,
+            record_id: params.recordId,
+            checklist_id: checklist.id,
+            deleted_at: null,
+          },
+          orderBy: [{ table_definition_id: "asc" }, { row_index: "asc" }],
+          include: { cells: { orderBy: { column_key: "asc" } } },
+        }),
+        prisma.commissionAttachment.findMany({
+          where: {
+            workspace_id: params.workspaceId,
+            record_id: params.recordId,
+            checklist_id: checklist.id,
+            deleted_at: null,
+          },
+          orderBy: { created_at: "desc" },
+          include: {
+            document: {
+              select: {
+                id: true,
+                filename: true,
+                file_type: { select: { mime_type: true } },
+                size_bytes: true,
+              },
             },
           },
-        },
-      }),
-      prisma.commissionSignature.findMany({
-        where: { workspace_id: params.workspaceId, record_id: params.recordId, checklist_id: checklist.id },
-        orderBy: { signed_at: "desc" },
-      }),
-    ]);
+        }),
+        prisma.commissionSignature.findMany({
+          where: {
+            workspace_id: params.workspaceId,
+            record_id: params.recordId,
+            checklist_id: checklist.id,
+          },
+          orderBy: { signed_at: "desc" },
+        }),
+      ]);
 
     const sectionsByPage = new Map<string, typeof sections>();
     for (const section of sections) {
-      sectionsByPage.set(section.page_id, [...(sectionsByPage.get(section.page_id) ?? []), section]);
+      sectionsByPage.set(section.page_id, [
+        ...(sectionsByPage.get(section.page_id) ?? []),
+        section,
+      ]);
     }
 
     const fieldsBySection = new Map<string, typeof fields>();
     const fieldsByPageWithoutSection = new Map<string, typeof fields>();
     for (const field of fields) {
       if (field.section_id) {
-        fieldsBySection.set(field.section_id, [...(fieldsBySection.get(field.section_id) ?? []), field]);
+        fieldsBySection.set(field.section_id, [
+          ...(fieldsBySection.get(field.section_id) ?? []),
+          field,
+        ]);
       } else {
-        fieldsByPageWithoutSection.set(field.page_id, [...(fieldsByPageWithoutSection.get(field.page_id) ?? []), field]);
+        fieldsByPageWithoutSection.set(field.page_id, [
+          ...(fieldsByPageWithoutSection.get(field.page_id) ?? []),
+          field,
+        ]);
       }
     }
 
     return {
       record,
-      currentUser: { ...currentUser, canReopenSignedChecklist, canConfigureVendorList: canReopenSignedChecklist },
+      currentUser: {
+        ...currentUser,
+        canReopenSignedChecklist,
+        canConfigureVendorList: canReopenSignedChecklist,
+      },
       checklist: {
         id: checklist.id,
         title: checklist.title,
@@ -543,14 +716,21 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         formVersionId: checklist.form_version_id,
       },
       pages: pages.map((page) => {
-        const mappedSections = (sectionsByPage.get(page.id) ?? []).map((section) => ({
-          id: section.id,
-          key: section.key,
-          title: section.title,
-          description: section.description,
-          sortOrder: section.sort_order,
-          fields: (fieldsBySection.get(section.id) ?? []).map((field) => this.mapFormField(field, this.vendorListRowsFromChecklistMetadata(checklist.metadata))),
-        }));
+        const mappedSections = (sectionsByPage.get(page.id) ?? []).map(
+          (section) => ({
+            id: section.id,
+            key: section.key,
+            title: section.title,
+            description: section.description,
+            sortOrder: section.sort_order,
+            fields: (fieldsBySection.get(section.id) ?? []).map((field) =>
+              this.mapFormField(
+                field,
+                this.vendorListRowsFromChecklistMetadata(checklist.metadata),
+              ),
+            ),
+          }),
+        );
         const unsectionedFields = fieldsByPageWithoutSection.get(page.id) ?? [];
         return {
           id: page.id,
@@ -559,24 +739,39 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
           title: page.title,
           description: page.description,
           sortOrder: page.sort_order,
-          sections: unsectionedFields.length > 0
-            ? [
-              ...mappedSections,
-              {
-                id: `${page.id}:fields`,
-                key: `${page.key}:fields`,
-                title: page.title,
-                description: null,
-                sortOrder: Number.MAX_SAFE_INTEGER,
-                fields: unsectionedFields.map((field) => this.mapFormField(field, this.vendorListRowsFromChecklistMetadata(checklist.metadata))),
-              },
-            ]
-            : mappedSections,
+          sections:
+            unsectionedFields.length > 0
+              ? [
+                  ...mappedSections,
+                  {
+                    id: `${page.id}:fields`,
+                    key: `${page.key}:fields`,
+                    title: page.title,
+                    description: null,
+                    sortOrder: Number.MAX_SAFE_INTEGER,
+                    fields: unsectionedFields.map((field) =>
+                      this.mapFormField(
+                        field,
+                        this.vendorListRowsFromChecklistMetadata(
+                          checklist.metadata,
+                        ),
+                      ),
+                    ),
+                  },
+                ]
+              : mappedSections,
         };
       }),
       values: values.map((value) => this.mapFieldValue(value)),
-      tableRows: tableRows.map((row) => this.mapTableRow(row, this.vendorListContextFromChecklistMetadata(checklist.metadata))),
-      attachments: attachments.map((attachment) => this.mapAttachment(attachment)),
+      tableRows: tableRows.map((row) =>
+        this.mapTableRow(
+          row,
+          this.vendorListContextFromChecklistMetadata(checklist.metadata),
+        ),
+      ),
+      attachments: attachments.map((attachment) =>
+        this.mapAttachment(attachment),
+      ),
       signatures: signatures.map((signature) => this.mapSignature(signature)),
     };
   }
@@ -590,18 +785,44 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     value: unknown;
   }): Promise<CommissionSavedFieldValue> {
     const prisma = PrismaClientManager.getClient();
-    await this.ensureCanWrite(params.workspaceId, params.recordId, params.actorUserId);
+    await this.ensureCanWrite(
+      params.workspaceId,
+      params.recordId,
+      params.actorUserId,
+    );
 
     const result = await prisma.$transaction(async (tx) => {
       const context = await this.resolveEditableField(tx, params);
       this.ensureChecklistEditable(context.checklist.status);
-      if (context.field.field_type === CommissionFieldType.TABLE || context.field.field_type === CommissionFieldType.SIGNATURE) {
-        throw new AppError("Questo campo richiede un endpoint dedicato.", "COMMISSION_FIELD_ENDPOINT_INVALID", 400);
+      if (
+        context.field.field_type === CommissionFieldType.TABLE ||
+        context.field.field_type === CommissionFieldType.SIGNATURE
+      ) {
+        throw new AppError(
+          "Questo campo richiede un endpoint dedicato.",
+          "COMMISSION_FIELD_ENDPOINT_INVALID",
+          400,
+        );
       }
-      await this.ensureNoBlockingLock(tx, params.workspaceId, params.recordId, params.actorUserId);
-      await this.ensureOwnActiveChecklistLock(tx, params.workspaceId, params.recordId, params.checklistId, params.actorUserId);
+      await this.ensureNoBlockingLock(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.actorUserId,
+      );
+      await this.ensureOwnActiveChecklistLock(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.checklistId,
+        params.actorUserId,
+      );
 
-      const normalized = this.normalizeValueForStorage(params.value, context.field.data_kind, context.field.field_type);
+      const normalized = this.normalizeValueForStorage(
+        params.value,
+        context.field.data_kind,
+        context.field.field_type,
+      );
       const fieldValue = await tx.commissionFieldValue.upsert({
         where: {
           checklist_id_field_id: {
@@ -624,7 +845,12 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         },
       });
 
-      const progressPercent = await this.updateChecklistProgress(tx, params.workspaceId, params.recordId, params.checklistId);
+      const progressPercent = await this.updateChecklistProgress(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.checklistId,
+      );
       await this.recordEvent(tx, {
         workspaceId: params.workspaceId,
         recordId: params.recordId,
@@ -632,13 +858,20 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         actorUserId: params.actorUserId,
         eventType: CommissionEventType.FIELD_CHANGED,
         summary: `Campo aggiornato: ${context.field.label}.`,
-        payload: { fieldId: params.fieldId, fieldKey: context.field.key, displayValue: normalized.display_value },
+        payload: {
+          fieldId: params.fieldId,
+          fieldKey: context.field.key,
+          displayValue: normalized.display_value,
+        },
       });
 
       return { fieldValue, progressPercent };
     });
 
-    return { fieldValue: this.mapFieldValue(result.fieldValue), progressPercent: result.progressPercent };
+    return {
+      fieldValue: this.mapFieldValue(result.fieldValue),
+      progressPercent: result.progressPercent,
+    };
   }
 
   public async replaceTableRows(params: {
@@ -650,10 +883,19 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     rows: Array<{ rowKey?: string | null; cells: Record<string, unknown> }>;
   }): Promise<CommissionTableRowItem[]> {
     const prisma = PrismaClientManager.getClient();
-    await this.ensureCanWrite(params.workspaceId, params.recordId, params.actorUserId);
+    await this.ensureCanWrite(
+      params.workspaceId,
+      params.recordId,
+      params.actorUserId,
+    );
 
     return prisma.$transaction(async (tx) => {
-      const checklist = await this.resolveChecklist(tx, params.workspaceId, params.recordId, params.checklistId);
+      const checklist = await this.resolveChecklist(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.checklistId,
+      );
       this.ensureChecklistEditable(checklist.status);
       const table = await tx.commissionTableDefinition.findFirst({
         where: {
@@ -666,13 +908,32 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         },
       });
       if (!table) {
-        throw new AppError("Tabella non trovata nella checklist.", "COMMISSION_TABLE_NOT_FOUND", 404);
+        throw new AppError(
+          "Tabella non trovata nella checklist.",
+          "COMMISSION_TABLE_NOT_FOUND",
+          404,
+        );
       }
       if (table.max_rows !== null && params.rows.length > table.max_rows) {
-        throw new AppError("Sono state inviate troppe righe per questa tabella.", "COMMISSION_TABLE_TOO_MANY_ROWS", 400);
+        throw new AppError(
+          "Sono state inviate troppe righe per questa tabella.",
+          "COMMISSION_TABLE_TOO_MANY_ROWS",
+          400,
+        );
       }
-      await this.ensureNoBlockingLock(tx, params.workspaceId, params.recordId, params.actorUserId);
-      await this.ensureOwnActiveChecklistLock(tx, params.workspaceId, params.recordId, params.checklistId, params.actorUserId);
+      await this.ensureNoBlockingLock(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.actorUserId,
+      );
+      await this.ensureOwnActiveChecklistLock(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.checklistId,
+        params.actorUserId,
+      );
 
       const existingRows = await tx.commissionTableRow.findMany({
         where: {
@@ -684,8 +945,12 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         select: { id: true },
       });
       if (existingRows.length > 0) {
-        await tx.commissionTableCell.deleteMany({ where: { row_id: { in: existingRows.map((row) => row.id) } } });
-        await tx.commissionTableRow.deleteMany({ where: { id: { in: existingRows.map((row) => row.id) } } });
+        await tx.commissionTableCell.deleteMany({
+          where: { row_id: { in: existingRows.map((row) => row.id) } },
+        });
+        await tx.commissionTableRow.deleteMany({
+          where: { id: { in: existingRows.map((row) => row.id) } },
+        });
       }
 
       const createdRows = [];
@@ -704,7 +969,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         });
 
         for (const column of table.columns) {
-          const normalized = this.normalizeValueForStorage(rowInput.cells[column.key] ?? null, column.data_kind, null);
+          const normalized = this.normalizeValueForStorage(
+            rowInput.cells[column.key] ?? null,
+            column.data_kind,
+            null,
+          );
           await tx.commissionTableCell.create({
             data: {
               workspace_id: params.workspaceId,
@@ -722,7 +991,12 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         createdRows.push(row);
       }
 
-      await this.updateChecklistProgress(tx, params.workspaceId, params.recordId, params.checklistId);
+      await this.updateChecklistProgress(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.checklistId,
+      );
       await this.recordEvent(tx, {
         workspaceId: params.workspaceId,
         recordId: params.recordId,
@@ -730,7 +1004,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         actorUserId: params.actorUserId,
         eventType: CommissionEventType.TABLE_ROW_UPDATED,
         summary: `Tabella aggiornata: ${table.title}.`,
-        payload: { tableDefinitionId: table.id, tableKey: table.key, rows: createdRows.length },
+        payload: {
+          tableDefinitionId: table.id,
+          tableKey: table.key,
+          rows: createdRows.length,
+        },
       });
 
       const rows = await tx.commissionTableRow.findMany({
@@ -763,21 +1041,51 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     storagePath: string;
   }): Promise<CommissionAttachmentItem> {
     const prisma = PrismaClientManager.getClient();
-    await this.ensureCanWrite(params.workspaceId, params.recordId, params.actorUserId);
+    await this.ensureCanWrite(
+      params.workspaceId,
+      params.recordId,
+      params.actorUserId,
+    );
 
     const created = await prisma.$transaction(async (tx) => {
-      const checklist = await this.resolveChecklist(tx, params.workspaceId, params.recordId, params.checklistId);
+      const checklist = await this.resolveChecklist(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.checklistId,
+      );
       this.ensureChecklistEditable(checklist.status);
-      await this.ensureNoBlockingLock(tx, params.workspaceId, params.recordId, params.actorUserId);
-      await this.ensureOwnActiveChecklistLock(tx, params.workspaceId, params.recordId, params.checklistId, params.actorUserId);
+      await this.ensureNoBlockingLock(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.actorUserId,
+      );
+      await this.ensureOwnActiveChecklistLock(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.checklistId,
+        params.actorUserId,
+      );
 
-      const node = await this.ensureCommissionDocumentNode(tx, params.workspaceId, params.recordId);
-      const extension = this.resolveFileExtension(params.fileName, params.mimeType);
+      const node = await this.ensureCommissionDocumentNode(
+        tx,
+        params.workspaceId,
+        params.recordId,
+      );
+      const extension = this.resolveFileExtension(
+        params.fileName,
+        params.mimeType,
+      );
       const [fileType, fileStatus, moduleRow] = await Promise.all([
         tx.fileType.upsert({
           where: { key: extension },
           update: { mime_type: params.mimeType || "application/octet-stream" },
-          create: { key: extension, mime_type: params.mimeType || "application/octet-stream" },
+          create: {
+            key: extension,
+            mime_type: params.mimeType || "application/octet-stream",
+          },
         }),
         tx.fileStatus.upsert({
           where: { key: "uploaded" },
@@ -816,7 +1124,9 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
           checklist_id: params.checklistId,
           document_id: document.id,
           label: this.normalizeOptionalString(params.fieldKey),
-          note: this.normalizeOptionalString(params.note) ?? this.normalizeOptionalString(params.label),
+          note:
+            this.normalizeOptionalString(params.note) ??
+            this.normalizeOptionalString(params.label),
           uploaded_by_user_id: params.actorUserId,
         },
         include: {
@@ -838,7 +1148,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         actorUserId: params.actorUserId,
         eventType: CommissionEventType.ATTACHMENT_ADDED,
         summary: `Allegato caricato: ${params.fileName}.`,
-        payload: { attachmentId: attachment.id, documentId: document.id, fieldKey: params.fieldKey ?? null },
+        payload: {
+          attachmentId: attachment.id,
+          documentId: document.id,
+          fieldKey: params.fieldKey ?? null,
+        },
       });
 
       return attachment;
@@ -854,7 +1168,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     actorUserId: string;
   }): Promise<{ storagePath: string } | null> {
     const prisma = PrismaClientManager.getClient();
-    await this.ensureCanWrite(params.workspaceId, params.recordId, params.actorUserId);
+    await this.ensureCanWrite(
+      params.workspaceId,
+      params.recordId,
+      params.actorUserId,
+    );
 
     return prisma.$transaction(async (tx) => {
       const attachment = await tx.commissionAttachment.findFirst({
@@ -869,10 +1187,26 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       if (!attachment) return null;
 
       if (attachment.checklist_id) {
-        const checklist = await this.resolveChecklist(tx, params.workspaceId, params.recordId, attachment.checklist_id);
+        const checklist = await this.resolveChecklist(
+          tx,
+          params.workspaceId,
+          params.recordId,
+          attachment.checklist_id,
+        );
         this.ensureChecklistEditable(checklist.status);
-        await this.ensureNoBlockingLock(tx, params.workspaceId, params.recordId, params.actorUserId);
-        await this.ensureOwnActiveChecklistLock(tx, params.workspaceId, params.recordId, attachment.checklist_id, params.actorUserId);
+        await this.ensureNoBlockingLock(
+          tx,
+          params.workspaceId,
+          params.recordId,
+          params.actorUserId,
+        );
+        await this.ensureOwnActiveChecklistLock(
+          tx,
+          params.workspaceId,
+          params.recordId,
+          attachment.checklist_id,
+          params.actorUserId,
+        );
       }
 
       await tx.commissionAttachment.update({
@@ -891,7 +1225,10 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         actorUserId: params.actorUserId,
         eventType: CommissionEventType.ATTACHMENT_REMOVED,
         summary: "Allegato rimosso.",
-        payload: { attachmentId: attachment.id, documentId: attachment.document_id },
+        payload: {
+          attachmentId: attachment.id,
+          documentId: attachment.document_id,
+        },
       });
 
       return { storagePath: attachment.document.storage_path };
@@ -906,14 +1243,39 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     statement?: string | null;
   }): Promise<CommissionSignatureItem> {
     const prisma = PrismaClientManager.getClient();
-    await this.ensureCanWrite(params.workspaceId, params.recordId, params.actorUserId);
+    await this.ensureCanWrite(
+      params.workspaceId,
+      params.recordId,
+      params.actorUserId,
+    );
 
     const signature = await prisma.$transaction(async (tx) => {
-      const checklist = await this.resolveChecklist(tx, params.workspaceId, params.recordId, params.checklistId);
+      const checklist = await this.resolveChecklist(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.checklistId,
+      );
       this.ensureChecklistEditable(checklist.status);
-      await this.ensureNoBlockingLock(tx, params.workspaceId, params.recordId, params.actorUserId);
-      await this.ensureOwnActiveChecklistLock(tx, params.workspaceId, params.recordId, params.checklistId, params.actorUserId);
-      await this.updateChecklistProgress(tx, params.workspaceId, params.recordId, params.checklistId);
+      await this.ensureNoBlockingLock(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.actorUserId,
+      );
+      await this.ensureOwnActiveChecklistLock(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.checklistId,
+        params.actorUserId,
+      );
+      await this.updateChecklistProgress(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.checklistId,
+      );
       const signer = await this.resolveCurrentUser(tx, params.actorUserId);
       await tx.commissionSignature.deleteMany({
         where: {
@@ -936,11 +1298,18 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
 
       await tx.commissionChecklist.update({
         where: { id: params.checklistId },
-        data: { status: CommissionChecklistStatus.SIGNED, signed_at: row.signed_at, updated_by_user_id: params.actorUserId },
+        data: {
+          status: CommissionChecklistStatus.SIGNED,
+          signed_at: row.signed_at,
+          updated_by_user_id: params.actorUserId,
+        },
       });
       await tx.commissionRecord.update({
         where: { id: params.recordId },
-        data: { status: CommissionRecordStatus.SIGNED, updated_by_user_id: params.actorUserId },
+        data: {
+          status: CommissionRecordStatus.SIGNED,
+          updated_by_user_id: params.actorUserId,
+        },
       });
       await this.recordEvent(tx, {
         workspaceId: params.workspaceId,
@@ -964,18 +1333,39 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     actorUserId: string;
   }): Promise<void> {
     const prisma = PrismaClientManager.getClient();
-    const canManage = await this.canManageWorkspace(params.workspaceId, params.actorUserId);
+    const canManage = await this.canManageWorkspace(
+      params.workspaceId,
+      params.actorUserId,
+    );
     if (!canManage) {
-      throw new AppError("Solo un admin può riaprire una checklist firmata.", "COMMISSION_CHECKLIST_REOPEN_FORBIDDEN", 403);
+      throw new AppError(
+        "Solo un admin può riaprire una checklist firmata.",
+        "COMMISSION_CHECKLIST_REOPEN_FORBIDDEN",
+        403,
+      );
     }
 
     await prisma.$transaction(async (tx) => {
-      const checklist = await this.resolveChecklist(tx, params.workspaceId, params.recordId, params.checklistId);
+      const checklist = await this.resolveChecklist(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.checklistId,
+      );
       if (checklist.status !== CommissionChecklistStatus.SIGNED) {
-        throw new AppError("Solo una checklist firmata può essere riaperta.", "COMMISSION_CHECKLIST_REOPEN_INVALID_STATUS", 409);
+        throw new AppError(
+          "Solo una checklist firmata può essere riaperta.",
+          "COMMISSION_CHECKLIST_REOPEN_INVALID_STATUS",
+          409,
+        );
       }
 
-      await this.ensureNoBlockingLock(tx, params.workspaceId, params.recordId, params.actorUserId);
+      await this.ensureNoBlockingLock(
+        tx,
+        params.workspaceId,
+        params.recordId,
+        params.actorUserId,
+      );
 
       await tx.commissionChecklist.update({
         where: { id: params.checklistId },
@@ -1001,7 +1391,10 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         actorUserId: params.actorUserId,
         eventType: CommissionEventType.STATUS_CHANGED,
         summary: "Checklist riaperta.",
-        payload: { from: CommissionChecklistStatus.SIGNED, to: CommissionChecklistStatus.IN_PROGRESS },
+        payload: {
+          from: CommissionChecklistStatus.SIGNED,
+          to: CommissionChecklistStatus.IN_PROGRESS,
+        },
       });
     });
   }
@@ -1017,7 +1410,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     expiresAt: Date;
   }): Promise<CommissionLockResult> {
     const prisma = PrismaClientManager.getClient();
-    await this.ensureCanWrite(params.workspaceId, params.recordId, params.userId);
+    await this.ensureCanWrite(
+      params.workspaceId,
+      params.recordId,
+      params.userId,
+    );
     await this.ensureLockResourceBelongsToRecord(prisma, {
       workspaceId: params.workspaceId,
       recordId: params.recordId,
@@ -1025,7 +1422,12 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       resourceId: params.resourceId,
     });
 
-    const activeScopeKey = this.lockScopeKey(params.workspaceId, params.recordId, params.resourceType, params.resourceId);
+    const activeScopeKey = this.lockScopeKey(
+      params.workspaceId,
+      params.recordId,
+      params.resourceType,
+      params.resourceId,
+    );
     const now = new Date();
     await prisma.commissionResourceLock.updateMany({
       where: {
@@ -1039,7 +1441,12 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         release_reason: "expired",
       },
     });
-    await this.ensureNoBlockingLock(prisma, params.workspaceId, params.recordId, params.userId);
+    await this.ensureNoBlockingLock(
+      prisma,
+      params.workspaceId,
+      params.recordId,
+      params.userId,
+    );
 
     const existingOwnLock = await prisma.commissionResourceLock.findFirst({
       where: {
@@ -1072,7 +1479,10 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         data: {
           workspace_id: params.workspaceId,
           record_id: params.recordId,
-          checklist_id: params.resourceType === CommissionLockResourceType.CHECKLIST ? params.resourceId : null,
+          checklist_id:
+            params.resourceType === CommissionLockResourceType.CHECKLIST
+              ? params.resourceId
+              : null,
           resource_type: params.resourceType,
           resource_id: params.resourceId,
           active_scope_key: activeScopeKey,
@@ -1089,7 +1499,10 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         actorUserId: params.userId,
         eventType: CommissionEventType.LOCK_ACQUIRED,
         summary: "Blocco modifica acquisito.",
-        payload: { resourceType: params.resourceType, resourceId: params.resourceId },
+        payload: {
+          resourceType: params.resourceType,
+          resourceId: params.resourceId,
+        },
       });
 
       return {
@@ -1100,8 +1513,15 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         expiresAt: lock.expires_at,
       };
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new AppError("Questa risorsa è già in modifica da un altro utente.", "COMMISSION_RESOURCE_LOCKED", 409);
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        throw new AppError(
+          "Questa risorsa è già in modifica da un altro utente.",
+          "COMMISSION_RESOURCE_LOCKED",
+          409,
+        );
       }
 
       throw error;
@@ -1151,7 +1571,10 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       actorUserId: params.userId,
       eventType: CommissionEventType.LOCK_RELEASED,
       summary: "Blocco modifica rilasciato.",
-      payload: { resourceType: lock.resource_type, resourceId: lock.resource_id },
+      payload: {
+        resourceType: lock.resource_type,
+        resourceId: lock.resource_id,
+      },
     });
 
     return true;
@@ -1182,7 +1605,9 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       return null;
     }
 
-    const expiresAt = new Date(now.getTime() + Math.min(Math.max(params.ttlSeconds, 30), 1800) * 1000);
+    const expiresAt = new Date(
+      now.getTime() + Math.min(Math.max(params.ttlSeconds, 30), 1800) * 1000,
+    );
     const renewed = await prisma.commissionResourceLock.updateMany({
       where: {
         id: lock.id,
@@ -1213,7 +1638,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
   }): Promise<{ id: string; title: string } | null> {
     const prisma = PrismaClientManager.getClient();
     if (params.formVersionId) {
-      return this.findPublishedTemplateVersion(prisma, params.workspaceId, params.formVersionId);
+      return this.findPublishedTemplateVersion(
+        prisma,
+        params.workspaceId,
+        params.formVersionId,
+      );
     }
 
     const workspaceVersion = await prisma.commissionFormVersion.findFirst({
@@ -1256,7 +1685,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     actorUserId: string;
   }): Promise<string> {
     const prisma = PrismaClientManager.getClient();
-    await this.ensureCanWrite(params.workspaceId, params.recordId, params.actorUserId);
+    await this.ensureCanWrite(
+      params.workspaceId,
+      params.recordId,
+      params.actorUserId,
+    );
     const checklist = await prisma.commissionChecklist.create({
       data: {
         workspace_id: params.workspaceId,
@@ -1267,7 +1700,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         created_by_user_id: params.actorUserId,
         updated_by_user_id: params.actorUserId,
         metadata: this.toNullableJson({
-          vendorList: await this.resolveVendorListSnapshot(prisma, params.workspaceId, params.formVersionId),
+          vendorList: await this.resolveVendorListSnapshot(
+            prisma,
+            params.workspaceId,
+            params.formVersionId,
+          ),
         }),
       },
     });
@@ -1280,7 +1717,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     return checklist.id;
   }
 
-  private async ensureCanRead(workspaceId: string, recordId: string, userId: string): Promise<void> {
+  private async ensureCanRead(
+    workspaceId: string,
+    recordId: string,
+    userId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     const record = await prisma.commissionRecord.findFirst({
       where: {
@@ -1292,11 +1733,19 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     });
 
     if (!record) {
-      throw new AppError("Commessa non trovata o non accessibile.", "COMMISSION_RECORD_NOT_FOUND", 404);
+      throw new AppError(
+        "Commessa non trovata o non accessibile.",
+        "COMMISSION_RECORD_NOT_FOUND",
+        404,
+      );
     }
   }
 
-  private async ensureCanWrite(workspaceId: string, recordId: string, userId: string): Promise<void> {
+  private async ensureCanWrite(
+    workspaceId: string,
+    recordId: string,
+    userId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     const record = await prisma.commissionRecord.findFirst({
       where: {
@@ -1308,12 +1757,18 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     });
 
     if (!record) {
-      throw new AppError("Commessa non trovata o non modificabile.", "COMMISSION_RECORD_NOT_WRITABLE", 404);
+      throw new AppError(
+        "Commessa non trovata o non modificabile.",
+        "COMMISSION_RECORD_NOT_WRITABLE",
+        404,
+      );
     }
   }
 
   private async ensureNoBlockingLock(
-    prisma: Prisma.TransactionClient | ReturnType<typeof PrismaClientManager.getClient>,
+    prisma:
+      | Prisma.TransactionClient
+      | ReturnType<typeof PrismaClientManager.getClient>,
     workspaceId: string,
     recordId: string,
     userId: string,
@@ -1345,7 +1800,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     });
 
     if (blockingLock) {
-      throw new AppError("Questa commessa è in modifica da un altro utente.", "COMMISSION_RESOURCE_LOCKED", 409);
+      throw new AppError(
+        "Questa commessa è in modifica da un altro utente.",
+        "COMMISSION_RESOURCE_LOCKED",
+        409,
+      );
     }
   }
 
@@ -1370,11 +1829,18 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     });
 
     if (!lock) {
-      throw new AppError("Apri la checklist in modifica prima di salvare.", "COMMISSION_LOCK_REQUIRED", 409);
+      throw new AppError(
+        "Apri la checklist in modifica prima di salvare.",
+        "COMMISSION_LOCK_REQUIRED",
+        409,
+      );
     }
   }
 
-  private async canManageWorkspace(workspaceId: string, userId: string): Promise<boolean> {
+  private async canManageWorkspace(
+    workspaceId: string,
+    userId: string,
+  ): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
     const count = await prisma.userWorkspaceRole.count({
       where: {
@@ -1443,37 +1909,63 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
   ): Promise<void> {
     if (params.companyId) {
       const company = await prisma.company.findFirst({
-        where: { workspace_id: params.workspaceId, id: params.companyId, deleted_at: null },
+        where: {
+          workspace_id: params.workspaceId,
+          id: params.companyId,
+          deleted_at: null,
+        },
         select: { id: true },
       });
       if (!company) {
-        throw new AppError("Azienda non trovata nel workspace.", "COMMISSION_COMPANY_NOT_FOUND", 404);
+        throw new AppError(
+          "Azienda non trovata nel workspace.",
+          "COMMISSION_COMPANY_NOT_FOUND",
+          404,
+        );
       }
     }
 
     if (params.clientId) {
       const client = await prisma.client.findFirst({
-        where: { workspace_id: params.workspaceId, id: params.clientId, deleted_at: null },
+        where: {
+          workspace_id: params.workspaceId,
+          id: params.clientId,
+          deleted_at: null,
+        },
         select: { id: true },
       });
       if (!client) {
-        throw new AppError("Cliente non trovato nel workspace.", "COMMISSION_CLIENT_NOT_FOUND", 404);
+        throw new AppError(
+          "Cliente non trovato nel workspace.",
+          "COMMISSION_CLIENT_NOT_FOUND",
+          404,
+        );
       }
     }
 
     if (params.projectId) {
       const project = await prisma.project.findFirst({
-        where: { workspace_id: params.workspaceId, id: params.projectId, deleted_at: null },
+        where: {
+          workspace_id: params.workspaceId,
+          id: params.projectId,
+          deleted_at: null,
+        },
         select: { id: true },
       });
       if (!project) {
-        throw new AppError("Progetto non trovato nel workspace.", "COMMISSION_PROJECT_NOT_FOUND", 404);
+        throw new AppError(
+          "Progetto non trovato nel workspace.",
+          "COMMISSION_PROJECT_NOT_FOUND",
+          404,
+        );
       }
     }
   }
 
   private async resolveCurrentUser(
-    prisma: Prisma.TransactionClient | ReturnType<typeof PrismaClientManager.getClient>,
+    prisma:
+      | Prisma.TransactionClient
+      | ReturnType<typeof PrismaClientManager.getClient>,
     userId: string,
   ): Promise<{ id: string; fullName: string }> {
     const user = await prisma.user.findFirst({
@@ -1490,10 +1982,15 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     });
 
     if (!user) {
-      throw new AppError("Utente firmatario non trovato.", "COMMISSION_SIGNER_NOT_FOUND", 404);
+      throw new AppError(
+        "Utente firmatario non trovato.",
+        "COMMISSION_SIGNER_NOT_FOUND",
+        404,
+      );
     }
 
-    const fullName = [user.first_name, user.last_name ?? ""].join(" ").trim() || user.email;
+    const fullName =
+      [user.first_name, user.last_name ?? ""].join(" ").trim() || user.email;
     return { id: user.id, fullName };
   }
 
@@ -1516,7 +2013,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     });
 
     if (!membership) {
-      throw new AppError("L'utente assegnato non appartiene al workspace o non è attivo.", "COMMISSION_OWNER_NOT_IN_WORKSPACE", 400);
+      throw new AppError(
+        "L'utente assegnato non appartiene al workspace o non è attivo.",
+        "COMMISSION_OWNER_NOT_IN_WORKSPACE",
+        400,
+      );
     }
   }
 
@@ -1531,7 +2032,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
   ): Promise<void> {
     if (params.resourceType === CommissionLockResourceType.RECORD) {
       if (params.resourceId !== params.recordId) {
-        throw new AppError("Il lock RECORD deve puntare alla commessa corrente.", "COMMISSION_LOCK_RESOURCE_INVALID", 400);
+        throw new AppError(
+          "Il lock RECORD deve puntare alla commessa corrente.",
+          "COMMISSION_LOCK_RESOURCE_INVALID",
+          400,
+        );
       }
       return;
     }
@@ -1547,7 +2052,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         select: { id: true },
       });
       if (!checklist) {
-        throw new AppError("Checklist non trovata per questa commessa.", "COMMISSION_LOCK_RESOURCE_INVALID", 400);
+        throw new AppError(
+          "Checklist non trovata per questa commessa.",
+          "COMMISSION_LOCK_RESOURCE_INVALID",
+          400,
+        );
       }
       return;
     }
@@ -1569,7 +2078,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     });
 
     if (!page) {
-      throw new AppError("Pagina form non trovata per questa commessa.", "COMMISSION_LOCK_RESOURCE_INVALID", 400);
+      throw new AppError(
+        "Pagina form non trovata per questa commessa.",
+        "COMMISSION_LOCK_RESOURCE_INVALID",
+        400,
+      );
     }
   }
 
@@ -1578,7 +2091,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     workspaceId: string,
     recordId: string,
     checklistId: string,
-  ): Promise<{ id: string; form_version_id: string; status: CommissionChecklistStatus }> {
+  ): Promise<{
+    id: string;
+    form_version_id: string;
+    status: CommissionChecklistStatus;
+  }> {
     const checklist = await prisma.commissionChecklist.findFirst({
       where: {
         id: checklistId,
@@ -1590,7 +2107,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     });
 
     if (!checklist) {
-      throw new AppError("Checklist non trovata per questa commessa.", "COMMISSION_CHECKLIST_NOT_FOUND", 404);
+      throw new AppError(
+        "Checklist non trovata per questa commessa.",
+        "COMMISSION_CHECKLIST_NOT_FOUND",
+        404,
+      );
     }
 
     return checklist;
@@ -1604,8 +2125,27 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       checklistId: string;
       fieldId: string;
     },
-  ): Promise<{ checklist: { id: string; form_version_id: string; status: CommissionChecklistStatus }; field: { id: string; key: string; label: string; field_type: CommissionFieldType; data_kind: CommissionDataKind; is_required: boolean } }> {
-    const checklist = await this.resolveChecklist(prisma, params.workspaceId, params.recordId, params.checklistId);
+  ): Promise<{
+    checklist: {
+      id: string;
+      form_version_id: string;
+      status: CommissionChecklistStatus;
+    };
+    field: {
+      id: string;
+      key: string;
+      label: string;
+      field_type: CommissionFieldType;
+      data_kind: CommissionDataKind;
+      is_required: boolean;
+    };
+  }> {
+    const checklist = await this.resolveChecklist(
+      prisma,
+      params.workspaceId,
+      params.recordId,
+      params.checklistId,
+    );
     const field = await prisma.commissionFormField.findFirst({
       where: {
         id: params.fieldId,
@@ -1622,15 +2162,26 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     });
 
     if (!field) {
-      throw new AppError("Campo non trovato nella checklist.", "COMMISSION_FIELD_NOT_FOUND", 404);
+      throw new AppError(
+        "Campo non trovato nella checklist.",
+        "COMMISSION_FIELD_NOT_FOUND",
+        404,
+      );
     }
 
     return { checklist, field };
   }
 
   private ensureChecklistEditable(status: CommissionChecklistStatus): void {
-    if (status === CommissionChecklistStatus.SIGNED || status === CommissionChecklistStatus.ARCHIVED) {
-      throw new AppError("Checklist già firmata: non può essere modificata.", "COMMISSION_CHECKLIST_FINALIZED", 409);
+    if (
+      status === CommissionChecklistStatus.SIGNED ||
+      status === CommissionChecklistStatus.ARCHIVED
+    ) {
+      throw new AppError(
+        "Checklist già firmata: non può essere modificata.",
+        "COMMISSION_CHECKLIST_FINALIZED",
+        409,
+      );
     }
   }
 
@@ -1640,7 +2191,12 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     recordId: string,
     checklistId: string,
   ): Promise<number> {
-    const checklist = await this.resolveChecklist(prisma, workspaceId, recordId, checklistId);
+    const checklist = await this.resolveChecklist(
+      prisma,
+      workspaceId,
+      recordId,
+      checklistId,
+    );
     const requiredFields = await prisma.commissionFormField.findMany({
       where: {
         version_id: checklist.form_version_id,
@@ -1689,11 +2245,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     const completedFieldIds = new Set<string>();
     for (const value of values) {
       if (
-        this.hasStoredValue(value.value_text)
-        || value.value_number !== null
-        || value.value_date !== null
-        || value.value_boolean !== null
-        || value.value_json !== null
+        this.hasStoredValue(value.value_text) ||
+        value.value_number !== null ||
+        value.value_date !== null ||
+        value.value_boolean !== null ||
+        value.value_json !== null
       ) {
         completedFieldIds.add(value.field_id);
       }
@@ -1702,12 +2258,17 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       completedFieldIds.add(row.table_definition.field_id);
     }
 
-    const progressPercent = Math.round((completedFieldIds.size / requiredFields.length) * 100);
+    const progressPercent = Math.round(
+      (completedFieldIds.size / requiredFields.length) * 100,
+    );
     await prisma.commissionChecklist.update({
       where: { id: checklistId },
       data: {
         progress_percent: progressPercent,
-        status: progressPercent > 0 ? CommissionChecklistStatus.IN_PROGRESS : CommissionChecklistStatus.DRAFT,
+        status:
+          progressPercent > 0
+            ? CommissionChecklistStatus.IN_PROGRESS
+            : CommissionChecklistStatus.DRAFT,
       },
     });
 
@@ -1715,7 +2276,9 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
   }
 
   private async findPublishedTemplateVersion(
-    prisma: Prisma.TransactionClient | ReturnType<typeof PrismaClientManager.getClient>,
+    prisma:
+      | Prisma.TransactionClient
+      | ReturnType<typeof PrismaClientManager.getClient>,
     workspaceId: string,
     formVersionId: string,
   ): Promise<{ id: string; title: string } | null> {
@@ -1723,10 +2286,7 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       where: {
         id: formVersionId,
         status: "PUBLISHED",
-        OR: [
-          { workspace_id: null },
-          { workspace_id: workspaceId },
-        ],
+        OR: [{ workspace_id: null }, { workspace_id: workspaceId }],
         template: {
           is_active: true,
           deleted_at: null,
@@ -1737,7 +2297,9 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
   }
 
   private async recordEvent(
-    prisma: Prisma.TransactionClient | ReturnType<typeof PrismaClientManager.getClient>,
+    prisma:
+      | Prisma.TransactionClient
+      | ReturnType<typeof PrismaClientManager.getClient>,
     params: {
       workspaceId: string;
       recordId: string | null;
@@ -1774,10 +2336,14 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       params.description,
       params.sourceSystem,
       params.externalReference,
-    ].filter((item) => typeof item === "string" && item.trim().length > 0).join(" ");
+    ]
+      .filter((item) => typeof item === "string" && item.trim().length > 0)
+      .join(" ");
   }
 
-  private toNullableJson(value: unknown): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput {
+  private toNullableJson(
+    value: unknown,
+  ): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput {
     if (value === null || typeof value === "undefined") {
       return Prisma.JsonNull;
     }
@@ -1789,10 +2355,26 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     value: unknown,
     dataKind: CommissionDataKind,
     fieldType: CommissionFieldType | null,
-  ): Pick<Prisma.CommissionFieldValueUncheckedCreateInput, "value_text" | "value_number" | "value_date" | "value_boolean" | "value_json" | "normalized_value" | "display_value"> {
-    if (fieldType === CommissionFieldType.MULTI_SELECT || fieldType === CommissionFieldType.CHECKBOX_GROUP || fieldType === CommissionFieldType.DOCUMENT_CHECKLIST || dataKind === CommissionDataKind.JSON) {
+  ): Pick<
+    Prisma.CommissionFieldValueUncheckedCreateInput,
+    | "value_text"
+    | "value_number"
+    | "value_date"
+    | "value_boolean"
+    | "value_json"
+    | "normalized_value"
+    | "display_value"
+  > {
+    if (
+      fieldType === CommissionFieldType.MULTI_SELECT ||
+      fieldType === CommissionFieldType.CHECKBOX_GROUP ||
+      fieldType === CommissionFieldType.DOCUMENT_CHECKLIST ||
+      dataKind === CommissionDataKind.JSON
+    ) {
       const jsonValue = value === undefined ? null : value;
-      const displayValue = Array.isArray(jsonValue) ? jsonValue.join(", ") : this.displayValue(jsonValue);
+      const displayValue = Array.isArray(jsonValue)
+        ? jsonValue.join(", ")
+        : this.displayValue(jsonValue);
       return {
         value_text: null,
         value_number: null,
@@ -1804,8 +2386,18 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       };
     }
 
-    if (dataKind === CommissionDataKind.BOOLEAN || fieldType === CommissionFieldType.BOOLEAN) {
-      const booleanValue = typeof value === "boolean" ? value : value === "true" ? true : value === "false" ? false : null;
+    if (
+      dataKind === CommissionDataKind.BOOLEAN ||
+      fieldType === CommissionFieldType.BOOLEAN
+    ) {
+      const booleanValue =
+        typeof value === "boolean"
+          ? value
+          : value === "true"
+            ? true
+            : value === "false"
+              ? false
+              : null;
       return {
         value_text: null,
         value_number: null,
@@ -1813,14 +2405,23 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
         value_boolean: booleanValue,
         value_json: Prisma.JsonNull,
         normalized_value: booleanValue === null ? null : String(booleanValue),
-        display_value: booleanValue === null ? null : booleanValue ? "Sì" : "No",
+        display_value:
+          booleanValue === null ? null : booleanValue ? "Sì" : "No",
       };
     }
 
-    if (dataKind === CommissionDataKind.INTEGER || dataKind === CommissionDataKind.DECIMAL || fieldType === CommissionFieldType.NUMBER) {
+    if (
+      dataKind === CommissionDataKind.INTEGER ||
+      dataKind === CommissionDataKind.DECIMAL ||
+      fieldType === CommissionFieldType.NUMBER
+    ) {
       const text = this.normalizeOptionalString(value);
       if (text !== null && !/^-?\d+(\.\d+)?$/.test(text)) {
-        throw new AppError("Valore numerico non valido.", "COMMISSION_VALUE_NUMBER_INVALID", 400);
+        throw new AppError(
+          "Valore numerico non valido.",
+          "COMMISSION_VALUE_NUMBER_INVALID",
+          400,
+        );
       }
       return {
         value_text: null,
@@ -1833,11 +2434,18 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       };
     }
 
-    if (dataKind === CommissionDataKind.DATE || fieldType === CommissionFieldType.DATE) {
+    if (
+      dataKind === CommissionDataKind.DATE ||
+      fieldType === CommissionFieldType.DATE
+    ) {
       const text = this.normalizeOptionalString(value);
       const date = text ? new Date(text) : null;
       if (date && Number.isNaN(date.getTime())) {
-        throw new AppError("Data non valida.", "COMMISSION_VALUE_DATE_INVALID", 400);
+        throw new AppError(
+          "Data non valida.",
+          "COMMISSION_VALUE_DATE_INVALID",
+          400,
+        );
       }
       return {
         value_text: null,
@@ -1863,7 +2471,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
   }
 
   private normalizeOptionalString(value: unknown): string | null {
-    if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+    if (
+      typeof value !== "string" &&
+      typeof value !== "number" &&
+      typeof value !== "boolean"
+    ) {
       return null;
     }
 
@@ -1884,7 +2496,11 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       return null;
     }
 
-    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
       return String(value);
     }
 
@@ -1895,20 +2511,31 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     return typeof value === "string" && value.trim().length > 0;
   }
 
-  private lockScopeKey(workspaceId: string, recordId: string, resourceType: CommissionLockResourceType, resourceId: string): string {
+  private lockScopeKey(
+    workspaceId: string,
+    recordId: string,
+    resourceType: CommissionLockResourceType,
+    resourceId: string,
+  ): string {
     return `${workspaceId}:${recordId}:${resourceType}:${resourceId}`;
   }
 
   private isUniqueConstraintError(error: unknown): boolean {
-    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    );
   }
 
-  private mapFormField(field: Prisma.CommissionFormFieldGetPayload<{
-    include: {
-      options: true;
-      table_definition: { include: { columns: true } };
-    };
-  }>, vendorListRows?: Array<Record<string, unknown>> | null) {
+  private mapFormField(
+    field: Prisma.CommissionFormFieldGetPayload<{
+      include: {
+        options: true;
+        table_definition: { include: { columns: true } };
+      };
+    }>,
+    vendorListRows?: Array<Record<string, unknown>> | null,
+  ) {
     return {
       id: field.id,
       key: field.key,
@@ -1932,31 +2559,35 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       })),
       table: field.table_definition
         ? {
-          id: field.table_definition.id,
-          key: field.table_definition.key,
-          title: field.table_definition.title,
-          minRows: field.table_definition.min_rows,
-          maxRows: field.table_definition.max_rows,
-          allowAddRows: field.table_definition.allow_add_rows,
-          defaultRows: field.table_definition.key.includes("vendor_list") && vendorListRows
-            ? vendorListRows
-            : this.extractTableDefaultRows(field.table_definition.metadata),
-          columns: field.table_definition.columns.map((column) => ({
-            id: column.id,
-            key: column.key,
-            label: column.label,
-            placeholder: column.placeholder,
-            dataKind: column.data_kind,
-            sensitivity: column.sensitivity,
-            required: column.is_required,
-            sortOrder: column.sort_order,
-          })),
-        }
+            id: field.table_definition.id,
+            key: field.table_definition.key,
+            title: field.table_definition.title,
+            minRows: field.table_definition.min_rows,
+            maxRows: field.table_definition.max_rows,
+            allowAddRows: field.table_definition.allow_add_rows,
+            defaultRows:
+              field.table_definition.key.includes("vendor_list") &&
+              vendorListRows
+                ? vendorListRows
+                : this.extractTableDefaultRows(field.table_definition.metadata),
+            columns: field.table_definition.columns.map((column) => ({
+              id: column.id,
+              key: column.key,
+              label: column.label,
+              placeholder: column.placeholder,
+              dataKind: column.data_kind,
+              sensitivity: column.sensitivity,
+              required: column.is_required,
+              sortOrder: column.sort_order,
+            })),
+          }
         : null,
     };
   }
 
-  private extractTableDefaultRows(metadata: Prisma.JsonValue | null): Array<Record<string, unknown>> {
+  private extractTableDefaultRows(
+    metadata: Prisma.JsonValue | null,
+  ): Array<Record<string, unknown>> {
     if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
       return [];
     }
@@ -1966,84 +2597,194 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       return [];
     }
 
-    return defaultRows.filter((row): row is Record<string, unknown> => (
-      Boolean(row) && typeof row === "object" && !Array.isArray(row)
-    ));
+    return defaultRows.filter(
+      (row): row is Record<string, unknown> =>
+        Boolean(row) && typeof row === "object" && !Array.isArray(row),
+    );
   }
 
   private async resolveVendorListSnapshot(
-    prisma: Prisma.TransactionClient | ReturnType<typeof PrismaClientManager.getClient>,
+    prisma:
+      | Prisma.TransactionClient
+      | ReturnType<typeof PrismaClientManager.getClient>,
     workspaceId: string,
     formVersionId: string,
-  ): Promise<{ revision: number; categories: Array<{ name: string; note: string; items: Array<{ component: string; brands: string }> }> }> {
+  ): Promise<{
+    revision: number;
+    categories: Array<{
+      name: string;
+      note: string;
+      items: Array<{ component: string; brands: string }>;
+    }>;
+  }> {
     const configured = await prisma.commissionCatalog.findFirst({
-      where: { workspace_id: workspaceId, key: "commission_vendor_list", deleted_at: null },
+      where: {
+        workspace_id: workspaceId,
+        key: "commission_vendor_list",
+        deleted_at: null,
+      },
       select: { metadata: true },
     });
     const parsed = this.parseVendorListMetadata(configured?.metadata);
     if (parsed) return parsed;
 
     const table = await prisma.commissionTableDefinition.findFirst({
-      where: { key: { contains: "vendor_list" }, field: { version_id: formVersionId } },
+      where: {
+        key: { contains: "vendor_list" },
+        field: { version_id: formVersionId },
+      },
       select: { metadata: true },
     });
-    return { revision: 0, categories: this.vendorListCategoriesFromRows(this.extractTableDefaultRows(table?.metadata ?? null)) };
+    return {
+      revision: 0,
+      categories: this.vendorListCategoriesFromRows(
+        this.extractTableDefaultRows(table?.metadata ?? null),
+      ),
+    };
   }
 
-  private vendorListRowsFromChecklistMetadata(metadata: Prisma.JsonValue | null): Array<Record<string, unknown>> | null {
-    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
-    const snapshot = this.parseVendorListMetadata((metadata as { vendorList?: Prisma.JsonValue }).vendorList);
+  private vendorListRowsFromChecklistMetadata(
+    metadata: Prisma.JsonValue | null,
+  ): Array<Record<string, unknown>> | null {
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+      return null;
+    const snapshot = this.parseVendorListMetadata(
+      (metadata as { vendorList?: Prisma.JsonValue }).vendorList,
+    );
     if (!snapshot) return null;
     return [
-      ...snapshot.categories.flatMap((category) => category.items.map((item) => ({
-        col_1_categoria: category.name,
-        _vendor_category_note: category.note,
-        col_2_componente: item.component,
+      ...snapshot.categories.flatMap((category) =>
+        category.items.map((item) => ({
+          col_1_categoria: category.name,
+          _vendor_category_note: category.note,
+          col_2_componente: item.component,
+          col_3_marche_di_riferimento: "",
+          _placeholder_col_3_marche_di_riferimento:
+            item.brands || "Marca o fornitore di riferimento",
+          col_4_confermato: "",
+          col_5_altro: "",
+        })),
+      ),
+      {
+        col_1_categoria: "Altro",
+        col_2_componente: "",
         col_3_marche_di_riferimento: "",
-        _placeholder_col_3_marche_di_riferimento: item.brands || "Marca o fornitore di riferimento",
+        _placeholder_col_3_marche_di_riferimento:
+          "Marca o fornitore di riferimento",
         col_4_confermato: "",
         col_5_altro: "",
-      }))),
-      { col_1_categoria: "Altro", col_2_componente: "", col_3_marche_di_riferimento: "", _placeholder_col_3_marche_di_riferimento: "Marca o fornitore di riferimento", col_4_confermato: "", col_5_altro: "" },
+      },
     ];
   }
 
-  private vendorListContextFromChecklistMetadata(metadata: Prisma.JsonValue | null): Map<string, { note: string; brands: string }> {
-    const snapshot = metadata && typeof metadata === "object" && !Array.isArray(metadata)
-      ? this.parseVendorListMetadata((metadata as { vendorList?: Prisma.JsonValue }).vendorList)
-      : null;
-    return new Map((snapshot?.categories ?? []).flatMap((category) => category.items.map((item) => [
-      `${category.name}\u0000${item.component}`,
-      { note: category.note, brands: item.brands },
-    ])));
+  private vendorListContextFromChecklistMetadata(
+    metadata: Prisma.JsonValue | null,
+  ): Map<string, { note: string; brands: string }> {
+    const snapshot =
+      metadata && typeof metadata === "object" && !Array.isArray(metadata)
+        ? this.parseVendorListMetadata(
+            (metadata as { vendorList?: Prisma.JsonValue }).vendorList,
+          )
+        : null;
+    return new Map(
+      (snapshot?.categories ?? []).flatMap((category) =>
+        category.items.map((item) => [
+          `${category.name}\u0000${item.component}`,
+          { note: category.note, brands: item.brands },
+        ]),
+      ),
+    );
   }
 
-  private parseVendorListMetadata(metadata: Prisma.JsonValue | null | undefined): { revision: number; categories: Array<{ name: string; note: string; items: Array<{ component: string; brands: string }> }> } | null {
-    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  private parseVendorListMetadata(
+    metadata: Prisma.JsonValue | null | undefined,
+  ): {
+    revision: number;
+    categories: Array<{
+      name: string;
+      note: string;
+      items: Array<{ component: string; brands: string }>;
+    }>;
+  } | null {
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+      return null;
     const value = metadata as { revision?: unknown; categories?: unknown };
     if (!Array.isArray(value.categories)) return null;
-    const categories = value.categories.map((category) => {
-      const source = category as { name?: unknown; note?: unknown; items?: unknown };
-      return {
-        name: typeof source.name === "string" ? source.name.trim() : "",
-        note: typeof source.note === "string" ? source.note.trim() : "",
-        items: Array.isArray(source.items) ? source.items.map((item) => {
-          const sourceItem = item as { component?: unknown; brands?: unknown };
-          return { component: typeof sourceItem.component === "string" ? sourceItem.component.trim() : "", brands: typeof sourceItem.brands === "string" ? sourceItem.brands.trim() : "" };
-        }).filter((item) => item.component.length > 0) : [],
-      };
-    }).filter((category) => category.name.length > 0);
-    return { revision: typeof value.revision === "number" ? value.revision : 0, categories };
+    const categories = value.categories
+      .map((category) => {
+        const source = category as {
+          name?: unknown;
+          note?: unknown;
+          items?: unknown;
+        };
+        return {
+          name: typeof source.name === "string" ? source.name.trim() : "",
+          note: typeof source.note === "string" ? source.note.trim() : "",
+          items: Array.isArray(source.items)
+            ? source.items
+                .map((item) => {
+                  const sourceItem = item as {
+                    component?: unknown;
+                    brands?: unknown;
+                  };
+                  return {
+                    component:
+                      typeof sourceItem.component === "string"
+                        ? sourceItem.component.trim()
+                        : "",
+                    brands:
+                      typeof sourceItem.brands === "string"
+                        ? sourceItem.brands.trim()
+                        : "",
+                  };
+                })
+                .filter((item) => item.component.length > 0)
+            : [],
+        };
+      })
+      .filter((category) => category.name.length > 0);
+    return {
+      revision: typeof value.revision === "number" ? value.revision : 0,
+      categories,
+    };
   }
 
-  private vendorListCategoriesFromRows(rows: Array<Record<string, unknown>>): Array<{ name: string; note: string; items: Array<{ component: string; brands: string }> }> {
-    const groups = new Map<string, { name: string; note: string; items: Array<{ component: string; brands: string }> }>();
+  private vendorListCategoriesFromRows(
+    rows: Array<Record<string, unknown>>,
+  ): Array<{
+    name: string;
+    note: string;
+    items: Array<{ component: string; brands: string }>;
+  }> {
+    const groups = new Map<
+      string,
+      {
+        name: string;
+        note: string;
+        items: Array<{ component: string; brands: string }>;
+      }
+    >();
     for (const row of rows) {
-      const name = typeof row.col_1_categoria === "string" ? row.col_1_categoria.trim() : "";
+      const name =
+        typeof row.col_1_categoria === "string"
+          ? row.col_1_categoria.trim()
+          : "";
       if (!name || name.toLowerCase() === "altro") continue;
       const group = groups.get(name) ?? { name, note: "", items: [] };
-      const component = typeof row.col_2_componente === "string" ? row.col_2_componente.trim() : "";
-      if (component) group.items.push({ component, brands: typeof row._placeholder_col_3_marche_di_riferimento === "string" ? row._placeholder_col_3_marche_di_riferimento.trim() : typeof row.col_3_marche_di_riferimento === "string" ? row.col_3_marche_di_riferimento.trim() : "" });
+      const component =
+        typeof row.col_2_componente === "string"
+          ? row.col_2_componente.trim()
+          : "";
+      if (component)
+        group.items.push({
+          component,
+          brands:
+            typeof row._placeholder_col_3_marche_di_riferimento === "string"
+              ? row._placeholder_col_3_marche_di_riferimento.trim()
+              : typeof row.col_3_marche_di_riferimento === "string"
+                ? row.col_3_marche_di_riferimento.trim()
+                : "",
+        });
       groups.set(name, group);
     }
     return [...groups.values()];
@@ -2071,34 +2812,54 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     };
   }
 
-  private mapTableRow(row: {
-    id: string;
-    table_definition_id: string;
-    row_index: number;
-    row_key: string | null;
-    cells: Array<{
-      column_id: string;
-      column_key: string;
-      value_text: string | null;
-      value_number: Prisma.Decimal | null;
-      value_date: Date | null;
-      value_boolean: boolean | null;
-      value_json: Prisma.JsonValue | null;
-      display_value: string | null;
-    }>;
-  }, vendorListContext = new Map<string, { note: string; brands: string }>()): CommissionTableRowItem {
+  private mapTableRow(
+    row: {
+      id: string;
+      table_definition_id: string;
+      row_index: number;
+      row_key: string | null;
+      cells: Array<{
+        column_id: string;
+        column_key: string;
+        value_text: string | null;
+        value_number: Prisma.Decimal | null;
+        value_date: Date | null;
+        value_boolean: boolean | null;
+        value_json: Prisma.JsonValue | null;
+        display_value: string | null;
+      }>;
+    },
+    vendorListContext = new Map<string, { note: string; brands: string }>(),
+  ): CommissionTableRowItem {
     const cells = row.cells.map((cell) => ({
       columnId: cell.column_id,
       columnKey: cell.column_key,
       value: this.unpackStoredValue(cell),
       displayValue: cell.display_value,
     }));
-    const category = cells.find((cell) => cell.columnKey === "col_1_categoria")?.value;
-    const component = cells.find((cell) => cell.columnKey === "col_2_componente")?.value;
-    const context = typeof category === "string" && typeof component === "string" ? vendorListContext.get(`${category}\u0000${component}`) : null;
+    const category = cells.find(
+      (cell) => cell.columnKey === "col_1_categoria",
+    )?.value;
+    const component = cells.find(
+      (cell) => cell.columnKey === "col_2_componente",
+    )?.value;
+    const context =
+      typeof category === "string" && typeof component === "string"
+        ? vendorListContext.get(`${category}\u0000${component}`)
+        : null;
     if (context) {
-      cells.push({ columnId: "vendor-category-note", columnKey: "_vendor_category_note", value: context.note, displayValue: context.note });
-      cells.push({ columnId: "vendor-reference-brands", columnKey: "_vendor_reference_brands", value: context.brands, displayValue: context.brands });
+      cells.push({
+        columnId: "vendor-category-note",
+        columnKey: "_vendor_category_note",
+        value: context.note,
+        displayValue: context.note,
+      });
+      cells.push({
+        columnId: "vendor-reference-brands",
+        columnKey: "_vendor_reference_brands",
+        value: context.brands,
+        displayValue: context.brands,
+      });
     }
     return {
       id: row.id,
@@ -2131,7 +2892,10 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       note: attachment.note,
       fileName: attachment.document.filename,
       contentType: attachment.document.file_type?.mime_type ?? null,
-      sizeBytes: attachment.document.size_bytes === null ? null : String(attachment.document.size_bytes),
+      sizeBytes:
+        attachment.document.size_bytes === null
+          ? null
+          : String(attachment.document.size_bytes),
       uploadedByUserId: attachment.uploaded_by_user_id,
       createdAt: attachment.created_at,
     };
@@ -2164,7 +2928,8 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
   }): unknown {
     if (value.value_text !== null) return value.value_text;
     if (value.value_number !== null) return value.value_number.toString();
-    if (value.value_date !== null) return value.value_date.toISOString().slice(0, 10);
+    if (value.value_date !== null)
+      return value.value_date.toISOString().slice(0, 10);
     if (value.value_boolean !== null) return value.value_boolean;
     if (value.value_json !== null) return value.value_json;
     return null;
@@ -2175,8 +2940,22 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
     workspaceId: string,
     recordId: string,
   ): Promise<{ id: string; depth: number }> {
-    const root = await this.ensureNode(tx, workspaceId, null, "commission-intake", "/commission-intake", 0);
-    return this.ensureNode(tx, workspaceId, root.id, recordId, `/commission-intake/${recordId}`, 1);
+    const root = await this.ensureNode(
+      tx,
+      workspaceId,
+      null,
+      "commission-intake",
+      "/commission-intake",
+      0,
+    );
+    return this.ensureNode(
+      tx,
+      workspaceId,
+      root.id,
+      recordId,
+      `/commission-intake/${recordId}`,
+      1,
+    );
   }
 
   private async ensureNode(
@@ -2216,7 +2995,9 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
   }
 
   private resolveFileExtension(fileName: string, mimeType: string): string {
-    const extension = fileName.includes(".") ? fileName.split(".").pop()?.trim().toLowerCase() : "";
+    const extension = fileName.includes(".")
+      ? fileName.split(".").pop()?.trim().toLowerCase()
+      : "";
     if (extension && /^[a-z0-9]{1,12}$/.test(extension)) return extension;
     if (mimeType.includes("pdf")) return "pdf";
     if (mimeType.includes("png")) return "png";
@@ -2240,7 +3021,9 @@ export class PrismaCommissionIntakeRepository implements CommissionIntakeReposit
       priority: row.priority,
       companyId: row.company_id,
       clientId: row.client_id,
-      clientDisplayName: client ? `${client.first_name} ${client.last_name ?? ""}`.trim() : null,
+      clientDisplayName: client
+        ? `${client.first_name} ${client.last_name ?? ""}`.trim()
+        : null,
       projectId: row.project_id,
       companyName: directCompany?.name ?? client?.company?.name ?? null,
       sourceSystem: row.source_system,

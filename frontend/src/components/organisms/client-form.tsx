@@ -1,6 +1,15 @@
 "use client";
 
-import { ArrowLeft, Building2, Mail, MapPin, Phone, Save, UserRound, XCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Building2,
+  Mail,
+  MapPin,
+  Phone,
+  Save,
+  UserRound,
+  XCircle,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -70,7 +79,7 @@ export function ClientForm({ id }: ClientFormProps) {
       try {
         const response = await fetch("/api/companies", { cache: "no-store" });
         if (!response.ok) return;
-        setCompanies(await response.json() as Company[]);
+        setCompanies((await response.json()) as Company[]);
       } catch {
         setCompanies([]);
       }
@@ -87,13 +96,15 @@ export function ClientForm({ id }: ClientFormProps) {
 
     const loadClient = async () => {
       try {
-        const response = await fetch(`/api/clients/${id}`, { cache: "no-store" });
+        const response = await fetch(`/api/clients/${id}`, {
+          cache: "no-store",
+        });
 
         if (!response.ok) {
           throw new Error("Cliente non trovato");
         }
 
-        const client = await response.json() as ClientApiDetail;
+        const client = (await response.json()) as ClientApiDetail;
         setClientId(client.id);
         reset({
           name: client.name,
@@ -140,7 +151,11 @@ export function ClientForm({ id }: ClientFormProps) {
         throw new Error("Errore salvataggio cliente");
       }
 
-      toast.success(isEdit ? "Cliente aggiornato con successo." : "Cliente creato con successo.");
+      toast.success(
+        isEdit
+          ? "Cliente aggiornato con successo."
+          : "Cliente creato con successo.",
+      );
       router.push(APP_ROUTES.clients);
       router.refresh();
     } catch {
@@ -168,26 +183,45 @@ export function ClientForm({ id }: ClientFormProps) {
               <PageHelpHint text="Compila i dati anagrafici, aziendali e di contatto." />
             </div>
             <Text variant="muted">
-              {isEdit ? "Aggiorna i dati del cliente" : "Inserisci un nuovo cliente collegabile a un'azienda"}
+              {isEdit
+                ? "Aggiorna i dati del cliente"
+                : "Inserisci un nuovo cliente collegabile a un'azienda"}
             </Text>
           </div>
         </div>
 
         {isEdit && (
           <div className="hidden items-center gap-2 rounded-[var(--radius-md)] border border-border-default bg-status-info-bg px-3 py-1 text-xs font-bold text-status-info-text sm:flex">
-            ID cliente: <span className="font-mono text-[10px]">{clientId ?? "-"}</span>
+            ID cliente:{" "}
+            <span className="font-mono text-[10px]">{clientId ?? "-"}</span>
           </div>
         )}
       </div>
 
       <Card className="overflow-hidden">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 p-6 lg:p-10">
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="space-y-8 p-6 lg:p-10"
+        >
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:gap-10">
-            <FormField label="Nome cliente" icon={<UserRound size={18} className="text-brand-primary" />} error={errors.name?.message}>
-              <Input type="text" disabled={isLoading || isSubmitting} {...register("name", { required: "Il nome cliente è obbligatorio" })} />
+            <FormField
+              label="Nome cliente"
+              icon={<UserRound size={18} className="text-brand-primary" />}
+              error={errors.name?.message}
+            >
+              <Input
+                type="text"
+                disabled={isLoading || isSubmitting}
+                {...register("name", {
+                  required: "Il nome cliente è obbligatorio",
+                })}
+              />
             </FormField>
 
-            <FormField label="Azienda" icon={<Building2 size={18} className="text-brand-primary" />}>
+            <FormField
+              label="Azienda"
+              icon={<Building2 size={18} className="text-brand-primary" />}
+            >
               <select
                 disabled={isLoading || isSubmitting}
                 className="h-11 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-muted px-3 text-sm text-text-secondary focus-visible:border-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-60"
@@ -195,7 +229,9 @@ export function ClientForm({ id }: ClientFormProps) {
               >
                 <option value="">Nessuna azienda collegata</option>
                 {companies.map((company) => (
-                  <option key={company.id} value={company.id}>{company.name}</option>
+                  <option key={company.id} value={company.id}>
+                    {company.name}
+                  </option>
                 ))}
               </select>
             </FormField>
@@ -203,37 +239,89 @@ export function ClientForm({ id }: ClientFormProps) {
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:gap-10">
             <FormField label="Ruolo" error={errors.role?.message}>
-              <Input type="text" disabled={isLoading || isSubmitting} {...register("role")} />
+              <Input
+                type="text"
+                disabled={isLoading || isSubmitting}
+                {...register("role")}
+              />
             </FormField>
             <FormField label="Reparto" error={errors.department?.message}>
-              <Input type="text" disabled={isLoading || isSubmitting} {...register("department")} />
+              <Input
+                type="text"
+                disabled={isLoading || isSubmitting}
+                {...register("department")}
+              />
             </FormField>
           </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3 lg:gap-10">
-            <FormField label="Email" icon={<Mail size={18} className="text-brand-primary" />} error={errors.email?.message}>
-              <Input type="email" disabled={isLoading || isSubmitting} {...register("email")} />
+            <FormField
+              label="Email"
+              icon={<Mail size={18} className="text-brand-primary" />}
+              error={errors.email?.message}
+            >
+              <Input
+                type="email"
+                disabled={isLoading || isSubmitting}
+                {...register("email")}
+              />
             </FormField>
-            <FormField label="Telefono" icon={<Phone size={18} className="text-brand-primary" />} error={errors.phone?.message}>
-              <Input type="text" disabled={isLoading || isSubmitting} {...register("phone")} />
+            <FormField
+              label="Telefono"
+              icon={<Phone size={18} className="text-brand-primary" />}
+              error={errors.phone?.message}
+            >
+              <Input
+                type="text"
+                disabled={isLoading || isSubmitting}
+                {...register("phone")}
+              />
             </FormField>
-            <FormField label="Cellulare" icon={<Phone size={18} className="text-brand-primary" />} error={errors.mobile?.message}>
-              <Input type="text" disabled={isLoading || isSubmitting} {...register("mobile")} />
+            <FormField
+              label="Cellulare"
+              icon={<Phone size={18} className="text-brand-primary" />}
+              error={errors.mobile?.message}
+            >
+              <Input
+                type="text"
+                disabled={isLoading || isSubmitting}
+                {...register("mobile")}
+              />
             </FormField>
           </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:gap-10">
-            <FormField label="Indirizzo" icon={<MapPin size={18} className="text-brand-primary" />} error={errors.address?.message}>
-              <Input type="text" disabled={isLoading || isSubmitting} {...register("address")} />
+            <FormField
+              label="Indirizzo"
+              icon={<MapPin size={18} className="text-brand-primary" />}
+              error={errors.address?.message}
+            >
+              <Input
+                type="text"
+                disabled={isLoading || isSubmitting}
+                {...register("address")}
+              />
             </FormField>
             <FormField label="Città" error={errors.city?.message}>
-              <Input type="text" disabled={isLoading || isSubmitting} {...register("city")} />
+              <Input
+                type="text"
+                disabled={isLoading || isSubmitting}
+                {...register("city")}
+              />
             </FormField>
             <FormField label="Provincia" error={errors.province?.message}>
-              <Input type="text" disabled={isLoading || isSubmitting} {...register("province")} />
+              <Input
+                type="text"
+                disabled={isLoading || isSubmitting}
+                {...register("province")}
+              />
             </FormField>
             <FormField label="Paese" error={errors.country?.message}>
-              <Input type="text" disabled={isLoading || isSubmitting} {...register("country")} />
+              <Input
+                type="text"
+                disabled={isLoading || isSubmitting}
+                {...register("country")}
+              />
             </FormField>
           </div>
 
@@ -256,7 +344,11 @@ export function ClientForm({ id }: ClientFormProps) {
               Annulla
             </Button>
 
-            <Button type="submit" className="h-12 w-full rounded-[var(--radius-md)] px-8 py-3 sm:w-auto" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              className="h-12 w-full rounded-[var(--radius-md)] px-8 py-3 sm:w-auto"
+              disabled={isSubmitting}
+            >
               <Save size={18} />
               {isEdit ? "Salva modifiche" : "Crea cliente"}
             </Button>

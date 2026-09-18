@@ -12,7 +12,12 @@ import { WorkflowsNestModule } from "../workflows/workflows.module.js";
 import { NestDdtReaderController } from "./ddt-reader.controller.js";
 
 @Module({
-  imports: [AuthModule, BackendProvidersModule, NotificationsNestModule, WorkflowsNestModule],
+  imports: [
+    AuthModule,
+    BackendProvidersModule,
+    NotificationsNestModule,
+    WorkflowsNestModule,
+  ],
   controllers: [NestDdtReaderController],
   providers: [
     {

@@ -2,6 +2,7 @@
 key: customer_map
 ui: Mappa clienti
 ---
+
 # customer_map
 
 Vista operativa geografica dei clienti, dei riferimenti di lavoro e degli eventi di assistenza.

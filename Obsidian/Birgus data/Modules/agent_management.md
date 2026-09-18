@@ -2,6 +2,7 @@
 key: agent_management
 ui: Agenti
 ---
+
 # agent_management
 
 Catalogo degli agenti e dei prompt disponibili ai workflow. Non ha una pagina applicativa autonoma.

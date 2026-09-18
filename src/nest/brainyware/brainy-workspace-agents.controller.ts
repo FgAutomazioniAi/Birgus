@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 import { z } from "zod";
 
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
@@ -37,7 +48,9 @@ export class BrainyWorkspaceAgentsController {
   }
 
   @Get("available")
-  public async available() { return { agents: await this.service.listAvailable() }; }
+  public async available() {
+    return { agents: await this.service.listAvailable() };
+  }
 
   @Get("access-options")
   public async accessOptions(@CurrentRequestContext() context: RequestContext) {
@@ -45,18 +58,45 @@ export class BrainyWorkspaceAgentsController {
   }
 
   @Post()
-  public async create(@Body() body: unknown, @CurrentRequestContext() context: RequestContext) {
-    return { agent: await this.service.create(context.workspace.workspaceId, context.workspace.userId, agentSchema.parse(body)) };
+  public async create(
+    @Body() body: unknown,
+    @CurrentRequestContext() context: RequestContext,
+  ) {
+    return {
+      agent: await this.service.create(
+        context.workspace.workspaceId,
+        context.workspace.userId,
+        agentSchema.parse(body),
+      ),
+    };
   }
 
   @Patch(":id")
-  public async update(@Param("id") id: string, @Body() body: unknown, @CurrentRequestContext() context: RequestContext) {
-    return { agent: await this.service.update(context.workspace.workspaceId, context.workspace.userId, id, agentSchema.parse(body)) };
+  public async update(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @CurrentRequestContext() context: RequestContext,
+  ) {
+    return {
+      agent: await this.service.update(
+        context.workspace.workspaceId,
+        context.workspace.userId,
+        id,
+        agentSchema.parse(body),
+      ),
+    };
   }
 
   @Delete(":id")
   @HttpCode(204)
-  public async remove(@Param("id") id: string, @CurrentRequestContext() context: RequestContext): Promise<void> {
-    await this.service.remove(context.workspace.workspaceId, context.workspace.userId, id);
+  public async remove(
+    @Param("id") id: string,
+    @CurrentRequestContext() context: RequestContext,
+  ): Promise<void> {
+    await this.service.remove(
+      context.workspace.workspaceId,
+      context.workspace.userId,
+      id,
+    );
   }
 }

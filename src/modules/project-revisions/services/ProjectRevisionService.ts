@@ -10,7 +10,10 @@ export class ProjectRevisionService {
   private readonly repository: ProjectRevisionRepository;
   private readonly auditLogService: AuditLogService | null;
 
-  public constructor(repository: ProjectRevisionRepository, auditLogService?: AuditLogService | null) {
+  public constructor(
+    repository: ProjectRevisionRepository,
+    auditLogService?: AuditLogService | null,
+  ) {
     this.repository = repository;
     this.auditLogService = auditLogService ?? null;
   }
@@ -19,18 +22,30 @@ export class ProjectRevisionService {
     return this.repository.list(workspaceId);
   }
 
-  public async getById(workspaceId: string, revisionId: number): Promise<ProjectRevisionEntity> {
+  public async getById(
+    workspaceId: string,
+    revisionId: number,
+  ): Promise<ProjectRevisionEntity> {
     const item = await this.repository.findById(workspaceId, revisionId);
     if (!item) {
-      throw new AppError("Project revision not found.", "PROJECT_REVISION_NOT_FOUND", 404);
+      throw new AppError(
+        "Project revision not found.",
+        "PROJECT_REVISION_NOT_FOUND",
+        404,
+      );
     }
 
     return item;
   }
 
-  public async create(command: CreateProjectRevisionCommand): Promise<ProjectRevisionEntity> {
+  public async create(
+    command: CreateProjectRevisionCommand,
+  ): Promise<ProjectRevisionEntity> {
     const code = this.normalizeCode(command.code);
-    const revision = await this.repository.create({ workspaceId: command.workspaceId, code });
+    const revision = await this.repository.create({
+      workspaceId: command.workspaceId,
+      code,
+    });
 
     await this.auditLogService?.record({
       workspaceId: command.workspaceId,
@@ -45,7 +60,9 @@ export class ProjectRevisionService {
     return revision;
   }
 
-  public async update(command: UpdateProjectRevisionCommand): Promise<ProjectRevisionEntity> {
+  public async update(
+    command: UpdateProjectRevisionCommand,
+  ): Promise<ProjectRevisionEntity> {
     const revision = await this.repository.update({
       workspaceId: command.workspaceId,
       revisionId: command.revisionId,
@@ -53,7 +70,11 @@ export class ProjectRevisionService {
     });
 
     if (!revision) {
-      throw new AppError("Project revision not found.", "PROJECT_REVISION_NOT_FOUND", 404);
+      throw new AppError(
+        "Project revision not found.",
+        "PROJECT_REVISION_NOT_FOUND",
+        404,
+      );
     }
 
     await this.auditLogService?.record({
@@ -69,10 +90,18 @@ export class ProjectRevisionService {
     return revision;
   }
 
-  public async delete(workspaceId: string, revisionId: number, actorUserId?: string | null): Promise<void> {
+  public async delete(
+    workspaceId: string,
+    revisionId: number,
+    actorUserId?: string | null,
+  ): Promise<void> {
     const removed = await this.repository.delete(workspaceId, revisionId);
     if (!removed) {
-      throw new AppError("Project revision not found.", "PROJECT_REVISION_NOT_FOUND", 404);
+      throw new AppError(
+        "Project revision not found.",
+        "PROJECT_REVISION_NOT_FOUND",
+        404,
+      );
     }
 
     await this.auditLogService?.record({
@@ -89,7 +118,11 @@ export class ProjectRevisionService {
   private normalizeCode(code: string): string {
     const normalized = code.trim().replace(/\s+/g, " ");
     if (!normalized) {
-      throw new AppError("Revision code is required.", "PROJECT_REVISION_CODE_INVALID", 400);
+      throw new AppError(
+        "Revision code is required.",
+        "PROJECT_REVISION_CODE_INVALID",
+        400,
+      );
     }
 
     return normalized.slice(0, 80);

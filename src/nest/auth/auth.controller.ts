@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, Inject, Post, Req, Res, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from "@nestjs/common";
 import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
@@ -39,7 +49,7 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(8),
 });
 
-  @Controller("/api/auth")
+@Controller("/api/auth")
 export class NestAuthController {
   public constructor(
     @Inject(AuthService)
@@ -64,7 +74,10 @@ export class NestAuthController {
         email: body.email,
         password: body.password,
         rememberMe: body.rememberMe,
-        trustedDeviceToken: this.getCookie(request, this.sessionCookieFactory.getTrustedDeviceCookieName()),
+        trustedDeviceToken: this.getCookie(
+          request,
+          this.sessionCookieFactory.getTrustedDeviceCookieName(),
+        ),
         ipAddress: this.getIpAddress(request),
         userAgent: this.getUserAgent(request),
       }),
@@ -96,8 +109,18 @@ export class NestAuthController {
       throw new AppError("Invalid auth state.", "AUTH_STATE_INVALID", 500);
     }
 
-    const cookieMaxAgeSeconds = Math.max(1, Math.floor((result.expiresAt.getTime() - Date.now()) / 1000));
-    reply.header("Set-Cookie", this.createLoginCookies(result.token, cookieMaxAgeSeconds, result.trustedDeviceToken));
+    const cookieMaxAgeSeconds = Math.max(
+      1,
+      Math.floor((result.expiresAt.getTime() - Date.now()) / 1000),
+    );
+    reply.header(
+      "Set-Cookie",
+      this.createLoginCookies(
+        result.token,
+        cookieMaxAgeSeconds,
+        result.trustedDeviceToken,
+      ),
+    );
 
     return {
       ok: true,
@@ -134,8 +157,18 @@ export class NestAuthController {
       throw new AppError("Invalid auth state.", "AUTH_STATE_INVALID", 500);
     }
 
-    const cookieMaxAgeSeconds = Math.max(1, Math.floor((result.expiresAt.getTime() - Date.now()) / 1000));
-    reply.header("Set-Cookie", this.createLoginCookies(result.token, cookieMaxAgeSeconds, result.trustedDeviceToken));
+    const cookieMaxAgeSeconds = Math.max(
+      1,
+      Math.floor((result.expiresAt.getTime() - Date.now()) / 1000),
+    );
+    reply.header(
+      "Set-Cookie",
+      this.createLoginCookies(
+        result.token,
+        cookieMaxAgeSeconds,
+        result.trustedDeviceToken,
+      ),
+    );
 
     return {
       ok: true,
@@ -166,10 +199,16 @@ export class NestAuthController {
 
   @Get("session")
   @UseGuards(RequestContextAuthGuard)
-  public async session(@CurrentRequestContext() requestContext: RequestContext): Promise<Record<string, unknown>> {
+  public async session(
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
     const session = await this.authService.validateToken(requestContext.token);
     if (!session) {
-      throw new AppError("Invalid or expired session.", "AUTH_SESSION_INVALID", 401);
+      throw new AppError(
+        "Invalid or expired session.",
+        "AUTH_SESSION_INVALID",
+        401,
+      );
     }
 
     const roleKeys = await this.listWorkspaceRoleKeys(
@@ -194,7 +233,9 @@ export class NestAuthController {
 
   @Get("me")
   @UseGuards(RequestContextAuthGuard)
-  public async me(@CurrentRequestContext() requestContext: RequestContext): Promise<Record<string, unknown>> {
+  public async me(
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
     const userId = requestContext.workspace.userId;
     const workspaceId = requestContext.workspace.workspaceId;
     const prisma = PrismaClientManager.getClient();
@@ -222,7 +263,9 @@ export class NestAuthController {
 
     const fullName = [user.first_name, user.last_name ?? ""].join(" ").trim();
     const roleKeys = await this.listWorkspaceRoleKeys(workspaceId, userId);
-    const normalizedRoleKeys = roleKeys.map((item) => item.trim().toLowerCase());
+    const normalizedRoleKeys = roleKeys.map((item) =>
+      item.trim().toLowerCase(),
+    );
     let roleLabel = "Operatore";
     if (normalizedRoleKeys.includes("developer")) {
       roleLabel = "Developer";
@@ -248,7 +291,9 @@ export class NestAuthController {
 
   @Post("password/forgot")
   @HttpCode(200)
-  public async forgotPassword(@Body() bodyRaw: unknown): Promise<Record<string, unknown>> {
+  public async forgotPassword(
+    @Body() bodyRaw: unknown,
+  ): Promise<Record<string, unknown>> {
     const body = forgotPasswordSchema.parse(bodyRaw);
     const outcome = await this.passwordResetService.requestReset(body.email);
 
@@ -262,7 +307,9 @@ export class NestAuthController {
 
   @Post("password/reset")
   @HttpCode(200)
-  public async resetPassword(@Body() bodyRaw: unknown): Promise<{ ok: true; message: string }> {
+  public async resetPassword(
+    @Body() bodyRaw: unknown,
+  ): Promise<{ ok: true; message: string }> {
     const body = resetPasswordSchema.parse(bodyRaw);
     await this.passwordResetService.resetPassword({
       email: body.email,
@@ -311,7 +358,10 @@ export class NestAuthController {
     return typeof value === "string" && value.trim() ? value.trim() : null;
   }
 
-  private async listWorkspaceRoleKeys(workspaceId: string, userId: string): Promise<string[]> {
+  private async listWorkspaceRoleKeys(
+    workspaceId: string,
+    userId: string,
+  ): Promise<string[]> {
     const prisma = PrismaClientManager.getClient();
     const rows = await prisma.userWorkspaceRole.findMany({
       where: {
@@ -330,10 +380,24 @@ export class NestAuthController {
     return rows.map((row) => row.role.key);
   }
 
-  private createLoginCookies(sessionToken: string, sessionMaxAgeSeconds: number, trustedDeviceToken: string | null): string[] {
-    const cookies = [this.sessionCookieFactory.createSessionCookie(sessionToken, sessionMaxAgeSeconds)];
+  private createLoginCookies(
+    sessionToken: string,
+    sessionMaxAgeSeconds: number,
+    trustedDeviceToken: string | null,
+  ): string[] {
+    const cookies = [
+      this.sessionCookieFactory.createSessionCookie(
+        sessionToken,
+        sessionMaxAgeSeconds,
+      ),
+    ];
     if (trustedDeviceToken) {
-      cookies.push(this.sessionCookieFactory.createTrustedDeviceCookie(trustedDeviceToken, 30 * 24 * 60 * 60));
+      cookies.push(
+        this.sessionCookieFactory.createTrustedDeviceCookie(
+          trustedDeviceToken,
+          30 * 24 * 60 * 60,
+        ),
+      );
     }
     return cookies;
   }
