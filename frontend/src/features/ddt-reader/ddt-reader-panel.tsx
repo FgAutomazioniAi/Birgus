@@ -1,6 +1,13 @@
 "use client";
 
-import { Bot, Clock3, FileText, LoaderCircle, Trash2, Upload } from "lucide-react";
+import {
+  Bot,
+  Clock3,
+  FileText,
+  LoaderCircle,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -15,7 +22,11 @@ import { appendWorkspaceId } from "@/lib/workspace";
 
 import type { DdtReaderArticleItem, DdtReaderDocument } from "./types";
 
-const PROCESSING_STATUSES = new Set(["queued", "ocr_processing", "ai_processing"]);
+const PROCESSING_STATUSES = new Set([
+  "queued",
+  "ocr_processing",
+  "ai_processing",
+]);
 
 type ApiErrorPayload = {
   code?: string;
@@ -39,10 +50,16 @@ const AUTH_ERROR_CODES = new Set([
 const getErrorMessage = (payload: unknown, fallback: string) => {
   if (payload && typeof payload === "object") {
     const maybePayload = payload as ApiErrorPayload;
-    if (typeof maybePayload.detail === "string" && maybePayload.detail.trim().length > 0) {
+    if (
+      typeof maybePayload.detail === "string" &&
+      maybePayload.detail.trim().length > 0
+    ) {
       return maybePayload.detail;
     }
-    if (typeof maybePayload.message === "string" && maybePayload.message.trim().length > 0) {
+    if (
+      typeof maybePayload.message === "string" &&
+      maybePayload.message.trim().length > 0
+    ) {
       return maybePayload.message;
     }
   }
@@ -83,12 +100,17 @@ const requestJson = async <T,>(
   if (!response.ok) {
     if (response.status === 401) {
       const code =
-        payload && typeof payload === "object" && "code" in payload && typeof (payload as ApiErrorPayload).code === "string"
-          ? (payload as ApiErrorPayload).code ?? null
+        payload &&
+        typeof payload === "object" &&
+        "code" in payload &&
+        typeof (payload as ApiErrorPayload).code === "string"
+          ? ((payload as ApiErrorPayload).code ?? null)
           : null;
 
       if (!code || AUTH_ERROR_CODES.has(code)) {
-        throw new AuthSessionExpiredError(getErrorMessage(payload, "Sessione non valida o scaduta."));
+        throw new AuthSessionExpiredError(
+          getErrorMessage(payload, "Sessione non valida o scaduta."),
+        );
       }
     }
 
@@ -165,7 +187,9 @@ const deltaLabel = (value: number | null | undefined): string => {
   return `${value}`;
 };
 
-const formatArticleItems = (items: DdtReaderArticleItem[] | null | undefined): string => {
+const formatArticleItems = (
+  items: DdtReaderArticleItem[] | null | undefined,
+): string => {
   if (!items || items.length === 0) {
     return "[]";
   }
@@ -224,7 +248,8 @@ export function DdtReaderPanel() {
   }, [documents, selectedDocId]);
 
   const hasProcessing = useMemo(
-    () => documents.some((document) => PROCESSING_STATUSES.has(document.status)),
+    () =>
+      documents.some((document) => PROCESSING_STATUSES.has(document.status)),
     [documents],
   );
 
@@ -236,18 +261,23 @@ export function DdtReaderPanel() {
   }, [selectedDocument]);
 
   const canUploadAndAnalyze = useMemo(() => {
-    return Boolean(selectedFile) && !hasProcessing && !isUploading && !isAnalyzing;
+    return (
+      Boolean(selectedFile) && !hasProcessing && !isUploading && !isAnalyzing
+    );
   }, [hasProcessing, isAnalyzing, isUploading, selectedFile]);
 
   const recentTimings = useMemo(() => {
     return documents
       .filter(
         (document) =>
-          typeof document.ocr_duration_ms === "number" || typeof document.inference_duration_ms === "number",
+          typeof document.ocr_duration_ms === "number" ||
+          typeof document.inference_duration_ms === "number",
       )
       .sort((left, right) => {
-        const leftTime = Date.parse(left.updated_at ?? left.created_at ?? "") || 0;
-        const rightTime = Date.parse(right.updated_at ?? right.created_at ?? "") || 0;
+        const leftTime =
+          Date.parse(left.updated_at ?? left.created_at ?? "") || 0;
+        const rightTime =
+          Date.parse(right.updated_at ?? right.created_at ?? "") || 0;
         return rightTime - leftTime;
       })
       .slice(0, 6);
@@ -274,32 +304,40 @@ export function DdtReaderPanel() {
     [redirectToLogin],
   );
 
-  const refreshDocuments = useCallback(async (clearMessages = false) => {
-    try {
-      const docs = await requestJson<DdtReaderDocument[]>(
-        "/api/ddt-reader/documents",
-        { method: "GET", cache: "no-store" },
-        "Impossibile leggere i documenti dal server.",
-      );
+  const refreshDocuments = useCallback(
+    async (clearMessages = false) => {
+      try {
+        const docs = await requestJson<DdtReaderDocument[]>(
+          "/api/ddt-reader/documents",
+          { method: "GET", cache: "no-store" },
+          "Impossibile leggere i documenti dal server.",
+        );
 
-      setDocuments(docs);
-      setSelectedDocId((current) => {
-        if (current === null) {
-          return null;
+        setDocuments(docs);
+        setSelectedDocId((current) => {
+          if (current === null) {
+            return null;
+          }
+
+          return docs.some((document) => document.id === current)
+            ? current
+            : null;
+        });
+
+        if (clearMessages) {
+          setFeedback("");
+          setError("");
         }
-
-        return docs.some((document) => document.id === current) ? current : null;
-      });
-
-      if (clearMessages) {
-        setFeedback("");
-        setError("");
+      } catch (refreshError) {
+        const message = handleRequestError(
+          refreshError,
+          "Impossibile leggere i documenti dal server.",
+        );
+        setError(message);
       }
-    } catch (refreshError) {
-      const message = handleRequestError(refreshError, "Impossibile leggere i documenti dal server.");
-      setError(message);
-    }
-  }, [handleRequestError]);
+    },
+    [handleRequestError],
+  );
 
   useEffect(() => {
     void refreshDocuments(true);
@@ -331,17 +369,23 @@ export function DdtReaderPanel() {
       }
 
       try {
-        const response = await fetch(appendWorkspaceId(`/api/ddt-reader/documents/${selectedDocId}/file`), {
-          method: "GET",
-          cache: "no-store",
-        });
+        const response = await fetch(
+          appendWorkspaceId(`/api/ddt-reader/documents/${selectedDocId}/file`),
+          {
+            method: "GET",
+            cache: "no-store",
+          },
+        );
 
         if (!response.ok) {
           if (response.status === 401) {
             const payload = await readPayload(response);
             const code =
-              payload && typeof payload === "object" && "code" in payload && typeof (payload as ApiErrorPayload).code === "string"
-                ? (payload as ApiErrorPayload).code ?? null
+              payload &&
+              typeof payload === "object" &&
+              "code" in payload &&
+              typeof (payload as ApiErrorPayload).code === "string"
+                ? ((payload as ApiErrorPayload).code ?? null)
                 : null;
 
             if (!code || AUTH_ERROR_CODES.has(code)) {
@@ -416,7 +460,12 @@ export function DdtReaderPanel() {
   };
 
   const queueDocumentAnalysis = async (documentId: string) => {
-    await requestJson<{ queued: boolean; doc_id: string; status: string; job_id: string }>(
+    await requestJson<{
+      queued: boolean;
+      doc_id: string;
+      status: string;
+      job_id: string;
+    }>(
       `/api/ddt-reader/documents/${documentId}/analyze`,
       {
         method: "POST",
@@ -452,7 +501,9 @@ export function DdtReaderPanel() {
       );
 
       if (document.status === "ready") {
-        setFeedback("Documento già caricato e analizzato: risultato recuperato.");
+        setFeedback(
+          "Documento già caricato e analizzato: risultato recuperato.",
+        );
         toast.success("Documento già analizzato.");
       } else if (PROCESSING_STATUSES.has(document.status)) {
         setFeedback("Documento già caricato: workflow DDT già in corso.");
@@ -472,7 +523,10 @@ export function DdtReaderPanel() {
 
       await refreshDocuments();
     } catch (uploadError) {
-      const message = handleRequestError(uploadError, "Errore durante l'avvio del workflow DDT.");
+      const message = handleRequestError(
+        uploadError,
+        "Errore durante l'avvio del workflow DDT.",
+      );
       setError(message);
       toast.error(message);
     } finally {
@@ -491,7 +545,8 @@ export function DdtReaderPanel() {
     setError("");
 
     if (PROCESSING_STATUSES.has(document.status)) {
-      const message = "Documento in elaborazione: attendi la fine prima di archiviarlo.";
+      const message =
+        "Documento in elaborazione: attendi la fine prima di archiviarlo.";
       setError(message);
       toast.error(message);
       return;
@@ -529,7 +584,10 @@ export function DdtReaderPanel() {
           setFeedback("Documento archiviato.");
           await refreshDocuments();
         } catch (deleteError) {
-          const message = handleRequestError(deleteError, "Errore durante l'archiviazione del documento.");
+          const message = handleRequestError(
+            deleteError,
+            "Errore durante l'archiviazione del documento.",
+          );
           setError(message);
           throw deleteError;
         } finally {
@@ -548,9 +606,7 @@ export function DdtReaderPanel() {
           </Text>
           <PageHelpHint text={t("ddt.help")} />
         </div>
-        <Text variant="muted">
-          {t("ddt.subtitle")}
-        </Text>
+        <Text variant="muted">{t("ddt.subtitle")}</Text>
       </header>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_320px]">
@@ -559,13 +615,14 @@ export function DdtReaderPanel() {
             <Text as="h2" variant="h2" className="text-lg">
               {t("ddt.workflow")}
             </Text>
-            <Text variant="caption">
-              {t("ddt.workflowHint")}
-            </Text>
+            <Text variant="caption">{t("ddt.workflowHint")}</Text>
           </div>
 
           <div className="space-y-3 rounded-[var(--radius-lg)] border border-border-subtle bg-bg-muted/60 p-3">
-            <label className="text-xs font-bold uppercase tracking-wide text-text-muted" htmlFor="ddt-reader-upload">
+            <label
+              className="text-xs font-bold uppercase tracking-wide text-text-muted"
+              htmlFor="ddt-reader-upload"
+            >
               {t("ddt.pdf")}
             </label>
             <Input
@@ -576,7 +633,11 @@ export function DdtReaderPanel() {
               onChange={onFileChange}
               className="cursor-pointer file:mr-3 file:rounded-[var(--radius-sm)] file:border-0 file:bg-status-info-bg file:px-2 file:py-1 file:text-xs file:font-semibold file:text-status-info-text"
             />
-            <Button onClick={() => void uploadAndAnalyzeDocument()} disabled={!canUploadAndAnalyze} className="w-full">
+            <Button
+              onClick={() => void uploadAndAnalyzeDocument()}
+              disabled={!canUploadAndAnalyze}
+              className="w-full"
+            >
               {isUploading || isAnalyzing ? (
                 <>
                   <LoaderCircle size={16} className="animate-spin" />
@@ -590,13 +651,18 @@ export function DdtReaderPanel() {
               )}
             </Button>
             {hasProcessing ? (
-              <Text variant="caption">Attendi la fine del workflow in corso prima di avviarne un altro.</Text>
+              <Text variant="caption">
+                Attendi la fine del workflow in corso prima di avviarne un
+                altro.
+              </Text>
             ) : null}
           </div>
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Text className="text-sm font-bold text-text-primary">Documenti caricati</Text>
+              <Text className="text-sm font-bold text-text-primary">
+                Documenti caricati
+              </Text>
               <span className="rounded-full border border-border-default bg-bg-muted px-2 py-0.5 text-xs font-semibold text-text-secondary">
                 {documents.length}
               </span>
@@ -639,7 +705,9 @@ export function DdtReaderPanel() {
                               statusClasses(document.status),
                             )}
                           >
-                            {isProcessing && <span className="h-2 w-2 animate-pulse rounded-full bg-current" />}
+                            {isProcessing && (
+                              <span className="h-2 w-2 animate-pulse rounded-full bg-current" />
+                            )}
                             {statusLabel(document.status)}
                           </span>
                         </div>
@@ -654,7 +722,11 @@ export function DdtReaderPanel() {
                           disabled={isDeleting || isProcessing}
                           className="text-text-muted hover:bg-status-danger-bg hover:text-status-danger-text"
                         >
-                          {isDeleting ? <LoaderCircle size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                          {isDeleting ? (
+                            <LoaderCircle size={16} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={16} />
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -694,14 +766,20 @@ export function DdtReaderPanel() {
             <div className="space-y-3 rounded-[var(--radius-lg)] border border-border-subtle bg-bg-muted/50 p-4">
               <div className="flex items-center gap-2">
                 <FileText size={16} className="text-brand-primary" />
-                <Text className="text-sm font-bold text-text-primary">{selectedDocument.original_filename}</Text>
+                <Text className="text-sm font-bold text-text-primary">
+                  {selectedDocument.original_filename}
+                </Text>
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <Text className="text-sm font-bold text-text-primary">Anteprima PDF</Text>
+                  <Text className="text-sm font-bold text-text-primary">
+                    Anteprima PDF
+                  </Text>
                   <a
-                    href={appendWorkspaceId(`/api/ddt-reader/documents/${selectedDocument.id}/file`)}
+                    href={appendWorkspaceId(
+                      `/api/ddt-reader/documents/${selectedDocument.id}/file`,
+                    )}
                     target="_blank"
                     rel="noreferrer"
                     className="text-xs font-semibold text-brand-accent transition-colors hover:text-brand-accent-hover"
@@ -725,7 +803,9 @@ export function DdtReaderPanel() {
                 {selectedDocument.status === "ready" ? (
                   <div className="space-y-3">
                     <div className="rounded-[var(--radius-md)] border border-brand-primary/35 bg-brand-primary/10 px-3 py-2">
-                      <Text className="text-[11px] font-bold uppercase tracking-wide text-brand-primary">Commessa</Text>
+                      <Text className="text-[11px] font-bold uppercase tracking-wide text-brand-primary">
+                        Commessa
+                      </Text>
                       <Text className="text-sm font-extrabold text-text-primary">
                         {selectedDocument.commessa_reference || "-"}
                       </Text>
@@ -733,31 +813,51 @@ export function DdtReaderPanel() {
 
                     <div className="flex flex-wrap gap-2">
                       <div className="inline-flex items-center gap-2 rounded-full border border-border-default bg-bg-surface px-3 py-1.5">
-                        <span className="text-xs font-semibold text-text-muted">Tipo DDT</span>
+                        <span className="text-xs font-semibold text-text-muted">
+                          Tipo DDT
+                        </span>
                         <span className="text-xs font-bold text-text-primary">
                           {movementLabel(selectedDocument.movement_type)}
                         </span>
                       </div>
                       <div className="inline-flex items-center gap-2 rounded-full border border-border-default bg-bg-surface px-3 py-1.5">
-                        <span className="text-xs font-semibold text-text-muted">Azione</span>
+                        <span className="text-xs font-semibold text-text-muted">
+                          Azione
+                        </span>
                         <span className="text-xs font-bold text-text-primary">
-                          {mainActionLabel(selectedDocument.main_warehouse_action)}
+                          {mainActionLabel(
+                            selectedDocument.main_warehouse_action,
+                          )}
                         </span>
                       </div>
                       <div className="inline-flex items-center gap-2 rounded-full border border-border-default bg-bg-surface px-3 py-1.5">
-                        <span className="text-xs font-semibold text-text-muted">Numero bolla/DDT</span>
-                        <span className="text-xs font-bold text-text-primary">{selectedDocument.bolla_number || "-"}</span>
+                        <span className="text-xs font-semibold text-text-muted">
+                          Numero bolla/DDT
+                        </span>
+                        <span className="text-xs font-bold text-text-primary">
+                          {selectedDocument.bolla_number || "-"}
+                        </span>
                       </div>
                       <div className="inline-flex items-center gap-2 rounded-full border border-border-default bg-bg-surface px-3 py-1.5">
-                        <span className="text-xs font-semibold text-text-muted">Nota movimento</span>
-                        <span className="text-xs font-bold text-text-primary">{selectedDocument.transfer_note || "-"}</span>
+                        <span className="text-xs font-semibold text-text-muted">
+                          Nota movimento
+                        </span>
+                        <span className="text-xs font-bold text-text-primary">
+                          {selectedDocument.transfer_note || "-"}
+                        </span>
                       </div>
                       <div className="inline-flex items-center gap-2 rounded-full border border-border-default bg-bg-surface px-3 py-1.5">
-                        <span className="text-xs font-semibold text-text-muted">Articoli movimentati</span>
-                        <span className="text-xs font-bold text-text-primary">{selectedDocument.article_count ?? "-"}</span>
+                        <span className="text-xs font-semibold text-text-muted">
+                          Articoli movimentati
+                        </span>
+                        <span className="text-xs font-bold text-text-primary">
+                          {selectedDocument.article_count ?? "-"}
+                        </span>
                       </div>
                       <div className="inline-flex items-center gap-2 rounded-full border border-border-default bg-bg-surface px-3 py-1.5">
-                        <span className="text-xs font-semibold text-text-muted">Impatto magazzino</span>
+                        <span className="text-xs font-semibold text-text-muted">
+                          Impatto magazzino
+                        </span>
                         <span className="text-xs font-bold text-text-primary">
                           {deltaLabel(selectedDocument.warehouse_delta)}
                         </span>
@@ -765,12 +865,18 @@ export function DdtReaderPanel() {
                     </div>
 
                     <div className="rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 py-2">
-                      <Text className="text-xs font-bold uppercase tracking-wide text-text-muted">Sintesi</Text>
-                      <Text className="mt-1 text-sm text-text-primary">{selectedDocument.analysis_summary || "-"}</Text>
+                      <Text className="text-xs font-bold uppercase tracking-wide text-text-muted">
+                        Sintesi
+                      </Text>
+                      <Text className="mt-1 text-sm text-text-primary">
+                        {selectedDocument.analysis_summary || "-"}
+                      </Text>
                     </div>
 
                     <div className="space-y-1">
-                      <Text className="text-sm font-bold text-text-primary">Dettaglio articoli (JSON)</Text>
+                      <Text className="text-sm font-bold text-text-primary">
+                        Dettaglio articoli (JSON)
+                      </Text>
                       <pre className="max-h-56 overflow-auto rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-3 text-xs text-text-secondary">
                         {formatArticleItems(selectedDocument.article_items)}
                       </pre>
@@ -780,11 +886,14 @@ export function DdtReaderPanel() {
                   <>
                     {selectedDocument.status === "error" ? (
                       <p className="text-status-danger-text">
-                        <strong>Errore:</strong> {selectedDocument.last_error || "Errore non specificato"}
+                        <strong>Errore:</strong>{" "}
+                        {selectedDocument.last_error ||
+                          "Errore non specificato"}
                       </p>
                     ) : (
                       <Text variant="muted">
-                        Il risultato comparirè qui quando l&apos;elaborazione sarà completata.
+                        Il risultato comparirè qui quando l&apos;elaborazione
+                        sarà completata.
                       </Text>
                     )}
                   </>
@@ -793,7 +902,9 @@ export function DdtReaderPanel() {
             </div>
           ) : (
             <div className="rounded-[var(--radius-lg)] border border-dashed border-border-default bg-bg-muted p-5 text-center">
-              <Text variant="muted">Seleziona un PDF dalla lista a sinistra.</Text>
+              <Text variant="muted">
+                Seleziona un PDF dalla lista a sinistra.
+              </Text>
             </div>
           )}
         </Card>
@@ -814,7 +925,9 @@ export function DdtReaderPanel() {
           <div className="space-y-3">
             {recentTimings.length === 0 ? (
               <div className="rounded-[var(--radius-lg)] border border-dashed border-border-default bg-bg-muted p-4 text-center">
-                <Text variant="muted">I tempi compariranno dopo le prime analisi completate.</Text>
+                <Text variant="muted">
+                  I tempi compariranno dopo le prime analisi completate.
+                </Text>
               </div>
             ) : (
               recentTimings.map((document) => {
@@ -836,16 +949,22 @@ export function DdtReaderPanel() {
                         : "border-border-default bg-bg-muted/40 hover:border-brand-accent/70",
                     )}
                   >
-                    <Text className="truncate text-sm font-bold text-text-primary">{document.original_filename}</Text>
+                    <Text className="truncate text-sm font-bold text-text-primary">
+                      {document.original_filename}
+                    </Text>
                     <div className="mt-3 space-y-2 text-sm text-text-secondary">
                       <div className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-border-subtle bg-bg-surface px-3 py-2">
-                        <span className="text-xs font-bold uppercase tracking-wide text-text-muted">OCR:</span>
+                        <span className="text-xs font-bold uppercase tracking-wide text-text-muted">
+                          OCR:
+                        </span>
                         <span className="text-sm font-semibold text-text-primary">
                           {formatDuration(document.ocr_duration_ms)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-border-subtle bg-bg-surface px-3 py-2">
-                        <span className="text-xs font-bold uppercase tracking-wide text-text-muted">Inferenza:</span>
+                        <span className="text-xs font-bold uppercase tracking-wide text-text-muted">
+                          Inferenza:
+                        </span>
                         <span className="text-sm font-semibold text-text-primary">
                           {formatDuration(document.inference_duration_ms)}
                         </span>

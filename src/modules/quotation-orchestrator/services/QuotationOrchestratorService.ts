@@ -11,7 +11,10 @@ import { NextOrchestratorQuotationAnalyzer } from "./NextOrchestratorQuotationAn
 import { QuotationEmailNotifier } from "./QuotationEmailNotifier.js";
 import { QuotationDocxBuilder } from "./QuotationDocxBuilder.js";
 import { WorkflowService } from "../../workflows/services/WorkflowService.js";
-import { ModuleWorkflowEntity, ModuleWorkflowNodeEntity } from "../../workflows/domain/ModuleWorkflowEntity.js";
+import {
+  ModuleWorkflowEntity,
+  ModuleWorkflowNodeEntity,
+} from "../../workflows/domain/ModuleWorkflowEntity.js";
 import { Job } from "../../../worker/queue/Job.js";
 import { JobQueue } from "../../../worker/queue/JobQueue.js";
 import { QuotationJobPayload } from "../../../worker/services/QuotationOrchestratorWorker.js";
@@ -74,7 +77,8 @@ interface QuotationExecutionStep {
 }
 
 export class QuotationOrchestratorService {
-  private static readonly QUOTATION_WORKFLOW_KEY = "quotation_document_pipeline";
+  private static readonly QUOTATION_WORKFLOW_KEY =
+    "quotation_document_pipeline";
   public static readonly JOB_NAME = "quotation.orchestrator";
   private readonly documentArchiveService: DocumentArchiveService;
   private readonly quotationAnalyzer: NextOrchestratorQuotationAnalyzer;
@@ -117,7 +121,10 @@ export class QuotationOrchestratorService {
     requestedByUserId: string;
     clientName?: string | null;
   }): Promise<string> {
-    const projectName = await this.loadProjectName(params.workspaceId, params.projectId);
+    const projectName = await this.loadProjectName(
+      params.workspaceId,
+      params.projectId,
+    );
     const created = await this.repository.createJob({
       workspaceId: params.workspaceId,
       projectId: params.projectId,
@@ -190,19 +197,24 @@ export class QuotationOrchestratorService {
           version_label: job.versionLabel,
         },
       },
-      result: job.outputDocxPath || job.outputDocxStoragePath || job.outputDocxSizeBytes || job.emailRecipient || job.finalMessage
-        ? {
-            project_uuid: job.projectId,
-            output_docx_path: job.outputDocxPath,
-            output_docx_storage_path: job.outputDocxStoragePath,
-            output_docx_size_bytes: job.outputDocxSizeBytes,
-            email_recipient: job.emailRecipient,
-            mail_delivery_status: job.mailDeliveryStatus,
-            mail_sent_at: job.mailSentAt?.toISOString() ?? null,
-            mail_error: job.mailError,
-            final_message: job.finalMessage,
-          }
-        : null,
+      result:
+        job.outputDocxPath ||
+        job.outputDocxStoragePath ||
+        job.outputDocxSizeBytes ||
+        job.emailRecipient ||
+        job.finalMessage
+          ? {
+              project_uuid: job.projectId,
+              output_docx_path: job.outputDocxPath,
+              output_docx_storage_path: job.outputDocxStoragePath,
+              output_docx_size_bytes: job.outputDocxSizeBytes,
+              email_recipient: job.emailRecipient,
+              mail_delivery_status: job.mailDeliveryStatus,
+              mail_sent_at: job.mailSentAt?.toISOString() ?? null,
+              mail_error: job.mailError,
+              final_message: job.finalMessage,
+            }
+          : null,
     };
   }
 
@@ -245,16 +257,32 @@ export class QuotationOrchestratorService {
 
       const totalSteps = executionPlan.length;
       const progressForStep = (index: number): number => {
-        const computed = Math.floor(((index + 1) / Math.max(totalSteps, 1)) * 95);
+        const computed = Math.floor(
+          ((index + 1) / Math.max(totalSteps, 1)) * 95,
+        );
         return Math.max(10, Math.min(95, computed));
       };
 
-      let quotationSource: { documentId: string; storagePath: string; fileName: string } | null = null;
+      let quotationSource: {
+        documentId: string;
+        storagePath: string;
+        fileName: string;
+      } | null = null;
       let analysis: QuotationAnalysisResult | null = null;
       let docxBytes: Buffer | null = null;
-      let saved: { storagePath: string; sizeBytes: number | null } | null = null;
-      let versionContext: { clientEmail: string | null; clientName: string | null; projectName: string | null } | null = null;
-      let mailOutcome: { status: string; message: string; sentAt: Date | null; error: string | null } = {
+      let saved: { storagePath: string; sizeBytes: number | null } | null =
+        null;
+      let versionContext: {
+        clientEmail: string | null;
+        clientName: string | null;
+        projectName: string | null;
+      } | null = null;
+      let mailOutcome: {
+        status: string;
+        message: string;
+        sentAt: Date | null;
+        error: string | null;
+      } = {
         status: "SKIPPED",
         message: "Invio email non previsto dal workflow.",
         sentAt: null,
@@ -283,7 +311,9 @@ export class QuotationOrchestratorService {
 
         if (step.action === "analyzing") {
           if (!quotationSource) {
-            throw new Error("Sorgente preventivo non disponibile per l'analisi.");
+            throw new Error(
+              "Sorgente preventivo non disponibile per l'analisi.",
+            );
           }
 
           await this.patchJob(jobId, {
@@ -312,7 +342,9 @@ export class QuotationOrchestratorService {
 
         if (step.action === "docx_generation") {
           if (!analysis) {
-            throw new Error("Dati strutturati mancanti: impossibile generare DOCX.");
+            throw new Error(
+              "Dati strutturati mancanti: impossibile generare DOCX.",
+            );
           }
 
           await this.patchJob(jobId, {
@@ -340,7 +372,8 @@ export class QuotationOrchestratorService {
               versionLabel: queued.versionLabel,
               fileKind: FileKind.QUOTATION_DOCX,
               fileName: "preventivo.docx",
-              contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              contentType:
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
               bytes: docxBytes,
               uploadedByUserId: queued.requestedByUserId,
             }),
@@ -409,20 +442,28 @@ export class QuotationOrchestratorService {
         mailDeliveryStatus: mailOutcome.status,
         mailSentAt: mailOutcome.sentAt,
         mailError: mailOutcome.error,
-        finalMessage: this.composeFinalMessage(analysis, versionContext.clientEmail, mailOutcome.message),
+        finalMessage: this.composeFinalMessage(
+          analysis,
+          versionContext.clientEmail,
+          mailOutcome.message,
+        ),
       });
-      const deliverySummary = mailOutcome.status === "SENT"
-        ? "Email inviata."
-        : mailOutcome.status === "SKIPPED"
-          ? "Email non inviata."
-          : "Email non riuscita.";
+      const deliverySummary =
+        mailOutcome.status === "SENT"
+          ? "Email inviata."
+          : mailOutcome.status === "SKIPPED"
+            ? "Email non inviata."
+            : "Email non riuscita.";
       await this.notify(
         queued.workspaceId,
         versionContext.projectName ?? "Progetti",
         `Preventivo ${queued.versionLabel.toUpperCase()} completato. ${deliverySummary}`,
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Errore durante l'elaborazione.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Errore durante l'elaborazione.";
       await this.patchJob(jobId, {
         status: "failed",
         progress: 100,
@@ -449,7 +490,10 @@ export class QuotationOrchestratorService {
     return `quotation:${jobId}`;
   }
 
-  private async loadProjectName(workspaceId: string, projectId: string): Promise<string | null> {
+  private async loadProjectName(
+    workspaceId: string,
+    projectId: string,
+  ): Promise<string | null> {
     const prisma = PrismaClientManager.getClient();
     const project = await prisma.project.findFirst({
       where: {
@@ -471,12 +515,13 @@ export class QuotationOrchestratorService {
     projectId: string;
     versionLabel: string;
   }): Promise<{ documentId: string; storagePath: string; fileName: string }> {
-    const quotation = await this.documentArchiveService.getCurrentProjectVersionFile({
-      workspaceId: params.workspaceId,
-      projectId: params.projectId,
-      versionLabel: params.versionLabel,
-      fileKind: FileKind.QUOTATION_PDF,
-    });
+    const quotation =
+      await this.documentArchiveService.getCurrentProjectVersionFile({
+        workspaceId: params.workspaceId,
+        projectId: params.projectId,
+        versionLabel: params.versionLabel,
+        fileKind: FileKind.QUOTATION_PDF,
+      });
 
     if (!quotation) {
       throw new Error("PDF preventivo non trovato per questo progetto.");
@@ -497,7 +542,11 @@ export class QuotationOrchestratorService {
     workspaceId: string;
     projectId: string;
     versionLabel: string;
-  }): Promise<{ clientEmail: string | null; clientName: string | null; projectName: string | null }> {
+  }): Promise<{
+    clientEmail: string | null;
+    clientName: string | null;
+    projectName: string | null;
+  }> {
     const prisma = PrismaClientManager.getClient();
     const version = await prisma.projectVersion.findFirst({
       where: {
@@ -523,13 +572,22 @@ export class QuotationOrchestratorService {
     });
 
     return {
-      clientEmail: version?.client?.email?.trim() ? version.client.email.trim() : null,
-      clientName: this.composeClientName(version?.client?.first_name, version?.client?.last_name),
-      projectName: version?.project?.name?.trim() ? version.project.name.trim() : null,
+      clientEmail: version?.client?.email?.trim()
+        ? version.client.email.trim()
+        : null,
+      clientName: this.composeClientName(
+        version?.client?.first_name,
+        version?.client?.last_name,
+      ),
+      projectName: version?.project?.name?.trim()
+        ? version.project.name.trim()
+        : null,
     };
   }
 
-  private async resolveQuotationWorkflow(workspaceId: string): Promise<ModuleWorkflowEntity> {
+  private async resolveQuotationWorkflow(
+    workspaceId: string,
+  ): Promise<ModuleWorkflowEntity> {
     try {
       const workflow = await this.workflowService.findWorkflowByKey(
         workspaceId,
@@ -550,16 +608,25 @@ export class QuotationOrchestratorService {
     }
   }
 
-  private buildExecutionPlan(workflow: ModuleWorkflowEntity): QuotationExecutionStep[] {
-    const enabledNodes = workflow.nodes.filter((node) => node.isEnabled || node.isRequired);
+  private buildExecutionPlan(
+    workflow: ModuleWorkflowEntity,
+  ): QuotationExecutionStep[] {
+    const enabledNodes = workflow.nodes.filter(
+      (node) => node.isEnabled || node.isRequired,
+    );
     if (enabledNodes.length === 0) {
-      throw new Error("Workflow preventivo progetto vuoto o senza nodi attivi.");
+      throw new Error(
+        "Workflow preventivo progetto vuoto o senza nodi attivi.",
+      );
     }
 
     const orderedNodeIds = this.computeOrderedNodeIds(workflow, enabledNodes);
     const nodeById = new Map(enabledNodes.map((node) => [node.id, node]));
     const steps: QuotationExecutionStep[] = [];
-    const pushUnique = (action: QuotationStepAction, node?: ModuleWorkflowNodeEntity) => {
+    const pushUnique = (
+      action: QuotationStepAction,
+      node?: ModuleWorkflowNodeEntity,
+    ) => {
       if (steps.some((step) => step.action === action)) {
         return;
       }
@@ -593,9 +660,15 @@ export class QuotationOrchestratorService {
     return steps;
   }
 
-  private computeOrderedNodeIds(workflow: ModuleWorkflowEntity, nodes: ModuleWorkflowNodeEntity[]): string[] {
+  private computeOrderedNodeIds(
+    workflow: ModuleWorkflowEntity,
+    nodes: ModuleWorkflowNodeEntity[],
+  ): string[] {
     const enabledNodeIds = new Set(nodes.map((node) => node.id));
-    const outgoing = new Map<string, Array<{ target: string; orderNo: number }>>();
+    const outgoing = new Map<
+      string,
+      Array<{ target: string; orderNo: number }>
+    >();
     const incomingCount = new Map<string, number>();
 
     for (const node of nodes) {
@@ -607,7 +680,10 @@ export class QuotationOrchestratorService {
       if (!edge.isEnabled) {
         continue;
       }
-      if (!enabledNodeIds.has(edge.sourceNodeId) || !enabledNodeIds.has(edge.targetNodeId)) {
+      if (
+        !enabledNodeIds.has(edge.sourceNodeId) ||
+        !enabledNodeIds.has(edge.targetNodeId)
+      ) {
         continue;
       }
 
@@ -616,7 +692,10 @@ export class QuotationOrchestratorService {
         continue;
       }
       sourceLinks.push({ target: edge.targetNodeId, orderNo: edge.orderNo });
-      incomingCount.set(edge.targetNodeId, (incomingCount.get(edge.targetNodeId) ?? 0) + 1);
+      incomingCount.set(
+        edge.targetNodeId,
+        (incomingCount.get(edge.targetNodeId) ?? 0) + 1,
+      );
     }
 
     for (const links of outgoing.values()) {
@@ -651,20 +730,27 @@ export class QuotationOrchestratorService {
   }
 
   private ensureRequiredPlanConsistency(plan: QuotationExecutionStep[]): void {
-    const hasAction = (action: QuotationStepAction) => plan.some((step) => step.action === action);
+    const hasAction = (action: QuotationStepAction) =>
+      plan.some((step) => step.action === action);
 
     if (!hasAction("resolve_source")) {
       throw new Error("Workflow non valido: step di input mancante.");
     }
     if (!hasAction("analyzing")) {
-      throw new Error("Workflow non valido: step di analisi preventivo mancante.");
+      throw new Error(
+        "Workflow non valido: step di analisi preventivo mancante.",
+      );
     }
     if (!hasAction("docx_generation")) {
       throw new Error("Workflow non valido: step generazione DOCX mancante.");
     }
   }
 
-  private composeFinalMessage(analysis: QuotationAnalysisResult | null, clientEmail: string | null, mailSummary: string): string {
+  private composeFinalMessage(
+    analysis: QuotationAnalysisResult | null,
+    clientEmail: string | null,
+    mailSummary: string,
+  ): string {
     const title = analysis?.structuredData.Title?.trim();
     const reference = analysis?.structuredData.Reference?.trim();
 
@@ -674,7 +760,9 @@ export class QuotationOrchestratorService {
         ? `Riferimento rilevato: ${reference}`
         : "Dati strutturati rilevati correttamente.";
 
-    const clientDetail = clientEmail ? ` Cliente associato: ${clientEmail}.` : "";
+    const clientDetail = clientEmail
+      ? ` Cliente associato: ${clientEmail}.`
+      : "";
     return `${mailSummary} ${detail}.${clientDetail}`.trim();
   }
 
@@ -684,11 +772,17 @@ export class QuotationOrchestratorService {
     projectName: string | null;
     versionLabel: string;
     docxBytes: Buffer;
-  }): Promise<{ status: string; message: string; sentAt: Date | null; error: string | null }> {
+  }): Promise<{
+    status: string;
+    message: string;
+    sentAt: Date | null;
+    error: string | null;
+  }> {
     if (!params.clientEmail) {
       return {
         status: "SKIPPED",
-        message: "Preventivo DOCX generato con successo. Nessuna email cliente associata: invio saltato.",
+        message:
+          "Preventivo DOCX generato con successo. Nessuna email cliente associata: invio saltato.",
         sentAt: null,
         error: null,
       };
@@ -711,7 +805,8 @@ export class QuotationOrchestratorService {
         error: null,
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Invio email non riuscito.";
+      const message =
+        error instanceof Error ? error.message : "Invio email non riuscito.";
       return {
         status: "FAILED",
         message: `Preventivo DOCX generato e salvato, ma invio email non riuscito verso ${params.clientEmail}.`,
@@ -721,8 +816,14 @@ export class QuotationOrchestratorService {
     }
   }
 
-  private composeClientName(firstName: string | null | undefined, lastName: string | null | undefined): string | null {
-    const fullName = [firstName?.trim(), lastName?.trim()].filter((value) => Boolean(value)).join(" ").trim();
+  private composeClientName(
+    firstName: string | null | undefined,
+    lastName: string | null | undefined,
+  ): string | null {
+    const fullName = [firstName?.trim(), lastName?.trim()]
+      .filter((value) => Boolean(value))
+      .join(" ")
+      .trim();
     return fullName.length > 0 ? fullName : null;
   }
 
@@ -733,20 +834,30 @@ export class QuotationOrchestratorService {
     versionLabel: string;
   }): Promise<void> {
     try {
-      await this.documentIntelligenceService.refreshDocumentKnowledge(params.workspaceId, params.documentId);
+      await this.documentIntelligenceService.refreshDocumentKnowledge(
+        params.workspaceId,
+        params.documentId,
+      );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Knowledge indexing error";
-      console.error("[QuotationOrchestratorService] Unable to index quotation document knowledge", {
-        workspaceId: params.workspaceId,
-        projectId: params.projectId,
-        versionLabel: params.versionLabel,
-        documentId: params.documentId,
-        message,
-      });
+      const message =
+        error instanceof Error ? error.message : "Knowledge indexing error";
+      console.error(
+        "[QuotationOrchestratorService] Unable to index quotation document knowledge",
+        {
+          workspaceId: params.workspaceId,
+          projectId: params.projectId,
+          versionLabel: params.versionLabel,
+          documentId: params.documentId,
+          message,
+        },
+      );
     }
   }
 
-  private async patchJob(jobId: string, patch: QuotationJobPatch): Promise<void> {
+  private async patchJob(
+    jobId: string,
+    patch: QuotationJobPatch,
+  ): Promise<void> {
     await this.repository.updateJob(jobId, {
       status: patch.status?.toUpperCase(),
       progress: patch.progress,
@@ -762,7 +873,10 @@ export class QuotationOrchestratorService {
       mailError: patch.mailError ?? null,
       finalMessage: patch.finalMessage ?? null,
       startedAt: patch.status === "running" ? new Date() : undefined,
-      completedAt: patch.status === "completed" || patch.status === "failed" ? new Date() : undefined,
+      completedAt:
+        patch.status === "completed" || patch.status === "failed"
+          ? new Date()
+          : undefined,
     });
   }
 
@@ -779,7 +893,11 @@ export class QuotationOrchestratorService {
     }
   }
 
-  private async notify(workspaceId: string, title: string, message: string): Promise<void> {
+  private async notify(
+    workspaceId: string,
+    title: string,
+    message: string,
+  ): Promise<void> {
     if (!this.notificationService) {
       return;
     }
@@ -793,12 +911,15 @@ export class QuotationOrchestratorService {
         message,
       });
     } catch (error) {
-      console.error("[QuotationOrchestratorService] Unable to create notification", {
-        workspaceId,
-        title,
-        message,
-        error,
-      });
+      console.error(
+        "[QuotationOrchestratorService] Unable to create notification",
+        {
+          workspaceId,
+          title,
+          message,
+          error,
+        },
+      );
     }
   }
 }

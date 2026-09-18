@@ -46,70 +46,83 @@ export class ArchivedItemsService {
   }): Promise<ArchivedItemsView> {
     const prisma = PrismaClientManager.getClient();
 
-    const [projects, versions, documents, companies, clients] = await Promise.all([
-      prisma.project.findMany({
-        where: {
-          workspace_id: params.workspaceId,
-          deleted_at: {
-            not: null,
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          deleted_at: true,
-        },
-      }),
-      prisma.projectVersion.findMany({
-        where: {
-          workspace_id: params.workspaceId,
-          deleted_at: {
-            not: null,
-          },
-        },
-        select: {
-          id: true,
-          project_id: true,
-          version_label: true,
-          deleted_at: true,
-          project: {
-            select: {
-              name: true,
+    const [projects, versions, documents, companies, clients] =
+      await Promise.all([
+        prisma.project.findMany({
+          where: {
+            workspace_id: params.workspaceId,
+            deleted_at: {
+              not: null,
             },
           },
-        },
-      }),
-      prisma.document.findMany({
-        where: {
-          workspace_id: params.workspaceId,
-          deleted_at: {
-            not: null,
+          select: {
+            id: true,
+            name: true,
+            deleted_at: true,
           },
-        },
-        select: {
-          id: true,
-          filename: true,
-          scope: true,
-          domain_entity_type: true,
-          domain_entity_id: true,
-          size_bytes: true,
-          deleted_at: true,
-          node: {
-            select: {
-              path_cache: true,
+        }),
+        prisma.projectVersion.findMany({
+          where: {
+            workspace_id: params.workspaceId,
+            deleted_at: {
+              not: null,
             },
           },
-        },
-      }),
-      prisma.company.findMany({
-        where: { workspace_id: params.workspaceId, deleted_at: { not: null } },
-        select: { id: true, name: true, city: true, deleted_at: true },
-      }),
-      prisma.client.findMany({
-        where: { workspace_id: params.workspaceId, deleted_at: { not: null } },
-        select: { id: true, first_name: true, last_name: true, deleted_at: true, company: { select: { name: true } } },
-      }),
-    ]);
+          select: {
+            id: true,
+            project_id: true,
+            version_label: true,
+            deleted_at: true,
+            project: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        }),
+        prisma.document.findMany({
+          where: {
+            workspace_id: params.workspaceId,
+            deleted_at: {
+              not: null,
+            },
+          },
+          select: {
+            id: true,
+            filename: true,
+            scope: true,
+            domain_entity_type: true,
+            domain_entity_id: true,
+            size_bytes: true,
+            deleted_at: true,
+            node: {
+              select: {
+                path_cache: true,
+              },
+            },
+          },
+        }),
+        prisma.company.findMany({
+          where: {
+            workspace_id: params.workspaceId,
+            deleted_at: { not: null },
+          },
+          select: { id: true, name: true, city: true, deleted_at: true },
+        }),
+        prisma.client.findMany({
+          where: {
+            workspace_id: params.workspaceId,
+            deleted_at: { not: null },
+          },
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            deleted_at: true,
+            company: { select: { name: true } },
+          },
+        }),
+      ]);
 
     const projectNameById = new Map<string, string>();
     for (const project of projects) {
@@ -123,9 +136,16 @@ export class ArchivedItemsService {
       }
     }
 
-    const documentProjectRefById = new Map<string, { projectId: string; versionLabel: string | null }>();
+    const documentProjectRefById = new Map<
+      string,
+      { projectId: string; versionLabel: string | null }
+    >();
     for (const document of documents) {
-      const projectRef = this.extractProjectReference(document.domain_entity_type, document.domain_entity_id, document.node.path_cache);
+      const projectRef = this.extractProjectReference(
+        document.domain_entity_type,
+        document.domain_entity_id,
+        document.node.path_cache,
+      );
       if (projectRef) {
         documentProjectRefById.set(document.id, projectRef);
         if (!projectNameById.has(projectRef.projectId)) {
@@ -158,7 +178,8 @@ export class ArchivedItemsService {
         id: `project:${project.id}`,
         entityType: "project",
         entityId: project.id,
-        archivedAt: project.deleted_at?.toISOString() ?? new Date(0).toISOString(),
+        archivedAt:
+          project.deleted_at?.toISOString() ?? new Date(0).toISOString(),
         title: project.name,
         description: "Progetto archiviato",
         projectId: project.id,
@@ -174,9 +195,12 @@ export class ArchivedItemsService {
         id: `company:${company.id}`,
         entityType: "company",
         entityId: String(company.id),
-        archivedAt: company.deleted_at?.toISOString() ?? new Date(0).toISOString(),
+        archivedAt:
+          company.deleted_at?.toISOString() ?? new Date(0).toISOString(),
         title: company.name,
-        description: company.city ? `Azienda - ${company.city}` : "Azienda archiviata",
+        description: company.city
+          ? `Azienda - ${company.city}`
+          : "Azienda archiviata",
         projectId: null,
         projectName: null,
         versionLabel: null,
@@ -191,9 +215,12 @@ export class ArchivedItemsService {
         id: `client:${client.id}`,
         entityType: "client",
         entityId: client.id,
-        archivedAt: client.deleted_at?.toISOString() ?? new Date(0).toISOString(),
+        archivedAt:
+          client.deleted_at?.toISOString() ?? new Date(0).toISOString(),
         title: name,
-        description: client.company?.name ? `Cliente - ${client.company.name}` : "Cliente archiviato",
+        description: client.company?.name
+          ? `Cliente - ${client.company.name}`
+          : "Cliente archiviato",
         projectId: null,
         projectName: null,
         versionLabel: null,
@@ -208,7 +235,8 @@ export class ArchivedItemsService {
         id: `project_version:${version.id}`,
         entityType: "project_version",
         entityId: String(version.id),
-        archivedAt: version.deleted_at?.toISOString() ?? new Date(0).toISOString(),
+        archivedAt:
+          version.deleted_at?.toISOString() ?? new Date(0).toISOString(),
         title: `Versione ${versionLabel}`,
         description: `Versionamento ${versionLabel} archiviato`,
         projectId: version.project_id,
@@ -221,14 +249,20 @@ export class ArchivedItemsService {
 
     for (const document of documents) {
       const projectRef = documentProjectRefById.get(document.id) ?? null;
-      const projectName = projectRef ? projectNameById.get(projectRef.projectId) ?? null : null;
+      const projectName = projectRef
+        ? (projectNameById.get(projectRef.projectId) ?? null)
+        : null;
       allItems.push({
         id: `document:${document.id}`,
         entityType: "document",
         entityId: document.id,
-        archivedAt: document.deleted_at?.toISOString() ?? new Date(0).toISOString(),
+        archivedAt:
+          document.deleted_at?.toISOString() ?? new Date(0).toISOString(),
         title: document.filename?.trim() || "Documento senza nome",
-        description: this.describeArchivedDocument(document.scope, document.size_bytes),
+        description: this.describeArchivedDocument(
+          document.scope,
+          document.size_bytes,
+        ),
         projectId: projectRef?.projectId ?? null,
         projectName,
         versionLabel: projectRef?.versionLabel ?? null,
@@ -244,8 +278,15 @@ export class ArchivedItemsService {
     });
 
     const projectItems = allItems.filter((item) => item.projectId !== null);
-    const registryItems = allItems.filter((item) => item.entityType === "company" || item.entityType === "client");
-    const filteredItems = params.packageKey === "projects" ? projectItems : params.packageKey === "registries" ? registryItems : allItems;
+    const registryItems = allItems.filter(
+      (item) => item.entityType === "company" || item.entityType === "client",
+    );
+    const filteredItems =
+      params.packageKey === "projects"
+        ? projectItems
+        : params.packageKey === "registries"
+          ? registryItems
+          : allItems;
 
     return {
       selectedPackage: params.packageKey,
@@ -295,7 +336,11 @@ export class ArchivedItemsService {
         await this.restoreClient(params.workspaceId, params.entityId);
         return;
       default:
-        throw new AppError("Tipo archivio non supportato.", "ARCHIVE_ENTITY_TYPE_INVALID", 400);
+        throw new AppError(
+          "Tipo archivio non supportato.",
+          "ARCHIVE_ENTITY_TYPE_INVALID",
+          400,
+        );
     }
   }
 
@@ -306,27 +351,46 @@ export class ArchivedItemsService {
   }): Promise<void> {
     switch (params.entityType) {
       case "project":
-        await this.permanentlyDeleteProject(params.workspaceId, params.entityId);
+        await this.permanentlyDeleteProject(
+          params.workspaceId,
+          params.entityId,
+        );
         return;
       case "project_version":
-        await this.permanentlyDeleteProjectVersion(params.workspaceId, params.entityId);
+        await this.permanentlyDeleteProjectVersion(
+          params.workspaceId,
+          params.entityId,
+        );
         return;
       case "document":
-        await this.permanentlyDeleteDocument(params.workspaceId, params.entityId);
+        await this.permanentlyDeleteDocument(
+          params.workspaceId,
+          params.entityId,
+        );
         return;
       case "company":
-        await this.permanentlyDeleteCompany(params.workspaceId, params.entityId);
+        await this.permanentlyDeleteCompany(
+          params.workspaceId,
+          params.entityId,
+        );
         return;
       case "client":
         await this.permanentlyDeleteClient(params.workspaceId, params.entityId);
         return;
       default:
-        throw new AppError("Tipo archivio non supportato.", "ARCHIVE_ENTITY_TYPE_INVALID", 400);
+        throw new AppError(
+          "Tipo archivio non supportato.",
+          "ARCHIVE_ENTITY_TYPE_INVALID",
+          400,
+        );
     }
   }
 
   public async emptyTrash(workspaceId: string): Promise<void> {
-    const archived = await this.listArchivedItems({ workspaceId, packageKey: "complete" });
+    const archived = await this.listArchivedItems({
+      workspaceId,
+      packageKey: "complete",
+    });
     const priority: Record<ArchivedItemDto["entityType"], number> = {
       project: 0,
       project_version: 1,
@@ -334,7 +398,9 @@ export class ArchivedItemsService {
       client: 3,
       company: 4,
     };
-    const items = [...archived.items].sort((left, right) => priority[left.entityType] - priority[right.entityType]);
+    const items = [...archived.items].sort(
+      (left, right) => priority[left.entityType] - priority[right.entityType],
+    );
 
     for (const item of items) {
       try {
@@ -344,7 +410,10 @@ export class ArchivedItemsService {
           entityId: item.entityId,
         });
       } catch (error) {
-        if (!(error instanceof AppError) || error.code !== "ARCHIVE_ITEM_NOT_FOUND") {
+        if (
+          !(error instanceof AppError) ||
+          error.code !== "ARCHIVE_ITEM_NOT_FOUND"
+        ) {
           throw error;
         }
       }
@@ -375,7 +444,9 @@ export class ArchivedItemsService {
     };
   }
 
-  private readProjectVersionFromPath(pathCache: string): { projectId: string; versionLabel: string | null } | null {
+  private readProjectVersionFromPath(
+    pathCache: string,
+  ): { projectId: string; versionLabel: string | null } | null {
     const match = pathCache.match(/^\/documents\/([^/]+)\/([^/]+)\//);
     if (!match) {
       return null;
@@ -387,9 +458,15 @@ export class ArchivedItemsService {
     };
   }
 
-  private describeArchivedDocument(scope: string, sizeBytes: bigint | null): string {
+  private describeArchivedDocument(
+    scope: string,
+    sizeBytes: bigint | null,
+  ): string {
     const scopeLabel = scope.replace(/_/g, " ").toLowerCase();
-    const size = sizeBytes !== null ? `${this.toNumber(sizeBytes)} B` : "dimensione sconosciuta";
+    const size =
+      sizeBytes !== null
+        ? `${this.toNumber(sizeBytes)} B`
+        : "dimensione sconosciuta";
     return `Documento ${scopeLabel}, ${size}`;
   }
 
@@ -402,7 +479,10 @@ export class ArchivedItemsService {
     return 0;
   }
 
-  private async restoreProject(workspaceId: string, projectId: string): Promise<void> {
+  private async restoreProject(
+    workspaceId: string,
+    projectId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
 
     const project = await prisma.project.findFirst({
@@ -418,7 +498,11 @@ export class ArchivedItemsService {
       },
     });
     if (!project) {
-      throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
+      throw new AppError(
+        "Elemento archivio non trovato.",
+        "ARCHIVE_ITEM_NOT_FOUND",
+        404,
+      );
     }
 
     await prisma.$transaction(async (tx) => {
@@ -456,13 +540,18 @@ export class ArchivedItemsService {
           deleted_at: null,
         },
       });
-
     });
   }
 
-  private async restoreProjectVersion(workspaceId: string, entityId: string): Promise<void> {
+  private async restoreProjectVersion(
+    workspaceId: string,
+    entityId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
-    const versionId = this.parseNumericId(entityId, "ARCHIVE_ENTITY_ID_INVALID");
+    const versionId = this.parseNumericId(
+      entityId,
+      "ARCHIVE_ENTITY_ID_INVALID",
+    );
 
     const version = await prisma.projectVersion.findFirst({
       where: {
@@ -478,7 +567,11 @@ export class ArchivedItemsService {
       },
     });
     if (!version) {
-      throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
+      throw new AppError(
+        "Elemento archivio non trovato.",
+        "ARCHIVE_ITEM_NOT_FOUND",
+        404,
+      );
     }
 
     await prisma.$transaction(async (tx) => {
@@ -500,11 +593,13 @@ export class ArchivedItemsService {
           deleted_at: null,
         },
       });
-
     });
   }
 
-  private async restoreDocument(workspaceId: string, documentId: string): Promise<void> {
+  private async restoreDocument(
+    workspaceId: string,
+    documentId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     const document = await prisma.document.findFirst({
       where: {
@@ -521,7 +616,11 @@ export class ArchivedItemsService {
       },
     });
     if (!document) {
-      throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
+      throw new AppError(
+        "Elemento archivio non trovato.",
+        "ARCHIVE_ITEM_NOT_FOUND",
+        404,
+      );
     }
 
     await prisma.$transaction(async (tx) => {
@@ -573,7 +672,10 @@ export class ArchivedItemsService {
     });
   }
 
-  private async permanentlyDeleteProject(workspaceId: string, projectId: string): Promise<void> {
+  private async permanentlyDeleteProject(
+    workspaceId: string,
+    projectId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     const project = await prisma.project.findFirst({
       where: {
@@ -588,7 +690,11 @@ export class ArchivedItemsService {
       },
     });
     if (!project) {
-      throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
+      throw new AppError(
+        "Elemento archivio non trovato.",
+        "ARCHIVE_ITEM_NOT_FOUND",
+        404,
+      );
     }
 
     const versionRows = await prisma.projectVersion.findMany({
@@ -630,9 +736,17 @@ export class ArchivedItemsService {
 
     await prisma.$transaction(async (tx) => {
       if (documentIds.length > 0) {
-        await this.deleteAssistantSessionDocuments(tx, workspaceId, documentIds);
+        await this.deleteAssistantSessionDocuments(
+          tx,
+          workspaceId,
+          documentIds,
+        );
         await this.deleteKnowledgeForDocuments(tx, workspaceId, documentIds);
-        await this.deleteDdtRelationsByDocumentIds(tx, workspaceId, documentIds);
+        await this.deleteDdtRelationsByDocumentIds(
+          tx,
+          workspaceId,
+          documentIds,
+        );
         await tx.document.deleteMany({
           where: {
             workspace_id: workspaceId,
@@ -671,9 +785,15 @@ export class ArchivedItemsService {
     await this.removeStoragePaths(storagePaths);
   }
 
-  private async permanentlyDeleteProjectVersion(workspaceId: string, entityId: string): Promise<void> {
+  private async permanentlyDeleteProjectVersion(
+    workspaceId: string,
+    entityId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
-    const versionId = this.parseNumericId(entityId, "ARCHIVE_ENTITY_ID_INVALID");
+    const versionId = this.parseNumericId(
+      entityId,
+      "ARCHIVE_ENTITY_ID_INVALID",
+    );
     const version = await prisma.projectVersion.findFirst({
       where: {
         workspace_id: workspaceId,
@@ -689,7 +809,11 @@ export class ArchivedItemsService {
       },
     });
     if (!version) {
-      throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
+      throw new AppError(
+        "Elemento archivio non trovato.",
+        "ARCHIVE_ITEM_NOT_FOUND",
+        404,
+      );
     }
 
     const docs = await prisma.document.findMany({
@@ -712,9 +836,17 @@ export class ArchivedItemsService {
 
     await prisma.$transaction(async (tx) => {
       if (documentIds.length > 0) {
-        await this.deleteAssistantSessionDocuments(tx, workspaceId, documentIds);
+        await this.deleteAssistantSessionDocuments(
+          tx,
+          workspaceId,
+          documentIds,
+        );
         await this.deleteKnowledgeForDocuments(tx, workspaceId, documentIds);
-        await this.deleteDdtRelationsByDocumentIds(tx, workspaceId, documentIds);
+        await this.deleteDdtRelationsByDocumentIds(
+          tx,
+          workspaceId,
+          documentIds,
+        );
         await tx.document.deleteMany({
           where: {
             workspace_id: workspaceId,
@@ -735,7 +867,10 @@ export class ArchivedItemsService {
     await this.removeStoragePaths(storagePaths);
   }
 
-  private async permanentlyDeleteDocument(workspaceId: string, documentId: string): Promise<void> {
+  private async permanentlyDeleteDocument(
+    workspaceId: string,
+    documentId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     const document = await prisma.document.findFirst({
       where: {
@@ -751,13 +886,21 @@ export class ArchivedItemsService {
       },
     });
     if (!document) {
-      throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
+      throw new AppError(
+        "Elemento archivio non trovato.",
+        "ARCHIVE_ITEM_NOT_FOUND",
+        404,
+      );
     }
 
     await prisma.$transaction(async (tx) => {
-      await this.deleteAssistantSessionDocuments(tx, workspaceId, [document.id]);
+      await this.deleteAssistantSessionDocuments(tx, workspaceId, [
+        document.id,
+      ]);
       await this.deleteKnowledgeForDocuments(tx, workspaceId, [document.id]);
-      await this.deleteDdtRelationsByDocumentIds(tx, workspaceId, [document.id]);
+      await this.deleteDdtRelationsByDocumentIds(tx, workspaceId, [
+        document.id,
+      ]);
       await tx.document.delete({
         where: {
           id: document.id,
@@ -778,7 +921,9 @@ export class ArchivedItemsService {
   }
 
   private async removeStoragePaths(storagePaths: string[]): Promise<void> {
-    const uniquePaths = [...new Set(storagePaths.filter((item) => item.startsWith("garage://")))];
+    const uniquePaths = [
+      ...new Set(storagePaths.filter((item) => item.startsWith("garage://"))),
+    ];
     for (const storagePath of uniquePaths) {
       try {
         const parsed = GaragePath.parse(storagePath);
@@ -824,40 +969,96 @@ export class ArchivedItemsService {
     });
   }
 
-  private async restoreCompany(workspaceId: string, entityId: string): Promise<void> {
-    const companyId = this.parseNumericId(entityId, "ARCHIVE_ENTITY_ID_INVALID");
+  private async restoreCompany(
+    workspaceId: string,
+    entityId: string,
+  ): Promise<void> {
+    const companyId = this.parseNumericId(
+      entityId,
+      "ARCHIVE_ENTITY_ID_INVALID",
+    );
     const result = await PrismaClientManager.getClient().company.updateMany({
-      where: { workspace_id: workspaceId, id: companyId, deleted_at: { not: null } },
+      where: {
+        workspace_id: workspaceId,
+        id: companyId,
+        deleted_at: { not: null },
+      },
       data: { deleted_at: null },
     });
-    if (result.count === 0) throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
+    if (result.count === 0)
+      throw new AppError(
+        "Elemento archivio non trovato.",
+        "ARCHIVE_ITEM_NOT_FOUND",
+        404,
+      );
   }
 
-  private async restoreClient(workspaceId: string, clientId: string): Promise<void> {
+  private async restoreClient(
+    workspaceId: string,
+    clientId: string,
+  ): Promise<void> {
     const result = await PrismaClientManager.getClient().client.updateMany({
-      where: { workspace_id: workspaceId, id: clientId, deleted_at: { not: null } },
+      where: {
+        workspace_id: workspaceId,
+        id: clientId,
+        deleted_at: { not: null },
+      },
       data: { deleted_at: null },
     });
-    if (result.count === 0) throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
+    if (result.count === 0)
+      throw new AppError(
+        "Elemento archivio non trovato.",
+        "ARCHIVE_ITEM_NOT_FOUND",
+        404,
+      );
   }
 
-  private async permanentlyDeleteCompany(workspaceId: string, entityId: string): Promise<void> {
-    const companyId = this.parseNumericId(entityId, "ARCHIVE_ENTITY_ID_INVALID");
+  private async permanentlyDeleteCompany(
+    workspaceId: string,
+    entityId: string,
+  ): Promise<void> {
+    const companyId = this.parseNumericId(
+      entityId,
+      "ARCHIVE_ENTITY_ID_INVALID",
+    );
     const result = await PrismaClientManager.getClient().company.deleteMany({
-      where: { workspace_id: workspaceId, id: companyId, deleted_at: { not: null } },
+      where: {
+        workspace_id: workspaceId,
+        id: companyId,
+        deleted_at: { not: null },
+      },
     });
-    if (result.count === 0) throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
+    if (result.count === 0)
+      throw new AppError(
+        "Elemento archivio non trovato.",
+        "ARCHIVE_ITEM_NOT_FOUND",
+        404,
+      );
   }
 
-  private async permanentlyDeleteClient(workspaceId: string, clientId: string): Promise<void> {
+  private async permanentlyDeleteClient(
+    workspaceId: string,
+    clientId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     await prisma.$transaction(async (tx) => {
       const client = await tx.client.findFirst({
-        where: { workspace_id: workspaceId, id: clientId, deleted_at: { not: null } },
+        where: {
+          workspace_id: workspaceId,
+          id: clientId,
+          deleted_at: { not: null },
+        },
         select: { id: true },
       });
-      if (!client) throw new AppError("Elemento archivio non trovato.", "ARCHIVE_ITEM_NOT_FOUND", 404);
-      await tx.projectClient.deleteMany({ where: { workspace_id: workspaceId, client_id: clientId } });
+      if (!client)
+        throw new AppError(
+          "Elemento archivio non trovato.",
+          "ARCHIVE_ITEM_NOT_FOUND",
+          404,
+        );
+      await tx.projectClient.deleteMany({
+        where: { workspace_id: workspaceId, client_id: clientId },
+      });
       await tx.client.delete({ where: { id: clientId } });
     });
   }
@@ -909,5 +1110,4 @@ export class ArchivedItemsService {
       },
     });
   }
-
 }

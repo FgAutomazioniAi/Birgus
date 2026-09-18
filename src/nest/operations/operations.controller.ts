@@ -4,6 +4,7 @@ import { PermissionKey } from "../../core/authorization/PermissionKey.js";
 import { ModuleKey } from "../../core/module-access/ModuleKey.js";
 import { RequestContext } from "../../core/tenancy/RequestContext.js";
 import { OperationsInsightService } from "../../modules/operations/services/OperationsInsightService.js";
+import { DashboardMonitoringService } from "../../modules/operations/services/DashboardMonitoringService.js";
 import { AccessPolicyGuard } from "../auth/access-policy.guard.js";
 import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
 import { CurrentRequestContext } from "../common/decorators/request-context.decorator.js";
@@ -16,6 +17,8 @@ export class OperationsController {
   public constructor(
     @Inject(OperationsInsightService)
     private readonly operationsInsightService: OperationsInsightService,
+    @Inject(DashboardMonitoringService)
+    private readonly dashboardMonitoringService: DashboardMonitoringService,
   ) {}
 
   @Get("/api/operations/my-queue")
@@ -24,8 +27,22 @@ export class OperationsController {
   ): Promise<Record<string, unknown>> {
     const { workspaceId, userId } = requestContext.workspace;
     return {
-      operations: await this.operationsInsightService.listMyQueuedOperations(workspaceId, userId),
+      operations: await this.operationsInsightService.listMyQueuedOperations(
+        workspaceId,
+        userId,
+      ),
     };
+  }
+
+  @Get("/api/dashboard/monitoring")
+  @RequirePermission(PermissionKey.DASHBOARD_MONITORING_READ)
+  public async getDashboardMonitoring(
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    return this.dashboardMonitoringService.getOverview(
+      requestContext.workspace.workspaceId,
+      requestContext.workspace.userId,
+    );
   }
 
   @Get("/api/customer-map")
@@ -34,7 +51,9 @@ export class OperationsController {
   public async listCustomerMap(
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Array<Record<string, unknown>>> {
-    return this.operationsInsightService.listCustomerMap(requestContext.workspace.workspaceId);
+    return this.operationsInsightService.listCustomerMap(
+      requestContext.workspace.workspaceId,
+    );
   }
 
   @Get("/api/offer-priority")
@@ -43,7 +62,9 @@ export class OperationsController {
   public async listOfferPriority(
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Array<Record<string, unknown>>> {
-    return this.operationsInsightService.listOfferPriority(requestContext.workspace.workspaceId);
+    return this.operationsInsightService.listOfferPriority(
+      requestContext.workspace.workspaceId,
+    );
   }
 
   @Get("/api/maintenance-proposals")
@@ -52,7 +73,9 @@ export class OperationsController {
   public async listMaintenanceProposals(
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Record<string, unknown>> {
-    return this.operationsInsightService.listMaintenanceProposals(requestContext.workspace.workspaceId);
+    return this.operationsInsightService.listMaintenanceProposals(
+      requestContext.workspace.workspaceId,
+    );
   }
 
   @Get("/api/maintenance-calendar")
@@ -61,6 +84,8 @@ export class OperationsController {
   public async listMaintenanceCalendar(
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Array<Record<string, unknown>>> {
-    return this.operationsInsightService.listMaintenanceCalendar(requestContext.workspace.workspaceId);
+    return this.operationsInsightService.listMaintenanceCalendar(
+      requestContext.workspace.workspaceId,
+    );
   }
 }

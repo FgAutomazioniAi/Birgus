@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 import { z } from "zod";
 
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
@@ -140,7 +151,10 @@ export class NestProjectsController {
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Record<string, unknown>> {
     const workspaceId = requestContext.workspace.workspaceId;
-    const project = await this.service.getProject(workspaceId, this.getProjectId(projectIdRaw));
+    const project = await this.service.getProject(
+      workspaceId,
+      this.getProjectId(projectIdRaw),
+    );
 
     return {
       id: project.id,
@@ -221,7 +235,11 @@ export class NestProjectsController {
       );
     }
 
-    await this.service.deleteProject(workspaceId, projectId, requestContext.workspace.userId);
+    await this.service.deleteProject(
+      workspaceId,
+      projectId,
+      requestContext.workspace.userId,
+    );
     return { ok: true, id: projectId };
   }
 
@@ -382,7 +400,11 @@ export class NestProjectsController {
 
   private getVersionLabel(versionLabel: string): string {
     if (!versionLabel || !versionLabel.trim()) {
-      throw new AppError("Version label is required.", "PROJECT_VERSION_LABEL_REQUIRED", 400);
+      throw new AppError(
+        "Version label is required.",
+        "PROJECT_VERSION_LABEL_REQUIRED",
+        400,
+      );
     }
 
     return versionLabel.trim();
@@ -391,14 +413,24 @@ export class NestProjectsController {
   private resolveStatusKey(statusKey?: string, status?: string): string {
     const resolved = statusKey?.trim() || status?.trim() || "";
     if (!resolved) {
-      throw new AppError("Project status is required.", "PROJECT_STATUS_REQUIRED", 400);
+      throw new AppError(
+        "Project status is required.",
+        "PROJECT_STATUS_REQUIRED",
+        400,
+      );
     }
 
     return resolved;
   }
 
-  private async buildVersionsPayload(workspaceId: string, projectId: string): Promise<Record<string, unknown>> {
-    const versions = await this.service.listProjectVersions(workspaceId, projectId);
+  private async buildVersionsPayload(
+    workspaceId: string,
+    projectId: string,
+  ): Promise<Record<string, unknown>> {
+    const versions = await this.service.listProjectVersions(
+      workspaceId,
+      projectId,
+    );
     return {
       versions: versions.map((item) => ({
         id: item.id,

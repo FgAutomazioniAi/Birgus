@@ -1,21 +1,38 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { CalendarDays, ExternalLink, MapPin, RefreshCw, TrendingUp, Wrench } from "lucide-react";
+import {
+  CalendarDays,
+  ExternalLink,
+  MapPin,
+  RefreshCw,
+  TrendingUp,
+  Wrench,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge, Button, Card, Text } from "@/components/atoms";
 import { PageHelpHint } from "@/components/molecules";
-import { ConfigurableDataTable, type ConfigurableColumn } from "./configurable-data-table";
+import {
+  ConfigurableDataTable,
+  type ConfigurableColumn,
+} from "./configurable-data-table";
 import type { CustomerGeoPoint } from "./customer-geo-map";
 import { OptionSelect, SegmentedControl } from "./operation-controls";
 
-const CustomerGeoMap = dynamic(() => import("./customer-geo-map").then((module) => module.CustomerGeoMap), {
-  ssr: false,
-});
+const CustomerGeoMap = dynamic(
+  () => import("./customer-geo-map").then((module) => module.CustomerGeoMap),
+  {
+    ssr: false,
+  },
+);
 
-type PanelKind = "customer-map" | "offer-priority" | "maintenance-proposals" | "maintenance-calendar";
+type PanelKind =
+  | "customer-map"
+  | "offer-priority"
+  | "maintenance-proposals"
+  | "maintenance-calendar";
 type OfferAnalysisMode = "score" | "abc";
 
 interface OperationsPanelProps {
@@ -118,7 +135,9 @@ const formatDate = (value?: string | null): string => {
     return "n/d";
   }
 
-  return new Intl.DateTimeFormat("it-IT", { dateStyle: "medium" }).format(new Date(value));
+  return new Intl.DateTimeFormat("it-IT", { dateStyle: "medium" }).format(
+    new Date(value),
+  );
 };
 
 const formatDateTime = (value?: string | null): string => {
@@ -126,7 +145,10 @@ const formatDateTime = (value?: string | null): string => {
     return "n/d";
   }
 
-  return new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("it-IT", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 };
 
 const formatCurrency = (value?: number | null): string => {
@@ -134,7 +156,10 @@ const formatCurrency = (value?: number | null): string => {
     return "n/d";
   }
 
-  return new Intl.NumberFormat("it-IT", { currency: "EUR", style: "currency" }).format(value);
+  return new Intl.NumberFormat("it-IT", {
+    currency: "EUR",
+    style: "currency",
+  }).format(value);
 };
 
 const formatPercent = (value?: number | null): string => {
@@ -142,7 +167,10 @@ const formatPercent = (value?: number | null): string => {
     return "n/d";
   }
 
-  return new Intl.NumberFormat("it-IT", { maximumFractionDigits: 1, style: "percent" }).format(value);
+  return new Intl.NumberFormat("it-IT", {
+    maximumFractionDigits: 1,
+    style: "percent",
+  }).format(value);
 };
 
 export function OperationsPanel({ kind }: OperationsPanelProps) {
@@ -160,7 +188,9 @@ export function OperationsPanel({ kind }: OperationsPanelProps) {
 
       setData(await response.json());
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Impossibile caricare i dati.");
+      toast.error(
+        error instanceof Error ? error.message : "Impossibile caricare i dati.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -188,10 +218,15 @@ export function OperationsPanel({ kind }: OperationsPanelProps) {
             </Text>
             <PageHelpHint text={config.subtitle} />
           </div>
-            <Text variant="muted">{config.subtitle}</Text>
+          <Text variant="muted">{config.subtitle}</Text>
         </div>
 
-        <Button variant="outline" className="h-10 rounded-lg px-3" onClick={() => void load()} disabled={isLoading}>
+        <Button
+          variant="outline"
+          className="h-10 rounded-lg px-3"
+          onClick={() => void load()}
+          disabled={isLoading}
+        >
           <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
           Aggiorna
         </Button>
@@ -199,17 +234,37 @@ export function OperationsPanel({ kind }: OperationsPanelProps) {
 
       <Card className="overflow-hidden">
         <div className="flex items-center justify-between border-b border-border-subtle px-5 py-4">
-          <p className="text-sm font-semibold text-text-primary">Elementi disponibili</p>
+          <p className="text-sm font-semibold text-text-primary">
+            Elementi disponibili
+          </p>
           <Badge>{isLoading ? "..." : itemCount}</Badge>
         </div>
 
-        {kind === "customer-map" && <CustomerMapView items={(Array.isArray(data) ? data : []) as CustomerMapItem[]} isLoading={isLoading} />}
-        {kind === "offer-priority" && <OfferPriorityView items={(Array.isArray(data) ? data : []) as OfferPriorityItem[]} isLoading={isLoading} />}
+        {kind === "customer-map" && (
+          <CustomerMapView
+            items={(Array.isArray(data) ? data : []) as CustomerMapItem[]}
+            isLoading={isLoading}
+          />
+        )}
+        {kind === "offer-priority" && (
+          <OfferPriorityView
+            items={(Array.isArray(data) ? data : []) as OfferPriorityItem[]}
+            isLoading={isLoading}
+          />
+        )}
         {kind === "maintenance-proposals" && (
-          <MaintenanceProposalView data={(data as MaintenanceResponse | null) ?? { proposals: [] }} isLoading={isLoading} />
+          <MaintenanceProposalView
+            data={(data as MaintenanceResponse | null) ?? { proposals: [] }}
+            isLoading={isLoading}
+          />
         )}
         {kind === "maintenance-calendar" && (
-          <MaintenanceCalendarView items={(Array.isArray(data) ? data : []) as MaintenanceCalendarItem[]} isLoading={isLoading} />
+          <MaintenanceCalendarView
+            items={
+              (Array.isArray(data) ? data : []) as MaintenanceCalendarItem[]
+            }
+            isLoading={isLoading}
+          />
         )}
       </Card>
     </div>
@@ -219,16 +274,29 @@ export function OperationsPanel({ kind }: OperationsPanelProps) {
 function EmptyState({ isLoading }: { isLoading: boolean }) {
   return (
     <div className="px-6 py-12 text-center text-sm text-text-muted">
-      {isLoading ? "Caricamento dati in corso..." : "Nessun dato disponibile dalla sorgente collegata."}
+      {isLoading
+        ? "Caricamento dati in corso..."
+        : "Nessun dato disponibile dalla sorgente collegata."}
     </div>
   );
 }
 
-function CustomerMapView({ items, isLoading }: { items: CustomerMapItem[]; isLoading: boolean }) {
+function CustomerMapView({
+  items,
+  isLoading,
+}: {
+  items: CustomerMapItem[];
+  isLoading: boolean;
+}) {
   const points = items.filter(isGeoPoint);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = points.find((point) => point.id === selectedId) ?? points[0] ?? null;
-  const nearby = selected ? points.filter((point) => point.id !== selected.id).map((point) => ({ ...point, distanceKm: distanceKm(selected, point) })) : [];
+  const selected =
+    points.find((point) => point.id === selectedId) ?? points[0] ?? null;
+  const nearby = selected
+    ? points
+        .filter((point) => point.id !== selected.id)
+        .map((point) => ({ ...point, distanceKm: distanceKm(selected, point) }))
+    : [];
 
   useEffect(() => {
     if (!selectedId && points[0]) {
@@ -269,12 +337,16 @@ function CustomerMapView({ items, isLoading }: { items: CustomerMapItem[]; isLoa
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-semibold text-text-primary">{point.customerName}</p>
+                <p className="font-semibold text-text-primary">
+                  {point.customerName}
+                </p>
                 <p className="mt-1 text-sm text-text-muted">{point.label}</p>
               </div>
               <ExternalLink size={16} className="text-brand-primary" />
             </div>
-            <p className="mt-3 text-sm text-text-secondary">{point.distanceKm.toFixed(1)} km</p>
+            <p className="mt-3 text-sm text-text-secondary">
+              {point.distanceKm.toFixed(1)} km
+            </p>
           </a>
         ))}
       </div>
@@ -282,23 +354,42 @@ function CustomerMapView({ items, isLoading }: { items: CustomerMapItem[]; isLoa
   );
 }
 
-function OfferPriorityView({ items, isLoading }: { items: OfferPriorityItem[]; isLoading: boolean }) {
+function OfferPriorityView({
+  items,
+  isLoading,
+}: {
+  items: OfferPriorityItem[];
+  isLoading: boolean;
+}) {
   const [analysisMode, setAnalysisMode] = useState<OfferAnalysisMode>("score");
   const [competenceFilter, setCompetenceFilter] = useState("all");
   const competenceOptions = useMemo(
     () => [
       { label: "Tutte", value: "all" },
-      ...Array.from(new Set(items.map((item) => item.competence).filter((value): value is string => Boolean(value))))
+      ...Array.from(
+        new Set(
+          items
+            .map((item) => item.competence)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      )
         .sort((left, right) => left.localeCompare(right, "it"))
         .map((value) => ({ label: value, value })),
     ],
     [items],
   );
   const filteredItems = useMemo(
-    () => competenceFilter === "all" ? items : items.filter((item) => item.competence === competenceFilter),
+    () =>
+      competenceFilter === "all"
+        ? items
+        : items.filter((item) => item.competence === competenceFilter),
     [competenceFilter, items],
   );
-  const rows = useMemo(() => (analysisMode === "abc" ? buildAbcOffers(filteredItems) : filteredItems), [analysisMode, filteredItems]);
+  const rows = useMemo(
+    () =>
+      analysisMode === "abc" ? buildAbcOffers(filteredItems) : filteredItems,
+    [analysisMode, filteredItems],
+  );
   const columns = useMemo<Array<ConfigurableColumn<OfferPriorityItem, string>>>(
     () => [
       {
@@ -310,19 +401,40 @@ function OfferPriorityView({ items, isLoading }: { items: OfferPriorityItem[]; i
         render: (item) => (
           <div>
             <p className="font-semibold text-text-primary">{item.offerCode}</p>
-            <p className="text-xs text-text-muted">{formatDate(item.issuedAt)}</p>
+            <p className="text-xs text-text-muted">
+              {formatDate(item.issuedAt)}
+            </p>
           </div>
         ),
       },
-      { key: "client", label: "Cliente", defaultWidth: 240, sortValue: (item) => item.customerName, render: (item) => item.customerName || "n/d" },
+      {
+        key: "client",
+        label: "Cliente",
+        defaultWidth: 240,
+        sortValue: (item) => item.customerName,
+        render: (item) => item.customerName || "n/d",
+      },
       {
         key: "items",
         label: "Righe principali",
         defaultWidth: 360,
-        render: (item) => item.topLines.map((line) => line.description).join(", ") || "n/d",
+        render: (item) =>
+          item.topLines.map((line) => line.description).join(", ") || "n/d",
       },
-      { key: "competence", label: "Competenza", defaultWidth: 160, sortValue: (item) => item.competence, render: (item) => item.competence || "n/d" },
-      { key: "value", label: "Valore", defaultWidth: 140, sortValue: (item) => item.totalAmount, render: (item) => formatCurrency(item.totalAmount) },
+      {
+        key: "competence",
+        label: "Competenza",
+        defaultWidth: 160,
+        sortValue: (item) => item.competence,
+        render: (item) => item.competence || "n/d",
+      },
+      {
+        key: "value",
+        label: "Valore",
+        defaultWidth: 140,
+        sortValue: (item) => item.totalAmount,
+        render: (item) => formatCurrency(item.totalAmount),
+      },
       {
         key: "conversion",
         label: "Storico conferme",
@@ -334,17 +446,34 @@ function OfferPriorityView({ items, isLoading }: { items: OfferPriorityItem[]; i
         key: "priority",
         label: analysisMode === "abc" ? "Classe ABC" : "Priorità",
         defaultWidth: 150,
-        sortValue: (item) => (analysisMode === "abc" ? abcRank(String(item.abcClass ?? "C")) : item.priorityScore),
+        sortValue: (item) =>
+          analysisMode === "abc"
+            ? abcRank(String(item.abcClass ?? "C"))
+            : item.priorityScore,
         render: (item) =>
           analysisMode === "abc" ? (
             <div>
-              <Badge tone={item.abcClass === "A" ? "warn" : item.abcClass === "B" ? "progress" : "info"}>Classe {item.abcClass ?? "C"}</Badge>
-              <p className="mt-1 text-xs text-text-muted">cumulato {formatPercent(item.cumulativeShare)}</p>
+              <Badge
+                tone={
+                  item.abcClass === "A"
+                    ? "warn"
+                    : item.abcClass === "B"
+                      ? "progress"
+                      : "info"
+                }
+              >
+                Classe {item.abcClass ?? "C"}
+              </Badge>
+              <p className="mt-1 text-xs text-text-muted">
+                cumulato {formatPercent(item.cumulativeShare)}
+              </p>
             </div>
           ) : (
             <div>
               <Badge>{item.priorityBand ?? "n/d"}</Badge>
-              <p className="mt-1 text-xs text-text-muted">score {item.priorityScore?.toFixed(3) ?? "n/d"}</p>
+              <p className="mt-1 text-xs text-text-muted">
+                score {item.priorityScore?.toFixed(3) ?? "n/d"}
+              </p>
             </div>
           ),
       },
@@ -364,36 +493,126 @@ function OfferPriorityView({ items, isLoading }: { items: OfferPriorityItem[]; i
           value={analysisMode}
           onChange={setAnalysisMode}
           options={[
-            { label: "% proprietaria", value: "score", description: "Score: valore, storico conferme e anzianita offerta." },
-            { label: "ABC", value: "abc", description: "Classificazione sul valore cumulato." },
+            {
+              label: "% proprietaria",
+              value: "score",
+              description:
+                "Score: valore, storico conferme e anzianita offerta.",
+            },
+            {
+              label: "ABC",
+              value: "abc",
+              description: "Classificazione sul valore cumulato.",
+            },
           ]}
         />
-        <OptionSelect id="offer-competence-filter" label="Competenza" value={competenceFilter} onChange={setCompetenceFilter} options={competenceOptions} />
+        <OptionSelect
+          id="offer-competence-filter"
+          label="Competenza"
+          value={competenceFilter}
+          onChange={setCompetenceFilter}
+          options={competenceOptions}
+        />
       </div>
-      <ConfigurableDataTable columns={columns} emptyLabel="Nessuna offerta disponibile." getRowId={(item) => item.id} items={rows} storageKey="operations-offers" />
+      <ConfigurableDataTable
+        columns={columns}
+        emptyLabel="Nessuna offerta disponibile."
+        getRowId={(item) => item.id}
+        items={rows}
+        storageKey="operations-offers"
+      />
     </>
   );
 }
 
-function MaintenanceProposalView({ data, isLoading }: { data: MaintenanceResponse; isLoading: boolean }) {
-  const columns = useMemo<Array<ConfigurableColumn<MaintenanceProposalItem, string>>>(
+function MaintenanceProposalView({
+  data,
+  isLoading,
+}: {
+  data: MaintenanceResponse;
+  isLoading: boolean;
+}) {
+  const columns = useMemo<
+    Array<ConfigurableColumn<MaintenanceProposalItem, string>>
+  >(
     () => [
-      { key: "client", label: "Cliente", defaultWidth: 220, required: true, sortValue: (item) => item.customerName, render: (item) => item.customerName || "n/d" },
+      {
+        key: "client",
+        label: "Cliente",
+        defaultWidth: 220,
+        required: true,
+        sortValue: (item) => item.customerName,
+        render: (item) => item.customerName || "n/d",
+      },
       {
         key: "work",
         label: "Commessa",
         defaultWidth: 300,
         sortValue: (item) => item.workReferenceCode,
-        render: (item) => [item.workReferenceCode, item.workReferenceName].filter(Boolean).join(" - ") || "n/d",
+        render: (item) =>
+          [item.workReferenceCode, item.workReferenceName]
+            .filter(Boolean)
+            .join(" - ") || "n/d",
       },
-      { key: "last", label: "Ultima manutenzione", defaultWidth: 160, sortValue: (item) => Date.parse(item.lastServiceAt ?? ""), render: (item) => formatDate(item.lastServiceAt) },
-      { key: "proposal", label: "Data suggerita", defaultWidth: 150, sortValue: (item) => Date.parse(item.suggestedAt ?? ""), render: (item) => formatDate(item.suggestedAt) },
-      { key: "cadence", label: "Frequenza stimata", defaultWidth: 160, sortValue: (item) => item.estimatedFrequencyDays, render: (item) => `${item.estimatedFrequencyDays ?? "n/d"} giorni` },
-      { key: "history", label: "Storico interventi", defaultWidth: 170, sortValue: (item) => item.historicalEventsCount, render: (item) => `${item.historicalEventsCount} interventi` },
-      { key: "operator", label: "Manutentore", defaultWidth: 180, sortValue: (item) => item.preferredOperator, render: (item) => item.preferredOperator || "n/d" },
-      { key: "plan", label: "Piano annuale", defaultWidth: 190, sortValue: (item) => item.annualPlanHint, render: (item) => item.annualPlanHint || "n/d" },
-      { key: "urgency", label: "Urgenza", defaultWidth: 130, sortValue: (item) => urgencyRank(item.urgency), render: (item) => <Badge tone={item.urgency === "OVERDUE" ? "warn" : "info"}>{item.urgency}</Badge> },
-      { key: "reason", label: "Motivo", defaultWidth: 360, render: (item) => item.reason || "n/d" },
+      {
+        key: "last",
+        label: "Ultima manutenzione",
+        defaultWidth: 160,
+        sortValue: (item) => Date.parse(item.lastServiceAt ?? ""),
+        render: (item) => formatDate(item.lastServiceAt),
+      },
+      {
+        key: "proposal",
+        label: "Data suggerita",
+        defaultWidth: 150,
+        sortValue: (item) => Date.parse(item.suggestedAt ?? ""),
+        render: (item) => formatDate(item.suggestedAt),
+      },
+      {
+        key: "cadence",
+        label: "Frequenza stimata",
+        defaultWidth: 160,
+        sortValue: (item) => item.estimatedFrequencyDays,
+        render: (item) => `${item.estimatedFrequencyDays ?? "n/d"} giorni`,
+      },
+      {
+        key: "history",
+        label: "Storico interventi",
+        defaultWidth: 170,
+        sortValue: (item) => item.historicalEventsCount,
+        render: (item) => `${item.historicalEventsCount} interventi`,
+      },
+      {
+        key: "operator",
+        label: "Manutentore",
+        defaultWidth: 180,
+        sortValue: (item) => item.preferredOperator,
+        render: (item) => item.preferredOperator || "n/d",
+      },
+      {
+        key: "plan",
+        label: "Piano annuale",
+        defaultWidth: 190,
+        sortValue: (item) => item.annualPlanHint,
+        render: (item) => item.annualPlanHint || "n/d",
+      },
+      {
+        key: "urgency",
+        label: "Urgenza",
+        defaultWidth: 130,
+        sortValue: (item) => urgencyRank(item.urgency),
+        render: (item) => (
+          <Badge tone={item.urgency === "OVERDUE" ? "warn" : "info"}>
+            {item.urgency}
+          </Badge>
+        ),
+      },
+      {
+        key: "reason",
+        label: "Motivo",
+        defaultWidth: 360,
+        render: (item) => item.reason || "n/d",
+      },
     ],
     [],
   );
@@ -402,20 +621,89 @@ function MaintenanceProposalView({ data, isLoading }: { data: MaintenanceRespons
     return <EmptyState isLoading={isLoading} />;
   }
 
-  return <ConfigurableDataTable columns={columns} emptyLabel="Nessuna proposta disponibile." getRowId={(item) => item.id} items={data.proposals} storageKey="operations-maintenance-proposals" />;
+  return (
+    <ConfigurableDataTable
+      columns={columns}
+      emptyLabel="Nessuna proposta disponibile."
+      getRowId={(item) => item.id}
+      items={data.proposals}
+      storageKey="operations-maintenance-proposals"
+    />
+  );
 }
 
-function MaintenanceCalendarView({ items, isLoading }: { items: MaintenanceCalendarItem[]; isLoading: boolean }) {
-  const columns = useMemo<Array<ConfigurableColumn<MaintenanceCalendarItem, string>>>(
+function MaintenanceCalendarView({
+  items,
+  isLoading,
+}: {
+  items: MaintenanceCalendarItem[];
+  isLoading: boolean;
+}) {
+  const columns = useMemo<
+    Array<ConfigurableColumn<MaintenanceCalendarItem, string>>
+  >(
     () => [
-      { key: "title", label: "Intervento", defaultWidth: 260, required: true, sortValue: (item) => item.title, render: (item) => <span className="font-semibold text-text-primary">{item.title}</span> },
-      { key: "client", label: "Cliente", defaultWidth: 220, sortValue: (item) => item.customerName, render: (item) => item.customerName || "n/d" },
-      { key: "work", label: "Commessa", defaultWidth: 260, sortValue: (item) => item.workReferenceCode, render: (item) => [item.workReferenceCode, item.workReferenceName].filter(Boolean).join(" - ") || "n/d" },
-      { key: "start", label: "Inizio", defaultWidth: 180, sortValue: (item) => Date.parse(item.plannedStartAt ?? ""), render: (item) => formatDateTime(item.plannedStartAt) },
-      { key: "end", label: "Fine", defaultWidth: 180, sortValue: (item) => Date.parse(item.plannedEndAt ?? ""), render: (item) => formatDateTime(item.plannedEndAt) },
-      { key: "status", label: "Stato", defaultWidth: 130, sortValue: (item) => item.status, render: (item) => <Badge>{item.status}</Badge> },
-      { key: "assignee", label: "Assegnato a", defaultWidth: 170, sortValue: (item) => item.assigneeName, render: (item) => item.assigneeName || "n/d" },
-      { key: "note", label: "Note", defaultWidth: 320, render: (item) => item.note || "n/d" },
+      {
+        key: "title",
+        label: "Intervento",
+        defaultWidth: 260,
+        required: true,
+        sortValue: (item) => item.title,
+        render: (item) => (
+          <span className="font-semibold text-text-primary">{item.title}</span>
+        ),
+      },
+      {
+        key: "client",
+        label: "Cliente",
+        defaultWidth: 220,
+        sortValue: (item) => item.customerName,
+        render: (item) => item.customerName || "n/d",
+      },
+      {
+        key: "work",
+        label: "Commessa",
+        defaultWidth: 260,
+        sortValue: (item) => item.workReferenceCode,
+        render: (item) =>
+          [item.workReferenceCode, item.workReferenceName]
+            .filter(Boolean)
+            .join(" - ") || "n/d",
+      },
+      {
+        key: "start",
+        label: "Inizio",
+        defaultWidth: 180,
+        sortValue: (item) => Date.parse(item.plannedStartAt ?? ""),
+        render: (item) => formatDateTime(item.plannedStartAt),
+      },
+      {
+        key: "end",
+        label: "Fine",
+        defaultWidth: 180,
+        sortValue: (item) => Date.parse(item.plannedEndAt ?? ""),
+        render: (item) => formatDateTime(item.plannedEndAt),
+      },
+      {
+        key: "status",
+        label: "Stato",
+        defaultWidth: 130,
+        sortValue: (item) => item.status,
+        render: (item) => <Badge>{item.status}</Badge>,
+      },
+      {
+        key: "assignee",
+        label: "Assegnato a",
+        defaultWidth: 170,
+        sortValue: (item) => item.assigneeName,
+        render: (item) => item.assigneeName || "n/d",
+      },
+      {
+        key: "note",
+        label: "Note",
+        defaultWidth: 320,
+        render: (item) => item.note || "n/d",
+      },
     ],
     [],
   );
@@ -424,16 +712,34 @@ function MaintenanceCalendarView({ items, isLoading }: { items: MaintenanceCalen
     return <EmptyState isLoading={isLoading} />;
   }
 
-  return <ConfigurableDataTable columns={columns} emptyLabel="Nessuna voce calendario disponibile." getRowId={(item) => item.id} items={items} storageKey="operations-maintenance-calendar" />;
+  return (
+    <ConfigurableDataTable
+      columns={columns}
+      emptyLabel="Nessuna voce calendario disponibile."
+      getRowId={(item) => item.id}
+      items={items}
+      storageKey="operations-maintenance-calendar"
+    />
+  );
 }
 
-function isGeoPoint(item: CustomerMapItem): item is CustomerMapItem & CustomerGeoPoint {
-  return typeof item.latitude === "number" && typeof item.longitude === "number";
+function isGeoPoint(
+  item: CustomerMapItem,
+): item is CustomerMapItem & CustomerGeoPoint {
+  return (
+    typeof item.latitude === "number" && typeof item.longitude === "number"
+  );
 }
 
 function buildAbcOffers(items: OfferPriorityItem[]): OfferPriorityItem[] {
-  const sorted = [...items].sort((left, right) => Number(right.totalAmount ?? 0) - Number(left.totalAmount ?? 0));
-  const totalValue = sorted.reduce((sum, item) => sum + Number(item.totalAmount ?? 0), 0);
+  const sorted = [...items].sort(
+    (left, right) =>
+      Number(right.totalAmount ?? 0) - Number(left.totalAmount ?? 0),
+  );
+  const totalValue = sorted.reduce(
+    (sum, item) => sum + Number(item.totalAmount ?? 0),
+    0,
+  );
   let cumulativeValue = 0;
 
   return sorted.map((item) => {
@@ -441,7 +747,8 @@ function buildAbcOffers(items: OfferPriorityItem[]): OfferPriorityItem[] {
     const cumulativeShare = totalValue ? cumulativeValue / totalValue : 0;
     return {
       ...item,
-      abcClass: cumulativeShare <= 0.8 ? "A" : cumulativeShare <= 0.95 ? "B" : "C",
+      abcClass:
+        cumulativeShare <= 0.8 ? "A" : cumulativeShare <= 0.95 ? "B" : "C",
       cumulativeShare,
     };
   });
@@ -476,7 +783,9 @@ function distanceKm(left: CustomerGeoPoint, right: CustomerGeoPoint): number {
   const lonDelta = toRadians(right.longitude - left.longitude);
   const leftLat = toRadians(left.latitude);
   const rightLat = toRadians(right.latitude);
-  const a = Math.sin(latDelta / 2) ** 2 + Math.cos(leftLat) * Math.cos(rightLat) * Math.sin(lonDelta / 2) ** 2;
+  const a =
+    Math.sin(latDelta / 2) ** 2 +
+    Math.cos(leftLat) * Math.cos(rightLat) * Math.sin(lonDelta / 2) ** 2;
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
@@ -484,12 +793,18 @@ function toRadians(value: number): number {
   return (value * Math.PI) / 180;
 }
 
-function buildItineraryUrl(anchor: CustomerGeoPoint | null, destination: CustomerGeoPoint): string {
+function buildItineraryUrl(
+  anchor: CustomerGeoPoint | null,
+  destination: CustomerGeoPoint,
+): string {
   const url = new URL("https://www.google.com/maps/dir/");
   url.searchParams.set("api", "1");
   if (anchor) {
     url.searchParams.set("origin", `${anchor.latitude},${anchor.longitude}`);
   }
-  url.searchParams.set("destination", `${destination.latitude},${destination.longitude}`);
+  url.searchParams.set(
+    "destination",
+    `${destination.latitude},${destination.longitude}`,
+  );
   return url.toString();
 }

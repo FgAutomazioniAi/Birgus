@@ -6,8 +6,13 @@ import { AssistantSessionEntity } from "../domain/AssistantSessionEntity.js";
 import { AssistantToolCallEntity } from "../domain/AssistantToolCallEntity.js";
 import { AssistantSessionRepository } from "../repositories/AssistantSessionRepository.js";
 
-export class PrismaAssistantSessionRepository implements AssistantSessionRepository {
-  public async listSessions(workspaceId: string, userId: string): Promise<AssistantSessionEntity[]> {
+export class PrismaAssistantSessionRepository
+  implements AssistantSessionRepository
+{
+  public async listSessions(
+    workspaceId: string,
+    userId: string,
+  ): Promise<AssistantSessionEntity[]> {
     const prisma = PrismaClientManager.getClient();
     const rows = await prisma.assistantSession.findMany({
       where: {
@@ -58,7 +63,10 @@ export class PrismaAssistantSessionRepository implements AssistantSessionReposit
     return this.toSessionEntity(row);
   }
 
-  public async findSessionById(workspaceId: string, sessionId: string): Promise<AssistantSessionEntity | null> {
+  public async findSessionById(
+    workspaceId: string,
+    sessionId: string,
+  ): Promise<AssistantSessionEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.assistantSession.findFirst({
       where: {
@@ -91,7 +99,10 @@ export class PrismaAssistantSessionRepository implements AssistantSessionReposit
     return this.toSessionEntity(row);
   }
 
-  public async closeSession(workspaceId: string, sessionId: string): Promise<void> {
+  public async closeSession(
+    workspaceId: string,
+    sessionId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     await prisma.assistantSession.updateMany({
       where: {
@@ -159,7 +170,10 @@ export class PrismaAssistantSessionRepository implements AssistantSessionReposit
     return this.toMessageEntity(row);
   }
 
-  public async listMessages(workspaceId: string, sessionId: string): Promise<AssistantMessageEntity[]> {
+  public async listMessages(
+    workspaceId: string,
+    sessionId: string,
+  ): Promise<AssistantMessageEntity[]> {
     const prisma = PrismaClientManager.getClient();
     const rows = await prisma.assistantMessage.findMany({
       where: {
@@ -285,49 +299,103 @@ export class PrismaAssistantSessionRepository implements AssistantSessionReposit
     });
   }
 
-  private toSessionEntity(row: Record<string, unknown>): AssistantSessionEntity {
+  private toSessionEntity(
+    row: Record<string, unknown>,
+  ): AssistantSessionEntity {
     return new AssistantSessionEntity({
       id: String(row.id),
       workspaceId: String(row.workspace_id),
-      openedByUserId: typeof row.opened_by_user_id === "string" ? row.opened_by_user_id : null,
+      openedByUserId:
+        typeof row.opened_by_user_id === "string"
+          ? row.opened_by_user_id
+          : null,
       moduleId: typeof row.module_id === "number" ? row.module_id : null,
       title: typeof row.title === "string" ? row.title : null,
       status: String(row.status),
-      contextEntityType: typeof row.context_entity_type === "string" ? row.context_entity_type : null,
-      contextEntityId: typeof row.context_entity_id === "string" ? row.context_entity_id : null,
+      contextEntityType:
+        typeof row.context_entity_type === "string"
+          ? row.context_entity_type
+          : null,
+      contextEntityId:
+        typeof row.context_entity_id === "string"
+          ? row.context_entity_id
+          : null,
       projectId: typeof row.project_id === "string" ? row.project_id : null,
-      projectVersionId: typeof row.project_version_id === "number" ? row.project_version_id : null,
+      projectVersionId:
+        typeof row.project_version_id === "number"
+          ? row.project_version_id
+          : null,
       clientId: typeof row.client_id === "string" ? row.client_id : null,
       documentId: typeof row.document_id === "string" ? row.document_id : null,
-      ddtDocumentId: typeof row.ddt_document_id === "string" ? row.ddt_document_id : null,
-      configuration: row.configuration && typeof row.configuration === "object" ? row.configuration as Record<string, unknown> : null,
-      openedAt: row.opened_at instanceof Date ? row.opened_at : new Date(String(row.opened_at)),
-      lastActivityAt: row.last_activity_at instanceof Date ? row.last_activity_at : new Date(String(row.last_activity_at)),
-      closedAt: row.closed_at instanceof Date ? row.closed_at : row.closed_at ? new Date(String(row.closed_at)) : null,
-      createdAt: row.created_at instanceof Date ? row.created_at : new Date(String(row.created_at)),
-      updatedAt: row.updated_at instanceof Date ? row.updated_at : new Date(String(row.updated_at)),
+      ddtDocumentId:
+        typeof row.ddt_document_id === "string" ? row.ddt_document_id : null,
+      configuration:
+        row.configuration && typeof row.configuration === "object"
+          ? (row.configuration as Record<string, unknown>)
+          : null,
+      openedAt:
+        row.opened_at instanceof Date
+          ? row.opened_at
+          : new Date(String(row.opened_at)),
+      lastActivityAt:
+        row.last_activity_at instanceof Date
+          ? row.last_activity_at
+          : new Date(String(row.last_activity_at)),
+      closedAt:
+        row.closed_at instanceof Date
+          ? row.closed_at
+          : row.closed_at
+            ? new Date(String(row.closed_at))
+            : null,
+      createdAt:
+        row.created_at instanceof Date
+          ? row.created_at
+          : new Date(String(row.created_at)),
+      updatedAt:
+        row.updated_at instanceof Date
+          ? row.updated_at
+          : new Date(String(row.updated_at)),
     });
   }
 
-  private toMessageEntity(row: Record<string, unknown>): AssistantMessageEntity {
+  private toMessageEntity(
+    row: Record<string, unknown>,
+  ): AssistantMessageEntity {
     return new AssistantMessageEntity({
       id: String(row.id),
       sessionId: String(row.session_id),
       workspaceId: String(row.workspace_id),
-      authorUserId: typeof row.author_user_id === "string" ? row.author_user_id : null,
+      authorUserId:
+        typeof row.author_user_id === "string" ? row.author_user_id : null,
       role: String(row.role),
       sequenceNo: Number(row.sequence_no),
-      contentText: typeof row.content_text === "string" ? row.content_text : null,
-      contentPayload: row.content_payload && typeof row.content_payload === "object" ? row.content_payload as Record<string, unknown> : null,
+      contentText:
+        typeof row.content_text === "string" ? row.content_text : null,
+      contentPayload:
+        row.content_payload && typeof row.content_payload === "object"
+          ? (row.content_payload as Record<string, unknown>)
+          : null,
       modelName: typeof row.model_name === "string" ? row.model_name : null,
-      promptTokens: typeof row.prompt_tokens === "number" ? row.prompt_tokens : null,
-      completionTokens: typeof row.completion_tokens === "number" ? row.completion_tokens : null,
-      createdAt: row.created_at instanceof Date ? row.created_at : new Date(String(row.created_at)),
-      updatedAt: row.updated_at instanceof Date ? row.updated_at : new Date(String(row.updated_at)),
+      promptTokens:
+        typeof row.prompt_tokens === "number" ? row.prompt_tokens : null,
+      completionTokens:
+        typeof row.completion_tokens === "number"
+          ? row.completion_tokens
+          : null,
+      createdAt:
+        row.created_at instanceof Date
+          ? row.created_at
+          : new Date(String(row.created_at)),
+      updatedAt:
+        row.updated_at instanceof Date
+          ? row.updated_at
+          : new Date(String(row.updated_at)),
     });
   }
 
-  private toToolCallEntity(row: Record<string, unknown>): AssistantToolCallEntity {
+  private toToolCallEntity(
+    row: Record<string, unknown>,
+  ): AssistantToolCallEntity {
     return new AssistantToolCallEntity({
       id: String(row.id),
       sessionId: String(row.session_id),
@@ -336,18 +404,47 @@ export class PrismaAssistantSessionRepository implements AssistantSessionReposit
       moduleId: typeof row.module_id === "number" ? row.module_id : null,
       toolName: String(row.tool_name),
       status: String(row.status),
-      argumentsPayload: row.arguments_payload && typeof row.arguments_payload === "object" ? row.arguments_payload as Record<string, unknown> : null,
-      resultPayload: row.result_payload && typeof row.result_payload === "object" ? row.result_payload as Record<string, unknown> : null,
-      authorizationContext: row.authorization_context && typeof row.authorization_context === "object" ? row.authorization_context as Record<string, unknown> : null,
-      deniedReason: typeof row.denied_reason === "string" ? row.denied_reason : null,
-      startedAt: row.started_at instanceof Date ? row.started_at : row.started_at ? new Date(String(row.started_at)) : null,
-      completedAt: row.completed_at instanceof Date ? row.completed_at : row.completed_at ? new Date(String(row.completed_at)) : null,
-      createdAt: row.created_at instanceof Date ? row.created_at : new Date(String(row.created_at)),
-      updatedAt: row.updated_at instanceof Date ? row.updated_at : new Date(String(row.updated_at)),
+      argumentsPayload:
+        row.arguments_payload && typeof row.arguments_payload === "object"
+          ? (row.arguments_payload as Record<string, unknown>)
+          : null,
+      resultPayload:
+        row.result_payload && typeof row.result_payload === "object"
+          ? (row.result_payload as Record<string, unknown>)
+          : null,
+      authorizationContext:
+        row.authorization_context &&
+        typeof row.authorization_context === "object"
+          ? (row.authorization_context as Record<string, unknown>)
+          : null,
+      deniedReason:
+        typeof row.denied_reason === "string" ? row.denied_reason : null,
+      startedAt:
+        row.started_at instanceof Date
+          ? row.started_at
+          : row.started_at
+            ? new Date(String(row.started_at))
+            : null,
+      completedAt:
+        row.completed_at instanceof Date
+          ? row.completed_at
+          : row.completed_at
+            ? new Date(String(row.completed_at))
+            : null,
+      createdAt:
+        row.created_at instanceof Date
+          ? row.created_at
+          : new Date(String(row.created_at)),
+      updatedAt:
+        row.updated_at instanceof Date
+          ? row.updated_at
+          : new Date(String(row.updated_at)),
     });
   }
 
-  private toInputJson(value: Record<string, unknown> | null | undefined): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined {
+  private toInputJson(
+    value: Record<string, unknown> | null | undefined,
+  ): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined {
     if (value === undefined) {
       return undefined;
     }

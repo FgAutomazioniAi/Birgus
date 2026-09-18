@@ -55,19 +55,22 @@ export class PrismaAuditLogRepository implements AuditLogRepository {
       take: params.limit,
     });
 
-    return rows.map((row) => new AuditLogEntity({
-      id: row.id,
-      workspaceId: row.workspace_id,
-      userId: row.user_id,
-      userEmail: row.user?.email ?? null,
-      moduleKey: row.module?.key ?? null,
-      action: row.action,
-      entityType: row.entity_type,
-      entityId: row.entity_id,
-      payload: row.payload,
-      ipAddress: row.ip_address,
-      userAgent: row.user_agent,
-      createdAt: row.created_at,
-    }));
+    return rows.map(
+      (row) =>
+        new AuditLogEntity({
+          id: row.id,
+          workspaceId: row.workspace_id,
+          userId: row.user_id,
+          userEmail: row.user?.email ?? null,
+          moduleKey: row.module?.key ?? null,
+          action: row.action,
+          entityType: row.entity_type,
+          entityId: row.entity_id,
+          payload: row.payload,
+          ipAddress: row.ip_address,
+          userAgent: row.user_agent,
+          createdAt: row.created_at,
+        }),
+    );
   }
 }

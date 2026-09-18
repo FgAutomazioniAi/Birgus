@@ -7,7 +7,7 @@ _ txt (Reparto / Linea produttiva) | txt (Referente FG Automazioni) _
 
 PROCESSO PRODUTTIVO ATTUALE
 num 2.1 Descrizione Generale
-desc Descrizione dettagliata del processo attuale 
+desc Descrizione dettagliata del processo attuale
 num 2.2 Fasi del Processo
 tab
 col1 N #indica un numero
@@ -17,7 +17,7 @@ col4 txt(Tempo ciclo)
 /tab
 num 2.3 Dati Operativi Attuali
 [] Cadenza produttiva attuale (pz/h, pz/turno): txt()
-[] Numero turni lavoro: _ []1 turno  []2 turni  []3 turni []Continuo _
+[] Numero turni lavoro: _ []1 turno []2 turni []3 turni []Continuo _
 [] Numero operatori coinvolti nel processo : txt()
 [] OEE attuale (se disponibile): txt()%
 [] Tempo di setup / cambio formato: txt()
@@ -56,8 +56,8 @@ num 3.3 Specifiche Qualitative
 [] Parametri critici da controllare: txt()
 [] Tolleranze qualitative: txt()
 [] Controlli qualità richiesti: _ [] Visivo [] Dimensionale [] Funzionale [] Altro: txt()_
-[] Normative di riferimento (es. ISO, CE, FDA): txt() 
-[] Tracciabilità richiesta: _ []Lotto []Seriale []Non necessaria _   
+[] Normative di riferimento (es. ISO, CE, FDA): txt()
+[] Tracciabilità richiesta: _ []Lotto []Seriale []Non necessaria _  
 [] Campionamento: ogni txt() pezzi
 /
 
@@ -89,8 +89,8 @@ num 4.3 Livello di Automazione Richiesto
 [] Sistema semi-automatico (assistenza operatore)
 [] Collaborativo (cobot + operatore)
 _
-[] Flessibilità richiesta: 
-[] Mono-prodotto [] Multi-formato [] Multi-prodotto 
+[] Flessibilità richiesta:
+[] Mono-prodotto [] Multi-formato [] Multi-prodotto
 _
 /
 SPAZIO E LAYOUT DISPONIBILE
@@ -222,9 +222,13 @@ num 9.3 Movimentazione Materiali
 [] Accumulo buffer: []Richiesto []Non necessario []Capacita: txt() pz
 [] AGV/AMR: []Richiesto []Non necessario
 num 9.4 Vendor List componenti (standard FG Automazioni)
+
 # Elenco fornitori/marche di riferimento proposti da FG Automazioni per la progettazione.
+
 # Salvo diversa indicazione del Cliente, i componenti saranno selezionati tra le marche elencate.
+
 # La struttura, categorie e marche, e mantenuta da FG Automazioni.
+
 tab
 col1 Categoria
 col2 Componente
@@ -269,7 +273,9 @@ row Sistemi di visione e lettori | Sistemi di visione | VISIOFY, COGNEX, KEYENCE
 row Sistemi di visione e lettori | Sensori di visione | IMAGES, COGNEX, KEYENCE | [] | txt()
 row Sistemi di visione e lettori | Lettori barcode / QR code | IMAGES, COGNEX, KEYENCE, DATALOGIC | [] | txt()
 /tab
+
 # I dispositivi che necessitano di periodica taratura o controllo metrologico dovranno essere facilmente accessibili con macchina in funzione e in totale sicurezza per il verificatore.
+
 /
 
 SICUREZZA E NORMATIVE
@@ -342,9 +348,13 @@ num 12.3 Validazione IQ/OQ/PQ
 [] PQ (Performance Qualification): []Richiesta
 [] Protocolli validazione: []Da costruttore []Da cliente
 [] Supporto validazione: []Richiesto []Solo documentazione
+
 # IQ verifica che l'apparecchiatura sia installata correttamente e conforme alle specifiche del produttore.
+
 # OQ convalida che la macchina funzioni correttamente nelle condizioni operative previste.
+
 # PQ conferma che il sistema produca risultati costanti e riproducibili nel processo reale.
+
 /
 
 TEMPI E BUDGET
@@ -364,7 +374,9 @@ num 13.2 Budget e Investimento
 /
 
 DOCUMENTAZIONE E ALLEGATI
+
 # Documentazione da allegare alla checklist.
+
 [] Planimetria stabilimento, scala e quotata
 [] Layout area di installazione
 [] Fotografie area
@@ -390,8 +402,11 @@ desc Annotazioni, criticità evidenziate, richieste particolari
 /
 
 CYBERSECURITY OT - CONFORMITA' NIS2 (Dir. UE 2022/2555)
+
 # Sezione da compilare in coordinamento con il referente IT/OT Security del Cliente.
+
 # Le informazioni sono trattate come dati riservati e utilizzate esclusivamente ai fini della progettazione e della valutazione dei requisiti di sicurezza dell'impianto.
+
 num 16.1 Inquadramento del Cliente rispetto a NIS2
 [] Il Cliente rientra nell'ambito NIS2: []Soggetto essenziale []Soggetto importante []Non rientra []Da verificare
 [] Settore di appartenenza (All. I/II Dir. UE 2022/2555): txt()

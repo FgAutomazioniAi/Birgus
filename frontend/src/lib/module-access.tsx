@@ -21,6 +21,7 @@ export function ModuleAccessProvider({
 
 export function useModuleAccess() {
   const enabledModuleKeys = useContext(ModuleAccessContext);
-  const hasModule = (moduleKey: string) => enabledModuleKeys.includes(moduleKey);
+  const hasModule = (moduleKey: string) =>
+    enabledModuleKeys.includes(moduleKey);
   return { enabledModuleKeys, hasModule };
 }

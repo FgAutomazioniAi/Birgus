@@ -55,7 +55,9 @@ export class AuditLogService {
     });
   }
 
-  private async resolveModuleId(moduleKey: string | null): Promise<number | null> {
+  private async resolveModuleId(
+    moduleKey: string | null,
+  ): Promise<number | null> {
     if (!moduleKey) {
       return null;
     }

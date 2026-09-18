@@ -4,12 +4,15 @@ import { NotFoundPanel, SuperadminPanel } from "@/components/organisms";
 import { AUTH_CONFIGURED_COOKIE_NAME } from "@/lib/auth/constants";
 
 const getApiBaseUrl = () =>
-  (process.env.BIRGUS_API_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  (process.env.BIRGUS_API_BASE_URL ?? "http://localhost:3000").replace(
+    /\/$/,
+    "",
+  );
 
 export default async function SuperadminPage() {
   const cookieStore = await cookies();
   const token = cookieStore.get(AUTH_CONFIGURED_COOKIE_NAME)?.value;
-  if (!token || !await canAccessSuperadmin(token)) {
+  if (!token || !(await canAccessSuperadmin(token))) {
     return <NotFoundPanel />;
   }
 
@@ -37,18 +40,23 @@ async function canAccessSuperadmin(token: string): Promise<boolean> {
 
     const userId = sessionPayload.userId?.trim() ?? "";
     const workspaceId = sessionPayload.workspaceId?.trim() ?? "";
-    const canManageWorkspace = (sessionPayload.user?.roleKeys ?? []).some((item) => ["developer", "superuser"].includes(item.trim().toLowerCase()));
+    const canManageWorkspace = (sessionPayload.user?.roleKeys ?? []).some(
+      (item) => ["developer", "superuser"].includes(item.trim().toLowerCase()),
+    );
     if (!canManageWorkspace || !userId) {
       return false;
     }
 
-    const modulesResponse = await fetch(`${getApiBaseUrl()}/api/modules/users/${encodeURIComponent(userId)}`, {
-      cache: "no-store",
-      headers: {
-        cookie: `${AUTH_CONFIGURED_COOKIE_NAME}=${encodeURIComponent(token)}`,
-        ...(workspaceId ? { "x-workspace-id": workspaceId } : {}),
+    const modulesResponse = await fetch(
+      `${getApiBaseUrl()}/api/modules/users/${encodeURIComponent(userId)}`,
+      {
+        cache: "no-store",
+        headers: {
+          cookie: `${AUTH_CONFIGURED_COOKIE_NAME}=${encodeURIComponent(token)}`,
+          ...(workspaceId ? { "x-workspace-id": workspaceId } : {}),
+        },
       },
-    });
+    );
 
     if (!modulesResponse.ok) {
       return false;

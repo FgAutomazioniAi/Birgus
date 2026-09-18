@@ -4,7 +4,10 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaClientManager } from "../../database/PrismaClientManager.js";
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   public constructor() {
     super({
       log: ["error"],

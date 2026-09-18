@@ -82,7 +82,10 @@ async function main(): Promise<void> {
   ]);
 
   const storage = StorageSelector.create();
-  const archiveService = new DocumentArchiveService(new PrismaDocumentArchiveRepository(), storage);
+  const archiveService = new DocumentArchiveService(
+    new PrismaDocumentArchiveRepository(),
+    storage,
+  );
   const intelligenceService = new DocumentIntelligenceService(archiveService);
   const createdDocuments: Array<{ id: string; fileName: string }> = [];
 
@@ -108,7 +111,10 @@ async function main(): Promise<void> {
         sha256: checksum,
       },
     });
-    const storagePath = GaragePath.toStoragePath(stored.bucket, stored.objectKey);
+    const storagePath = GaragePath.toStoragePath(
+      stored.bucket,
+      stored.objectKey,
+    );
 
     const existing = await prisma.document.findFirst({
       where: {
@@ -153,13 +159,20 @@ async function main(): Promise<void> {
           select: { id: true, filename: true },
         });
 
-    await intelligenceService.refreshDocumentKnowledge(workspace.id, document.id);
-    createdDocuments.push({ id: document.id, fileName: document.filename ?? item.fileName });
+    await intelligenceService.refreshDocumentKnowledge(
+      workspace.id,
+      document.id,
+    );
+    createdDocuments.push({
+      id: document.id,
+      fileName: document.filename ?? item.fileName,
+    });
   }
 
   const searchHits = await intelligenceService.searchWorkspaceKnowledge({
     workspaceId: workspace.id,
-    query: "Quale cliente ha priorità alta per manutenzione e quale azione e consigliata?",
+    query:
+      "Quale cliente ha priorità alta per manutenzione e quale azione e consigliata?",
     topK: 5,
   });
 
@@ -170,7 +183,8 @@ async function main(): Promise<void> {
     aiAnalysis = await intelligenceService.analyzeDocumentSet({
       workspaceId: workspace.id,
       documentIds: createdDocuments.map((document) => document.id),
-      prompt: "Riassumi i tre documenti e indica per ogni cliente priorità, rischio o prossima azione.",
+      prompt:
+        "Riassumi i tre documenti e indica per ogni cliente priorità, rischio o prossima azione.",
       knowledgeMode: "hybrid",
       useDeepReasoning: false,
       aiProvider,
@@ -179,24 +193,32 @@ async function main(): Promise<void> {
     aiError = error instanceof Error ? error.message : String(error);
   }
 
-  console.log(JSON.stringify({
-    workspaceId: workspace.id,
-    documents: createdDocuments,
-    searchHits: searchHits.map((hit) => ({
-      title: hit.title,
-      documentId: hit.documentId,
-      chunkIndex: hit.chunkIndex,
-      distance: hit.distance,
-      preview: hit.contentText.slice(0, 180),
-    })),
-    aiAnalysis,
-    aiError,
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        workspaceId: workspace.id,
+        documents: createdDocuments,
+        searchHits: searchHits.map((hit) => ({
+          title: hit.title,
+          documentId: hit.documentId,
+          chunkIndex: hit.chunkIndex,
+          distance: hit.distance,
+          preview: hit.contentText.slice(0, 180),
+        })),
+        aiAnalysis,
+        aiError,
+      },
+      null,
+      2,
+    ),
+  );
 
   await prisma.$disconnect();
 }
 
-async function loadAiProviderOverride(prisma: PrismaClient): Promise<Record<string, unknown> | null> {
+async function loadAiProviderOverride(
+  prisma: PrismaClient,
+): Promise<Record<string, unknown> | null> {
   const row = await prisma.appSetting.findUnique({
     where: { key: "ai_provider" },
     select: { value: true },
@@ -214,10 +236,17 @@ async function loadAiProviderOverride(prisma: PrismaClient): Promise<Record<stri
   if (typeof config.chatModel === "string" && config.chatModel.trim()) {
     override.chat_model = config.chatModel.trim();
   }
-  if (typeof config.temperature === "number" && Number.isFinite(config.temperature)) {
+  if (
+    typeof config.temperature === "number" &&
+    Number.isFinite(config.temperature)
+  ) {
     override.temperature = config.temperature;
   }
-  if (typeof config.timeoutMs === "number" && Number.isFinite(config.timeoutMs) && config.timeoutMs > 0) {
+  if (
+    typeof config.timeoutMs === "number" &&
+    Number.isFinite(config.timeoutMs) &&
+    config.timeoutMs > 0
+  ) {
     override.timeout_ms = Math.trunc(config.timeoutMs);
   }
   return Object.keys(override).length > 0 ? override : null;

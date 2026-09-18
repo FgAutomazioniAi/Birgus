@@ -14,14 +14,20 @@ export function readCurrentWorkspaceId(): string | null {
   return fromRoot || null;
 }
 
-export function appendWorkspaceId(url: string, workspaceId = readCurrentWorkspaceId()): string {
+export function appendWorkspaceId(
+  url: string,
+  workspaceId = readCurrentWorkspaceId(),
+): string {
   const normalizedWorkspaceId = workspaceId?.trim();
   if (!normalizedWorkspaceId) {
     return url;
   }
 
   try {
-    const baseOrigin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+    const baseOrigin =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "http://localhost";
     const parsed = new URL(url, baseOrigin);
     if (!parsed.searchParams.has(WORKSPACE_QUERY_PARAM)) {
       parsed.searchParams.set(WORKSPACE_QUERY_PARAM, normalizedWorkspaceId);

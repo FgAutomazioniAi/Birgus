@@ -42,10 +42,15 @@ export class TotpService {
     window?: number;
   }): boolean {
     const now = params.now ?? new Date();
-    const window = Number.isInteger(params.window) ? Math.max(0, params.window ?? 1) : 1;
+    const window = Number.isInteger(params.window)
+      ? Math.max(0, params.window ?? 1)
+      : 1;
     const normalizedCode = params.code.replace(/\s+/g, "").trim();
 
-    if (!/^\d+$/.test(normalizedCode) || normalizedCode.length !== this.digits) {
+    if (
+      !/^\d+$/.test(normalizedCode) ||
+      normalizedCode.length !== this.digits
+    ) {
       return false;
     }
 
@@ -80,12 +85,12 @@ export class TotpService {
     const digest = createHmac("sha1", secret).update(message).digest();
     const offset = digest[digest.length - 1] & 0x0f;
     const binary =
-      ((digest[offset] & 0x7f) << 24)
-      | ((digest[offset + 1] & 0xff) << 16)
-      | ((digest[offset + 2] & 0xff) << 8)
-      | (digest[offset + 3] & 0xff);
+      ((digest[offset] & 0x7f) << 24) |
+      ((digest[offset + 1] & 0xff) << 16) |
+      ((digest[offset + 2] & 0xff) << 8) |
+      (digest[offset + 3] & 0xff);
 
-    const code = binary % (10 ** this.digits);
+    const code = binary % 10 ** this.digits;
     return code.toString().padStart(this.digits, "0");
   }
 

@@ -1,5 +1,8 @@
 import { UserPreferenceEntity } from "../domain/UserPreferenceEntity.js";
-import { UserPreferencePatch, UserPreferenceRepository } from "../repositories/UserPreferenceRepository.js";
+import {
+  UserPreferencePatch,
+  UserPreferenceRepository,
+} from "../repositories/UserPreferenceRepository.js";
 
 export class UserPreferenceService {
   private readonly repository: UserPreferenceRepository;
@@ -8,7 +11,10 @@ export class UserPreferenceService {
     this.repository = repository;
   }
 
-  public async getPreferences(userId: string, workspaceId: string): Promise<UserPreferenceEntity | null> {
+  public async getPreferences(
+    userId: string,
+    workspaceId: string,
+  ): Promise<UserPreferenceEntity | null> {
     return this.repository.getByUserAndWorkspace(userId, workspaceId);
   }
 
@@ -17,6 +23,10 @@ export class UserPreferenceService {
     workspaceId: string,
     patch: UserPreferencePatch,
   ): Promise<UserPreferenceEntity> {
-    return this.repository.upsertForUserAndWorkspace(userId, workspaceId, patch);
+    return this.repository.upsertForUserAndWorkspace(
+      userId,
+      workspaceId,
+      patch,
+    );
   }
 }

@@ -11,7 +11,8 @@ import { NestNotificationsController } from "./notifications.controller.js";
   providers: [
     {
       provide: NotificationService,
-      useFactory: (repository: PrismaNotificationRepository) => new NotificationService(repository),
+      useFactory: (repository: PrismaNotificationRepository) =>
+        new NotificationService(repository),
       inject: [PrismaNotificationRepository],
     },
   ],

@@ -31,9 +31,10 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
   providers: [
     {
       provide: PasswordHasher,
-      useFactory: (configService: AppConfigService) => new PasswordHasher(
-        resolveProductionSecret(configService, "AUTH_PEPPER"),
-      ),
+      useFactory: (configService: AppConfigService) =>
+        new PasswordHasher(
+          resolveProductionSecret(configService, "AUTH_PEPPER"),
+        ),
       inject: [AppConfigService],
     },
     {
@@ -46,37 +47,46 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
     },
     {
       provide: TotpService,
-      useFactory: (configService: AppConfigService) => new TotpService(
-        configService.getNumber("AUTH_TOTP_DIGITS", 6),
-        configService.getNumber("AUTH_TOTP_STEP_SECONDS", 30),
-      ),
+      useFactory: (configService: AppConfigService) =>
+        new TotpService(
+          configService.getNumber("AUTH_TOTP_DIGITS", 6),
+          configService.getNumber("AUTH_TOTP_STEP_SECONDS", 30),
+        ),
       inject: [AppConfigService],
     },
     {
       provide: TotpSecretCipherService,
-      useFactory: (configService: AppConfigService) => new TotpSecretCipherService(
-        resolveProductionSecret(
-          configService,
-          "AUTH_TOTP_ENCRYPTION_KEY",
-          configService.getString("AUTH_PEPPER", ""),
+      useFactory: (configService: AppConfigService) =>
+        new TotpSecretCipherService(
+          resolveProductionSecret(
+            configService,
+            "AUTH_TOTP_ENCRYPTION_KEY",
+            configService.getString("AUTH_PEPPER", ""),
+          ),
         ),
-      ),
       inject: [AppConfigService],
     },
     {
       provide: SessionCookieFactory,
-      useFactory: (configService: AppConfigService) => new SessionCookieFactory({
-        cookieName: configService.getString("AUTH_COOKIE_NAME", "vl_session"),
-        domain: configService.getOptionalString("AUTH_COOKIE_DOMAIN") ?? undefined,
-        path: configService.getString("AUTH_COOKIE_PATH", "/"),
-        secure: parseBoolean(configService.getString("AUTH_COOKIE_SECURE", "false")),
-        sameSite: resolveSameSiteMode(configService.getOptionalString("AUTH_COOKIE_SAME_SITE")),
-      }),
+      useFactory: (configService: AppConfigService) =>
+        new SessionCookieFactory({
+          cookieName: configService.getString("AUTH_COOKIE_NAME", "vl_session"),
+          domain:
+            configService.getOptionalString("AUTH_COOKIE_DOMAIN") ?? undefined,
+          path: configService.getString("AUTH_COOKIE_PATH", "/"),
+          secure: parseBoolean(
+            configService.getString("AUTH_COOKIE_SECURE", "false"),
+          ),
+          sameSite: resolveSameSiteMode(
+            configService.getOptionalString("AUTH_COOKIE_SAME_SITE"),
+          ),
+        }),
       inject: [AppConfigService],
     },
     {
       provide: SmtpPasswordResetNotifier,
-      useFactory: (mailProviderSettingsService: MailProviderSettingsService) => new SmtpPasswordResetNotifier(mailProviderSettingsService),
+      useFactory: (mailProviderSettingsService: MailProviderSettingsService) =>
+        new SmtpPasswordResetNotifier(mailProviderSettingsService),
       inject: [MailProviderSettingsService],
     },
     {
@@ -92,22 +102,23 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
         passwordPolicy: PasswordPolicy,
         trustedDeviceRepository: PrismaAuthTrustedDeviceRepository,
         configService: AppConfigService,
-      ) => new AuthService(
-        userRepository,
-        authSessionRepository,
-        authLoginChallengeRepository,
-        passwordHasher,
-        tokenService,
-        totpService,
-        totpSecretCipherService,
-        passwordPolicy,
-        configService.getString("AUTH_TOTP_ISSUER", "Birgus"),
-        configService.getNumber("AUTH_SESSION_HOURS", 12),
-        configService.getNumber("AUTH_SESSION_REMEMBER_DAYS", 30),
-        configService.getNumber("AUTH_2FA_CHALLENGE_TTL_MINUTES", 5),
-        trustedDeviceRepository,
-        configService.getNumber("AUTH_TRUSTED_DEVICE_DAYS", 30),
-      ),
+      ) =>
+        new AuthService(
+          userRepository,
+          authSessionRepository,
+          authLoginChallengeRepository,
+          passwordHasher,
+          tokenService,
+          totpService,
+          totpSecretCipherService,
+          passwordPolicy,
+          configService.getString("AUTH_TOTP_ISSUER", "Birgus"),
+          configService.getNumber("AUTH_SESSION_HOURS", 12),
+          configService.getNumber("AUTH_SESSION_REMEMBER_DAYS", 30),
+          configService.getNumber("AUTH_2FA_CHALLENGE_TTL_MINUTES", 5),
+          trustedDeviceRepository,
+          configService.getNumber("AUTH_TRUSTED_DEVICE_DAYS", 30),
+        ),
       inject: [
         PrismaUserAccountRepository,
         PrismaAuthSessionRepository,
@@ -132,16 +143,17 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
         passwordPolicy: PasswordPolicy,
         configService: AppConfigService,
         trustedDeviceRepository: PrismaAuthTrustedDeviceRepository,
-      ) => new PasswordResetService(
-        userRepository,
-        passwordResetCodeRepository,
-        authSessionRepository,
-        passwordHasher,
-        notifier,
-        passwordPolicy,
-        configService.getNumber("AUTH_PASSWORD_RESET_CODE_TTL_MINUTES", 15),
-        trustedDeviceRepository,
-      ),
+      ) =>
+        new PasswordResetService(
+          userRepository,
+          passwordResetCodeRepository,
+          authSessionRepository,
+          passwordHasher,
+          notifier,
+          passwordPolicy,
+          configService.getNumber("AUTH_PASSWORD_RESET_CODE_TTL_MINUTES", 15),
+          trustedDeviceRepository,
+        ),
       inject: [
         PrismaUserAccountRepository,
         PrismaPasswordResetCodeRepository,
@@ -156,7 +168,8 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
     PrismaAuthTrustedDeviceRepository,
     {
       provide: RequestContextAuthGuard,
-      useFactory: (authService: AuthService, tenancyGuard: TenancyGuard) => new RequestContextAuthGuard(authService, tenancyGuard),
+      useFactory: (authService: AuthService, tenancyGuard: TenancyGuard) =>
+        new RequestContextAuthGuard(authService, tenancyGuard),
       inject: [AuthService, TenancyGuard],
     },
     {
@@ -165,7 +178,8 @@ import { RequestContextAuthGuard } from "./request-context-auth.guard.js";
         reflector: Reflector,
         moduleAccessPolicy: ModuleAccessPolicy,
         permissionPolicy: PermissionPolicy,
-      ) => new AccessPolicyGuard(reflector, moduleAccessPolicy, permissionPolicy),
+      ) =>
+        new AccessPolicyGuard(reflector, moduleAccessPolicy, permissionPolicy),
       inject: [Reflector, ModuleAccessPolicy, PermissionPolicy],
     },
   ],
@@ -183,10 +197,19 @@ export class AuthModule {}
 
 function parseBoolean(value: string): boolean {
   const normalized = value.trim().toLowerCase();
-  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+  return (
+    normalized === "1" ||
+    normalized === "true" ||
+    normalized === "yes" ||
+    normalized === "on"
+  );
 }
 
-function resolveProductionSecret(configService: AppConfigService, key: string, fallback = ""): string {
+function resolveProductionSecret(
+  configService: AppConfigService,
+  key: string,
+  fallback = "",
+): string {
   const value = configService.getString(key, fallback);
   if (process.env.NODE_ENV === "production" && !value.trim()) {
     throw new Error(`${key} is required in production.`);

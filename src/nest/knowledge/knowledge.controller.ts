@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { z } from "zod";
 
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
@@ -76,23 +86,24 @@ export class NestKnowledgeController {
     const workspaceId = requestContext.workspace.workspaceId;
     const moduleId = await this.resolveModuleId(query.moduleKey ?? null);
     const mode = query.mode ?? "semantic";
-    const hits = mode === "targeted"
-      ? await this.service.searchWorkspaceKnowledgeByKeyword({
-        workspaceId,
-        query: query.query,
-        topK: query.topK,
-        moduleId,
-        sourceEntityType: query.sourceEntityType ?? null,
-        sourceEntityId: query.sourceEntityId ?? null,
-      })
-      : await this.service.searchWorkspaceKnowledge({
-        workspaceId,
-        query: query.query,
-        topK: query.topK,
-        moduleId,
-        sourceEntityType: query.sourceEntityType ?? null,
-        sourceEntityId: query.sourceEntityId ?? null,
-      });
+    const hits =
+      mode === "targeted"
+        ? await this.service.searchWorkspaceKnowledgeByKeyword({
+            workspaceId,
+            query: query.query,
+            topK: query.topK,
+            moduleId,
+            sourceEntityType: query.sourceEntityType ?? null,
+            sourceEntityId: query.sourceEntityId ?? null,
+          })
+        : await this.service.searchWorkspaceKnowledge({
+            workspaceId,
+            query: query.query,
+            topK: query.topK,
+            moduleId,
+            sourceEntityType: query.sourceEntityType ?? null,
+            sourceEntityId: query.sourceEntityId ?? null,
+          });
 
     return {
       workspaceId,
@@ -133,12 +144,17 @@ export class NestKnowledgeController {
 
   @Get("projects/:projectId/versions/:versionLabel/quotation-context")
   @RequireModule(ModuleKey.DOCUMENT_ARCHIVE, ModuleKey.PROJECT_MANAGEMENT)
-  @RequirePermission(PermissionKey.KNOWLEDGE_READ, PermissionKey.DOCUMENTS_READ, PermissionKey.PROJECTS_READ)
+  @RequirePermission(
+    PermissionKey.KNOWLEDGE_READ,
+    PermissionKey.DOCUMENTS_READ,
+    PermissionKey.PROJECTS_READ,
+  )
   public async getQuotationContext(
     @Param() paramsRaw: unknown,
     @CurrentRequestContext() requestContext: RequestContext,
   ) {
-    const { projectId, versionLabel } = quotationContextParamsSchema.parse(paramsRaw);
+    const { projectId, versionLabel } =
+      quotationContextParamsSchema.parse(paramsRaw);
     const workspaceId = requestContext.workspace.workspaceId;
     return this.service.getProjectVersionQuotationContext({
       workspaceId,
@@ -147,7 +163,9 @@ export class NestKnowledgeController {
     });
   }
 
-  private async resolveModuleId(moduleKey: string | null): Promise<number | null> {
+  private async resolveModuleId(
+    moduleKey: string | null,
+  ): Promise<number | null> {
     if (!moduleKey?.trim()) {
       return null;
     }
@@ -164,13 +182,20 @@ export class NestKnowledgeController {
     });
 
     if (!row) {
-      throw new AppError(`Modulo '${moduleKey}' non trovato.`, "KNOWLEDGE_MODULE_NOT_FOUND", 404);
+      throw new AppError(
+        `Modulo '${moduleKey}' non trovato.`,
+        "KNOWLEDGE_MODULE_NOT_FOUND",
+        404,
+      );
     }
 
     return row.id;
   }
 
-  private async buildPythonAiProviderOverride(): Promise<Record<string, unknown> | null> {
+  private async buildPythonAiProviderOverride(): Promise<Record<
+    string,
+    unknown
+  > | null> {
     const config = await this.aiProviderSettingsService.getRuntimeConfig();
     const override: Record<string, unknown> = {};
     if (typeof config.baseUrl === "string" && config.baseUrl.trim()) {
@@ -182,7 +207,11 @@ export class NestKnowledgeController {
     if (Number.isFinite(config.temperature)) {
       override.temperature = config.temperature;
     }
-    if (typeof config.timeoutMs === "number" && Number.isFinite(config.timeoutMs) && config.timeoutMs > 0) {
+    if (
+      typeof config.timeoutMs === "number" &&
+      Number.isFinite(config.timeoutMs) &&
+      config.timeoutMs > 0
+    ) {
       override.timeout_ms = Math.trunc(config.timeoutMs);
     }
     return Object.keys(override).length > 0 ? override : null;

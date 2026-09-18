@@ -11,7 +11,8 @@ const variantClasses: Record<ButtonVariant, string> = {
   accent:
     "bg-brand-accent text-text-inverse hover:bg-brand-accent-hover shadow-accent",
   ghost: "bg-transparent text-text-secondary hover:bg-bg-subtle",
-  outline: "border border-border-default bg-bg-page text-text-secondary hover:bg-bg-subtle",
+  outline:
+    "border border-border-default bg-bg-page text-text-secondary hover:bg-bg-subtle",
   danger:
     "bg-status-danger-text text-text-inverse hover:brightness-90 shadow-card",
 };
@@ -22,13 +23,17 @@ const sizeClasses: Record<ButtonSize, string> = {
   lg: "h-12 px-6 text-sm",
 };
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "primary", size = "md", type = "button", ...props }, ref) => (
+  (
+    { className, variant = "primary", size = "md", type = "button", ...props },
+    ref,
+  ) => (
     <button
       ref={ref}
       type={type}

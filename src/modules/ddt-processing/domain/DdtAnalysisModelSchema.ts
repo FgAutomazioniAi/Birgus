@@ -21,7 +21,12 @@ export const ddtAnalysisJsonSchema = {
     },
     main_warehouse_action: {
       type: "string",
-      enum: ["aggiunta_principale", "rimozione_principale", "invariato", "sconosciuto"],
+      enum: [
+        "aggiunta_principale",
+        "rimozione_principale",
+        "invariato",
+        "sconosciuto",
+      ],
     },
     bolla_number: { type: "string" },
     commessa_reference: { type: "string" },
@@ -61,33 +66,47 @@ export const ddtAnalysisJsonSchema = {
   ],
 } satisfies Record<string, unknown>;
 
-export const DdtAnalysisModelSchema = z.object({
-  movement_type: z.enum(["entrata", "uscita", "sconosciuto"]),
-  movement_scope: z.enum(["interno_fg", "esterno", "sconosciuto"]),
-  main_warehouse_action: z.enum(["aggiunta_principale", "rimozione_principale", "invariato", "sconosciuto"]),
-  bolla_number: z.string(),
-  commessa_reference: z.string(),
-  transfer_note: z.string(),
-  article_count: z.preprocess((value) => {
-    if (typeof value === "string" && value.trim().length > 0) {
-      return Number.parseInt(value, 10);
-    }
-    return value;
-  }, z.number().int().min(0)),
-  article_items: z.array(z.object({
-    article_type: z.string(),
-    quantity: numberFromModel.pipe(z.number().min(0)),
-    unit: z.string(),
-  }).strict()),
-  analysis_summary: z.string(),
-}).strict();
+export const DdtAnalysisModelSchema = z
+  .object({
+    movement_type: z.enum(["entrata", "uscita", "sconosciuto"]),
+    movement_scope: z.enum(["interno_fg", "esterno", "sconosciuto"]),
+    main_warehouse_action: z.enum([
+      "aggiunta_principale",
+      "rimozione_principale",
+      "invariato",
+      "sconosciuto",
+    ]),
+    bolla_number: z.string(),
+    commessa_reference: z.string(),
+    transfer_note: z.string(),
+    article_count: z.preprocess((value) => {
+      if (typeof value === "string" && value.trim().length > 0) {
+        return Number.parseInt(value, 10);
+      }
+      return value;
+    }, z.number().int().min(0)),
+    article_items: z.array(
+      z
+        .object({
+          article_type: z.string(),
+          quantity: numberFromModel.pipe(z.number().min(0)),
+          unit: z.string(),
+        })
+        .strict(),
+    ),
+    analysis_summary: z.string(),
+  })
+  .strict();
 
 export type DdtAnalysisModelPayload = z.infer<typeof DdtAnalysisModelSchema>;
 
-export function parseDdtAnalysisModelPayload(value: string): DdtAnalysisModelPayload {
+export function parseDdtAnalysisModelPayload(
+  value: string,
+): DdtAnalysisModelPayload {
   const start = value.indexOf("{");
   const end = value.lastIndexOf("}");
-  const candidate = start >= 0 && end > start ? value.slice(start, end + 1) : value;
+  const candidate =
+    start >= 0 && end > start ? value.slice(start, end + 1) : value;
   const parsed = JSON.parse(candidate) as JSONValue;
   return DdtAnalysisModelSchema.parse(parsed);
 }

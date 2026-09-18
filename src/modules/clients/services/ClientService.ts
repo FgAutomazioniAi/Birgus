@@ -10,7 +10,10 @@ export class ClientService {
   private readonly repository: ClientRepository;
   private readonly auditLogService: AuditLogService | null;
 
-  public constructor(repository: ClientRepository, auditLogService?: AuditLogService | null) {
+  public constructor(
+    repository: ClientRepository,
+    auditLogService?: AuditLogService | null,
+  ) {
     this.repository = repository;
     this.auditLogService = auditLogService ?? null;
   }
@@ -19,7 +22,10 @@ export class ClientService {
     return this.repository.list(workspaceId);
   }
 
-  public async getById(workspaceId: string, clientId: string): Promise<ClientEntity> {
+  public async getById(
+    workspaceId: string,
+    clientId: string,
+  ): Promise<ClientEntity> {
     const item = await this.repository.findById(workspaceId, clientId);
     if (!item) {
       throw new AppError("Client not found.", "CLIENT_NOT_FOUND", 404);
@@ -119,7 +125,11 @@ export class ClientService {
     return updated;
   }
 
-  public async delete(workspaceId: string, clientId: string, actorUserId?: string | null): Promise<void> {
+  public async delete(
+    workspaceId: string,
+    clientId: string,
+    actorUserId?: string | null,
+  ): Promise<void> {
     const removed = await this.repository.softDelete(workspaceId, clientId);
     if (!removed) {
       throw new AppError("Client not found.", "CLIENT_NOT_FOUND", 404);
@@ -136,9 +146,14 @@ export class ClientService {
     });
   }
 
-  public async permanentlyDelete(workspaceId: string, clientId: string, actorUserId?: string | null): Promise<void> {
+  public async permanentlyDelete(
+    workspaceId: string,
+    clientId: string,
+    actorUserId?: string | null,
+  ): Promise<void> {
     const removed = await this.repository.hardDelete(workspaceId, clientId);
-    if (!removed) throw new AppError("Client not found.", "CLIENT_NOT_FOUND", 404);
+    if (!removed)
+      throw new AppError("Client not found.", "CLIENT_NOT_FOUND", 404);
 
     await this.auditLogService?.record({
       workspaceId,
@@ -154,7 +169,11 @@ export class ClientService {
   private normalizeName(name: string): string {
     const value = name.trim().replace(/\s+/g, " ");
     if (value.length < 2) {
-      throw new AppError("Client name is too short.", "CLIENT_NAME_INVALID", 400);
+      throw new AppError(
+        "Client name is too short.",
+        "CLIENT_NAME_INVALID",
+        400,
+      );
     }
 
     return value;

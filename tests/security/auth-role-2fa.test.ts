@@ -18,8 +18,15 @@ import { TotpService } from "../../src/modules/identity/services/TotpService.js"
 const password = "ValidPass1";
 
 test("Developer is forced to configure 2FA", async () => {
-  const { service, challenges } = await createService({ isDeveloper: true, twoFactorEnabled: false });
-  const result = await service.login({ email: "developer@example.test", password, rememberMe: false });
+  const { service, challenges } = await createService({
+    isDeveloper: true,
+    twoFactorEnabled: false,
+  });
+  const result = await service.login({
+    email: "developer@example.test",
+    password,
+    rememberMe: false,
+  });
 
   assert.equal(result.requiresTwoFactor, true);
   assert.equal(result.twoFactorSetupRequired, true);
@@ -27,8 +34,15 @@ test("Developer is forced to configure 2FA", async () => {
 });
 
 test("Superuser can log in without enabling 2FA", async () => {
-  const { service, sessions } = await createService({ isDeveloper: false, twoFactorEnabled: false });
-  const result = await service.login({ email: "superuser@example.test", password, rememberMe: false });
+  const { service, sessions } = await createService({
+    isDeveloper: false,
+    twoFactorEnabled: false,
+  });
+  const result = await service.login({
+    email: "superuser@example.test",
+    password,
+    rememberMe: false,
+  });
 
   assert.equal(result.requiresTwoFactor, false);
   assert.equal(result.sessionId, "session-1");
@@ -36,8 +50,15 @@ test("Superuser can log in without enabling 2FA", async () => {
 });
 
 test("Optional 2FA remains enforced when enabled", async () => {
-  const { service } = await createService({ isDeveloper: false, twoFactorEnabled: true });
-  const result = await service.login({ email: "superuser@example.test", password, rememberMe: false });
+  const { service } = await createService({
+    isDeveloper: false,
+    twoFactorEnabled: true,
+  });
+  const result = await service.login({
+    email: "superuser@example.test",
+    password,
+    rememberMe: false,
+  });
 
   assert.equal(result.requiresTwoFactor, true);
   assert.equal(result.twoFactorSetupRequired, false);
@@ -61,18 +82,26 @@ test("Developer can skip 2FA only on a valid trusted device", async () => {
   assert.equal(trustedDevices.touched, 1);
 });
 
-async function createService(params: { isDeveloper: boolean; twoFactorEnabled: boolean; trustedDeviceToken?: string }) {
+async function createService(params: {
+  isDeveloper: boolean;
+  twoFactorEnabled: boolean;
+  trustedDeviceToken?: string;
+}) {
   const hasher = new PasswordHasher("test-pepper");
   const passwordHash = await hasher.hashPassword(password);
   const user = new UserAccount({
     id: "user-1",
-    email: params.isDeveloper ? "developer@example.test" : "superuser@example.test",
+    email: params.isDeveloper
+      ? "developer@example.test"
+      : "superuser@example.test",
     firstName: "Test",
     lastName: "User",
     passwordHash,
     mustChangePassword: false,
     twoFactorEnabled: params.twoFactorEnabled,
-    twoFactorSecretCiphertext: params.twoFactorEnabled ? "encrypted-secret" : null,
+    twoFactorSecretCiphertext: params.twoFactorEnabled
+      ? "encrypted-secret"
+      : null,
     isActive: true,
   });
   const users = new StaticUserRepository(user, params.isDeveloper);
@@ -80,7 +109,9 @@ async function createService(params: { isDeveloper: boolean; twoFactorEnabled: b
   const challenges = new CapturingChallengeRepository();
   const tokenService = new SessionTokenService();
   const trustedDevices = new CapturingTrustedDeviceRepository(
-    params.trustedDeviceToken ? tokenService.hashToken(params.trustedDeviceToken) : null,
+    params.trustedDeviceToken
+      ? tokenService.hashToken(params.trustedDeviceToken)
+      : null,
   );
   const service = new AuthService(
     users,
@@ -101,11 +132,20 @@ async function createService(params: { isDeveloper: boolean; twoFactorEnabled: b
 }
 
 class StaticUserRepository implements UserAccountRepository {
-  public constructor(private readonly user: UserAccount, private readonly developer: boolean) {}
-  public async findByEmail() { return this.user; }
-  public async findById() { return this.user; }
+  public constructor(
+    private readonly user: UserAccount,
+    private readonly developer: boolean,
+  ) {}
+  public async findByEmail() {
+    return this.user;
+  }
+  public async findById() {
+    return this.user;
+  }
   public async updatePassword() {}
-  public async isDeveloper() { return this.developer; }
+  public async isDeveloper() {
+    return this.developer;
+  }
   public async setTwoFactorSecret() {}
   public async clearTwoFactorSecret() {}
   public async markTwoFactorVerified() {}
@@ -117,7 +157,9 @@ class CapturingSessionRepository implements AuthSessionRepository {
     this.created += 1;
     return { id: "session-1" } as AuthSessionEntity;
   }
-  public async findByTokenHash() { return null; }
+  public async findByTokenHash() {
+    return null;
+  }
   public async revokeByTokenHash() {}
   public async revokeAllForUser() {}
   public async revokeAllForUserExceptSession() {}
@@ -129,7 +171,9 @@ class CapturingChallengeRepository implements AuthLoginChallengeRepository {
     this.created.push(params);
     return { id: "challenge-1" } as AuthLoginChallengeEntity;
   }
-  public async findByChallengeHash() { return null; }
+  public async findByChallengeHash() {
+    return null;
+  }
   public async consumeById() {}
   public async deleteExpired() {}
 }
@@ -141,8 +185,12 @@ class CapturingTrustedDeviceRepository implements AuthTrustedDeviceRepository {
 
   public async create(): Promise<void> {}
 
-  public async findUsableByTokenHash(tokenHash: string): Promise<{ id: string; userId: string } | null> {
-    return this.tokenHash === tokenHash ? { id: "trusted-device-1", userId: "user-1" } : null;
+  public async findUsableByTokenHash(
+    tokenHash: string,
+  ): Promise<{ id: string; userId: string } | null> {
+    return this.tokenHash === tokenHash
+      ? { id: "trusted-device-1", userId: "user-1" }
+      : null;
   }
 
   public async touch(): Promise<void> {

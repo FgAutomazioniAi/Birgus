@@ -7,13 +7,20 @@ export class PrismaProjectAuthorRepository implements ProjectAuthorRepository {
     const prisma = PrismaClientManager.getClient();
     const rows = await prisma.projectAuthor.findMany({
       where: { workspace_id: workspaceId, deleted_at: null },
-      orderBy: [{ display_name: "asc" }, { first_name: "asc" }, { last_name: "asc" }],
+      orderBy: [
+        { display_name: "asc" },
+        { first_name: "asc" },
+        { last_name: "asc" },
+      ],
     });
 
     return rows.map((row) => this.mapRow(row));
   }
 
-  public async findById(workspaceId: string, authorId: number): Promise<ProjectAuthorEntity | null> {
+  public async findById(
+    workspaceId: string,
+    authorId: number,
+  ): Promise<ProjectAuthorEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.projectAuthor.findFirst({
       where: { workspace_id: workspaceId, id: authorId, deleted_at: null },
@@ -53,7 +60,11 @@ export class PrismaProjectAuthorRepository implements ProjectAuthorRepository {
   }): Promise<ProjectAuthorEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const existing = await prisma.projectAuthor.findFirst({
-      where: { workspace_id: params.workspaceId, id: params.authorId, deleted_at: null },
+      where: {
+        workspace_id: params.workspaceId,
+        id: params.authorId,
+        deleted_at: null,
+      },
       select: { id: true },
     });
 
@@ -74,7 +85,10 @@ export class PrismaProjectAuthorRepository implements ProjectAuthorRepository {
     return this.mapRow(row);
   }
 
-  public async softDelete(workspaceId: string, authorId: number): Promise<boolean> {
+  public async softDelete(
+    workspaceId: string,
+    authorId: number,
+  ): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
     const result = await prisma.projectAuthor.updateMany({
       where: { workspace_id: workspaceId, id: authorId, deleted_at: null },
@@ -97,7 +111,9 @@ export class PrismaProjectAuthorRepository implements ProjectAuthorRepository {
       workspaceId: row.workspace_id,
       firstName: row.first_name,
       lastName: row.last_name,
-      displayName: row.display_name ?? [row.first_name, row.last_name ?? ""].join(" ").trim(),
+      displayName:
+        row.display_name ??
+        [row.first_name, row.last_name ?? ""].join(" ").trim(),
       notes: row.notes,
     });
   }

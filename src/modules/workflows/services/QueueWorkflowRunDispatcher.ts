@@ -17,7 +17,11 @@ export class QueueWorkflowRunDispatcher implements WorkflowRunDispatcher {
 
   public async dispatch(runId: string): Promise<void> {
     await this.queue.enqueue(
-      new Job<WorkflowRunJobPayload>(this.buildQueueJobId(runId), QueueWorkflowRunDispatcher.JOB_NAME, { runId }),
+      new Job<WorkflowRunJobPayload>(
+        this.buildQueueJobId(runId),
+        QueueWorkflowRunDispatcher.JOB_NAME,
+        { runId },
+      ),
     );
   }
 

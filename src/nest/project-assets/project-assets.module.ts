@@ -36,7 +36,8 @@ import { DocumentArchiveService } from "../../modules/document-archive/services/
   providers: [
     {
       provide: QuotationDocxBuilder,
-      useFactory: (pythonModulesClient: BackendPythonModulesClient) => new QuotationDocxBuilder(pythonModulesClient),
+      useFactory: (pythonModulesClient: BackendPythonModulesClient) =>
+        new QuotationDocxBuilder(pythonModulesClient),
       inject: [BackendPythonModulesClient],
     },
     {
@@ -57,17 +58,18 @@ import { DocumentArchiveService } from "../../modules/document-archive/services/
         workflowService: WorkflowService,
         jobQueue: JobQueue,
         notificationService: NotificationService,
-      ) => new QuotationOrchestratorService(
-        documentArchiveService,
-        quotationAnalyzer,
-        docxBuilder,
-        repository,
-        emailNotifier,
-        documentIntelligenceService,
-        workflowService,
-        jobQueue,
-        notificationService,
-      ),
+      ) =>
+        new QuotationOrchestratorService(
+          documentArchiveService,
+          quotationAnalyzer,
+          docxBuilder,
+          repository,
+          emailNotifier,
+          documentIntelligenceService,
+          workflowService,
+          jobQueue,
+          notificationService,
+        ),
       inject: [
         DocumentArchiveService,
         NextOrchestratorQuotationAnalyzer,

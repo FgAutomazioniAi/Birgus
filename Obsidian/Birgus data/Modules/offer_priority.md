@@ -2,6 +2,7 @@
 key: offer_priority
 ui: Priorita offerte
 ---
+
 # offer_priority
 
 Cruscotto operativo che ordina e rende lavorabili le offerte commerciali per priorita.

@@ -1,5 +1,5 @@
-import { DataCollectionChecklistPanel } from "@/components/organisms";
+import { redirect } from "next/navigation";
 
 export default function DataCollectionChecklistsPage() {
-  return <DataCollectionChecklistPanel />;
+  redirect("/preventivazione");
 }

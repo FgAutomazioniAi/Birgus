@@ -342,7 +342,11 @@ export class BrainyWorkspaceAgentService {
     });
 
     if (!existing) {
-      throw new AppError("Agente Brainy non trovato.", "BRAINY_AGENT_NOT_FOUND", 404);
+      throw new AppError(
+        "Agente Brainy non trovato.",
+        "BRAINY_AGENT_NOT_FOUND",
+        404,
+      );
     }
 
     const row = await this.prisma.$transaction(async (transaction) => {
@@ -375,7 +379,12 @@ export class BrainyWorkspaceAgentService {
         },
       });
 
-      await this.syncRoleAssignments(transaction, workspaceId, id, value.roleIds);
+      await this.syncRoleAssignments(
+        transaction,
+        workspaceId,
+        id,
+        value.roleIds,
+      );
 
       return transaction.brainyWorkspaceAgent.findUniqueOrThrow({
         where: { id },
@@ -405,7 +414,11 @@ export class BrainyWorkspaceAgentService {
     });
 
     if (result.count === 0) {
-      throw new AppError("Agente Brainy non trovato.", "BRAINY_AGENT_NOT_FOUND", 404);
+      throw new AppError(
+        "Agente Brainy non trovato.",
+        "BRAINY_AGENT_NOT_FOUND",
+        404,
+      );
     }
   }
 

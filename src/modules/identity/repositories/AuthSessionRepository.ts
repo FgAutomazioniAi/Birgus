@@ -11,5 +11,8 @@ export interface AuthSessionRepository {
   findByTokenHash(tokenHash: string): Promise<AuthSessionEntity | null>;
   revokeByTokenHash(tokenHash: string): Promise<void>;
   revokeAllForUser(userId: string): Promise<void>;
-  revokeAllForUserExceptSession(userId: string, currentSessionId: string): Promise<void>;
+  revokeAllForUserExceptSession(
+    userId: string,
+    currentSessionId: string,
+  ): Promise<void>;
 }

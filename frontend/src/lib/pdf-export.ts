@@ -42,11 +42,13 @@ export async function downloadTablePdf({
     return;
   }
 
-  const [{ jsPDF }, autoTableModule] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
+  const [{ jsPDF }, autoTableModule] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
   const autoTable = (autoTableModule.default ??
-    (autoTableModule as unknown as { autoTable?: (...args: unknown[]) => void }).autoTable) as
-    | ((...args: unknown[]) => void)
-    | undefined;
+    (autoTableModule as unknown as { autoTable?: (...args: unknown[]) => void })
+      .autoTable) as ((...args: unknown[]) => void) | undefined;
 
   if (!autoTable) {
     throw new Error("Impossibile inizializzare il generatore PDF.");
@@ -66,7 +68,9 @@ export async function downloadTablePdf({
     doc.text(subtitle.trim(), 40, 68);
   }
 
-  const columnStyles = columns.reduce<Record<number, { halign: PdfColumnAlign }>>((accumulator, column, index) => {
+  const columnStyles = columns.reduce<
+    Record<number, { halign: PdfColumnAlign }>
+  >((accumulator, column, index) => {
     accumulator[index] = {
       halign: column.align ?? "left",
     };

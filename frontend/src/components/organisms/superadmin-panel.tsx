@@ -13,6 +13,7 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  Settings2,
   ShieldCheck,
   Trash2,
   UserPlus,
@@ -24,7 +25,11 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Label, Text } from "@/components/atoms";
-import { ConfirmDeleteDialog, PageHelpHint, SelectDropdown } from "@/components/molecules";
+import {
+  ConfirmDeleteDialog,
+  PageHelpHint,
+  SelectDropdown,
+} from "@/components/molecules";
 import { useLanguage } from "@/components/organisms/language-provider";
 import { cn } from "@/lib/cn";
 
@@ -52,6 +57,18 @@ type RoleDto = {
   key: string;
   label: string;
 };
+type RolePermissionDto = {
+  key: string;
+  label: string;
+  permissions: Array<{
+    key: string;
+    label: { it: string; en: string };
+    category: string;
+    description: { it: string; en: string };
+    sensitive?: boolean;
+    enabled: boolean;
+  }>;
+};
 
 type ModuleDto = {
   key: string;
@@ -73,6 +90,12 @@ type UserModuleStateDto = {
   effectiveEnabled: boolean;
 };
 
+type ExternalDatabaseAccessDto = {
+  id: string;
+  name: string;
+  isAllowed: boolean;
+};
+
 type WorkspaceModuleStateDto = {
   moduleKey: string;
   enabled: boolean;
@@ -87,16 +110,23 @@ const fetchJson = async <T,>(url: string, init?: RequestInit): Promise<T> => {
     },
   });
 
-  const payload = (await response.json().catch(() => null)) as { message?: string } | T | null;
+  const payload = (await response.json().catch(() => null)) as
+    | { message?: string }
+    | T
+    | null;
   if (!response.ok) {
-    const message = payload && typeof payload === "object" && "message" in payload ? payload.message : undefined;
+    const message =
+      payload && typeof payload === "object" && "message" in payload
+        ? payload.message
+        : undefined;
     throw new Error(message ?? "Operazione non riuscita.");
   }
 
   return payload as T;
 };
 
-const passwordMeetsPolicy = (value: string) => value.length >= 8 && /[A-Z]/.test(value) && /\d/.test(value);
+const passwordMeetsPolicy = (value: string) =>
+  value.length >= 8 && /[A-Z]/.test(value) && /\d/.test(value);
 
 const generatePassword = (): string => {
   const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -104,17 +134,28 @@ const generatePassword = (): string => {
   const digits = "23456789";
   const symbols = "!@#$%";
   const all = upper + lower + digits + symbols;
-  const take = (source: string) => source[crypto.getRandomValues(new Uint32Array(1))[0] % source.length] ?? "A";
+  const take = (source: string) =>
+    source[crypto.getRandomValues(new Uint32Array(1))[0] % source.length] ??
+    "A";
   const result = [take(upper), take(lower), take(digits), take(symbols)];
   while (result.length < 16) {
     result.push(take(all));
   }
-  return result.sort(() => crypto.getRandomValues(new Uint32Array(1))[0] - 2 ** 31).join("");
+  return result
+    .sort(() => crypto.getRandomValues(new Uint32Array(1))[0] - 2 ** 31)
+    .join("");
 };
 
-const userFullName = (user: UserDto) => `${user.firstName} ${user.lastName ?? ""}`.trim() || user.email;
+const userFullName = (user: UserDto) =>
+  `${user.firstName} ${user.lastName ?? ""}`.trim() || user.email;
 
-function StatePill({ tone, children }: { tone: "success" | "muted" | "warn" | "danger"; children: React.ReactNode }) {
+function StatePill({
+  tone,
+  children,
+}: {
+  tone: "success" | "muted" | "warn" | "danger";
+  children: React.ReactNode;
+}) {
   return (
     <span
       className={cn(
@@ -166,7 +207,9 @@ function RadioChoice({
         )}
         aria-hidden="true"
       >
-        {checked ? <span className="h-2 w-2 rounded-full bg-brand-primary" /> : null}
+        {checked ? (
+          <span className="h-2 w-2 rounded-full bg-brand-primary" />
+        ) : null}
       </span>
       <span className="truncate">{children}</span>
     </label>
@@ -174,14 +217,27 @@ function RadioChoice({
 }
 
 export function SuperadminPanel() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [workspaces, setWorkspaces] = useState<WorkspaceDto[]>([]);
   const [users, setUsers] = useState<UserDto[]>([]);
   const [roles, setRoles] = useState<RoleDto[]>([]);
+  const [rolePermissions, setRolePermissions] = useState<RolePermissionDto[]>(
+    [],
+  );
+  const [permissionRoleKey, setPermissionRoleKey] = useState("");
+  const [permissionCategory, setPermissionCategory] = useState("workspace");
+  const [permissionDraft, setPermissionDraft] = useState<
+    Record<string, boolean>
+  >({});
+  const [permissionSaved, setPermissionSaved] = useState<
+    Record<string, boolean>
+  >({});
   const [modules, setModules] = useState<ModuleDto[]>([]);
-  const [managementScope, setManagementScope] = useState<"GLOBAL" | "WORKSPACE">("WORKSPACE");
+  const [managementScope, setManagementScope] = useState<
+    "GLOBAL" | "WORKSPACE"
+  >("WORKSPACE");
 
   const [search, setSearch] = useState("");
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
@@ -189,11 +245,19 @@ export function SuperadminPanel() {
   const [selectedUserId, setSelectedUserId] = useState("");
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false);
-  const [workspaceDeleteConfirmationOpen, setWorkspaceDeleteConfirmationOpen] = useState(false);
+  const [rolePermissionsModalOpen, setRolePermissionsModalOpen] =
+    useState(false);
+  const [workspaceDeleteConfirmationOpen, setWorkspaceDeleteConfirmationOpen] =
+    useState(false);
 
   const [memberships, setMemberships] = useState<MembershipDto[]>([]);
   const [userModules, setUserModules] = useState<UserModuleStateDto[]>([]);
-  const [workspaceModules, setWorkspaceModules] = useState<WorkspaceModuleStateDto[]>([]);
+  const [externalDatabaseAccesses, setExternalDatabaseAccesses] = useState<
+    ExternalDatabaseAccessDto[]
+  >([]);
+  const [workspaceModules, setWorkspaceModules] = useState<
+    WorkspaceModuleStateDto[]
+  >([]);
   const [selectedRoleKey, setSelectedRoleKey] = useState("operator");
 
   const [passwordResetValue, setPasswordResetValue] = useState("");
@@ -208,21 +272,33 @@ export function SuperadminPanel() {
   const [addWorkspaceRoleKey, setAddWorkspaceRoleKey] = useState("operator");
   const [isSaving, setIsSaving] = useState(false);
 
-  const selectedUser = useMemo(() => users.find((item) => item.id === selectedUserId) ?? null, [users, selectedUserId]);
+  const selectedUser = useMemo(
+    () => users.find((item) => item.id === selectedUserId) ?? null,
+    [users, selectedUserId],
+  );
   const selectedWorkspace = useMemo(
-    () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
+    () =>
+      workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ??
+      null,
     [selectedWorkspaceId, workspaces],
   );
   const managedWorkspace = useMemo(
-    () => workspaces.find((workspace) => workspace.id === managedWorkspaceId) ?? null,
+    () =>
+      workspaces.find((workspace) => workspace.id === managedWorkspaceId) ??
+      null,
     [managedWorkspaceId, workspaces],
   );
   const selectedWorkspaceMembership = useMemo(
-    () => memberships.find((membership) => membership.workspaceId === selectedWorkspaceId) ?? null,
+    () =>
+      memberships.find(
+        (membership) => membership.workspaceId === selectedWorkspaceId,
+      ) ?? null,
     [memberships, selectedWorkspaceId],
   );
   const availableWorkspaceOptions = useMemo(() => {
-    const membershipWorkspaceIds = new Set(memberships.map((membership) => membership.workspaceId));
+    const membershipWorkspaceIds = new Set(
+      memberships.map((membership) => membership.workspaceId),
+    );
     return workspaces
       .filter((workspace) => !membershipWorkspaceIds.has(workspace.id))
       .map((workspace) => ({
@@ -232,10 +308,11 @@ export function SuperadminPanel() {
   }, [memberships, workspaces]);
 
   const workspaceOptions = useMemo(
-    () => workspaces.map((workspace) => ({
-      value: workspace.id,
-      label: `${workspace.organizationCode}/${workspace.code}`,
-    })),
+    () =>
+      workspaces.map((workspace) => ({
+        value: workspace.id,
+        label: `${workspace.organizationCode}/${workspace.code}`,
+      })),
     [workspaces],
   );
 
@@ -249,14 +326,18 @@ export function SuperadminPanel() {
   );
 
   const userOptions = useMemo(
-    () => users.map((user) => ({
-      value: user.id,
-      label: `${userFullName(user)} (${user.email})`,
-    })),
+    () =>
+      users.map((user) => ({
+        value: user.id,
+        label: `${userFullName(user)} (${user.email})`,
+      })),
     [users],
   );
 
-  const loadBase = async (params?: { keepLoading?: boolean; searchOverride?: string }) => {
+  const loadBase = async (params?: {
+    keepLoading?: boolean;
+    searchOverride?: string;
+  }) => {
     if (!params?.keepLoading) {
       setLoading(true);
     }
@@ -270,12 +351,18 @@ export function SuperadminPanel() {
         userQuery.set("workspaceId", selectedWorkspaceId);
       }
 
-      const [workspacePayload, userPayload, rolePayload, modulePayload] = await Promise.all([
-        fetchJson<{ managementScope: "GLOBAL" | "WORKSPACE"; workspaces: WorkspaceDto[] }>("/api/superadmin/workspaces"),
-        fetchJson<{ users: UserDto[] }>(`/api/superadmin/users${userQuery.toString() ? `?${userQuery.toString()}` : ""}`),
-        fetchJson<{ roles: RoleDto[] }>("/api/superadmin/roles"),
-        fetchJson<{ modules: ModuleDto[] }>("/api/superadmin/modules"),
-      ]);
+      const [workspacePayload, userPayload, rolePayload, modulePayload] =
+        await Promise.all([
+          fetchJson<{
+            managementScope: "GLOBAL" | "WORKSPACE";
+            workspaces: WorkspaceDto[];
+          }>("/api/superadmin/workspaces"),
+          fetchJson<{ users: UserDto[] }>(
+            `/api/superadmin/users${userQuery.toString() ? `?${userQuery.toString()}` : ""}`,
+          ),
+          fetchJson<{ roles: RoleDto[] }>("/api/superadmin/roles"),
+          fetchJson<{ modules: ModuleDto[] }>("/api/superadmin/modules"),
+        ]);
 
       const nextWorkspaces = workspacePayload.workspaces ?? [];
       const nextUsers = userPayload.users ?? [];
@@ -283,20 +370,109 @@ export function SuperadminPanel() {
       setManagementScope(workspacePayload.managementScope);
       setUsers(nextUsers);
       setRoles(rolePayload.roles ?? []);
+      if (workspacePayload.managementScope === "GLOBAL") {
+        const permissionPayload = await fetchJson<{
+          roles: RolePermissionDto[];
+        }>("/api/superadmin/role-permissions");
+        const nextPermissionRoles = permissionPayload.roles ?? [];
+        setRolePermissions(nextPermissionRoles);
+        if (!permissionRoleKey && nextPermissionRoles[0])
+          setPermissionRoleKey(nextPermissionRoles[0].key);
+      }
       setModules(modulePayload.modules ?? []);
 
       if (!selectedWorkspaceId && nextWorkspaces[0]?.id) {
         setSelectedWorkspaceId(nextWorkspaces[0].id);
       }
-      if (selectedUserId && !nextUsers.some((user) => user.id === selectedUserId)) {
+      if (
+        selectedUserId &&
+        !nextUsers.some((user) => user.id === selectedUserId)
+      ) {
         setSelectedUserId("");
         setUserModalOpen(false);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Caricamento non riuscito.";
+      const message =
+        error instanceof Error ? error.message : "Caricamento non riuscito.";
       toast.error(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const role = rolePermissions.find((item) => item.key === permissionRoleKey);
+    if (!role) return;
+    const next = Object.fromEntries(
+      role.permissions.map((permission) => [
+        permission.key,
+        permission.enabled,
+      ]),
+    );
+    setPermissionDraft(next);
+    setPermissionSaved(next);
+  }, [permissionRoleKey, rolePermissions]);
+
+  const permissionChangesPending =
+    JSON.stringify(permissionDraft) !== JSON.stringify(permissionSaved);
+  const permissionCategoryLabels: Record<string, string> = {
+    read: language === "it" ? "Lettura" : "Read",
+    create: language === "it" ? "Creazione" : "Creation",
+    modify: language === "it" ? "Modifica" : "Modification",
+    action: language === "it" ? "Azioni / Utilizzo" : "Actions / Use",
+    configure: language === "it" ? "Configurazione" : "Configuration",
+  };
+  const permissionCategoryDescriptions: Record<string, string> = {
+    read:
+      language === "it"
+        ? "Visualizzare e consultare dati."
+        : "View and consult data.",
+    create:
+      language === "it"
+        ? "Creare nuovi contenuti o risorse."
+        : "Create new content or resources.",
+    modify:
+      language === "it"
+        ? "Cambiare contenuti e dati esistenti."
+        : "Change existing content and data.",
+    action:
+      language === "it"
+        ? "Eseguire elaborazioni e usare funzioni."
+        : "Run processing and use features.",
+    configure:
+      language === "it"
+        ? "Cambiare impostazioni e comportamento del sistema."
+        : "Change system settings and behavior.",
+  };
+  const selectedPermissionRole =
+    rolePermissions.find((item) => item.key === permissionRoleKey) ?? null;
+  const saveRolePermissions = async () => {
+    if (
+      !selectedPermissionRole ||
+      !window.confirm(t("superadmin.permissionsConfirm"))
+    )
+      return;
+    try {
+      setIsSaving(true);
+      await fetchJson("/api/superadmin/role-permissions", {
+        method: "PUT",
+        body: JSON.stringify({
+          roleKey: permissionRoleKey,
+          permissionKeys: Object.entries(permissionDraft)
+            .filter(([, enabled]) => enabled)
+            .map(([key]) => key),
+        }),
+      });
+      setPermissionSaved({ ...permissionDraft });
+      toast.success(t("superadmin.permissionsSaved"));
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t("superadmin.permissionsSaveFailed"),
+      );
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -304,48 +480,63 @@ export function SuperadminPanel() {
     if (!userId || !workspaceId) {
       setMemberships([]);
       setUserModules([]);
+      setExternalDatabaseAccesses([]);
       setSelectedRoleKey("operator");
       return;
     }
 
     try {
-      const [membershipPayload, modulesPayload] = await Promise.all([
-        fetchJson<{ memberships: MembershipDto[] }>(`/api/superadmin/users/${encodeURIComponent(userId)}/memberships`),
-        fetchJson<{ modules: UserModuleStateDto[] }>(
-          `/api/superadmin/users/${encodeURIComponent(userId)}/modules?workspaceId=${encodeURIComponent(workspaceId)}`,
-        ),
-      ]);
+      const [membershipPayload, modulesPayload, databaseAccessPayload] =
+        await Promise.all([
+          fetchJson<{ memberships: MembershipDto[] }>(
+            `/api/superadmin/users/${encodeURIComponent(userId)}/memberships`,
+          ),
+          fetchJson<{ modules: UserModuleStateDto[] }>(
+            `/api/superadmin/users/${encodeURIComponent(userId)}/modules?workspaceId=${encodeURIComponent(workspaceId)}`,
+          ),
+          fetchJson<{ connections: ExternalDatabaseAccessDto[] }>(
+            `/api/superadmin/users/${encodeURIComponent(userId)}/external-database-access?workspaceId=${encodeURIComponent(workspaceId)}`,
+          ),
+        ]);
 
       const nextMemberships = membershipPayload.memberships ?? [];
       setMemberships(nextMemberships);
       setUserModules(modulesPayload.modules ?? []);
+      setExternalDatabaseAccesses(databaseAccessPayload.connections ?? []);
 
-      const membership = nextMemberships.find((item) => item.workspaceId === workspaceId) ?? null;
+      const membership =
+        nextMemberships.find((item) => item.workspaceId === workspaceId) ??
+        null;
       setSelectedRoleKey(membership?.roleKeys[0] ?? "operator");
-      setAddWorkspaceId((current) => (
-        current && nextMemberships.some((item) => item.workspaceId === current) ? "" : current
-      ));
+      setAddWorkspaceId((current) =>
+        current && nextMemberships.some((item) => item.workspaceId === current)
+          ? ""
+          : current,
+      );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Caricamento contesto utente non riuscito.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Caricamento contesto utente non riuscito.";
       toast.error(message);
     }
   };
 
   useEffect(() => {
     void loadBase();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (selectedWorkspaceId) {
       void loadBase({ keepLoading: true });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
     void loadUserContext(selectedUserId, selectedWorkspaceId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUserId, selectedWorkspaceId]);
 
   const openUserManagement = (userId: string) => {
@@ -367,7 +558,10 @@ export function SuperadminPanel() {
       );
       setWorkspaceModules(payload.modules ?? []);
     } catch (error) {
-      const message = error instanceof Error ? error.message : t("superadmin.workspaceModulesLoadFailed");
+      const message =
+        error instanceof Error
+          ? error.message
+          : t("superadmin.workspaceModulesLoadFailed");
       toast.error(message);
     }
   };
@@ -389,7 +583,9 @@ export function SuperadminPanel() {
       return;
     }
     if (!passwordMeetsPolicy(createPassword)) {
-      toast.error("La password deve avere almeno 8 caratteri, una maiuscola e un numero.");
+      toast.error(
+        "La password deve avere almeno 8 caratteri, una maiuscola e un numero.",
+      );
       return;
     }
     if (!createRoleKey) {
@@ -399,17 +595,20 @@ export function SuperadminPanel() {
 
     try {
       setIsSaving(true);
-      const payload = await fetchJson<{ userId: string; email: string }>("/api/superadmin/users", {
-        method: "POST",
-        body: JSON.stringify({
-          workspaceId: selectedWorkspaceId,
-          email: createEmail.trim().toLowerCase(),
-          firstName: createFirstName.trim(),
-          lastName: createLastName.trim() || null,
-          password: createPassword,
-          roleKeys: [createRoleKey],
-        }),
-      });
+      const payload = await fetchJson<{ userId: string; email: string }>(
+        "/api/superadmin/users",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            workspaceId: selectedWorkspaceId,
+            email: createEmail.trim().toLowerCase(),
+            firstName: createFirstName.trim(),
+            lastName: createLastName.trim() || null,
+            password: createPassword,
+            roleKeys: [createRoleKey],
+          }),
+        },
+      );
       setSearch("");
       await loadBase({ keepLoading: true, searchOverride: "" });
       setCreateEmail("");
@@ -420,7 +619,10 @@ export function SuperadminPanel() {
       openUserManagement(payload.userId);
       toast.success(`Utente creato: ${payload.email}`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Creazione utente non riuscita.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Creazione utente non riuscita.";
       toast.error(message);
     } finally {
       setIsSaving(false);
@@ -435,15 +637,21 @@ export function SuperadminPanel() {
 
     try {
       setIsSaving(true);
-      await fetchJson(`/api/superadmin/users/${encodeURIComponent(selectedUserId)}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ isActive }),
-      });
+      await fetchJson(
+        `/api/superadmin/users/${encodeURIComponent(selectedUserId)}/status`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ isActive }),
+        },
+      );
       await loadBase({ keepLoading: true });
       await loadUserContext(selectedUserId, selectedWorkspaceId);
       toast.success(isActive ? "Utente attivato." : "Utente disattivato.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Aggiornamento stato utente non riuscito.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Aggiornamento stato utente non riuscito.";
       toast.error(message);
     } finally {
       setIsSaving(false);
@@ -456,20 +664,26 @@ export function SuperadminPanel() {
       return;
     }
     if (!passwordMeetsPolicy(passwordResetValue)) {
-      toast.error("La password deve avere almeno 8 caratteri, una maiuscola e un numero.");
+      toast.error(
+        "La password deve avere almeno 8 caratteri, una maiuscola e un numero.",
+      );
       return;
     }
 
     try {
       setIsSaving(true);
-      await fetchJson(`/api/superadmin/users/${encodeURIComponent(selectedUserId)}/reset-password`, {
-        method: "POST",
-        body: JSON.stringify({ newPassword: passwordResetValue }),
-      });
+      await fetchJson(
+        `/api/superadmin/users/${encodeURIComponent(selectedUserId)}/reset-password`,
+        {
+          method: "POST",
+          body: JSON.stringify({ newPassword: passwordResetValue }),
+        },
+      );
       setPasswordResetValue("");
       toast.success("Password utente aggiornata e sessioni revocate.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Reset password non riuscito.";
+      const message =
+        error instanceof Error ? error.message : "Reset password non riuscito.";
       toast.error(message);
     } finally {
       setIsSaving(false);
@@ -484,12 +698,18 @@ export function SuperadminPanel() {
 
     try {
       setIsSaving(true);
-      await fetchJson(`/api/superadmin/users/${encodeURIComponent(selectedUserId)}/revoke-sessions`, {
-        method: "POST",
-      });
+      await fetchJson(
+        `/api/superadmin/users/${encodeURIComponent(selectedUserId)}/revoke-sessions`,
+        {
+          method: "POST",
+        },
+      );
       toast.success("Sessioni utente revocate.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Revoca sessioni non riuscita.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Revoca sessioni non riuscita.";
       toast.error(message);
     } finally {
       setIsSaving(false);
@@ -504,19 +724,26 @@ export function SuperadminPanel() {
 
     try {
       setIsSaving(true);
-      await fetchJson(`/api/superadmin/users/${encodeURIComponent(selectedUserId)}/reset-2fa`, {
-        method: "POST",
-      });
+      await fetchJson(
+        `/api/superadmin/users/${encodeURIComponent(selectedUserId)}/reset-2fa`,
+        {
+          method: "POST",
+        },
+      );
       toast.success("2FA utente resettato e sessioni revocate.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Reset 2FA non riuscito.";
+      const message =
+        error instanceof Error ? error.message : "Reset 2FA non riuscito.";
       toast.error(message);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleSetModuleOverride = async (moduleKey: string, mode: "ALLOW" | "DENY") => {
+  const handleSetModuleOverride = async (
+    moduleKey: string,
+    mode: "ALLOW" | "DENY",
+  ) => {
     if (!selectedUserId || !selectedWorkspaceId) {
       toast.error("Seleziona workspace e utente.");
       return;
@@ -537,7 +764,10 @@ export function SuperadminPanel() {
       await loadUserContext(selectedUserId, selectedWorkspaceId);
       toast.success(`Override ${mode} salvato su ${moduleKey}.`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Override modulo non riuscito.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Override modulo non riuscito.";
       toast.error(message);
     } finally {
       setIsSaving(false);
@@ -564,14 +794,20 @@ export function SuperadminPanel() {
       await loadUserContext(selectedUserId, selectedWorkspaceId);
       toast.success(`Override rimosso su ${moduleKey}.`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Rimozione override non riuscita.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Rimozione override non riuscita.";
       toast.error(message);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleSetWorkspaceModule = async (moduleKey: string, enabled: boolean) => {
+  const handleSetWorkspaceModule = async (
+    moduleKey: string,
+    enabled: boolean,
+  ) => {
     if (!managedWorkspaceId) {
       toast.error(t("superadmin.selectWorkspace"));
       return;
@@ -579,18 +815,28 @@ export function SuperadminPanel() {
 
     try {
       setIsSaving(true);
-      await fetchJson(`/api/superadmin/workspaces/${encodeURIComponent(managedWorkspaceId)}/modules/${encodeURIComponent(moduleKey)}`, {
-        method: "PUT",
-        body: JSON.stringify({ enabled }),
-      });
+      await fetchJson(
+        `/api/superadmin/workspaces/${encodeURIComponent(managedWorkspaceId)}/modules/${encodeURIComponent(moduleKey)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ enabled }),
+        },
+      );
       await loadWorkspaceContext(managedWorkspaceId);
       if (selectedUserId) {
         await loadUserContext(selectedUserId, selectedWorkspaceId);
       }
       router.refresh();
-      toast.success(enabled ? t("superadmin.workspaceModuleEnabled") : t("superadmin.workspaceModuleDisabled"));
+      toast.success(
+        enabled
+          ? t("superadmin.workspaceModuleEnabled")
+          : t("superadmin.workspaceModuleDisabled"),
+      );
     } catch (error) {
-      const message = error instanceof Error ? error.message : t("superadmin.workspaceModuleUpdateFailed");
+      const message =
+        error instanceof Error
+          ? error.message
+          : t("superadmin.workspaceModuleUpdateFailed");
       toast.error(message);
     } finally {
       setIsSaving(false);
@@ -605,10 +851,13 @@ export function SuperadminPanel() {
 
     try {
       setIsSaving(true);
-      await fetchJson(`/api/superadmin/workspaces/${encodeURIComponent(managedWorkspace.id)}`, {
-        method: "DELETE",
-        body: JSON.stringify({ confirmText: confirmText.trim() }),
-      });
+      await fetchJson(
+        `/api/superadmin/workspaces/${encodeURIComponent(managedWorkspace.id)}`,
+        {
+          method: "DELETE",
+          body: JSON.stringify({ confirmText: confirmText.trim() }),
+        },
+      );
       setWorkspaceModalOpen(false);
       setManagedWorkspaceId("");
       if (selectedWorkspaceId === managedWorkspace.id) {
@@ -618,7 +867,10 @@ export function SuperadminPanel() {
       router.refresh();
       toast.success(t("superadmin.workspaceDeleted"));
     } catch (error) {
-      const message = error instanceof Error ? error.message : t("superadmin.workspaceDeleteFailed");
+      const message =
+        error instanceof Error
+          ? error.message
+          : t("superadmin.workspaceDeleteFailed");
       toast.error(message);
     } finally {
       setIsSaving(false);
@@ -633,13 +885,16 @@ export function SuperadminPanel() {
 
     try {
       setIsSaving(true);
-      await fetchJson(`/api/superadmin/users/${encodeURIComponent(selectedUserId)}/workspaces`, {
-        method: "POST",
-        body: JSON.stringify({
-          workspaceId: addWorkspaceId,
-          roleKey: addWorkspaceRoleKey,
-        }),
-      });
+      await fetchJson(
+        `/api/superadmin/users/${encodeURIComponent(selectedUserId)}/workspaces`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            workspaceId: addWorkspaceId,
+            roleKey: addWorkspaceRoleKey,
+          }),
+        },
+      );
       setSelectedWorkspaceId(addWorkspaceId);
       setAddWorkspaceId("");
       setAddWorkspaceRoleKey("operator");
@@ -647,7 +902,10 @@ export function SuperadminPanel() {
       await loadUserContext(selectedUserId, addWorkspaceId);
       toast.success("Utente associato al workspace.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Associazione workspace non riuscita.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Associazione workspace non riuscita.";
       toast.error(message);
     } finally {
       setIsSaving(false);
@@ -677,8 +935,42 @@ export function SuperadminPanel() {
       await loadUserContext(selectedUserId, selectedWorkspaceId);
       toast.success("Ruoli workspace aggiornati.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Aggiornamento ruoli non riuscito.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Aggiornamento ruoli non riuscito.";
       toast.error(message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveExternalDatabaseAccess = async () => {
+    if (!selectedUserId || !selectedWorkspaceId) {
+      toast.error("Seleziona workspace e utente.");
+      return;
+    }
+    try {
+      setIsSaving(true);
+      await fetchJson(
+        `/api/superadmin/users/${encodeURIComponent(selectedUserId)}/external-database-access`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            workspaceId: selectedWorkspaceId,
+            connectionIds: externalDatabaseAccesses
+              .filter((connection) => connection.isAllowed)
+              .map((connection) => connection.id),
+          }),
+        },
+      );
+      toast.success("Accesso alle viste database aggiornato.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Salvataggio accessi database non riuscito.",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -689,23 +981,37 @@ export function SuperadminPanel() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <Text as="h1" variant="h1">Gestione workspace</Text>
+            <Text as="h1" variant="h1">
+              Gestione workspace
+            </Text>
             <PageHelpHint text={t("superadmin.help")} />
           </div>
-            <Text variant="muted">{t("superadmin.subtitle")}</Text>
+          <Text variant="muted">{t("superadmin.subtitle")}</Text>
         </div>
         <div className="grid grid-cols-3 gap-2 text-right text-sm">
           <div className="rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 py-2">
-            <div className="font-semibold text-text-primary">{users.length}</div>
-            <div className="text-xs text-text-muted">{t("superadmin.users")}</div>
+            <div className="font-semibold text-text-primary">
+              {users.length}
+            </div>
+            <div className="text-xs text-text-muted">
+              {t("superadmin.users")}
+            </div>
           </div>
           <div className="rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 py-2">
-            <div className="font-semibold text-text-primary">{workspaces.length}</div>
-            <div className="text-xs text-text-muted">{t("superadmin.workspace")}</div>
+            <div className="font-semibold text-text-primary">
+              {workspaces.length}
+            </div>
+            <div className="text-xs text-text-muted">
+              {t("superadmin.workspace")}
+            </div>
           </div>
           <div className="rounded-[var(--radius-md)] border border-border-default bg-bg-surface px-3 py-2">
-            <div className="font-semibold text-text-primary">{roles.length}</div>
-            <div className="text-xs text-text-muted">{t("superadmin.roles")}</div>
+            <div className="font-semibold text-text-primary">
+              {roles.length}
+            </div>
+            <div className="text-xs text-text-muted">
+              {t("superadmin.roles")}
+            </div>
           </div>
         </div>
       </div>
@@ -713,7 +1019,9 @@ export function SuperadminPanel() {
       <Card className="p-4 lg:p-5">
         <div className="grid max-w-[760px] gap-3 sm:grid-cols-[minmax(240px,360px)_minmax(220px,260px)] lg:grid-cols-[minmax(260px,340px)_minmax(220px,260px)_auto] lg:items-end">
           <div>
-            <Label htmlFor="superadmin-user-search">{t("superadmin.searchUser")}</Label>
+            <Label htmlFor="superadmin-user-search">
+              {t("superadmin.searchUser")}
+            </Label>
             <div className="relative mt-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
               <Input
@@ -731,7 +1039,9 @@ export function SuperadminPanel() {
             </div>
           </div>
           <div>
-            <Label htmlFor="superadmin-workspace">{t("superadmin.operatingWorkspace")}</Label>
+            <Label htmlFor="superadmin-workspace">
+              {t("superadmin.operatingWorkspace")}
+            </Label>
             <SelectDropdown
               id="superadmin-workspace"
               value={selectedWorkspaceId}
@@ -744,7 +1054,11 @@ export function SuperadminPanel() {
             />
           </div>
           <div className="flex items-end sm:col-span-2 lg:col-span-1">
-            <Button onClick={() => void loadBase({ keepLoading: true })} disabled={loading || isSaving} className="h-11 w-full sm:w-auto">
+            <Button
+              onClick={() => void loadBase({ keepLoading: true })}
+              disabled={loading || isSaving}
+              className="h-11 w-full sm:w-auto"
+            >
               <RefreshCw size={16} />
               {t("superadmin.refresh")}
             </Button>
@@ -752,40 +1066,87 @@ export function SuperadminPanel() {
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-text-muted">
           <span>{loading ? t("common.loading") : t("")}</span>
-          {selectedWorkspace ? <span>Workspace: {selectedWorkspace.organizationCode}</span> : <span>{t("superadmin.allWorkspaces")}</span>}
+          {selectedWorkspace ? (
+            <span>Workspace: {selectedWorkspace.organizationCode}</span>
+          ) : (
+            <span>{t("superadmin.allWorkspaces")}</span>
+          )}
         </div>
       </Card>
+
+      {managementScope === "GLOBAL" ? (
+        <Card className="flex items-center justify-between gap-4 p-4 lg:p-5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={18} className="text-brand-primary" />
+              <Text as="h2" variant="h2">
+                {t("superadmin.permissionsTitle")}
+              </Text>
+            </div>
+            <p className="mt-1 text-sm text-text-muted">
+              {t("superadmin.permissionsHint")}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => setRolePermissionsModalOpen(true)}
+            disabled={loading || rolePermissions.length === 0}
+          >
+            <Settings2 size={16} />
+            {t("superadmin.permissionsManage")}
+          </Button>
+        </Card>
+      ) : null}
 
       <Card className="overflow-hidden">
         <div className="flex items-center justify-between border-b border-border-default px-4 py-4 lg:px-5">
           <div className="flex items-center gap-2">
             <Building2 size={18} className="text-brand-primary" />
-            <Text as="h2" variant="h2">{t("superadmin.workspacesTitle")}</Text>
+            <Text as="h2" variant="h2">
+              {t("superadmin.workspacesTitle")}
+            </Text>
           </div>
         </div>
         <div className="divide-y divide-border-subtle">
           {workspaces.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-text-muted">{t("superadmin.noWorkspaces")}</div>
-          ) : workspaces.map((workspace) => (
-            <div key={workspace.id} className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:px-5">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="truncate text-sm font-semibold text-text-primary">{workspace.name}</p>
-                  <StatePill tone={workspace.isActive ? "success" : "danger"}>{workspace.isActive ? t("superadmin.active") : t("superadmin.inactive")}</StatePill>
-                </div>
-                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
-                  {/* <span>{workspace.organizationCode}/{workspace.code}</span>
-                  <span>{workspace.organizationName}</span> */}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2 lg:justify-end">
-                <Button size="sm" onClick={() => openWorkspaceManagement(workspace.id)} disabled={isSaving}>
-                  <MoreHorizontal size={16} />
-                  {t("superadmin.manage")}
-                </Button>
-              </div>
+            <div className="px-4 py-8 text-center text-sm text-text-muted">
+              {t("superadmin.noWorkspaces")}
             </div>
-          ))}
+          ) : (
+            workspaces.map((workspace) => (
+              <div
+                key={workspace.id}
+                className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:px-5"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-semibold text-text-primary">
+                      {workspace.name}
+                    </p>
+                    <StatePill tone={workspace.isActive ? "success" : "danger"}>
+                      {workspace.isActive
+                        ? t("superadmin.active")
+                        : t("superadmin.inactive")}
+                    </StatePill>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
+                    {/* <span>{workspace.organizationCode}/{workspace.code}</span>
+                  <span>{workspace.organizationName}</span> */}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 lg:justify-end">
+                  <Button
+                    size="sm"
+                    onClick={() => openWorkspaceManagement(workspace.id)}
+                    disabled={isSaving}
+                  >
+                    <MoreHorizontal size={16} />
+                    {t("superadmin.manage")}
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </Card>
 
@@ -794,7 +1155,9 @@ export function SuperadminPanel() {
           <div className="flex items-center justify-between border-b border-border-default px-4 py-4 lg:px-5">
             <div className="flex items-center gap-2">
               <Users size={18} className="text-brand-primary" />
-              <Text as="h2" variant="h2">{t("superadmin.usersTitle")}</Text>
+              <Text as="h2" variant="h2">
+                {t("superadmin.usersTitle")}
+              </Text>
             </div>
             <SelectDropdown
               value={selectedUserId}
@@ -819,35 +1182,58 @@ export function SuperadminPanel() {
               <div className="px-4 py-10 text-center text-sm text-text-muted">
                 {t("superadmin.noUsers")}
               </div>
-            ) : users.map((user) => (
-              <div key={user.id} className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:px-5">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate text-sm font-semibold text-text-primary">{userFullName(user)}</p>
-                    <StatePill tone={user.isActive ? "success" : "danger"}>{user.isActive ? t("superadmin.active") : t("superadmin.inactive")}</StatePill>
-                    {user.developer ? <StatePill tone="warn">Developer</StatePill> : null}
-                    {user.superuser ? <StatePill tone="warn">Superuser</StatePill> : null}
+            ) : (
+              users.map((user) => (
+                <div
+                  key={user.id}
+                  className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:px-5"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-sm font-semibold text-text-primary">
+                        {userFullName(user)}
+                      </p>
+                      <StatePill tone={user.isActive ? "success" : "danger"}>
+                        {user.isActive
+                          ? t("superadmin.active")
+                          : t("superadmin.inactive")}
+                      </StatePill>
+                      {user.developer ? (
+                        <StatePill tone="warn">Developer</StatePill>
+                      ) : null}
+                      {user.superuser ? (
+                        <StatePill tone="warn">Superuser</StatePill>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
+                      <span className="truncate">{user.email}</span>
+                      <span>
+                        {user.workspaceCount} {t("superadmin.workspace")}
+                      </span>
+                    </div>
                   </div>
-                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
-                    <span className="truncate">{user.email}</span>
-                    <span>{user.workspaceCount} {t("superadmin.workspace")}</span>
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                    <Button
+                      size="sm"
+                      onClick={() => openUserManagement(user.id)}
+                      disabled={isSaving}
+                    >
+                      <MoreHorizontal size={16} />
+                      {t("superadmin.manage")}
+                    </Button>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2 lg:justify-end">
-                  <Button size="sm" onClick={() => openUserManagement(user.id)} disabled={isSaving}>
-                    <MoreHorizontal size={16} />
-                    {t("superadmin.manage")}
-                  </Button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
 
         <Card className="p-4 lg:p-5">
           <div className="flex items-center gap-2">
             <UserPlus size={18} className="text-brand-primary" />
-            <Text as="h2" variant="h2">{t("superadmin.createUser")}</Text>
+            <Text as="h2" variant="h2">
+              {t("superadmin.createUser")}
+            </Text>
           </div>
           <p className="mt-1 text-sm text-text-muted">
             {t("superadmin.createHint")}
@@ -866,7 +1252,9 @@ export function SuperadminPanel() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <Label htmlFor="create-first-name">{t("superadmin.firstName")}</Label>
+                <Label htmlFor="create-first-name">
+                  {t("superadmin.firstName")}
+                </Label>
                 <Input
                   id="create-first-name"
                   value={createFirstName}
@@ -876,7 +1264,9 @@ export function SuperadminPanel() {
                 />
               </div>
               <div>
-                <Label htmlFor="create-last-name">{t("superadmin.lastName")}</Label>
+                <Label htmlFor="create-last-name">
+                  {t("superadmin.lastName")}
+                </Label>
                 <Input
                   id="create-last-name"
                   value={createLastName}
@@ -887,7 +1277,9 @@ export function SuperadminPanel() {
               </div>
             </div>
             <div>
-              <Label htmlFor="create-password">{t("superadmin.initialPassword")}</Label>
+              <Label htmlFor="create-password">
+                {t("superadmin.initialPassword")}
+              </Label>
               <div className="relative mt-1">
                 <Input
                   id="create-password"
@@ -913,10 +1305,18 @@ export function SuperadminPanel() {
                   <button
                     type="button"
                     className="p-1 text-text-muted hover:text-text-primary"
-                    title={showCreatePassword ? t("superadmin.hidePassword") : t("superadmin.showPassword")}
+                    title={
+                      showCreatePassword
+                        ? t("superadmin.hidePassword")
+                        : t("superadmin.showPassword")
+                    }
                     onClick={() => setShowCreatePassword((value) => !value)}
                   >
-                    {showCreatePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    {showCreatePassword ? (
+                      <EyeOff size={16} />
+                    ) : (
+                      <Eye size={16} />
+                    )}
                   </button>
                 </div>
               </div>
@@ -939,7 +1339,11 @@ export function SuperadminPanel() {
               </div>
             </div>
 
-            <Button onClick={() => void handleCreateUser()} disabled={isSaving || !selectedWorkspaceId} className="w-full">
+            <Button
+              onClick={() => void handleCreateUser()}
+              disabled={isSaving || !selectedWorkspaceId}
+              className="w-full"
+            >
               <UserPlus size={16} />
               {t("superadmin.createUser")}
             </Button>
@@ -947,20 +1351,249 @@ export function SuperadminPanel() {
         </Card>
       </div>
 
+      {rolePermissionsModalOpen && selectedPermissionRole ? (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-bg-overlay px-3 pb-6 pt-8 sm:px-5 sm:pt-10"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("superadmin.permissionsTitle")}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isSaving)
+              setRolePermissionsModalOpen(false);
+          }}
+        >
+          <section className="flex w-full max-w-6xl flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-bg-surface shadow-elevated">
+            <header className="flex items-center justify-between gap-4 border-b border-border-default px-4 py-3 lg:px-5">
+              <div className="min-w-0">
+                <Text as="h2" variant="h2">
+                  {t("superadmin.permissionsTitle")}
+                </Text>
+                <p className="mt-1 truncate text-sm text-text-muted">
+                  {t("superadmin.permissionsHint")}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-[var(--radius-md)] p-2 text-text-muted hover:bg-bg-muted hover:text-text-primary"
+                onClick={() => setRolePermissionsModalOpen(false)}
+                aria-label={t("superadmin.closeWorkspaceManagement")}
+              >
+                <X size={20} />
+              </button>
+            </header>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle bg-bg-muted/30 px-4 py-3 lg:px-5">
+              <SelectDropdown
+                value={permissionRoleKey}
+                onChange={setPermissionRoleKey}
+                options={rolePermissions.map((role) => ({
+                  value: role.key,
+                  label: role.label,
+                }))}
+                disabled={isSaving}
+                className="w-full sm:w-56"
+              />
+              <div className="flex items-center gap-2">
+                {permissionRoleKey === "developer" ? (
+                  <StatePill tone="muted">
+                    {t("superadmin.permissionsDeveloperReadOnly")}
+                  </StatePill>
+                ) : permissionChangesPending ? (
+                  <StatePill tone="warn">
+                    {t("superadmin.permissionsUnsaved")}
+                  </StatePill>
+                ) : (
+                  <StatePill tone="success">
+                    {t("superadmin.permissionsSaved")}
+                  </StatePill>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!permissionChangesPending || isSaving}
+                  onClick={() => {
+                    const role = rolePermissions.find(
+                      (item) => item.key === permissionRoleKey,
+                    );
+                    setPermissionDraft(
+                      Object.fromEntries(
+                        (role?.permissions ?? []).map((permission) => [
+                          permission.key,
+                          permission.enabled,
+                        ]),
+                      ),
+                    );
+                  }}
+                >
+                  {t("superadmin.permissionsCancel")}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={
+                    !permissionChangesPending ||
+                    isSaving ||
+                    permissionRoleKey === "developer"
+                  }
+                  onClick={() => void saveRolePermissions()}
+                >
+                  {t("superadmin.permissionsSave")}
+                </Button>
+              </div>
+            </div>
+
+            <div className="p-3 lg:p-4">
+              <div className="mb-3 grid grid-cols-2 gap-1 rounded-[var(--radius-md)] border border-border-subtle bg-bg-muted/30 p-1 sm:grid-cols-5">
+                {Object.entries(permissionCategoryLabels).map(
+                  ([category, label]) => {
+                    const permissions =
+                      selectedPermissionRole.permissions.filter(
+                        (permission) => permission.category === category,
+                      );
+                    const enabledCount = permissions.filter(
+                      (permission) => permissionDraft[permission.key],
+                    ).length;
+                    return (
+                      <button
+                        key={category}
+                        type="button"
+                        onClick={() => setPermissionCategory(category)}
+                        className={cn(
+                          "rounded px-2 py-2 text-left text-[11px] font-semibold transition-colors",
+                          permissionCategory === category
+                            ? "bg-brand-primary text-text-inverse"
+                            : "text-text-muted hover:bg-bg-muted hover:text-text-primary",
+                        )}
+                      >
+                        <span className="block truncate">{label}</span>
+                        <span
+                          className={cn(
+                            "mt-0.5 block text-[10px]",
+                            permissionCategory === category
+                              ? "text-text-inverse/80"
+                              : "text-text-muted",
+                          )}
+                        >
+                          {enabledCount}/{permissions.length}
+                        </span>
+                      </button>
+                    );
+                  },
+                )}
+              </div>
+
+              {(() => {
+                const permissions = selectedPermissionRole.permissions.filter(
+                  (permission) => permission.category === permissionCategory,
+                );
+                return (
+                  <section className="rounded-[var(--radius-md)] border border-border-subtle bg-bg-muted/20 p-2.5">
+                    <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                      <div>
+                        <h3 className="text-xs font-bold uppercase tracking-wide text-text-primary">
+                          {permissionCategoryLabels[permissionCategory]}
+                        </h3>
+                        <p className="mt-0.5 text-[11px] text-text-muted">
+                          {permissionCategoryDescriptions[permissionCategory]}
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-text-muted">
+                        {
+                          permissions.filter(
+                            (permission) => permissionDraft[permission.key],
+                          ).length
+                        }
+                        /{permissions.length}
+                      </span>
+                    </div>
+                    <div className="grid gap-1.5 sm:grid-cols-2">
+                      {permissions.map((permission) => (
+                        <label
+                          key={permission.key}
+                          className={cn(
+                            "flex cursor-pointer items-start gap-2 rounded border px-2 py-1.5 transition-colors",
+                            permission.sensitive
+                              ? "border-status-warn-text/40 bg-status-warn-bg/30"
+                              : "border-border-subtle hover:border-brand-primary/50 hover:bg-bg-muted",
+                            (permissionRoleKey === "developer" || isSaving) &&
+                              "cursor-not-allowed opacity-70",
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={permissionDraft[permission.key] ?? false}
+                            disabled={
+                              permissionRoleKey === "developer" || isSaving
+                            }
+                            onChange={(event) =>
+                              setPermissionDraft((current) => ({
+                                ...current,
+                                [permission.key]: event.target.checked,
+                              }))
+                            }
+                            className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-brand-primary"
+                          />
+                          <span className="min-w-0 leading-tight">
+                            <span className="flex flex-wrap items-center gap-1 text-xs font-semibold text-text-primary">
+                              {permission.label[language]}
+                              {permission.sensitive ? (
+                                <StatePill tone="warn">
+                                  {t("superadmin.permissionsSensitive")}
+                                </StatePill>
+                              ) : null}
+                            </span>
+                            <span className="mt-0.5 block truncate font-mono text-[9px] text-text-muted">
+                              {permission.key}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </section>
+                );
+              })()}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       {workspaceModalOpen && managedWorkspace ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-label={t("superadmin.workspaceManagement")} onMouseDown={(event) => { if (event.target === event.currentTarget && !isSaving) setWorkspaceModalOpen(false); }}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("superadmin.workspaceManagement")}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isSaving)
+              setWorkspaceModalOpen(false);
+          }}
+        >
           <section className="flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-bg-surface shadow-elevated">
             <header className="flex flex-col gap-3 border-b border-border-default px-4 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-5">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Text as="h2" variant="h2">{managedWorkspace.name}</Text>
-                  <StatePill tone={managedWorkspace.isActive ? "success" : "danger"}>{managedWorkspace.isActive ? t("superadmin.active") : t("superadmin.inactive")}</StatePill>
+                  <Text as="h2" variant="h2">
+                    {managedWorkspace.name}
+                  </Text>
+                  <StatePill
+                    tone={managedWorkspace.isActive ? "success" : "danger"}
+                  >
+                    {managedWorkspace.isActive
+                      ? t("superadmin.active")
+                      : t("superadmin.inactive")}
+                  </StatePill>
                 </div>
-                <p className="mt-1 truncate text-sm text-text-muted">{managedWorkspace.organizationCode}/{managedWorkspace.code}</p>
+                <p className="mt-1 truncate text-sm text-text-muted">
+                  {managedWorkspace.organizationCode}/{managedWorkspace.code}
+                </p>
               </div>
               <div className="flex items-center gap-2 self-end lg:self-auto">
                 {managementScope === "GLOBAL" ? (
-                  <Button size="sm" variant="danger" onClick={() => setWorkspaceDeleteConfirmationOpen(true)} disabled={isSaving}>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => setWorkspaceDeleteConfirmationOpen(true)}
+                    disabled={isSaving}
+                  >
                     <Trash2 size={16} />
                     {t("superadmin.deleteWorkspace")}
                   </Button>
@@ -980,10 +1613,21 @@ export function SuperadminPanel() {
               <section className="rounded-[var(--radius-md)] border border-border-default p-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <h3 className="text-sm font-semibold text-text-primary">{t("superadmin.workspaceModules")}</h3>
-                    <p className="text-xs text-text-muted">{t("superadmin.workspaceModulesHint")}</p>
+                    <h3 className="text-sm font-semibold text-text-primary">
+                      {t("superadmin.workspaceModules")}
+                    </h3>
+                    <p className="text-xs text-text-muted">
+                      {t("superadmin.workspaceModulesHint")}
+                    </p>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => void loadWorkspaceContext(managedWorkspace.id)} disabled={isSaving}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      void loadWorkspaceContext(managedWorkspace.id)
+                    }
+                    disabled={isSaving}
+                  >
                     <RefreshCw size={16} />
                     {t("superadmin.refresh")}
                   </Button>
@@ -993,31 +1637,65 @@ export function SuperadminPanel() {
                   <table className="min-w-full divide-y divide-border-subtle text-sm">
                     <thead>
                       <tr className="text-left text-text-muted">
-                        <th className="px-2 py-2 font-semibold">{t("superadmin.module")}</th>
-                        <th className="px-2 py-2 font-semibold">{t("superadmin.status")}</th>
-                        <th className="px-2 py-2 font-semibold">{t("archive.actions")}</th>
+                        <th className="px-2 py-2 font-semibold">
+                          {t("superadmin.module")}
+                        </th>
+                        <th className="px-2 py-2 font-semibold">
+                          {t("superadmin.status")}
+                        </th>
+                        <th className="px-2 py-2 font-semibold">
+                          {t("archive.actions")}
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border-subtle">
                       {overridableModules.map((module) => {
-                        const state = workspaceModules.find((item) => item.moduleKey === module.key) ?? null;
+                        const state =
+                          workspaceModules.find(
+                            (item) => item.moduleKey === module.key,
+                          ) ?? null;
                         const enabled = state?.enabled ?? false;
                         return (
                           <tr key={module.key}>
                             <td className="px-2 py-2">
-                              <div className="font-medium text-text-primary">{moduleNameByKey.get(module.key) ?? module.name}</div>
-                              <div className="font-mono text-[11px] text-text-muted">{module.key}</div>
+                              <div className="font-medium text-text-primary">
+                                {moduleNameByKey.get(module.key) ?? module.name}
+                              </div>
+                              <div className="font-mono text-[11px] text-text-muted">
+                                {module.key}
+                              </div>
                             </td>
                             <td className="px-2 py-2">
-                              <StatePill tone={enabled ? "success" : "muted"}>{enabled ? "ON" : "OFF"}</StatePill>
+                              <StatePill tone={enabled ? "success" : "muted"}>
+                                {enabled ? "ON" : "OFF"}
+                              </StatePill>
                             </td>
                             <td className="px-2 py-2">
                               <div className="flex flex-wrap gap-1">
-                                <Button size="sm" onClick={() => void handleSetWorkspaceModule(module.key, true)} disabled={isSaving || enabled}>
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    void handleSetWorkspaceModule(
+                                      module.key,
+                                      true,
+                                    )
+                                  }
+                                  disabled={isSaving || enabled}
+                                >
                                   <Power size={15} />
                                   {t("superadmin.enableModule")}
                                 </Button>
-                                <Button size="sm" variant="outline" onClick={() => void handleSetWorkspaceModule(module.key, false)} disabled={isSaving || !enabled}>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    void handleSetWorkspaceModule(
+                                      module.key,
+                                      false,
+                                    )
+                                  }
+                                  disabled={isSaving || !enabled}
+                                >
                                   <PowerOff size={15} />
                                   {t("superadmin.disableModule")}
                                 </Button>
@@ -1036,17 +1714,40 @@ export function SuperadminPanel() {
       ) : null}
 
       {userModalOpen && selectedUser ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-label={t("superadmin.userManagement")} onMouseDown={(event) => { if (event.target === event.currentTarget && !isSaving) setUserModalOpen(false); }}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("superadmin.userManagement")}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isSaving)
+              setUserModalOpen(false);
+          }}
+        >
           <section className="flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-bg-surface shadow-elevated">
             <header className="flex flex-col gap-3 border-b border-border-default px-4 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-5">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Text as="h2" variant="h2">{userFullName(selectedUser)}</Text>
-                  <StatePill tone={selectedUser.isActive ? "success" : "danger"}>{selectedUser.isActive ? t("superadmin.active") : t("superadmin.inactive")}</StatePill>
-                  {selectedUser.developer ? <StatePill tone="warn">Developer</StatePill> : null}
-                  {selectedUser.superuser ? <StatePill tone="warn">Superuser</StatePill> : null}
+                  <Text as="h2" variant="h2">
+                    {userFullName(selectedUser)}
+                  </Text>
+                  <StatePill
+                    tone={selectedUser.isActive ? "success" : "danger"}
+                  >
+                    {selectedUser.isActive
+                      ? t("superadmin.active")
+                      : t("superadmin.inactive")}
+                  </StatePill>
+                  {selectedUser.developer ? (
+                    <StatePill tone="warn">Developer</StatePill>
+                  ) : null}
+                  {selectedUser.superuser ? (
+                    <StatePill tone="warn">Superuser</StatePill>
+                  ) : null}
                 </div>
-                <p className="mt-1 truncate text-sm text-text-muted">{selectedUser.email}</p>
+                <p className="mt-1 truncate text-sm text-text-muted">
+                  {selectedUser.email}
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -1066,23 +1767,43 @@ export function SuperadminPanel() {
                   <section className="rounded-[var(--radius-md)] border border-border-default p-4">
                     <div className="flex items-center gap-2">
                       <KeyRound size={17} className="text-brand-primary" />
-                      <h3 className="text-sm font-semibold text-text-primary">{t("superadmin.accessSessions")}</h3>
+                      <h3 className="text-sm font-semibold text-text-primary">
+                        {t("superadmin.accessSessions")}
+                      </h3>
                     </div>
                     <div className="mt-4 space-y-3">
                       <Button
                         variant={selectedUser.isActive ? "outline" : "primary"}
-                        onClick={() => void handleSetUserStatus(!selectedUser.isActive)}
+                        onClick={() =>
+                          void handleSetUserStatus(!selectedUser.isActive)
+                        }
                         disabled={isSaving}
                         className="w-full"
                       >
-                        {selectedUser.isActive ? <Ban size={16} /> : <CheckCircle2 size={16} />}
-                        {selectedUser.isActive ? t("superadmin.disableUser") : t("superadmin.enableUser")}
+                        {selectedUser.isActive ? (
+                          <Ban size={16} />
+                        ) : (
+                          <CheckCircle2 size={16} />
+                        )}
+                        {selectedUser.isActive
+                          ? t("superadmin.disableUser")
+                          : t("superadmin.enableUser")}
                       </Button>
-                      <Button variant="outline" onClick={() => void handleRevokeSessions()} disabled={isSaving} className="w-full">
+                      <Button
+                        variant="outline"
+                        onClick={() => void handleRevokeSessions()}
+                        disabled={isSaving}
+                        className="w-full"
+                      >
                         <RotateCcw size={16} />
                         {t("superadmin.revokeSessions")}
                       </Button>
-                      <Button variant="outline" onClick={() => void handleResetTwoFactor()} disabled={isSaving} className="w-full">
+                      <Button
+                        variant="outline"
+                        onClick={() => void handleResetTwoFactor()}
+                        disabled={isSaving}
+                        className="w-full"
+                      >
                         <ShieldCheck size={16} />
                         Reset 2FA
                       </Button>
@@ -1090,15 +1811,79 @@ export function SuperadminPanel() {
                   </section>
 
                   <section className="rounded-[var(--radius-md)] border border-border-default p-4">
-                    <h3 className="text-sm font-semibold text-text-primary">{t("superadmin.resetPassword")}</h3>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-text-primary">
+                          Accesso alle viste database
+                        </h3>
+                        <p className="text-xs text-text-muted">
+                          Seleziona le connessioni SQL Server che questo utente
+                          può consultare. Developer e Superuser mantengono
+                          l’accesso amministrativo.
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => void handleSaveExternalDatabaseAccess()}
+                        disabled={isSaving || !selectedWorkspaceMembership}
+                      >
+                        Salva accessi
+                      </Button>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      {externalDatabaseAccesses.length === 0 ? (
+                        <p className="text-sm text-text-muted">
+                          Nessuna connessione database configurata nel
+                          workspace.
+                        </p>
+                      ) : (
+                        externalDatabaseAccesses.map((connection) => (
+                          <label
+                            key={connection.id}
+                            className="flex items-center gap-3 rounded-[var(--radius-sm)] border border-border-subtle px-3 py-2 text-sm text-text-secondary"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={connection.isAllowed}
+                              disabled={
+                                isSaving || !selectedWorkspaceMembership
+                              }
+                              onChange={(event) =>
+                                setExternalDatabaseAccesses((items) =>
+                                  items.map((item) =>
+                                    item.id === connection.id
+                                      ? {
+                                          ...item,
+                                          isAllowed: event.target.checked,
+                                        }
+                                      : item,
+                                  ),
+                                )
+                              }
+                            />
+                            <span>{connection.name}</span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="rounded-[var(--radius-md)] border border-border-default p-4">
+                    <h3 className="text-sm font-semibold text-text-primary">
+                      {t("superadmin.resetPassword")}
+                    </h3>
                     <div className="mt-3">
-                      <Label htmlFor="superadmin-password-reset">{t("superadmin.forcedPassword")}</Label>
+                      <Label htmlFor="superadmin-password-reset">
+                        {t("superadmin.forcedPassword")}
+                      </Label>
                       <div className="relative mt-1">
                         <Input
                           id="superadmin-password-reset"
                           type={showResetPassword ? "text" : "password"}
                           value={passwordResetValue}
-                          onChange={(event) => setPasswordResetValue(event.target.value)}
+                          onChange={(event) =>
+                            setPasswordResetValue(event.target.value)
+                          }
                           className="pr-20"
                           placeholder={t("superadmin.passwordHint")}
                           autoComplete="new-password"
@@ -1118,59 +1903,105 @@ export function SuperadminPanel() {
                           <button
                             type="button"
                             className="p-1 text-text-muted hover:text-text-primary"
-                            title={showResetPassword ? t("superadmin.hidePassword") : t("superadmin.showPassword")}
-                            onClick={() => setShowResetPassword((value) => !value)}
+                            title={
+                              showResetPassword
+                                ? t("superadmin.hidePassword")
+                                : t("superadmin.showPassword")
+                            }
+                            onClick={() =>
+                              setShowResetPassword((value) => !value)
+                            }
                           >
-                            {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                            {showResetPassword ? (
+                              <EyeOff size={16} />
+                            ) : (
+                              <Eye size={16} />
+                            )}
                           </button>
                         </div>
                       </div>
                     </div>
-                    <Button onClick={() => void handleResetPassword()} disabled={isSaving || !passwordResetValue} className="mt-3 w-full">
+                    <Button
+                      onClick={() => void handleResetPassword()}
+                      disabled={isSaving || !passwordResetValue}
+                      className="mt-3 w-full"
+                    >
                       <KeyRound size={16} />
                       {t("superadmin.updatePassword")}
                     </Button>
                   </section>
 
                   <section className="rounded-[var(--radius-md)] border border-border-default p-4">
-                    <h3 className="text-sm font-semibold text-text-primary">{t("superadmin.memberships")}</h3>
+                    <h3 className="text-sm font-semibold text-text-primary">
+                      {t("superadmin.memberships")}
+                    </h3>
                     <div className="mt-3 space-y-2 text-xs text-text-muted">
                       {memberships.length === 0 ? (
                         <p>{t("superadmin.noMembership")}</p>
-                      ) : memberships.map((item) => (
-                        <div key={item.workspaceId} className="rounded-[var(--radius-sm)] bg-bg-muted px-3 py-2">
-                          <div className="font-semibold text-text-secondary">{item.workspaceCode}</div>
-                          <div>{item.status} - {item.roleKeys.join(", ") || t("superadmin.noRole")}</div>
-                        </div>
-                      ))}
+                      ) : (
+                        memberships.map((item) => (
+                          <div
+                            key={item.workspaceId}
+                            className="rounded-[var(--radius-sm)] bg-bg-muted px-3 py-2"
+                          >
+                            <div className="font-semibold text-text-secondary">
+                              {item.workspaceCode}
+                            </div>
+                            <div>
+                              {item.status} -{" "}
+                              {item.roleKeys.join(", ") ||
+                                t("superadmin.noRole")}
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
-                    {managementScope === "GLOBAL" ? <div className="mt-4 border-t border-border-subtle pt-4">
-                      <h4 className="text-xs font-semibold uppercase text-text-muted">{t("superadmin.assignWorkspace")}</h4>
-                      <div className="mt-3 space-y-3">
-                        <SelectDropdown
-                          value={addWorkspaceId}
-                          onChange={(nextValue) => setAddWorkspaceId(nextValue)}
-                          options={availableWorkspaceOptions}
-                          placeholder={t("superadmin.workspace")}
-                          disabled={isSaving || availableWorkspaceOptions.length === 0}
-                        />
-                        <SelectDropdown
-                          value={addWorkspaceRoleKey}
-                          onChange={(nextValue) => setAddWorkspaceRoleKey(nextValue)}
-                          options={roles.map((role) => ({ value: role.key, label: role.label }))}
-                          placeholder={t("superadmin.role")}
-                          disabled={isSaving || availableWorkspaceOptions.length === 0}
-                        />
-                        <Button
-                          size="sm"
-                          onClick={() => void handleAddWorkspace()}
-                          disabled={isSaving || !addWorkspaceId || !addWorkspaceRoleKey}
-                          className="w-full"
-                        >
-                          {t("superadmin.assign")}
-                        </Button>
+                    {managementScope === "GLOBAL" ? (
+                      <div className="mt-4 border-t border-border-subtle pt-4">
+                        <h4 className="text-xs font-semibold uppercase text-text-muted">
+                          {t("superadmin.assignWorkspace")}
+                        </h4>
+                        <div className="mt-3 space-y-3">
+                          <SelectDropdown
+                            value={addWorkspaceId}
+                            onChange={(nextValue) =>
+                              setAddWorkspaceId(nextValue)
+                            }
+                            options={availableWorkspaceOptions}
+                            placeholder={t("superadmin.workspace")}
+                            disabled={
+                              isSaving || availableWorkspaceOptions.length === 0
+                            }
+                          />
+                          <SelectDropdown
+                            value={addWorkspaceRoleKey}
+                            onChange={(nextValue) =>
+                              setAddWorkspaceRoleKey(nextValue)
+                            }
+                            options={roles.map((role) => ({
+                              value: role.key,
+                              label: role.label,
+                            }))}
+                            placeholder={t("superadmin.role")}
+                            disabled={
+                              isSaving || availableWorkspaceOptions.length === 0
+                            }
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => void handleAddWorkspace()}
+                            disabled={
+                              isSaving ||
+                              !addWorkspaceId ||
+                              !addWorkspaceRoleKey
+                            }
+                            className="w-full"
+                          >
+                            {t("superadmin.assign")}
+                          </Button>
+                        </div>
                       </div>
-                    </div> : null}
+                    ) : null}
                   </section>
                 </aside>
 
@@ -1178,12 +2009,20 @@ export function SuperadminPanel() {
                   <section className="rounded-[var(--radius-md)] border border-border-default p-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <h3 className="text-sm font-semibold text-text-primary">{t("superadmin.workspaceRole")}</h3>
+                        <h3 className="text-sm font-semibold text-text-primary">
+                          {t("superadmin.workspaceRole")}
+                        </h3>
                         <p className="text-xs text-text-muted">
-                          {selectedWorkspaceMembership ? selectedWorkspaceMembership.workspaceName : t("superadmin.notMember")}
+                          {selectedWorkspaceMembership
+                            ? selectedWorkspaceMembership.workspaceName
+                            : t("superadmin.notMember")}
                         </p>
                       </div>
-                      <Button size="sm" onClick={() => void handleSaveRoles()} disabled={isSaving || !selectedRoleKey}>
+                      <Button
+                        size="sm"
+                        onClick={() => void handleSaveRoles()}
+                        disabled={isSaving || !selectedRoleKey}
+                      >
                         {t("superadmin.saveRole")}
                       </Button>
                     </div>
@@ -1204,42 +2043,141 @@ export function SuperadminPanel() {
 
                   <section className="rounded-[var(--radius-md)] border border-border-default p-4">
                     <div>
-                      <h3 className="text-sm font-semibold text-text-primary">{t("superadmin.moduleAccess")}</h3>
-                      <p className="text-xs text-text-muted">{t("superadmin.moduleAccessHint")}</p>
+                      <h3 className="text-sm font-semibold text-text-primary">
+                        {t("superadmin.moduleAccess")}
+                      </h3>
+                      <p className="text-xs text-text-muted">
+                        {t("superadmin.moduleAccessHint")}
+                      </p>
                     </div>
 
                     <div className="mt-4 overflow-x-auto">
                       <table className="min-w-full divide-y divide-border-subtle text-sm">
                         <thead>
                           <tr className="text-left text-text-muted">
-                            <th className="px-2 py-2 font-semibold">{t("superadmin.module")}</th>
-                            <th className="px-2 py-2 font-semibold">{t("superadmin.workspace")}</th>
-                            <th className="px-2 py-2 font-semibold">{t("superadmin.override")}</th>
-                            <th className="px-2 py-2 font-semibold">{t("superadmin.effective")}</th>
-                            <th className="px-2 py-2 font-semibold">{t("archive.actions")}</th>
+                            <th className="px-2 py-2 font-semibold">
+                              {t("superadmin.module")}
+                            </th>
+                            <th className="px-2 py-2 font-semibold">
+                              {t("superadmin.workspace")}
+                            </th>
+                            <th className="px-2 py-2 font-semibold">
+                              {t("superadmin.override")}
+                            </th>
+                            <th className="px-2 py-2 font-semibold">
+                              {t("superadmin.effective")}
+                            </th>
+                            <th className="px-2 py-2 font-semibold">
+                              {t("archive.actions")}
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border-subtle">
                           {overridableModules.map((module) => {
-                            const state = userModules.find((item) => item.moduleKey === module.key) ?? null;
+                            const state =
+                              userModules.find(
+                                (item) => item.moduleKey === module.key,
+                              ) ?? null;
                             return (
                               <tr key={module.key}>
                                 <td className="px-2 py-2">
-                                  <div className="font-medium text-text-primary">{module.name}</div>
-                                  <div className="font-mono text-[11px] text-text-muted">{module.key}</div>
+                                  <div className="font-medium text-text-primary">
+                                    {module.name}
+                                  </div>
+                                  <div className="font-mono text-[11px] text-text-muted">
+                                    {module.key}
+                                  </div>
                                 </td>
-                                <td className="px-2 py-2">{state ? <StatePill tone={state.workspaceEnabled ? "success" : "muted"}>{state.workspaceEnabled ? "ON" : "OFF"}</StatePill> : "-"}</td>
-                                <td className="px-2 py-2">{state?.overrideMode ? <StatePill tone={state.overrideMode === "ALLOW" ? "success" : "danger"}>{state.overrideMode}</StatePill> : "-"}</td>
-                                <td className="px-2 py-2">{state ? <StatePill tone={state.effectiveEnabled ? "success" : "danger"}>{state.effectiveEnabled ? "ON" : "OFF"}</StatePill> : "-"}</td>
+                                <td className="px-2 py-2">
+                                  {state ? (
+                                    <StatePill
+                                      tone={
+                                        state.workspaceEnabled
+                                          ? "success"
+                                          : "muted"
+                                      }
+                                    >
+                                      {state.workspaceEnabled ? "ON" : "OFF"}
+                                    </StatePill>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                                <td className="px-2 py-2">
+                                  {state?.overrideMode ? (
+                                    <StatePill
+                                      tone={
+                                        state.overrideMode === "ALLOW"
+                                          ? "success"
+                                          : "danger"
+                                      }
+                                    >
+                                      {state.overrideMode}
+                                    </StatePill>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                                <td className="px-2 py-2">
+                                  {state ? (
+                                    <StatePill
+                                      tone={
+                                        state.effectiveEnabled
+                                          ? "success"
+                                          : "danger"
+                                      }
+                                    >
+                                      {state.effectiveEnabled ? "ON" : "OFF"}
+                                    </StatePill>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
                                 <td className="px-2 py-2">
                                   <div className="flex flex-wrap gap-1">
-                                    <Button size="sm" onClick={() => void handleSetModuleOverride(module.key, "ALLOW")} disabled={isSaving || !selectedWorkspaceMembership}>
+                                    <Button
+                                      size="sm"
+                                      onClick={() =>
+                                        void handleSetModuleOverride(
+                                          module.key,
+                                          "ALLOW",
+                                        )
+                                      }
+                                      disabled={
+                                        isSaving || !selectedWorkspaceMembership
+                                      }
+                                    >
                                       Allow
                                     </Button>
-                                    <Button size="sm" variant="outline" onClick={() => void handleSetModuleOverride(module.key, "DENY")} disabled={isSaving || !selectedWorkspaceMembership}>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        void handleSetModuleOverride(
+                                          module.key,
+                                          "DENY",
+                                        )
+                                      }
+                                      disabled={
+                                        isSaving || !selectedWorkspaceMembership
+                                      }
+                                    >
                                       Deny
                                     </Button>
-                                    <Button size="sm" variant="ghost" onClick={() => void handleClearModuleOverride(module.key)} disabled={isSaving || !selectedWorkspaceMembership || !state?.overrideMode}>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() =>
+                                        void handleClearModuleOverride(
+                                          module.key,
+                                        )
+                                      }
+                                      disabled={
+                                        isSaving ||
+                                        !selectedWorkspaceMembership ||
+                                        !state?.overrideMode
+                                      }
+                                    >
                                       Clear
                                     </Button>
                                   </div>
@@ -1257,7 +2195,19 @@ export function SuperadminPanel() {
           </section>
         </div>
       ) : null}
-      <ConfirmDeleteDialog open={workspaceDeleteConfirmationOpen} expectedText={managedWorkspace?.code ?? ""} isBusy={isSaving} title={t("superadmin.deleteWorkspacePrompt", { code: managedWorkspace?.code ?? "" })} onCancel={() => setWorkspaceDeleteConfirmationOpen(false)} onConfirm={async (typedText) => { setWorkspaceDeleteConfirmationOpen(false); await handleDeleteWorkspace(typedText); }} />
+      <ConfirmDeleteDialog
+        open={workspaceDeleteConfirmationOpen}
+        expectedText={managedWorkspace?.code ?? ""}
+        isBusy={isSaving}
+        title={t("superadmin.deleteWorkspacePrompt", {
+          code: managedWorkspace?.code ?? "",
+        })}
+        onCancel={() => setWorkspaceDeleteConfirmationOpen(false)}
+        onConfirm={async (typedText) => {
+          setWorkspaceDeleteConfirmationOpen(false);
+          await handleDeleteWorkspace(typedText);
+        }}
+      />
     </div>
   );
 }

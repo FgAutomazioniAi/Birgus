@@ -16,7 +16,12 @@ import { NestKnowledgeController } from "./knowledge.controller.js";
       useFactory: (
         documentArchiveService: DocumentArchiveService,
         pythonModulesClient: BackendPythonModulesClient,
-      ) => new DocumentIntelligenceService(documentArchiveService, undefined, pythonModulesClient),
+      ) =>
+        new DocumentIntelligenceService(
+          documentArchiveService,
+          undefined,
+          pythonModulesClient,
+        ),
       inject: [DocumentArchiveService, BackendPythonModulesClient],
     },
   ],

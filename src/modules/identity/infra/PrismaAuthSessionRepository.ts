@@ -38,7 +38,9 @@ export class PrismaAuthSessionRepository implements AuthSessionRepository {
     });
   }
 
-  public async findByTokenHash(tokenHash: string): Promise<AuthSessionEntity | null> {
+  public async findByTokenHash(
+    tokenHash: string,
+  ): Promise<AuthSessionEntity | null> {
     const prisma = PrismaClientManager.getClient();
 
     const row = await prisma.authSession.findFirst({
@@ -95,7 +97,10 @@ export class PrismaAuthSessionRepository implements AuthSessionRepository {
     });
   }
 
-  public async revokeAllForUserExceptSession(userId: string, currentSessionId: string): Promise<void> {
+  public async revokeAllForUserExceptSession(
+    userId: string,
+    currentSessionId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
 
     await prisma.authSession.updateMany({

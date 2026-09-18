@@ -8,8 +8,16 @@ export class PermissionPolicy {
     this.permissionReader = permissionReader;
   }
 
-  public async ensureAllowed(workspaceId: string, userId: string, permissionKey: string): Promise<void> {
-    const allowed = await this.permissionReader.hasPermission(workspaceId, userId, permissionKey);
+  public async ensureAllowed(
+    workspaceId: string,
+    userId: string,
+    permissionKey: string,
+  ): Promise<void> {
+    const allowed = await this.hasPermission(
+      workspaceId,
+      userId,
+      permissionKey,
+    );
 
     if (!allowed) {
       throw new AppError(
@@ -18,5 +26,17 @@ export class PermissionPolicy {
         403,
       );
     }
+  }
+
+  public async hasPermission(
+    workspaceId: string,
+    userId: string,
+    permissionKey: string,
+  ): Promise<boolean> {
+    return this.permissionReader.hasPermission(
+      workspaceId,
+      userId,
+      permissionKey,
+    );
   }
 }

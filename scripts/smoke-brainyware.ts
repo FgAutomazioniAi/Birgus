@@ -37,13 +37,17 @@ function findToken(payload: JsonRecord): string | null {
 async function readJsonResponse(response: Response): Promise<JsonRecord> {
   const payload = await response.json().catch(() => null);
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    throw new Error(`Brainyware ha restituito una risposta non valida (HTTP ${response.status}).`);
+    throw new Error(
+      `Brainyware ha restituito una risposta non valida (HTTP ${response.status}).`,
+    );
   }
   return payload as JsonRecord;
 }
 
 export async function smokeBrainyware(): Promise<void> {
-  const baseUrl = normalizeBrainywareBaseUrl(required(process.env.BRAINYWARE_BASE_URL, "BRAINYWARE_BASE_URL"));
+  const baseUrl = normalizeBrainywareBaseUrl(
+    required(process.env.BRAINYWARE_BASE_URL, "BRAINYWARE_BASE_URL"),
+  );
   const accessKey = await readSecret("BRAINYWARE_ACCESS_KEY_FILE");
   const secretKey = await readSecret("BRAINYWARE_SECRET_KEY_FILE");
 
@@ -54,13 +58,17 @@ export async function smokeBrainyware(): Promise<void> {
     signal: AbortSignal.timeout(20_000),
   });
   if (!loginResponse.ok) {
-    throw new Error(`Autenticazione Brainyware non riuscita (HTTP ${loginResponse.status}).`);
+    throw new Error(
+      `Autenticazione Brainyware non riuscita (HTTP ${loginResponse.status}).`,
+    );
   }
 
   const loginPayload = await readJsonResponse(loginResponse);
   const token = findToken(loginPayload);
   if (!token) {
-    throw new Error("Autenticazione riuscita, ma Brainyware non ha restituito un token riconoscibile.");
+    throw new Error(
+      "Autenticazione riuscita, ma Brainyware non ha restituito un token riconoscibile.",
+    );
   }
 
   const identityResponse = await fetch(`${baseUrl}/brainy/api/auth`, {
@@ -68,23 +76,29 @@ export async function smokeBrainyware(): Promise<void> {
     signal: AbortSignal.timeout(20_000),
   });
   if (!identityResponse.ok) {
-    throw new Error(`Verifica identita Brainyware non riuscita (HTTP ${identityResponse.status}).`);
+    throw new Error(
+      `Verifica identita Brainyware non riuscita (HTTP ${identityResponse.status}).`,
+    );
   }
 
   const identity = await readJsonResponse(identityResponse);
-  console.log(JSON.stringify({
-    ok: true,
-    id: identity.id ?? null,
-    name: identity.name ?? identity.login ?? null,
-    profile: identity.profile ?? null,
-    admin: identity.admin ?? null,
-    organizationId: identity.organization_id ?? null,
-  }));
+  console.log(
+    JSON.stringify({
+      ok: true,
+      id: identity.id ?? null,
+      name: identity.name ?? identity.login ?? null,
+      profile: identity.profile ?? null,
+      admin: identity.admin ?? null,
+      organizationId: identity.organization_id ?? null,
+    }),
+  );
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   smokeBrainyware().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : "Test Brainyware non riuscito.");
+    console.error(
+      error instanceof Error ? error.message : "Test Brainyware non riuscito.",
+    );
     process.exitCode = 1;
   });
 }

@@ -1,95 +1,550 @@
 "use client";
 
-import { ChevronDown, ChevronUp, ClipboardList, Columns3, Eye, Pencil, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import {
+  ArrowDownAZ,
+  ArrowUpAZ,
+  ChevronDown,
+  ChevronUp,
+  Columns3,
+  Database,
+  ExternalLink,
+  Loader2,
+  Plus,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
-import { Button, Card, CheckboxControl, Input, Text } from "@/components/atoms";
-import { BirgusDialog } from "@/components/molecules";
-import { useLanguage } from "@/components/organisms/language-provider";
-import { cn } from "@/lib/cn";
+import { Button, Card, CheckboxControl, Text } from "@/components/atoms";
 import { APP_ROUTES } from "@/lib/routes";
 
-interface CommissionRecord { id: string; code: string; title: string; description: string | null; statusLabel: string | null; companyId: number | null; companyName: string | null; currentChecklistId: string | null; updatedAt: string; }
-interface Company { id: number; name: string; city?: string | null; }
-type ColumnKey = "code" | "job" | "company" | "commissionStatus" | "description" | "updatedAt" | "actions";
-type FormState = { code: string; title: string; companyId: string; description: string; statusLabel: string };
-interface ColumnDefinition { key: ColumnKey; label: string; required: boolean; }
+type Connection = { id: string; name: string };
+type Cell = string | number | boolean | null;
+type Result = { columns: string[]; rows: Array<Record<string, Cell>> };
+type ColumnFilter = { id: string; column: string; value: string };
+type SortState = { column: string; direction: "asc" | "desc" } | null;
 
-const EMPTY_FORM: FormState = { code: "", title: "", companyId: "", description: "", statusLabel: "" };
-const COLUMN_STORAGE_KEY = "birgus_commission_records_table_columns_v1";
-const DEFAULT_COLUMNS: ColumnKey[] = ["code", "job", "company", "commissionStatus", "description", "updatedAt", "actions"];
-const COLUMN_DEFINITIONS: ColumnDefinition[] = [
-  { key: "code", label: "Commessa / Cantiere", required: true }, { key: "job", label: "Nome lavoro", required: true }, { key: "company", label: "Azienda", required: false }, { key: "commissionStatus", label: "Stato commessa", required: false }, { key: "description", label: "Descrizione", required: false }, { key: "updatedAt", label: "Aggiornata", required: false }, { key: "actions", label: "Azioni", required: true },
-];
-const isColumnKey = (value: string): value is ColumnKey => DEFAULT_COLUMNS.includes(value as ColumnKey);
+async function getJson<T>(url: string): Promise<T> {
+  const response = await fetch(url, { cache: "no-store" });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      String(
+        (payload as { message?: unknown }).message ?? "Richiesta non riuscita.",
+      ),
+    );
+  }
+  return payload as T;
+}
+
+function cellText(value: Cell | undefined): string {
+  return value === null || value === undefined ? "" : String(value);
+}
 
 export function CommissionRecordsPanel() {
-  const { t } = useLanguage();
-  const [records, setRecords] = useState<CommissionRecord[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [search, setSearch] = useState("");
-  const [companySearch, setCompanySearch] = useState("");
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [editingRecord, setEditingRecord] = useState<CommissionRecord | null>(null);
-  const [recordToDelete, setRecordToDelete] = useState<CommissionRecord | null>(null);
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [roleKeys, setRoleKeys] = useState<string[]>([]);
-  const [isColumnsMenuOpen, setIsColumnsMenuOpen] = useState(false);
-  const [columnOrder, setColumnOrder] = useState<ColumnKey[]>(DEFAULT_COLUMNS);
-  const [hiddenColumns, setHiddenColumns] = useState<ColumnKey[]>([]);
-  const columnsMenuRef = useRef<HTMLDivElement | null>(null);
+  const [connection, setConnection] = useState<Connection | null>(null);
+  const [filters, setFilters] = useState<ColumnFilter[]>([]);
+  const [result, setResult] = useState<Result>({ columns: [], rows: [] });
+  const [loadingConnections, setLoadingConnections] = useState(true);
+  const [loadingRows, setLoadingRows] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filterMenuPosition, setFilterMenuPosition] = useState<{
+    top: number;
+    right: number;
+  } | null>(null);
+  const [sort, setSort] = useState<SortState>(null);
+  const [canOpenDetails, setCanOpenDetails] = useState(false);
+  const columnsRef = useRef<HTMLDivElement | null>(null);
+  const filterButtonRef = useRef<HTMLButtonElement | null>(null);
+  const filterMenuRef = useRef<HTMLDivElement | null>(null);
+  const hasAutoLoadedRef = useRef(false);
 
-  const canManage = roleKeys.some((role) => ["admin", "superuser", "developer"].includes(role));
-  const selectedCompany = companies.find((company) => company.id === Number(form.companyId)) ?? null;
-  const filteredCompanies = useMemo(() => { const query = companySearch.trim().toLowerCase(); return companies.filter((company) => !query || `${company.name} ${company.city ?? ""}`.toLowerCase().includes(query)).slice(0, 80); }, [companies, companySearch]);
-  const filteredRecords = useMemo(() => { const query = search.trim().toLowerCase(); return !query ? records : records.filter((record) => [record.code, record.title, record.companyName].some((value) => (value ?? "").toLowerCase().includes(query))); }, [records, search]);
-  const visibleColumns = useMemo(() => columnOrder.filter((key) => !hiddenColumns.includes(key)).map((key) => COLUMN_DEFINITIONS.find((column) => column.key === key)).filter((column): column is ColumnDefinition => Boolean(column)), [columnOrder, hiddenColumns]);
+  useEffect(() => {
+    void getJson<{ connection: Connection }>(
+      "/api/commission-intake/external-records/connections",
+    )
+      .then(({ connection: item }) => setConnection(item))
+      .catch((error) =>
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Impossibile caricare le connessioni database.",
+        ),
+      )
+      .finally(() => setLoadingConnections(false));
+    void getJson<{ user?: { roleKeys?: string[] } }>("/api/auth/session")
+      .then((session) =>
+        setCanOpenDetails(
+          (session.user?.roleKeys ?? []).some((role) =>
+            ["admin", "superuser", "developer"].includes(role),
+          ),
+        ),
+      )
+      .catch(() => setCanOpenDetails(false));
+  }, []);
 
-  const loadRecords = useCallback(async () => { setIsLoading(true); try { const response = await fetch("/api/commission-intake/records", { cache: "no-store" }); const payload = await response.json().catch(() => ({})) as { records?: CommissionRecord[]; message?: string }; if (!response.ok) throw new Error(payload.message ?? t("commissions.loadFailed")); setRecords(payload.records ?? []); } catch (error) { toast.error(error instanceof Error ? error.message : t("commissions.loadFailed")); } finally { setIsLoading(false); } }, [t]);
-  const loadCompanies = useCallback(async () => { try { const response = await fetch("/api/companies", { cache: "no-store" }); if (!response.ok) throw new Error("Impossibile caricare le aziende."); setCompanies(await response.json() as Company[]); } catch (error) { toast.error(error instanceof Error ? error.message : "Impossibile caricare le aziende."); } }, []);
+  useEffect(() => {
+    const close = (event: MouseEvent) => {
+      if (
+        columnsRef.current &&
+        !columnsRef.current.contains(event.target as Node)
+      ) {
+        setColumnsOpen(false);
+      }
+      const target = event.target as Node;
+      if (
+        !filterButtonRef.current?.contains(target) &&
+        !filterMenuRef.current?.contains(target)
+      ) {
+        setFiltersOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
 
-  useEffect(() => { void loadRecords(); void loadCompanies(); }, [loadCompanies, loadRecords]);
-  useEffect(() => { void fetch("/api/auth/session", { cache: "no-store" }).then(async (response) => response.ok ? response.json() as Promise<{ user?: { roleKeys?: string[] } }> : null).then((payload) => setRoleKeys((payload?.user?.roleKeys ?? []).map((role) => role.trim().toLowerCase()))); }, []);
-  useEffect(() => { const stored = window.localStorage.getItem(COLUMN_STORAGE_KEY); if (!stored) return; try { const parsed = JSON.parse(stored) as { order?: unknown; hidden?: unknown }; const order = [...new Set(Array.isArray(parsed.order) ? parsed.order.filter((key): key is ColumnKey => isColumnKey(String(key))) : [])]; setColumnOrder([...order, ...DEFAULT_COLUMNS.filter((key) => !order.includes(key))]); const optional = new Set(COLUMN_DEFINITIONS.filter((column) => !column.required).map((column) => column.key)); setHiddenColumns(Array.isArray(parsed.hidden) ? parsed.hidden.filter((key): key is ColumnKey => isColumnKey(String(key)) && optional.has(key as ColumnKey)) : []); } catch { window.localStorage.removeItem(COLUMN_STORAGE_KEY); } }, []);
-  useEffect(() => { window.localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify({ order: columnOrder, hidden: hiddenColumns })); }, [columnOrder, hiddenColumns]);
-  useEffect(() => { const close = (event: MouseEvent) => { if (columnsMenuRef.current && !columnsMenuRef.current.contains(event.target as Node)) setIsColumnsMenuOpen(false); }; document.addEventListener("mousedown", close); return () => document.removeEventListener("mousedown", close); }, []);
-
-  const openCreate = () => { setEditingRecord(null); setForm(EMPTY_FORM); setCompanySearch(""); setIsFormOpen(true); };
-  const openEdit = (record: CommissionRecord) => { setEditingRecord(record); setForm({ code: record.code, title: record.title, companyId: record.companyId ? String(record.companyId) : "", description: record.description ?? "", statusLabel: record.statusLabel ?? "" }); setCompanySearch(""); setIsFormOpen(true); };
-  const closeForm = () => { if (!isSaving) { setIsFormOpen(false); setEditingRecord(null); } };
-  const setField = <Key extends keyof FormState>(key: Key, value: FormState[Key]) => setForm((current) => ({ ...current, [key]: value }));
-
-  const saveRecord = async () => {
-    if (!form.code.trim() || form.title.trim().length < 2 || !form.companyId) { toast.error("Compila Commessa / Cantiere, Nome lavoro e Azienda."); return; }
-    setIsSaving(true);
-    try { const response = await fetch(editingRecord ? `/api/commission-intake/records/${editingRecord.id}` : "/api/commission-intake/records", { method: editingRecord ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: form.code.trim(), title: form.title.trim(), companyId: Number(form.companyId), description: form.description.trim() || null, statusLabel: form.statusLabel.trim() || null }) }); const payload = await response.json().catch(() => ({})) as { record?: CommissionRecord; message?: string }; if (!response.ok || !payload.record) throw new Error(payload.message ?? "Salvataggio commessa non riuscito."); setRecords((current) => editingRecord ? current.map((record) => record.id === payload.record!.id ? payload.record! : record) : [payload.record!, ...current]); closeForm(); toast.success(editingRecord ? "Commessa aggiornata." : "Commessa creata."); } catch (error) { toast.error(error instanceof Error ? error.message : "Salvataggio commessa non riuscito."); } finally { setIsSaving(false); }
+  const load = async () => {
+    if (!connection) {
+      toast.error("Non hai accesso al database associato alle Commesse.");
+      return;
+    }
+    setLoadingRows(true);
+    try {
+      const next = await getJson<Result>(
+        "/api/commission-intake/external-records",
+      );
+      setResult(next);
+      setVisibleColumns((current) => {
+        const retained = current.filter((column) =>
+          next.columns.includes(column),
+        );
+        return [
+          ...retained,
+          ...next.columns.filter((column) => !retained.includes(column)),
+        ];
+      });
+      setFilters((current) =>
+        current.filter((filter) => next.columns.includes(filter.column)),
+      );
+      setSort(null);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Impossibile leggere la vista SQL Server.",
+      );
+    } finally {
+      setLoadingRows(false);
+    }
   };
-  const deleteRecord = async () => { if (!recordToDelete || isDeleting) return; setIsDeleting(true); try { const response = await fetch(`/api/commission-intake/records/${recordToDelete.id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmText: deleteConfirmation.trim() }) }); const payload = await response.json().catch(() => ({})) as { message?: string }; if (!response.ok) throw new Error(payload.message ?? "Eliminazione commessa non riuscita."); setRecords((current) => current.filter((record) => record.id !== recordToDelete.id)); setRecordToDelete(null); setDeleteConfirmation(""); toast.success("Commessa eliminata."); } catch (error) { toast.error(error instanceof Error ? error.message : "Eliminazione commessa non riuscita."); } finally { setIsDeleting(false); } };
-  const toggleColumn = (key: ColumnKey) => setHiddenColumns((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
-  const moveColumn = (key: ColumnKey, direction: "up" | "down") => setColumnOrder((current) => { const index = current.indexOf(key); const target = direction === "up" ? index - 1 : index + 1; if (target < 0 || target >= current.length) return current; const next = [...current]; [next[index], next[target]] = [next[target], next[index]]; return next; });
-  const renderCell = (record: CommissionRecord, key: ColumnKey) => {
-    if (key === "code") return <span className="font-semibold text-text-primary">{record.code}</span>;
-    if (key === "job") return <span className="font-semibold text-text-primary">{record.title}</span>;
-    if (key === "company") return <span>{record.companyName ?? "-"}</span>;
-    if (key === "commissionStatus") return <span>{record.statusLabel ?? "-"}</span>;
-    if (key === "description") return <span className="line-clamp-2">{record.description ?? "-"}</span>;
-    if (key === "updatedAt") return <span>{new Date(record.updatedAt).toLocaleDateString("it-IT")}</span>;
-    return <div className="flex justify-end gap-1"><Link href={APP_ROUTES.commissionRecord(record.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-text-secondary hover:bg-bg-muted" title="Dettagli"><Eye size={16} /></Link>{record.currentChecklistId ? <Link href={APP_ROUTES.dataCollectionChecklist(record.id)} className="inline-flex h-8 items-center rounded-[var(--radius-sm)] px-2 text-xs font-bold text-brand-primary hover:bg-bg-muted">Checklist</Link> : null}{canManage ? <><button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-text-secondary hover:bg-bg-muted" title="Modifica" onClick={() => openEdit(record)}><Pencil size={15} /></button><button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-status-danger-text hover:bg-status-danger-bg" title="Elimina" onClick={() => { setRecordToDelete(record); setDeleteConfirmation(""); }}><Trash2 size={15} /></button></> : null}</div>;
+
+  useEffect(() => {
+    if (!connection || hasAutoLoadedRef.current) return;
+    hasAutoLoadedRef.current = true;
+    void load();
+  }, [connection]);
+
+  const openFiltersMenu = () => {
+    const bounds = filterButtonRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    setFilterMenuPosition({
+      top: bounds.bottom + 8,
+      right: window.innerWidth - bounds.right,
+    });
+    setFiltersOpen((open) => !open);
   };
 
-  return <div className="space-y-5"><header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><Text as="h1" variant="h1">Anagrafica commesse</Text><div className="flex flex-wrap items-center gap-2"><Button variant="outline" onClick={() => void loadRecords()} disabled={isLoading}><RefreshCw size={16} />{t("commissions.refresh")}</Button>{canManage ? <Button onClick={openCreate}><Plus size={16} />Nuova commessa</Button> : null}</div></header><Card className="p-4"><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={16} /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cerca per commessa/cantiere, azienda o nome lavoro" className="pl-9" /></div></Card><div className="overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-bg-surface"><div className="flex justify-end border-b border-border-subtle p-2"><div className="relative" ref={columnsMenuRef}><Button size="sm" variant="outline" onClick={() => setIsColumnsMenuOpen((open) => !open)}><Columns3 size={16} />Colonne</Button>{isColumnsMenuOpen ? <div className="absolute right-0 z-20 mt-2 w-72 rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-2 shadow-elevated">{columnOrder.map((key, index) => { const column = COLUMN_DEFINITIONS.find((item) => item.key === key)!; return <div key={key} className="flex items-center gap-2 px-2 py-1.5"><label className="flex min-w-0 flex-1 items-center gap-2 text-sm"><CheckboxControl checked={!hiddenColumns.includes(key)} disabled={column.required} onChange={() => toggleColumn(key)} /><span className={cn("truncate", column.required ? "font-semibold text-text-primary" : "text-text-secondary")}>{column.label}</span></label><button type="button" disabled={index === 0} onClick={() => moveColumn(key, "up")} className="p-1 disabled:opacity-30"><ChevronUp size={15} /></button><button type="button" disabled={index === columnOrder.length - 1} onClick={() => moveColumn(key, "down")} className="p-1 disabled:opacity-30"><ChevronDown size={15} /></button></div>; })}</div> : null}</div></div><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left"><thead className="border-b border-border-subtle bg-bg-muted/40"><tr>{visibleColumns.map((column) => <th key={column.key} className={cn("px-4 py-3 text-xs font-bold uppercase text-text-muted", column.key === "actions" && "text-right")}>{column.label}</th>)}</tr></thead><tbody>{isLoading ? <tr><td colSpan={visibleColumns.length} className="px-4 py-8 text-sm text-text-muted">{t("commissions.loading")}</td></tr> : filteredRecords.length ? filteredRecords.map((record) => <tr key={record.id} className="border-b border-border-subtle last:border-b-0 hover:bg-bg-muted/30">{visibleColumns.map((column) => <td key={column.key} className={cn("px-4 py-3 text-sm text-text-secondary", column.key === "actions" && "text-right")}>{renderCell(record, column.key)}</td>)}</tr>) : <tr><td colSpan={visibleColumns.length} className="px-4 py-10 text-center text-sm text-text-muted"><ClipboardList size={22} className="mx-auto mb-2" />{t("commissions.empty")}</td></tr>}</tbody></table></div></div>{isFormOpen ? <CommissionFormDialog companies={filteredCompanies} companySearch={companySearch} editing={editingRecord !== null} form={form} isSaving={isSaving} selectedCompany={selectedCompany} onClose={closeForm} onCompanySearchChange={setCompanySearch} onFieldChange={setField} onSave={() => void saveRecord()} /> : null}{recordToDelete ? <DeleteCommissionDialog confirmation={deleteConfirmation} isDeleting={isDeleting} record={recordToDelete} onCancel={() => { if (!isDeleting) { setRecordToDelete(null); setDeleteConfirmation(""); } }} onConfirm={() => void deleteRecord()} onConfirmationChange={setDeleteConfirmation} /> : null}</div>;
-}
+  const displayedColumns = useMemo(
+    () => visibleColumns.filter((column) => result.columns.includes(column)),
+    [result.columns, visibleColumns],
+  );
+  const displayedRows = useMemo(() => {
+    const filtered = result.rows.filter((row) =>
+      filters.every((filter) =>
+        cellText(row[filter.column])
+          .toLocaleLowerCase("it")
+          .includes(filter.value.trim().toLocaleLowerCase("it")),
+      ),
+    );
+    if (!sort) return filtered;
+    return [...filtered].sort((first, second) => {
+      const firstValue = cellText(first[sort.column]);
+      const secondValue = cellText(second[sort.column]);
+      const firstNumber = Number(firstValue.replace(",", "."));
+      const secondNumber = Number(secondValue.replace(",", "."));
+      const order =
+        Number.isFinite(firstNumber) && Number.isFinite(secondNumber)
+          ? firstNumber - secondNumber
+          : firstValue.localeCompare(secondValue, "it", {
+              numeric: true,
+              sensitivity: "base",
+            });
+      return sort.direction === "asc" ? order : -order;
+    });
+  }, [filters, result.rows, sort]);
 
-function CommissionFormDialog({ companies, companySearch, editing, form, isSaving, selectedCompany, onClose, onCompanySearchChange, onFieldChange, onSave }: { companies: Company[]; companySearch: string; editing: boolean; form: FormState; isSaving: boolean; selectedCompany: Company | null; onClose: () => void; onCompanySearchChange: (value: string) => void; onFieldChange: <Key extends keyof FormState>(key: Key, value: FormState[Key]) => void; onSave: () => void }) {
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-label={editing ? "Modifica commessa" : "Nuova commessa"} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><Card className="w-full max-w-2xl p-0 shadow-elevated"><form onSubmit={(event) => { event.preventDefault(); onSave(); }}><div className="flex items-center justify-between border-b border-border-subtle p-4"><Text as="h2" variant="h2">{editing ? "Modifica commessa" : "Nuova commessa"}</Text><button type="button" onClick={onClose} className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-bg-muted"><X size={18} /></button></div><div className="grid gap-4 p-4 md:grid-cols-2"><label className="space-y-1.5"><span className="text-sm font-bold text-text-primary">Commessa / Cantiere</span><Input value={form.code} onChange={(event) => onFieldChange("code", event.target.value)} autoFocus /></label><label className="space-y-1.5"><span className="text-sm font-bold text-text-primary">Nome lavoro</span><Input value={form.title} onChange={(event) => onFieldChange("title", event.target.value)} /></label><div className="space-y-2 md:col-span-2"><span className="text-sm font-bold text-text-primary">Azienda collegata</span><Input value={companySearch} onChange={(event) => onCompanySearchChange(event.target.value)} placeholder="Cerca tra le aziende salvate" /><div className="max-h-40 overflow-y-auto rounded-[var(--radius-sm)] border border-border-default bg-bg-page">{companies.map((company) => <button key={company.id} type="button" onClick={() => onFieldChange("companyId", String(company.id))} className={cn("flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-bg-muted", String(company.id) === form.companyId && "bg-brand-primary/10 text-brand-primary")}><span>{company.name}</span><span className="text-xs text-text-muted">{company.city ?? ""}</span></button>)}{companies.length === 0 ? <p className="px-3 py-2 text-sm text-text-muted">Nessuna azienda trovata.</p> : null}</div>{selectedCompany ? <p className="text-xs font-semibold text-status-success-text">Selezionata: {selectedCompany.name}</p> : null}</div><label className="space-y-1.5"><span className="text-sm font-bold text-text-primary">Stato commessa</span><Input value={form.statusLabel} onChange={(event) => onFieldChange("statusLabel", event.target.value)} placeholder="Stato libero" /></label><label className="space-y-1.5 md:col-span-2"><span className="text-sm font-bold text-text-primary">Descrizione lavoro</span><textarea value={form.description} onChange={(event) => onFieldChange("description", event.target.value)} className="min-h-28 w-full rounded-[var(--radius-md)] border border-border-default bg-bg-page px-3 py-2 text-sm text-text-primary focus-visible:border-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary" /></label></div><div className="flex justify-end gap-2 border-t border-border-subtle p-4"><Button type="button" variant="outline" disabled={isSaving} onClick={onClose}>Annulla</Button><Button type="submit" disabled={isSaving}>{isSaving ? "Salvataggio..." : editing ? "Salva modifiche" : "Crea commessa"}</Button></div></form></Card></div>;
-}
+  const addFilter = () => {
+    const column =
+      result.columns.find(
+        (candidate) => !filters.some((filter) => filter.column === candidate),
+      ) ?? result.columns[0];
+    if (!column) return;
+    setFilters((current) => [
+      ...current,
+      { id: crypto.randomUUID(), column, value: "" },
+    ]);
+  };
+  const updateFilter = (id: string, update: Partial<ColumnFilter>) =>
+    setFilters((current) =>
+      current.map((filter) =>
+        filter.id === id ? { ...filter, ...update } : filter,
+      ),
+    );
+  const moveColumn = (column: string, delta: number) =>
+    setVisibleColumns((current) => {
+      const index = current.indexOf(column);
+      const target = index + delta;
+      if (index < 0 || target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  const toggleColumn = (column: string) =>
+    setVisibleColumns((current) =>
+      current.includes(column)
+        ? current.filter((item) => item !== column)
+        : [...current, column],
+    );
+  const toggleSort = (column: string) =>
+    setSort((current) =>
+      current?.column !== column
+        ? { column, direction: "asc" }
+        : current.direction === "asc"
+          ? { column, direction: "desc" }
+          : null,
+    );
+  const startResize = (
+    column: string,
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth =
+      columnWidths[column] ??
+      (column.toLowerCase().includes("descrizione") ? 420 : 180);
+    const resize = (moveEvent: MouseEvent) => {
+      setColumnWidths((current) => ({
+        ...current,
+        [column]: Math.max(100, startWidth + moveEvent.clientX - startX),
+      }));
+    };
+    const stop = () => {
+      document.removeEventListener("mousemove", resize);
+      document.removeEventListener("mouseup", stop);
+    };
+    document.addEventListener("mousemove", resize);
+    document.addEventListener("mouseup", stop);
+  };
 
-function DeleteCommissionDialog({ confirmation, isDeleting, record, onCancel, onConfirm, onConfirmationChange }: { confirmation: string; isDeleting: boolean; record: CommissionRecord; onCancel: () => void; onConfirm: () => void; onConfirmationChange: (value: string) => void }) {
-  return <div className="fixed inset-0 z-[60] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" aria-label="Elimina commessa"><Card className="w-full max-w-md p-0 shadow-elevated"><div className="border-b border-border-subtle p-4"><Text as="h2" variant="h2">Birgus dice:</Text><p className="mt-1 text-sm text-text-secondary">Eliminare la commessa "{record.code}"? Inserisci il codice per confermare.</p></div><div className="p-4"><Input value={confirmation} onChange={(event) => onConfirmationChange(event.target.value)} placeholder={record.code} autoFocus /></div><div className="flex justify-end gap-2 border-t border-border-subtle p-4"><Button variant="outline" disabled={isDeleting} onClick={onCancel}>Annulla</Button><Button variant="danger" disabled={isDeleting || confirmation.trim() !== record.code} onClick={onConfirm}>Elimina</Button></div></Card></div>;
+  return (
+    <div className="flex h-[calc(100dvh-8rem)] min-h-[34rem] flex-col gap-4">
+      <header>
+        <Text as="h1" variant="h1">
+          Anagrafica commesse
+        </Text>
+        <Text variant="muted" className="mt-1">
+          Consultazione in sola lettura della vista SQL Server configurata.
+        </Text>
+      </header>
+      <Card className="shrink-0 p-4">
+        <div className="flex items-end gap-3 overflow-x-auto">
+          <div className="min-w-56 flex-1">
+            <div className="text-xs font-medium text-text-secondary">
+              Database collegato
+            </div>
+            <div className="mt-1 flex h-9 items-center rounded-[var(--radius-md)] border border-border-default bg-bg-page px-3 text-sm text-text-primary">
+              {loadingConnections
+                ? "Caricamento…"
+                : (connection?.name ??
+                  "Visita le impostazioni Admin per configurare una connessione.")}
+            </div>
+          </div>
+          <div className="shrink-0">
+            <Button
+              ref={filterButtonRef}
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!result.columns.length}
+              onClick={openFiltersMenu}
+            >
+              <Plus size={15} />
+              Filtri{filters.length ? ` (${filters.length})` : ""}
+            </Button>
+            {filtersOpen && filterMenuPosition
+              ? createPortal(
+                  <div
+                    ref={filterMenuRef}
+                    className="fixed z-[200] w-[36rem] max-w-[calc(100vw-2rem)] space-y-2 rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-3 shadow-elevated"
+                    style={{
+                      top: filterMenuPosition.top,
+                      right: filterMenuPosition.right,
+                    }}
+                  >
+                    {filters.length === 0 ? (
+                      <Text variant="caption">Nessun filtro attivo.</Text>
+                    ) : null}
+                    {filters.map((filter) => (
+                      <div key={filter.id} className="flex items-center gap-2">
+                        <select
+                          value={filter.column}
+                          onChange={(event) =>
+                            updateFilter(filter.id, {
+                              column: event.target.value,
+                            })
+                          }
+                          className="h-9 w-48 rounded-[var(--radius-md)] border border-border-default bg-bg-page px-3 text-sm text-text-primary"
+                        >
+                          {result.columns.map((column) => (
+                            <option key={column} value={column}>
+                              {column}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          value={filter.value}
+                          placeholder={`Cerca in ${filter.column}`}
+                          onChange={(event) =>
+                            updateFilter(filter.id, {
+                              value: event.target.value,
+                            })
+                          }
+                          className="h-9 min-w-0 flex-1 rounded-[var(--radius-md)] border border-border-default bg-bg-page px-3 text-sm text-text-primary"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-9 w-9 shrink-0 px-0"
+                          title="Rimuovi filtro"
+                          onClick={() =>
+                            setFilters((current) =>
+                              current.filter((item) => item.id !== filter.id),
+                            )
+                          }
+                        >
+                          <X size={16} />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={addFilter}
+                    >
+                      <Plus size={15} />
+                      Aggiungi filtro
+                    </Button>
+                  </div>,
+                  document.body,
+                )
+              : null}
+          </div>
+          <Button
+            type="button"
+            className="shrink-0"
+            disabled={loadingRows || !connection}
+            onClick={() => void load()}
+          >
+            {loadingRows ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <RefreshCw size={16} />
+            )}
+            Esegui ricerca
+          </Button>
+          {canOpenDetails ? (
+            <Link href={APP_ROUTES.commissionInsights} className="shrink-0">
+              <Button type="button" variant="outline">
+                <ExternalLink size={16} />
+                Dettaglio commesse
+              </Button>
+            </Link>
+          ) : null}
+        </div>
+      </Card>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-bg-surface">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border-subtle p-2">
+          <Text variant="caption" className="px-2">
+            {loadingRows
+              ? "Lettura in corso…"
+              : result.columns.length
+                ? `${displayedRows.length.toLocaleString("it-IT")} righe visualizzate su ${result.rows.length.toLocaleString("it-IT")}`
+                : "Esegui una ricerca per visualizzare le commesse."}
+          </Text>
+          <div className="relative" ref={columnsRef}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!result.columns.length}
+              onClick={() => setColumnsOpen((open) => !open)}
+            >
+              <Columns3 size={16} />
+              Colonne
+            </Button>
+            {columnsOpen ? (
+              <div className="absolute right-0 z-20 mt-2 max-h-80 w-80 overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-2 shadow-elevated">
+                {result.columns.map((column) => {
+                  const index = visibleColumns.indexOf(column);
+                  const isVisible = index >= 0;
+                  return (
+                    <div
+                      key={column}
+                      className="flex items-center gap-2 px-2 py-1.5"
+                    >
+                      <label className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+                        <CheckboxControl
+                          checked={isVisible}
+                          onChange={() => toggleColumn(column)}
+                        />
+                        <span className="truncate">{column}</span>
+                      </label>
+                      {isVisible ? (
+                        <>
+                          <button
+                            type="button"
+                            disabled={index === 0}
+                            onClick={() => moveColumn(column, -1)}
+                            className="p-1 disabled:opacity-30"
+                            aria-label={`Sposta ${column} a sinistra`}
+                          >
+                            <ChevronUp size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={index === visibleColumns.length - 1}
+                            onClick={() => moveColumn(column, 1)}
+                            className="p-1 disabled:opacity-30"
+                            aria-label={`Sposta ${column} a destra`}
+                          >
+                            <ChevronDown size={15} />
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto">
+          <table className="w-max min-w-full table-fixed text-left">
+            <colgroup>
+              {displayedColumns.map((column) => (
+                <col
+                  key={column}
+                  style={{
+                    width:
+                      columnWidths[column] ??
+                      (column.toLowerCase().includes("descrizione")
+                        ? 420
+                        : 180),
+                  }}
+                />
+              ))}
+            </colgroup>
+            <thead className="sticky top-0 z-10 border-b border-border-subtle bg-bg-muted/95 backdrop-blur">
+              <tr>
+                {displayedColumns.map((column) => (
+                  <th
+                    key={column}
+                    className="relative border-r border-border-default px-4 py-3 text-xs font-bold uppercase text-text-muted last:border-r-0"
+                  >
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 text-left"
+                      onClick={() => toggleSort(column)}
+                    >
+                      {column}
+                      {sort?.column === column ? (
+                        sort.direction === "asc" ? (
+                          <ArrowUpAZ size={14} />
+                        ) : (
+                          <ArrowDownAZ size={14} />
+                        )
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      className="absolute right-0 top-0 h-full w-2 cursor-col-resize"
+                      aria-label={`Ridimensiona ${column}`}
+                      onMouseDown={(event) => startResize(column, event)}
+                    />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loadingRows ? (
+                <tr>
+                  <td
+                    colSpan={Math.max(displayedColumns.length, 1)}
+                    className="px-4 py-10 text-sm text-text-muted"
+                  >
+                    La vista SQL Server sta restituendo tutte le righe
+                    richieste…
+                  </td>
+                </tr>
+              ) : displayedRows.length ? (
+                displayedRows.map((row, index) => (
+                  <tr
+                    key={index}
+                    className="border-b border-border-subtle last:border-b-0 hover:bg-bg-muted/30"
+                  >
+                    {displayedColumns.map((column) => (
+                      <td
+                        key={column}
+                        className={
+                          column.toLowerCase().includes("descrizione")
+                            ? "break-words whitespace-normal border-r border-border-subtle px-4 py-3 text-sm text-text-secondary last:border-r-0"
+                            : "whitespace-nowrap border-r border-border-subtle px-4 py-3 text-sm text-text-secondary last:border-r-0"
+                        }
+                      >
+                        {cellText(row[column]) || "-"}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : result.columns.length ? (
+                <tr>
+                  <td
+                    colSpan={Math.max(displayedColumns.length, 1)}
+                    className="px-4 py-10 text-center text-sm text-text-muted"
+                  >
+                    Nessuna riga corrisponde ai filtri inseriti.
+                  </td>
+                </tr>
+              ) : (
+                <tr>
+                  <td className="px-4 py-12 text-center text-sm text-text-muted">
+                    <Database size={24} className="mx-auto mb-2" />
+                    Seleziona un database ed esegui la ricerca.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 }

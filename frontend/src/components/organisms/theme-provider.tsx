@@ -55,7 +55,8 @@ interface UserPreferenceApiResponse {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeId>(DEFAULT_THEME);
-  const [cornerStyle, setCornerStyleState] = useState<CornerStyle>(DEFAULT_CORNER_STYLE);
+  const [cornerStyle, setCornerStyleState] =
+    useState<CornerStyle>(DEFAULT_CORNER_STYLE);
 
   useEffect(() => {
     const storedTheme = readStoredTheme();
@@ -67,7 +68,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     const syncThemeFromDatabase = async () => {
       try {
-        const response = await fetch("/api/user/preferences", { cache: "no-store" });
+        const response = await fetch("/api/user/preferences", {
+          cache: "no-store",
+        });
         if (!response.ok) {
           return;
         }
@@ -137,7 +140,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [cornerStyle, theme],
   );
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+  );
 }
 
 export function useTheme() {

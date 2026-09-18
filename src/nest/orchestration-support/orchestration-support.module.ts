@@ -17,7 +17,11 @@ import { AgentsNestModule } from "../agents/agents.module.js";
       useFactory: (
         moduleAgentService: ModuleAgentService,
         localLmOrchestrator: LocalLmOrchestrator,
-      ) => new NextOrchestratorDdtAnalyzer(moduleAgentService, localLmOrchestrator),
+      ) =>
+        new NextOrchestratorDdtAnalyzer(
+          moduleAgentService,
+          localLmOrchestrator,
+        ),
       inject: [ModuleAgentService, LocalLmOrchestrator],
     },
     {
@@ -25,7 +29,11 @@ import { AgentsNestModule } from "../agents/agents.module.js";
       useFactory: (
         moduleAgentService: ModuleAgentService,
         localLmOrchestrator: LocalLmOrchestrator,
-      ) => new NextOrchestratorQuotationAnalyzer(moduleAgentService, localLmOrchestrator),
+      ) =>
+        new NextOrchestratorQuotationAnalyzer(
+          moduleAgentService,
+          localLmOrchestrator,
+        ),
       inject: [ModuleAgentService, LocalLmOrchestrator],
     },
     {
@@ -34,8 +42,17 @@ import { AgentsNestModule } from "../agents/agents.module.js";
         moduleAgentService: ModuleAgentService,
         pythonModulesClient: BackendPythonModulesClient,
         lmClient: OpenAiCompatibleLmClient,
-      ) => new MeasureReportAnalyzer(moduleAgentService, pythonModulesClient, lmClient),
-      inject: [ModuleAgentService, BackendPythonModulesClient, OpenAiCompatibleLmClient],
+      ) =>
+        new MeasureReportAnalyzer(
+          moduleAgentService,
+          pythonModulesClient,
+          lmClient,
+        ),
+      inject: [
+        ModuleAgentService,
+        BackendPythonModulesClient,
+        OpenAiCompatibleLmClient,
+      ],
     },
   ],
   exports: [

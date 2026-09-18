@@ -1,12 +1,25 @@
 import { AppError } from "../../../core/errors/AppError.js";
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { ModuleToolEntity } from "../domain/ModuleToolEntity.js";
-import { ModuleWorkflowEdgeEntity, ModuleWorkflowEntity, ModuleWorkflowNodeEntity } from "../domain/ModuleWorkflowEntity.js";
-import { ModuleWorkflowRunEntity, ModuleWorkflowRunStepEntity } from "../domain/ModuleWorkflowRunEntity.js";
-import { WorkflowDefinitionInput, WorkflowRepository } from "../repositories/WorkflowRepository.js";
+import {
+  ModuleWorkflowEdgeEntity,
+  ModuleWorkflowEntity,
+  ModuleWorkflowNodeEntity,
+} from "../domain/ModuleWorkflowEntity.js";
+import {
+  ModuleWorkflowRunEntity,
+  ModuleWorkflowRunStepEntity,
+} from "../domain/ModuleWorkflowRunEntity.js";
+import {
+  WorkflowDefinitionInput,
+  WorkflowRepository,
+} from "../repositories/WorkflowRepository.js";
 
 export class PrismaWorkflowRepository implements WorkflowRepository {
-  public async listModuleTools(workspaceId: string, moduleKey?: string): Promise<ModuleToolEntity[]> {
+  public async listModuleTools(
+    workspaceId: string,
+    moduleKey?: string,
+  ): Promise<ModuleToolEntity[]> {
     const prisma = PrismaClientManager.getClient();
     const rows = await prisma.moduleTool.findMany({
       where: {
@@ -24,25 +37,31 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
       orderBy: [{ module: { key: "asc" } }, { label: "asc" }],
     });
 
-    return rows.map((row) => new ModuleToolEntity({
-      id: row.id,
-      workspaceId: row.workspace_id,
-      moduleKey: row.module.key,
-      key: row.key,
-      name: row.name,
-      label: row.label,
-      description: row.description,
-      runtimeKind: row.runtime_kind,
-      handlerKey: row.handler_key,
-      inputSchema: row.input_schema,
-      outputSchema: row.output_schema,
-      configuration: row.configuration,
-      isEnabled: row.is_enabled,
-      updatedAt: row.updated_at,
-    }));
+    return rows.map(
+      (row) =>
+        new ModuleToolEntity({
+          id: row.id,
+          workspaceId: row.workspace_id,
+          moduleKey: row.module.key,
+          key: row.key,
+          name: row.name,
+          label: row.label,
+          description: row.description,
+          runtimeKind: row.runtime_kind,
+          handlerKey: row.handler_key,
+          inputSchema: row.input_schema,
+          outputSchema: row.output_schema,
+          configuration: row.configuration,
+          isEnabled: row.is_enabled,
+          updatedAt: row.updated_at,
+        }),
+    );
   }
 
-  public async listWorkflows(workspaceId: string, moduleKey?: string): Promise<ModuleWorkflowEntity[]> {
+  public async listWorkflows(
+    workspaceId: string,
+    moduleKey?: string,
+  ): Promise<ModuleWorkflowEntity[]> {
     const prisma = PrismaClientManager.getClient();
     const rows = await prisma.moduleWorkflow.findMany({
       where: {
@@ -57,25 +76,31 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
       orderBy: [{ module: { key: "asc" } }, { updated_at: "desc" }],
     });
 
-    return rows.map((row) => new ModuleWorkflowEntity({
-      id: row.id,
-      workspaceId: row.workspace_id,
-      moduleKey: row.module.key,
-      key: row.key,
-      name: row.name,
-      label: row.label,
-      description: row.description,
-      configuration: row.configuration,
-      versionNo: row.version_no,
-      isEnabled: row.is_enabled,
-      isDefault: row.is_default,
-      nodes: [],
-      edges: [],
-      updatedAt: row.updated_at,
-    }));
+    return rows.map(
+      (row) =>
+        new ModuleWorkflowEntity({
+          id: row.id,
+          workspaceId: row.workspace_id,
+          moduleKey: row.module.key,
+          key: row.key,
+          name: row.name,
+          label: row.label,
+          description: row.description,
+          configuration: row.configuration,
+          versionNo: row.version_no,
+          isEnabled: row.is_enabled,
+          isDefault: row.is_default,
+          nodes: [],
+          edges: [],
+          updatedAt: row.updated_at,
+        }),
+    );
   }
 
-  public async findWorkflowById(workspaceId: string, workflowId: string): Promise<ModuleWorkflowEntity | null> {
+  public async findWorkflowById(
+    workspaceId: string,
+    workflowId: string,
+  ): Promise<ModuleWorkflowEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.moduleWorkflow.findFirst({
       where: {
@@ -93,7 +118,11 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
     return row ? this.mapWorkflow(row) : null;
   }
 
-  public async findWorkflowByKey(workspaceId: string, moduleKey: string, workflowKey: string): Promise<ModuleWorkflowEntity | null> {
+  public async findWorkflowByKey(
+    workspaceId: string,
+    moduleKey: string,
+    workflowKey: string,
+  ): Promise<ModuleWorkflowEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.moduleWorkflow.findFirst({
       where: {
@@ -116,7 +145,9 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
     return row ? this.mapWorkflow(row) : null;
   }
 
-  public async saveWorkflowDefinition(input: WorkflowDefinitionInput): Promise<ModuleWorkflowEntity> {
+  public async saveWorkflowDefinition(
+    input: WorkflowDefinitionInput,
+  ): Promise<ModuleWorkflowEntity> {
     const prisma = PrismaClientManager.getClient();
     const moduleRecord = await prisma.module.findFirst({
       where: {
@@ -126,7 +157,11 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
       select: { id: true },
     });
     if (!moduleRecord) {
-      throw new AppError(`Module '${input.moduleKey}' not found.`, "WORKFLOW_MODULE_NOT_FOUND", 404);
+      throw new AppError(
+        `Module '${input.moduleKey}' not found.`,
+        "WORKFLOW_MODULE_NOT_FOUND",
+        404,
+      );
     }
 
     const saved = await prisma.$transaction(async (tx) => {
@@ -161,7 +196,9 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
               is_enabled: input.isEnabled,
               is_default: input.isDefault,
               updated_by_user_id: input.actorUserId,
-              ...(input.incrementVersion === false ? {} : { version_no: { increment: 1 } }),
+              ...(input.incrementVersion === false
+                ? {}
+                : { version_no: { increment: 1 } }),
               deleted_at: null,
             },
           })
@@ -203,7 +240,9 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
           is_required: true,
         },
       });
-      const existingNodeByKey = new Map(existingNodes.map((row) => [row.node_key, row.id]));
+      const existingNodeByKey = new Map(
+        existingNodes.map((row) => [row.node_key, row.id]),
+      );
       const normalizedNodes = [...input.nodes];
 
       const nextNodeIds = new Set<string>();
@@ -260,7 +299,9 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
         nodeIdByKey.set(node.nodeKey, savedNode.id);
       }
 
-      const staleNodeIds = existingNodes.filter((row) => !nextNodeIds.has(row.id)).map((row) => row.id);
+      const staleNodeIds = existingNodes
+        .filter((row) => !nextNodeIds.has(row.id))
+        .map((row) => row.id);
       if (staleNodeIds.length > 0) {
         await tx.moduleWorkflowEdge.deleteMany({
           where: {
@@ -286,7 +327,11 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
             const sourceNodeId = nodeIdByKey.get(edge.sourceNodeKey);
             const targetNodeId = nodeIdByKey.get(edge.targetNodeKey);
             if (!sourceNodeId || !targetNodeId) {
-              throw new AppError("Workflow edge references unknown nodes.", "WORKFLOW_EDGE_INVALID", 400);
+              throw new AppError(
+                "Workflow edge references unknown nodes.",
+                "WORKFLOW_EDGE_INVALID",
+                400,
+              );
             }
 
             return {
@@ -310,12 +355,19 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
 
     const workflow = await this.findWorkflowById(input.workspaceId, saved);
     if (!workflow) {
-      throw new AppError("Workflow not found after save.", "WORKFLOW_NOT_FOUND", 404);
+      throw new AppError(
+        "Workflow not found after save.",
+        "WORKFLOW_NOT_FOUND",
+        404,
+      );
     }
     return workflow;
   }
 
-  public async listWorkflowRuns(workspaceId: string, workflowId?: string): Promise<ModuleWorkflowRunEntity[]> {
+  public async listWorkflowRuns(
+    workspaceId: string,
+    workflowId?: string,
+  ): Promise<ModuleWorkflowRunEntity[]> {
     const prisma = PrismaClientManager.getClient();
     const rows = await prisma.moduleWorkflowRun.findMany({
       where: {
@@ -330,33 +382,39 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
       take: 100,
     });
 
-    return rows.map((row) => new ModuleWorkflowRunEntity({
-      id: row.id,
-      workspaceId: row.workspace_id,
-      workflowId: row.workflow_id,
-      workflowKey: row.workflow.key,
-      moduleKey: row.module?.key ?? null,
-      status: row.status,
-      triggerSource: row.trigger_source,
-      contextEntityType: row.context_entity_type,
-      contextEntityId: row.context_entity_id,
-      projectId: row.project_id,
-      projectVersionId: row.project_version_id,
-      clientId: row.client_id,
-      documentId: row.document_id,
-      ddtDocumentId: row.ddt_document_id,
-      measureReportDocumentId: row.measure_report_document_id,
-      inputPayload: row.input_payload,
-      resultPayload: row.result_payload,
-      errorMessage: row.error_message,
-      queuedAt: row.queued_at,
-      startedAt: row.started_at,
-      completedAt: row.completed_at,
-      steps: [],
-    }));
+    return rows.map(
+      (row) =>
+        new ModuleWorkflowRunEntity({
+          id: row.id,
+          workspaceId: row.workspace_id,
+          workflowId: row.workflow_id,
+          workflowKey: row.workflow.key,
+          moduleKey: row.module?.key ?? null,
+          status: row.status,
+          triggerSource: row.trigger_source,
+          contextEntityType: row.context_entity_type,
+          contextEntityId: row.context_entity_id,
+          projectId: row.project_id,
+          projectVersionId: row.project_version_id,
+          clientId: row.client_id,
+          documentId: row.document_id,
+          ddtDocumentId: row.ddt_document_id,
+          measureReportDocumentId: row.measure_report_document_id,
+          inputPayload: row.input_payload,
+          resultPayload: row.result_payload,
+          errorMessage: row.error_message,
+          queuedAt: row.queued_at,
+          startedAt: row.started_at,
+          completedAt: row.completed_at,
+          steps: [],
+        }),
+    );
   }
 
-  public async findWorkflowRunById(workspaceId: string, runId: string): Promise<ModuleWorkflowRunEntity | null> {
+  public async findWorkflowRunById(
+    workspaceId: string,
+    runId: string,
+  ): Promise<ModuleWorkflowRunEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.moduleWorkflowRun.findFirst({
       where: {
@@ -396,19 +454,22 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
       queuedAt: row.queued_at,
       startedAt: row.started_at,
       completedAt: row.completed_at,
-      steps: row.steps.map((step) => new ModuleWorkflowRunStepEntity({
-        id: step.id,
-        workflowNodeId: step.workflow_node_id,
-        sequenceNo: step.sequence_no,
-        stepKey: step.step_key,
-        status: step.status,
-        startedAt: step.started_at,
-        completedAt: step.completed_at,
-        inputPayload: step.input_payload,
-        outputPayload: step.output_payload,
-        errorMessage: step.error_message,
-        logsText: step.logs_text,
-      })),
+      steps: row.steps.map(
+        (step) =>
+          new ModuleWorkflowRunStepEntity({
+            id: step.id,
+            workflowNodeId: step.workflow_node_id,
+            sequenceNo: step.sequence_no,
+            stepKey: step.step_key,
+            status: step.status,
+            startedAt: step.started_at,
+            completedAt: step.completed_at,
+            inputPayload: step.input_payload,
+            outputPayload: step.output_payload,
+            errorMessage: step.error_message,
+            logsText: step.logs_text,
+          }),
+      ),
     });
   }
 
@@ -464,12 +525,20 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
 
     const run = await this.findWorkflowRunById(params.workspaceId, created.id);
     if (!run) {
-      throw new AppError("Workflow run not found after creation.", "WORKFLOW_RUN_NOT_FOUND", 404);
+      throw new AppError(
+        "Workflow run not found after creation.",
+        "WORKFLOW_RUN_NOT_FOUND",
+        404,
+      );
     }
     return run;
   }
 
-  public async deletePersonalWorkflow(workspaceId: string, workflowId: string, actorUserId: string): Promise<void> {
+  public async deletePersonalWorkflow(
+    workspaceId: string,
+    workflowId: string,
+    actorUserId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     await prisma.moduleWorkflow.updateMany({
       where: {
@@ -540,34 +609,40 @@ export class PrismaWorkflowRepository implements WorkflowRepository {
       isEnabled: row.is_enabled,
       isDefault: row.is_default,
       updatedAt: row.updated_at,
-      nodes: row.nodes.map((node) => new ModuleWorkflowNodeEntity({
-        id: node.id,
-        nodeKey: node.node_key,
-        nodeKind: node.node_kind,
-        label: node.label,
-        positionX: node.position_x,
-        positionY: node.position_y,
-        moduleAgentId: node.module_agent_id,
-        moduleToolId: node.module_tool_id,
-        inputKind: node.input_kind,
-        outputKind: node.output_kind,
-        configuration: node.configuration,
-        inputSchema: node.input_schema,
-        outputSchema: node.output_schema,
-        isEnabled: node.is_enabled,
-        isRequired: node.is_required,
-      })),
-      edges: row.edges.map((edge) => new ModuleWorkflowEdgeEntity({
-        id: edge.id,
-        sourceNodeId: edge.source_node_id,
-        targetNodeId: edge.target_node_id,
-        sourceHandle: edge.source_handle,
-        targetHandle: edge.target_handle,
-        label: edge.label,
-        conditionPayload: edge.condition_payload,
-        orderNo: edge.order_no,
-        isEnabled: edge.is_enabled,
-      })),
+      nodes: row.nodes.map(
+        (node) =>
+          new ModuleWorkflowNodeEntity({
+            id: node.id,
+            nodeKey: node.node_key,
+            nodeKind: node.node_kind,
+            label: node.label,
+            positionX: node.position_x,
+            positionY: node.position_y,
+            moduleAgentId: node.module_agent_id,
+            moduleToolId: node.module_tool_id,
+            inputKind: node.input_kind,
+            outputKind: node.output_kind,
+            configuration: node.configuration,
+            inputSchema: node.input_schema,
+            outputSchema: node.output_schema,
+            isEnabled: node.is_enabled,
+            isRequired: node.is_required,
+          }),
+      ),
+      edges: row.edges.map(
+        (edge) =>
+          new ModuleWorkflowEdgeEntity({
+            id: edge.id,
+            sourceNodeId: edge.source_node_id,
+            targetNodeId: edge.target_node_id,
+            sourceHandle: edge.source_handle,
+            targetHandle: edge.target_handle,
+            label: edge.label,
+            conditionPayload: edge.condition_payload,
+            orderNo: edge.order_no,
+            isEnabled: edge.is_enabled,
+          }),
+      ),
     });
   }
 }

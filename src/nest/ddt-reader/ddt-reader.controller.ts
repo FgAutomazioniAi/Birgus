@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Req, Res, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from "@nestjs/common";
 import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
@@ -45,13 +57,19 @@ export class NestDdtReaderController {
     const workspaceId = requestContext.workspace.workspaceId;
     const userId = requestContext.workspace.userId;
     const multipart = await MultipartFormReader.read(request);
-    const uploaded = multipart.files.find((item) => item.fieldName === "file") ?? multipart.files[0];
+    const uploaded =
+      multipart.files.find((item) => item.fieldName === "file") ??
+      multipart.files[0];
     if (!uploaded) {
       throw new AppError("File mancante.", "DDT_FILE_REQUIRED", 400);
     }
 
     if (!this.isPdfFile(uploaded.fileName, uploaded.mimeType, uploaded.bytes)) {
-      throw new AppError("Sono accettati solo file PDF.", "DDT_FILE_EXTENSION_INVALID", 400);
+      throw new AppError(
+        "Sono accettati solo file PDF.",
+        "DDT_FILE_EXTENSION_INVALID",
+        400,
+      );
     }
 
     return this.service.uploadDocument({
@@ -73,7 +91,11 @@ export class NestDdtReaderController {
     const documentId = this.getDocumentId(documentIdRaw);
     const document = await this.service.getDocument(workspaceId, documentId);
     if (!document) {
-      throw new AppError("Documento non trovato.", "DDT_DOCUMENT_NOT_FOUND", 404);
+      throw new AppError(
+        "Documento non trovato.",
+        "DDT_DOCUMENT_NOT_FOUND",
+        404,
+      );
     }
 
     return document;
@@ -157,14 +179,25 @@ export class NestDdtReaderController {
 
   private getDocumentId(documentId: string): string {
     if (!documentId || !documentId.trim()) {
-      throw new AppError("ID documento non valido.", "DDT_DOCUMENT_ID_INVALID", 400);
+      throw new AppError(
+        "ID documento non valido.",
+        "DDT_DOCUMENT_ID_INVALID",
+        400,
+      );
     }
 
     return documentId.trim();
   }
 
-  private isPdfFile(fileName: string, mimeType: string, bytes: Buffer): boolean {
-    const hasPdfNameOrMime = mimeType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
-    return hasPdfNameOrMime && bytes.subarray(0, 5).toString("latin1") === "%PDF-";
+  private isPdfFile(
+    fileName: string,
+    mimeType: string,
+    bytes: Buffer,
+  ): boolean {
+    const hasPdfNameOrMime =
+      mimeType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
+    return (
+      hasPdfNameOrMime && bytes.subarray(0, 5).toString("latin1") === "%PDF-"
+    );
   }
 }

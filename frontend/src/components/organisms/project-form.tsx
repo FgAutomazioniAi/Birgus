@@ -1,13 +1,41 @@
 "use client";
 
-import { ArrowLeft, Briefcase, CheckCircle2, Eye, FileCheck, FileSpreadsheet, FileText, Loader2, PlusCircle, RefreshCw, Save, Sparkles, Trash2, Upload, Users, X, XCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Briefcase,
+  CheckCircle2,
+  Eye,
+  FileCheck,
+  FileSpreadsheet,
+  FileText,
+  Loader2,
+  PlusCircle,
+  RefreshCw,
+  Save,
+  Sparkles,
+  Trash2,
+  Upload,
+  Users,
+  X,
+  XCircle,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ChangeEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Switch, Text } from "@/components/atoms";
-import { FormField, PageHelpHint, SelectDropdown } from "@/components/molecules";
+import {
+  FormField,
+  PageHelpHint,
+  SelectDropdown,
+} from "@/components/molecules";
 import { PROJECT_STATUS_OPTIONS } from "@/lib/project-status";
 import { APP_ROUTES } from "@/lib/routes";
 import { scheduleUndoableAction } from "@/lib/undoable-action";
@@ -73,9 +101,12 @@ const LOCAL_PDF_KIND_MAP: Record<LocalPdfKey, string> = {
   techPdf: "tech-pdf",
 };
 
-const buildVersionQuery = (versionLabel: string) => `version=${encodeURIComponent(versionLabel)}`;
+const buildVersionQuery = (versionLabel: string) =>
+  `version=${encodeURIComponent(versionLabel)}`;
 const withVersion = (url: string, versionLabel: string) =>
-  appendWorkspaceId(`${url}${url.includes("?") ? "&" : "?"}${buildVersionQuery(versionLabel)}`);
+  appendWorkspaceId(
+    `${url}${url.includes("?") ? "&" : "?"}${buildVersionQuery(versionLabel)}`,
+  );
 
 export interface ProjectFormProps {
   id?: string;
@@ -89,44 +120,69 @@ export function ProjectForm({ id }: ProjectFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingQuotation, setIsUploadingQuotation] = useState(false);
   const [isDeletingQuotation, setIsDeletingQuotation] = useState(false);
-  const [quotationFileName, setQuotationFileName] = useState<string | null>(null);
-  const [quotationPreviewUrl, setQuotationPreviewUrl] = useState<string | null>(null);
+  const [quotationFileName, setQuotationFileName] = useState<string | null>(
+    null,
+  );
+  const [quotationPreviewUrl, setQuotationPreviewUrl] = useState<string | null>(
+    null,
+  );
   const [showQuotationPopup, setShowQuotationPopup] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [jobProgress, setJobProgress] = useState(0);
-  const [jobStatus, setJobStatus] = useState<"queued" | "running" | "completed" | "failed">("queued");
+  const [jobStatus, setJobStatus] = useState<
+    "queued" | "running" | "completed" | "failed"
+  >("queued");
   const [jobMessage, setJobMessage] = useState("In coda");
   const [showProgressWidget, setShowProgressWidget] = useState(false);
   const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
-  const [localPdfNames, setLocalPdfNames] = useState<Record<LocalPdfKey, string | null>>({
+  const [localPdfNames, setLocalPdfNames] = useState<
+    Record<LocalPdfKey, string | null>
+  >({
     emailPdf: null,
     techPdf: null,
   });
-  const [localPdfPreviewUrls, setLocalPdfPreviewUrls] = useState<Record<LocalPdfKey, string | null>>({
+  const [localPdfPreviewUrls, setLocalPdfPreviewUrls] = useState<
+    Record<LocalPdfKey, string | null>
+  >({
     emailPdf: null,
     techPdf: null,
   });
-  const [quotationDocxName, setQuotationDocxName] = useState<string | null>(null);
-  const [quotationDocxPreviewUrl, setQuotationDocxPreviewUrl] = useState<string | null>(null);
-  const [quotationXlsxName, setQuotationXlsxName] = useState<string | null>(null);
-  const [quotationXlsxPreviewUrl, setQuotationXlsxPreviewUrl] = useState<string | null>(null);
-  const [isUploadingQuotationXlsx, setIsUploadingQuotationXlsx] = useState(false);
+  const [quotationDocxName, setQuotationDocxName] = useState<string | null>(
+    null,
+  );
+  const [quotationDocxPreviewUrl, setQuotationDocxPreviewUrl] = useState<
+    string | null
+  >(null);
+  const [quotationXlsxName, setQuotationXlsxName] = useState<string | null>(
+    null,
+  );
+  const [quotationXlsxPreviewUrl, setQuotationXlsxPreviewUrl] = useState<
+    string | null
+  >(null);
+  const [isUploadingQuotationXlsx, setIsUploadingQuotationXlsx] =
+    useState(false);
   const [isDeletingQuotationXlsx, setIsDeletingQuotationXlsx] = useState(false);
-  const [projectVersions, setProjectVersions] = useState<ProjectVersionOption[]>([]);
+  const [projectVersions, setProjectVersions] = useState<
+    ProjectVersionOption[]
+  >([]);
   const [selectedVersionLabel, setSelectedVersionLabel] = useState("v1");
   const [isSwitchingVersion, setIsSwitchingVersion] = useState(false);
   const [showNewVersionForm, setShowNewVersionForm] = useState(false);
   const [isCreatingVersion, setIsCreatingVersion] = useState(false);
   const [newVersionDescription, setNewVersionDescription] = useState("");
   const [newVersionClientId, setNewVersionClientId] = useState("");
-  const [newVersionStatus, setNewVersionStatus] = useState<ProjectStatus>(PROJECT_STATUS_OPTIONS[0].key);
+  const [newVersionStatus, setNewVersionStatus] = useState<ProjectStatus>(
+    PROJECT_STATUS_OPTIONS[0].key,
+  );
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isCreatingClient, setIsCreatingClient] = useState(false);
   const [newClientName, setNewClientName] = useState("");
   const [newClientEmail, setNewClientEmail] = useState("");
   const [newClientPhone, setNewClientPhone] = useState("");
   const [newClientNotes, setNewClientNotes] = useState("");
-  const [activeJobVersionLabel, setActiveJobVersionLabel] = useState<string | null>(null);
+  const [activeJobVersionLabel, setActiveJobVersionLabel] = useState<
+    string | null
+  >(null);
   const progressPollRef = useRef<number | null>(null);
   const finalStatusNotifiedRef = useRef<string | null>(null);
 
@@ -168,59 +224,154 @@ export function ProjectForm({ id }: ProjectFormProps) {
     setQuotationXlsxPreviewUrl(null);
   }, []);
 
-  const loadVersionedProjectFiles = useCallback(async (projectId: string, versionLabel: string) => {
-    resetVersionedFiles();
+  const loadVersionedProjectFiles = useCallback(
+    async (projectId: string, versionLabel: string) => {
+      resetVersionedFiles();
 
-    const [quotationResponse, emailResponse, techResponse, docxResponse, xlsxResponse] = await Promise.all([
-      fetch(withVersion(`/api/projects/${projectId}/quotation`, versionLabel), { cache: "no-store" }),
-      fetch(withVersion(`/api/projects/${projectId}/files/email-pdf`, versionLabel), { cache: "no-store" }),
-      fetch(withVersion(`/api/projects/${projectId}/files/tech-pdf`, versionLabel), { cache: "no-store" }),
-      fetch(withVersion(`/api/projects/${projectId}/files/quotation-docx`, versionLabel), { cache: "no-store" }),
-      fetch(withVersion(`/api/projects/${projectId}/files/quotation-xlsx`, versionLabel), { cache: "no-store" }),
-    ]);
+      const [
+        quotationResponse,
+        emailResponse,
+        techResponse,
+        docxResponse,
+        xlsxResponse,
+      ] = await Promise.all([
+        fetch(
+          withVersion(`/api/projects/${projectId}/quotation`, versionLabel),
+          { cache: "no-store" },
+        ),
+        fetch(
+          withVersion(
+            `/api/projects/${projectId}/files/email-pdf`,
+            versionLabel,
+          ),
+          { cache: "no-store" },
+        ),
+        fetch(
+          withVersion(
+            `/api/projects/${projectId}/files/tech-pdf`,
+            versionLabel,
+          ),
+          { cache: "no-store" },
+        ),
+        fetch(
+          withVersion(
+            `/api/projects/${projectId}/files/quotation-docx`,
+            versionLabel,
+          ),
+          { cache: "no-store" },
+        ),
+        fetch(
+          withVersion(
+            `/api/projects/${projectId}/files/quotation-xlsx`,
+            versionLabel,
+          ),
+          { cache: "no-store" },
+        ),
+      ]);
 
-    if (quotationResponse.ok) {
-      const quotation = (await quotationResponse.json()) as QuotationApiDetail;
-      if (quotation.found) {
-        setQuotationFileName(quotation.fileName ?? "preventivo.pdf");
-        setQuotationPreviewUrl(appendWorkspaceId(quotation.previewUrl ?? withVersion(`/api/projects/${projectId}/quotation/file`, versionLabel)));
+      if (quotationResponse.ok) {
+        const quotation =
+          (await quotationResponse.json()) as QuotationApiDetail;
+        if (quotation.found) {
+          setQuotationFileName(quotation.fileName ?? "preventivo.pdf");
+          setQuotationPreviewUrl(
+            appendWorkspaceId(
+              quotation.previewUrl ??
+                withVersion(
+                  `/api/projects/${projectId}/quotation/file`,
+                  versionLabel,
+                ),
+            ),
+          );
+        }
       }
-    }
 
-    if (emailResponse.ok) {
-      const emailFile = (await emailResponse.json()) as GenericProjectFileDetail;
-      setLocalPdfNames((prev) => ({ ...prev, emailPdf: emailFile.found ? (emailFile.fileName ?? "email.pdf") : null }));
-      setLocalPdfPreviewUrls((prev) => ({
-        ...prev,
-        emailPdf: emailFile.found ? appendWorkspaceId(emailFile.previewUrl ?? withVersion(`/api/projects/${projectId}/files/email-pdf/content`, versionLabel)) : null,
-      }));
-    }
+      if (emailResponse.ok) {
+        const emailFile =
+          (await emailResponse.json()) as GenericProjectFileDetail;
+        setLocalPdfNames((prev) => ({
+          ...prev,
+          emailPdf: emailFile.found
+            ? (emailFile.fileName ?? "email.pdf")
+            : null,
+        }));
+        setLocalPdfPreviewUrls((prev) => ({
+          ...prev,
+          emailPdf: emailFile.found
+            ? appendWorkspaceId(
+                emailFile.previewUrl ??
+                  withVersion(
+                    `/api/projects/${projectId}/files/email-pdf/content`,
+                    versionLabel,
+                  ),
+              )
+            : null,
+        }));
+      }
 
-    if (techResponse.ok) {
-      const techFile = (await techResponse.json()) as GenericProjectFileDetail;
-      setLocalPdfNames((prev) => ({ ...prev, techPdf: techFile.found ? (techFile.fileName ?? "specifica-tecnica.pdf") : null }));
-      setLocalPdfPreviewUrls((prev) => ({
-        ...prev,
-        techPdf: techFile.found ? appendWorkspaceId(techFile.previewUrl ?? withVersion(`/api/projects/${projectId}/files/tech-pdf/content`, versionLabel)) : null,
-      }));
-    }
+      if (techResponse.ok) {
+        const techFile =
+          (await techResponse.json()) as GenericProjectFileDetail;
+        setLocalPdfNames((prev) => ({
+          ...prev,
+          techPdf: techFile.found
+            ? (techFile.fileName ?? "specifica-tecnica.pdf")
+            : null,
+        }));
+        setLocalPdfPreviewUrls((prev) => ({
+          ...prev,
+          techPdf: techFile.found
+            ? appendWorkspaceId(
+                techFile.previewUrl ??
+                  withVersion(
+                    `/api/projects/${projectId}/files/tech-pdf/content`,
+                    versionLabel,
+                  ),
+              )
+            : null,
+        }));
+      }
 
-    if (docxResponse.ok) {
-      const docxFile = (await docxResponse.json()) as GenericProjectFileDetail;
-      setQuotationDocxName(docxFile.found ? (docxFile.fileName ?? "preventivo.docx") : null);
-      setQuotationDocxPreviewUrl(
-        docxFile.found ? appendWorkspaceId(docxFile.previewUrl ?? withVersion(`/api/projects/${projectId}/files/quotation-docx/content`, versionLabel)) : null,
-      );
-    }
+      if (docxResponse.ok) {
+        const docxFile =
+          (await docxResponse.json()) as GenericProjectFileDetail;
+        setQuotationDocxName(
+          docxFile.found ? (docxFile.fileName ?? "preventivo.docx") : null,
+        );
+        setQuotationDocxPreviewUrl(
+          docxFile.found
+            ? appendWorkspaceId(
+                docxFile.previewUrl ??
+                  withVersion(
+                    `/api/projects/${projectId}/files/quotation-docx/content`,
+                    versionLabel,
+                  ),
+              )
+            : null,
+        );
+      }
 
-    if (xlsxResponse.ok) {
-      const xlsxFile = (await xlsxResponse.json()) as GenericProjectFileDetail;
-      setQuotationXlsxName(xlsxFile.found ? (xlsxFile.fileName ?? "preventivo.xlsx") : null);
-      setQuotationXlsxPreviewUrl(
-        xlsxFile.found ? appendWorkspaceId(xlsxFile.previewUrl ?? withVersion(`/api/projects/${projectId}/files/quotation-xlsx/content`, versionLabel)) : null,
-      );
-    }
-  }, [resetVersionedFiles]);
+      if (xlsxResponse.ok) {
+        const xlsxFile =
+          (await xlsxResponse.json()) as GenericProjectFileDetail;
+        setQuotationXlsxName(
+          xlsxFile.found ? (xlsxFile.fileName ?? "preventivo.xlsx") : null,
+        );
+        setQuotationXlsxPreviewUrl(
+          xlsxFile.found
+            ? appendWorkspaceId(
+                xlsxFile.previewUrl ??
+                  withVersion(
+                    `/api/projects/${projectId}/files/quotation-xlsx/content`,
+                    versionLabel,
+                  ),
+              )
+            : null,
+        );
+      }
+    },
+    [resetVersionedFiles],
+  );
 
   const loadClientOptions = useCallback(async (): Promise<ClientApiItem[]> => {
     const clientsResponse = await fetch("/api/clients", { cache: "no-store" });
@@ -241,7 +392,12 @@ export function ProjectForm({ id }: ProjectFormProps) {
   };
 
   const handleCreateClientInline = async () => {
-    if (!newClientName.trim() || !newClientEmail.trim() || !newClientPhone.trim() || !newClientNotes.trim()) {
+    if (
+      !newClientName.trim() ||
+      !newClientEmail.trim() ||
+      !newClientPhone.trim() ||
+      !newClientNotes.trim()
+    ) {
       toast.error("Compila tutti i campi del nuovo cliente.");
       return;
     }
@@ -265,7 +421,8 @@ export function ProjectForm({ id }: ProjectFormProps) {
 
       const created = (await response.json()) as ClientApiItem;
       const refreshed = await loadClientOptions();
-      const selected = refreshed.find((client) => client.id === created.id) ?? created;
+      const selected =
+        refreshed.find((client) => client.id === created.id) ?? created;
       setValue("clientId", selected.id, { shouldValidate: true });
       setNewVersionClientId(selected.id);
       setIsClientModalOpen(false);
@@ -306,7 +463,9 @@ export function ProjectForm({ id }: ProjectFormProps) {
             versions: [
               {
                 clientId: project.clientId,
-                clientName: clients.find((item) => item.id === project.clientId)?.name ?? null,
+                clientName:
+                  clients.find((item) => item.id === project.clientId)?.name ??
+                  null,
                 createdAt: new Date().toISOString(),
                 description: "Versione iniziale",
                 isDefault: true,
@@ -317,22 +476,36 @@ export function ProjectForm({ id }: ProjectFormProps) {
           };
 
           if (versionsResponse.ok) {
-            versionsPayload = (await versionsResponse.json()) as ProjectVersionsApiResponse;
+            versionsPayload =
+              (await versionsResponse.json()) as ProjectVersionsApiResponse;
           }
 
-          const availableVersions = versionsPayload.versions.length ? versionsPayload.versions : [];
+          const availableVersions = versionsPayload.versions.length
+            ? versionsPayload.versions
+            : [];
           const resolvedVersion =
             versionsPayload.selectedVersionLabel ??
-            availableVersions.find((version) => version.isDefault)?.versionLabel ??
+            availableVersions.find((version) => version.isDefault)
+              ?.versionLabel ??
             availableVersions[0]?.versionLabel ??
             "v1";
 
           setProjectVersions(availableVersions);
           setSelectedVersionLabel(resolvedVersion);
           const resolvedVersionData =
-            availableVersions.find((version) => version.versionLabel === resolvedVersion) ?? availableVersions[0] ?? null;
-          setNewVersionClientId(resolvedVersionData?.clientId ?? project.clientId ?? "");
-          setNewVersionStatus(resolvedVersionData?.status ?? project.status ?? PROJECT_STATUS_OPTIONS[0].key);
+            availableVersions.find(
+              (version) => version.versionLabel === resolvedVersion,
+            ) ??
+            availableVersions[0] ??
+            null;
+          setNewVersionClientId(
+            resolvedVersionData?.clientId ?? project.clientId ?? "",
+          );
+          setNewVersionStatus(
+            resolvedVersionData?.status ??
+              project.status ??
+              PROJECT_STATUS_OPTIONS[0].key,
+          );
           await loadVersionedProjectFiles(id, resolvedVersion);
         } else if (clients.length > 0) {
           setValue("clientId", clients[0]?.id ?? "", { shouldValidate: true });
@@ -346,7 +519,14 @@ export function ProjectForm({ id }: ProjectFormProps) {
     };
 
     void loadData();
-  }, [id, isEdit, loadClientOptions, loadVersionedProjectFiles, reset, setValue]);
+  }, [
+    id,
+    isEdit,
+    loadClientOptions,
+    loadVersionedProjectFiles,
+    reset,
+    setValue,
+  ]);
 
   const onSubmit = async (data: ProjectFormValues) => {
     try {
@@ -369,7 +549,11 @@ export function ProjectForm({ id }: ProjectFormProps) {
         throw new Error("Operazione progetto fallita");
       }
 
-      toast.success(isEdit ? "Progetto aggiornato con successo." : "Progetto creato con successo.");
+      toast.success(
+        isEdit
+          ? "Progetto aggiornato con successo."
+          : "Progetto creato con successo.",
+      );
       router.push(APP_ROUTES.dashboard);
       router.refresh();
     } catch {
@@ -386,7 +570,9 @@ export function ProjectForm({ id }: ProjectFormProps) {
 
     const fetchProgress = async () => {
       try {
-        const response = await fetch(`/api/orchestrator/jobs/${activeJobId}`, { cache: "no-store" });
+        const response = await fetch(`/api/orchestrator/jobs/${activeJobId}`, {
+          cache: "no-store",
+        });
         if (!response.ok) {
           return;
         }
@@ -394,9 +580,10 @@ export function ProjectForm({ id }: ProjectFormProps) {
         const payload = (await response.json()) as OrchestratorJobState;
         const progress = Math.max(0, Math.min(100, payload.progress ?? 0));
         const status = payload.status ?? "running";
-        const message = payload.status === "failed" && payload.error
-          ? payload.error
-          : payload.message ?? "Elaborazione in corso";
+        const message =
+          payload.status === "failed" && payload.error
+            ? payload.error
+            : (payload.message ?? "Elaborazione in corso");
 
         setJobProgress(progress);
         setJobStatus(status);
@@ -411,14 +598,34 @@ export function ProjectForm({ id }: ProjectFormProps) {
 
           if (id) {
             try {
-              const targetVersionLabel = activeJobVersionLabel ?? selectedVersionLabel;
-              const docxResponse = await fetch(withVersion(`/api/projects/${id}/files/quotation-docx`, targetVersionLabel), { cache: "no-store" });
+              const targetVersionLabel =
+                activeJobVersionLabel ?? selectedVersionLabel;
+              const docxResponse = await fetch(
+                withVersion(
+                  `/api/projects/${id}/files/quotation-docx`,
+                  targetVersionLabel,
+                ),
+                { cache: "no-store" },
+              );
               if (docxResponse.ok) {
-                const docxFile = (await docxResponse.json()) as GenericProjectFileDetail;
+                const docxFile =
+                  (await docxResponse.json()) as GenericProjectFileDetail;
                 if (targetVersionLabel === selectedVersionLabel) {
-                  setQuotationDocxName(docxFile.found ? (docxFile.fileName ?? "preventivo.docx") : null);
+                  setQuotationDocxName(
+                    docxFile.found
+                      ? (docxFile.fileName ?? "preventivo.docx")
+                      : null,
+                  );
                   setQuotationDocxPreviewUrl(
-                    docxFile.found ? appendWorkspaceId(docxFile.previewUrl ?? withVersion(`/api/projects/${id}/files/quotation-docx/content`, targetVersionLabel)) : null,
+                    docxFile.found
+                      ? appendWorkspaceId(
+                          docxFile.previewUrl ??
+                            withVersion(
+                              `/api/projects/${id}/files/quotation-docx/content`,
+                              targetVersionLabel,
+                            ),
+                        )
+                      : null,
                   );
                 }
               }
@@ -468,7 +675,9 @@ export function ProjectForm({ id }: ProjectFormProps) {
     };
   }, [activeJobId, activeJobVersionLabel, id, selectedVersionLabel]);
 
-  const handleQuotationUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleQuotationUpload = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0];
     event.target.value = "";
 
@@ -491,18 +700,33 @@ export function ProjectForm({ id }: ProjectFormProps) {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch(withVersion(`/api/projects/${id}/quotation`, selectedVersionLabel), {
-        method: "POST",
-        body: formData,
-      });
+      const response = await fetch(
+        withVersion(`/api/projects/${id}/quotation`, selectedVersionLabel),
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
 
       if (!response.ok) {
         throw new Error("Upload preventivo fallito");
       }
 
-      const payload = (await response.json()) as { filename?: string; orchestratorJobId?: string | null; previewUrl?: string };
+      const payload = (await response.json()) as {
+        filename?: string;
+        orchestratorJobId?: string | null;
+        previewUrl?: string;
+      };
       setQuotationFileName(payload.filename ?? "preventivo.pdf");
-      setQuotationPreviewUrl(appendWorkspaceId(payload.previewUrl ?? withVersion(`/api/projects/${id}/quotation/file`, selectedVersionLabel)));
+      setQuotationPreviewUrl(
+        appendWorkspaceId(
+          payload.previewUrl ??
+            withVersion(
+              `/api/projects/${id}/quotation/file`,
+              selectedVersionLabel,
+            ),
+        ),
+      );
       setShowQuotationPopup(true);
 
       if (payload.orchestratorJobId) {
@@ -525,8 +749,7 @@ export function ProjectForm({ id }: ProjectFormProps) {
   };
 
   const handleLocalPdfUpload =
-    (field: LocalPdfKey) =>
-    async (event: ChangeEvent<HTMLInputElement>) => {
+    (field: LocalPdfKey) => async (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       event.target.value = "";
 
@@ -549,10 +772,16 @@ export function ProjectForm({ id }: ProjectFormProps) {
         formData.append("file", file);
         formData.append("versionLabel", selectedVersionLabel);
         const fileKind = LOCAL_PDF_KIND_MAP[field];
-        const response = await fetch(withVersion(`/api/projects/${id}/files/${fileKind}`, selectedVersionLabel), {
-          method: "POST",
-          body: formData,
-        });
+        const response = await fetch(
+          withVersion(
+            `/api/projects/${id}/files/${fileKind}`,
+            selectedVersionLabel,
+          ),
+          {
+            method: "POST",
+            body: formData,
+          },
+        );
 
         if (!response.ok) {
           throw new Error("Upload file fallito");
@@ -565,7 +794,10 @@ export function ProjectForm({ id }: ProjectFormProps) {
         }));
         setLocalPdfPreviewUrls((prev) => ({
           ...prev,
-          [field]: withVersion(`/api/projects/${id}/files/${fileKind}/content`, selectedVersionLabel),
+          [field]: withVersion(
+            `/api/projects/${id}/files/${fileKind}/content`,
+            selectedVersionLabel,
+          ),
         }));
         toast.success("PDF caricato con successo.");
       } catch {
@@ -596,14 +828,23 @@ export function ProjectForm({ id }: ProjectFormProps) {
       errorMessage: "Archiviazione PDF non riuscita.",
       rollback: () => {
         setLocalPdfNames((prev) => ({ ...prev, [field]: previousName }));
-        setLocalPdfPreviewUrls((prev) => ({ ...prev, [field]: previousPreview }));
+        setLocalPdfPreviewUrls((prev) => ({
+          ...prev,
+          [field]: previousPreview,
+        }));
       },
       commit: async () => {
-        const response = await fetch(withVersion(`/api/projects/${id}/files/${fileKind}`, selectedVersionLabel), {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ confirmText: "cancella" }),
-        });
+        const response = await fetch(
+          withVersion(
+            `/api/projects/${id}/files/${fileKind}`,
+            selectedVersionLabel,
+          ),
+          {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ confirmText: "cancella" }),
+          },
+        );
         if (!response.ok) {
           throw new Error("Archiviazione PDF non riuscita.");
         }
@@ -613,10 +854,16 @@ export function ProjectForm({ id }: ProjectFormProps) {
 
   const isSpreadsheetFile = (file: File) => {
     const lowerName = file.name.toLowerCase();
-    return lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls") || lowerName.endsWith(".xlsm");
+    return (
+      lowerName.endsWith(".xlsx") ||
+      lowerName.endsWith(".xls") ||
+      lowerName.endsWith(".xlsm")
+    );
   };
 
-  const handleQuotationXlsxUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleQuotationXlsxUpload = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0];
     event.target.value = "";
 
@@ -639,10 +886,16 @@ export function ProjectForm({ id }: ProjectFormProps) {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("versionLabel", selectedVersionLabel);
-      const response = await fetch(withVersion(`/api/projects/${id}/files/quotation-xlsx`, selectedVersionLabel), {
-        method: "POST",
-        body: formData,
-      });
+      const response = await fetch(
+        withVersion(
+          `/api/projects/${id}/files/quotation-xlsx`,
+          selectedVersionLabel,
+        ),
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
 
       if (!response.ok) {
         throw new Error("Upload Excel fallito");
@@ -650,7 +903,12 @@ export function ProjectForm({ id }: ProjectFormProps) {
 
       const payload = (await response.json()) as { fileName?: string };
       setQuotationXlsxName(payload.fileName ?? file.name);
-      setQuotationXlsxPreviewUrl(withVersion(`/api/projects/${id}/files/quotation-xlsx/content`, selectedVersionLabel));
+      setQuotationXlsxPreviewUrl(
+        withVersion(
+          `/api/projects/${id}/files/quotation-xlsx/content`,
+          selectedVersionLabel,
+        ),
+      );
       toast.success("File Excel caricato con successo.");
     } catch {
       toast.error("Caricamento file Excel non riuscito.");
@@ -681,11 +939,17 @@ export function ProjectForm({ id }: ProjectFormProps) {
       },
       commit: async () => {
         try {
-          const response = await fetch(withVersion(`/api/projects/${id}/files/quotation-xlsx`, selectedVersionLabel), {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ confirmText: "cancella" }),
-          });
+          const response = await fetch(
+            withVersion(
+              `/api/projects/${id}/files/quotation-xlsx`,
+              selectedVersionLabel,
+            ),
+            {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ confirmText: "cancella" }),
+            },
+          );
           if (!response.ok) {
             throw new Error("Archiviazione file Excel non riuscita.");
           }
@@ -718,11 +982,14 @@ export function ProjectForm({ id }: ProjectFormProps) {
       },
       commit: async () => {
         try {
-          const response = await fetch(withVersion(`/api/projects/${id}/quotation`, selectedVersionLabel), {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ confirmText: "cancella" }),
-          });
+          const response = await fetch(
+            withVersion(`/api/projects/${id}/quotation`, selectedVersionLabel),
+            {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ confirmText: "cancella" }),
+            },
+          );
           if (!response.ok) {
             throw new Error("Archiviazione preventivo non riuscita.");
           }
@@ -740,7 +1007,13 @@ export function ProjectForm({ id }: ProjectFormProps) {
 
     try {
       setIsStartingAnalysis(true);
-      const response = await fetch(withVersion(`/api/projects/${id}/quotation/analyze`, selectedVersionLabel), { method: "POST" });
+      const response = await fetch(
+        withVersion(
+          `/api/projects/${id}/quotation/analyze`,
+          selectedVersionLabel,
+        ),
+        { method: "POST" },
+      );
       if (!response.ok) {
         throw new Error("Impossibile avviare rianalisi");
       }
@@ -784,7 +1057,10 @@ export function ProjectForm({ id }: ProjectFormProps) {
         const payload = (await response.json()) as ProjectVersionsApiResponse;
         if (payload.versions?.length) {
           setProjectVersions(payload.versions);
-          const selectedVersion = payload.versions.find((version) => version.versionLabel === nextVersionLabel) ?? null;
+          const selectedVersion =
+            payload.versions.find(
+              (version) => version.versionLabel === nextVersionLabel,
+            ) ?? null;
           if (selectedVersion) {
             setNewVersionClientId(selectedVersion.clientId ?? "");
             setNewVersionStatus(selectedVersion.status);
@@ -829,10 +1105,17 @@ export function ProjectForm({ id }: ProjectFormProps) {
         throw new Error("Creazione versione fallita");
       }
 
-      const payload = (await response.json()) as ProjectVersionsApiResponse & { selectedVersionLabel?: string };
-      const nextVersionLabel = payload.selectedVersionLabel ?? payload.versions?.find((version) => version.isDefault)?.versionLabel ?? "v1";
+      const payload = (await response.json()) as ProjectVersionsApiResponse & {
+        selectedVersionLabel?: string;
+      };
+      const nextVersionLabel =
+        payload.selectedVersionLabel ??
+        payload.versions?.find((version) => version.isDefault)?.versionLabel ??
+        "v1";
       const versions = payload.versions ?? [];
-      const activeVersion = versions.find((version) => version.versionLabel === nextVersionLabel) ?? null;
+      const activeVersion =
+        versions.find((version) => version.versionLabel === nextVersionLabel) ??
+        null;
 
       setProjectVersions(versions);
       setSelectedVersionLabel(nextVersionLabel);
@@ -866,7 +1149,9 @@ export function ProjectForm({ id }: ProjectFormProps) {
               </Text>
               <PageHelpHint text="Compila i dati progetto e salva la commessa." />
             </div>
-            <Text variant="muted">{isEdit ? "Modifica progetto" : "Nuovo progetto"}</Text>
+            <Text variant="muted">
+              {isEdit ? "Modifica progetto" : "Nuovo progetto"}
+            </Text>
           </div>
         </div>
 
@@ -878,9 +1163,16 @@ export function ProjectForm({ id }: ProjectFormProps) {
       </div>
 
       <Card className="overflow-hidden">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 p-6 lg:p-10">
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="space-y-8 p-6 lg:p-10"
+        >
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:gap-10">
-            <FormField label="Nome Cliente" icon={<Users size={18} className="text-brand-primary" />} error={errors.clientId?.message}>
+            <FormField
+              label="Nome Cliente"
+              icon={<Users size={18} className="text-brand-primary" />}
+              error={errors.clientId?.message}
+            >
               <div className="space-y-2">
                 <Controller
                   name="clientId"
@@ -920,11 +1212,17 @@ export function ProjectForm({ id }: ProjectFormProps) {
                 type="text"
                 placeholder="Inserisci il nome progetto..."
                 disabled={isLoading || isSubmitting}
-                {...register("projectName", { required: "Il nome progetto e obbligatorio" })}
+                {...register("projectName", {
+                  required: "Il nome progetto e obbligatorio",
+                })}
               />
             </FormField>
 
-            <FormField label="Stato Progetto" icon={<CheckCircle2 size={18} className="text-brand-primary" />} error={errors.status?.message}>
+            <FormField
+              label="Stato Progetto"
+              icon={<CheckCircle2 size={18} className="text-brand-primary" />}
+              error={errors.status?.message}
+            >
               <Controller
                 name="status"
                 control={control}
@@ -948,9 +1246,12 @@ export function ProjectForm({ id }: ProjectFormProps) {
             <div className="rounded-[var(--radius-xl)] border border-border-default bg-bg-muted p-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">Versione Progetto</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">
+                    Versione Progetto
+                  </h3>
                   <p className="mt-1 text-xs text-text-muted">
-                    Seleziona la versione attiva e visualizza/carica i file associati a quella revisione.
+                    Seleziona la versione attiva e visualizza/carica i file
+                    associati a quella revisione.
                   </p>
                 </div>
                 <button
@@ -959,7 +1260,13 @@ export function ProjectForm({ id }: ProjectFormProps) {
                     setShowNewVersionForm((prev) => {
                       const next = !prev;
                       if (next) {
-                        setNewVersionClientId((current) => current || selectedProjectClientId || clientOptions[0]?.id || "");
+                        setNewVersionClientId(
+                          (current) =>
+                            current ||
+                            selectedProjectClientId ||
+                            clientOptions[0]?.id ||
+                            "",
+                        );
                       }
                       if (!next) {
                         setNewVersionDescription("");
@@ -978,13 +1285,19 @@ export function ProjectForm({ id }: ProjectFormProps) {
                 <SelectDropdown
                   value={selectedVersionLabel}
                   onChange={(value) => void handleVersionSelection(value)}
-                  disabled={isSwitchingVersion || isCreatingVersion || !projectVersions.length}
-                  options={projectVersions.length
-                    ? projectVersions.map((version) => ({
-                      value: version.versionLabel,
-                      label: getVersionDisplayLabel(version),
-                    }))
-                    : [{ value: "v1", label: "Versione iniziale (V1)" }]}
+                  disabled={
+                    isSwitchingVersion ||
+                    isCreatingVersion ||
+                    !projectVersions.length
+                  }
+                  options={
+                    projectVersions.length
+                      ? projectVersions.map((version) => ({
+                          value: version.versionLabel,
+                          label: getVersionDisplayLabel(version),
+                        }))
+                      : [{ value: "v1", label: "Versione iniziale (V1)" }]
+                  }
                 />
 
                 <span className="inline-flex h-11 items-center rounded-md border border-border-subtle bg-bg-surface px-3 text-xs font-medium text-text-muted">
@@ -994,19 +1307,25 @@ export function ProjectForm({ id }: ProjectFormProps) {
 
               {showNewVersionForm && (
                 <div className="mt-4 rounded-lg border border-border-subtle bg-bg-surface p-3">
-                  <p className="text-xs font-semibold text-text-secondary">Descrizione breve versione</p>
+                  <p className="text-xs font-semibold text-text-secondary">
+                    Descrizione breve versione
+                  </p>
                   <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
                     <Input
                       type="text"
                       value={newVersionDescription}
                       maxLength={80}
-                      onChange={(event) => setNewVersionDescription(event.target.value)}
+                      onChange={(event) =>
+                        setNewVersionDescription(event.target.value)
+                      }
                       placeholder="Es: Aggiornamento prezzi aprile 2026"
                       disabled={isCreatingVersion}
                     />
                     <SelectDropdown
                       value={newVersionStatus}
-                      onChange={(value) => setNewVersionStatus(value as ProjectStatus)}
+                      onChange={(value) =>
+                        setNewVersionStatus(value as ProjectStatus)
+                      }
                       disabled={isCreatingVersion}
                       options={PROJECT_STATUS_OPTIONS.map((status) => ({
                         value: status.key,
@@ -1043,7 +1362,11 @@ export function ProjectForm({ id }: ProjectFormProps) {
                         disabled={isCreatingVersion}
                         className="h-11 px-4"
                       >
-                        {isCreatingVersion ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                        {isCreatingVersion ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Save size={16} />
+                        )}
                         Crea
                       </Button>
                       <Button
@@ -1069,12 +1392,26 @@ export function ProjectForm({ id }: ProjectFormProps) {
           <div className="h-px bg-border-subtle" />
 
           <div className="space-y-6">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">Caricamento Documenti (PDF)</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">
+              Caricamento Documenti (PDF)
+            </h3>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
               {[
-                { desc: "Storico comunicazioni", label: "Email PDF", name: "emailPdf" as const },
-                { desc: "Dettagli tecnici", label: "Specifica Tecnica", name: "techPdf" as const },
-                { desc: "Prezzi e condizioni", label: "Preventivo PDF", name: "quotationPdf" as const },
+                {
+                  desc: "Storico comunicazioni",
+                  label: "Email PDF",
+                  name: "emailPdf" as const,
+                },
+                {
+                  desc: "Dettagli tecnici",
+                  label: "Specifica Tecnica",
+                  name: "techPdf" as const,
+                },
+                {
+                  desc: "Prezzi e condizioni",
+                  label: "Preventivo PDF",
+                  name: "quotationPdf" as const,
+                },
               ].map((file) => (
                 <div key={file.name} className="group relative">
                   {file.name === "quotationPdf" && showQuotationPopup && (
@@ -1095,70 +1432,106 @@ export function ProjectForm({ id }: ProjectFormProps) {
                       }
                       disabled={
                         isSwitchingVersion ||
-                        (file.name === "quotationPdf" && (isUploadingQuotation || isDeletingQuotation))
+                        (file.name === "quotationPdf" &&
+                          (isUploadingQuotation || isDeletingQuotation))
                       }
                     />
                     <div className="flex flex-col items-center">
                       <div className="mb-3 rounded-[var(--radius-md)] bg-bg-subtle p-3 transition-colors group-hover:bg-status-info-bg">
-                        {file.name === "quotationPdf" && isUploadingQuotation ? (
-                          <Loader2 size={24} className="animate-spin text-brand-primary" />
-                        ) : file.name === "quotationPdf" && quotationFileName ? (
-                          <CheckCircle2 size={24} className="text-status-success-text" />
+                        {file.name === "quotationPdf" &&
+                        isUploadingQuotation ? (
+                          <Loader2
+                            size={24}
+                            className="animate-spin text-brand-primary"
+                          />
+                        ) : file.name === "quotationPdf" &&
+                          quotationFileName ? (
+                          <CheckCircle2
+                            size={24}
+                            className="text-status-success-text"
+                          />
                         ) : (
-                          <Upload size={24} className="text-text-muted group-hover:text-brand-primary" />
+                          <Upload
+                            size={24}
+                            className="text-text-muted group-hover:text-brand-primary"
+                          />
                         )}
                       </div>
-                      <span className="text-sm font-bold text-text-secondary">{file.label}</span>
-                      <span className="mt-1 text-xs text-text-muted">{file.desc}</span>
+                      <span className="text-sm font-bold text-text-secondary">
+                        {file.label}
+                      </span>
+                      <span className="mt-1 text-xs text-text-muted">
+                        {file.desc}
+                      </span>
                       {file.name === "quotationPdf" && quotationFileName && (
-                        <span className="mt-2 max-w-full truncate text-xs font-medium text-status-success-text" title={quotationFileName}>
+                        <span
+                          className="mt-2 max-w-full truncate text-xs font-medium text-status-success-text"
+                          title={quotationFileName}
+                        >
                           {quotationFileName}
                         </span>
                       )}
-                      {file.name !== "quotationPdf" && localPdfNames[file.name as LocalPdfKey] && (
-                        <span
-                          className="mt-2 max-w-full truncate text-xs font-medium text-status-success-text"
-                          title={localPdfNames[file.name as LocalPdfKey] ?? ""}
-                        >
-                          {localPdfNames[file.name as LocalPdfKey]}
-                        </span>
-                      )}
+                      {file.name !== "quotationPdf" &&
+                        localPdfNames[file.name as LocalPdfKey] && (
+                          <span
+                            className="mt-2 max-w-full truncate text-xs font-medium text-status-success-text"
+                            title={
+                              localPdfNames[file.name as LocalPdfKey] ?? ""
+                            }
+                          >
+                            {localPdfNames[file.name as LocalPdfKey]}
+                          </span>
+                        )}
                     </div>
                   </label>
 
                   <div className="mt-2 flex items-center justify-center gap-2">
-                    {file.name === "quotationPdf" && quotationPreviewUrl && quotationFileName && (
-                      <a
-                        href={quotationPreviewUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex h-9 items-center gap-1 rounded-md border border-border-default px-2 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:bg-bg-subtle"
-                      >
-                        <Eye size={13} />
-                        Anteprima
-                      </a>
-                    )}
+                    {file.name === "quotationPdf" &&
+                      quotationPreviewUrl &&
+                      quotationFileName && (
+                        <a
+                          href={quotationPreviewUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex h-9 items-center gap-1 rounded-md border border-border-default px-2 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:bg-bg-subtle"
+                        >
+                          <Eye size={13} />
+                          Anteprima
+                        </a>
+                      )}
 
-                    {file.name !== "quotationPdf" && localPdfNames[file.name as LocalPdfKey] && localPdfPreviewUrls[file.name as LocalPdfKey] && (
-                      <a
-                        href={localPdfPreviewUrls[file.name as LocalPdfKey] ?? "#"}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex h-9 items-center gap-1 rounded-md border border-border-default px-2 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:bg-bg-subtle"
-                      >
-                        <Eye size={13} />
-                        Anteprima
-                      </a>
-                    )}
+                    {file.name !== "quotationPdf" &&
+                      localPdfNames[file.name as LocalPdfKey] &&
+                      localPdfPreviewUrls[file.name as LocalPdfKey] && (
+                        <a
+                          href={
+                            localPdfPreviewUrls[file.name as LocalPdfKey] ?? "#"
+                          }
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex h-9 items-center gap-1 rounded-md border border-border-default px-2 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:bg-bg-subtle"
+                        >
+                          <Eye size={13} />
+                          Anteprima
+                        </a>
+                      )}
 
                     {file.name === "quotationPdf" && quotationFileName && (
                       <button
                         type="button"
                         onClick={() => void handleReanalyzeQuotation()}
-                        disabled={isSwitchingVersion || isStartingAnalysis || isUploadingQuotation || isDeletingQuotation}
+                        disabled={
+                          isSwitchingVersion ||
+                          isStartingAnalysis ||
+                          isUploadingQuotation ||
+                          isDeletingQuotation
+                        }
                         className="inline-flex h-9 items-center gap-1 rounded-md border border-border-default px-2 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        <RefreshCw size={13} className={isStartingAnalysis ? "animate-spin" : ""} />
+                        <RefreshCw
+                          size={13}
+                          className={isStartingAnalysis ? "animate-spin" : ""}
+                        />
                         Rianalizza PDF
                       </button>
                     )}
@@ -1168,12 +1541,19 @@ export function ProjectForm({ id }: ProjectFormProps) {
                       onClick={
                         file.name === "quotationPdf"
                           ? () => void handleDeleteQuotation()
-                          : () => void handleDeleteLocalPdf(file.name as LocalPdfKey)
+                          : () =>
+                              void handleDeleteLocalPdf(
+                                file.name as LocalPdfKey,
+                              )
                       }
                       disabled={
                         file.name === "quotationPdf"
-                          ? !quotationFileName || isSwitchingVersion || isUploadingQuotation || isDeletingQuotation
-                          : !localPdfNames[file.name as LocalPdfKey] || isSwitchingVersion
+                          ? !quotationFileName ||
+                            isSwitchingVersion ||
+                            isUploadingQuotation ||
+                            isDeletingQuotation
+                          : !localPdfNames[file.name as LocalPdfKey] ||
+                            isSwitchingVersion
                       }
                       className="inline-flex h-9 items-center gap-1 rounded-md border border-status-danger-border px-2 py-1 text-[11px] font-medium text-status-danger-text transition-colors hover:bg-status-danger-bg disabled:cursor-not-allowed disabled:opacity-50"
                     >
@@ -1188,7 +1568,9 @@ export function ProjectForm({ id }: ProjectFormProps) {
 
           {isEdit && (
             <div className="space-y-4">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">Output Di Versione</h3>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">
+                Output Di Versione
+              </h3>
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div className="rounded-[var(--radius-xl)] border border-border-default bg-bg-muted p-5">
                   <div className="flex items-start gap-3">
@@ -1196,9 +1578,16 @@ export function ProjectForm({ id }: ProjectFormProps) {
                       <FileText size={18} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-text-secondary">Preventivo Word (DOCX)</p>
-                      <p className="mt-1 text-xs text-text-muted">Generato dall&apos;orchestrator dopo l&apos;analisi.</p>
-                      <p className="mt-2 truncate text-xs font-medium text-text-secondary" title={quotationDocxName ?? ""}>
+                      <p className="text-sm font-bold text-text-secondary">
+                        Preventivo Word (DOCX)
+                      </p>
+                      <p className="mt-1 text-xs text-text-muted">
+                        Generato dall&apos;orchestrator dopo l&apos;analisi.
+                      </p>
+                      <p
+                        className="mt-2 truncate text-xs font-medium text-text-secondary"
+                        title={quotationDocxName ?? ""}
+                      >
                         {quotationDocxName ?? "Non ancora disponibile"}
                       </p>
                     </div>
@@ -1215,7 +1604,9 @@ export function ProjectForm({ id }: ProjectFormProps) {
                         Apri DOCX
                       </a>
                     ) : (
-                      <span className="text-xs text-text-muted">Disponibile al completamento dell&apos;elaborazione.</span>
+                      <span className="text-xs text-text-muted">
+                        Disponibile al completamento dell&apos;elaborazione.
+                      </span>
                     )}
                   </div>
                 </div>
@@ -1226,9 +1617,16 @@ export function ProjectForm({ id }: ProjectFormProps) {
                       <FileSpreadsheet size={18} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-text-secondary">Preventivo Excel (XLSX)</p>
-                      <p className="mt-1 text-xs text-text-muted">Caricabile per la stessa versione progetto.</p>
-                      <p className="mt-2 truncate text-xs font-medium text-text-secondary" title={quotationXlsxName ?? ""}>
+                      <p className="text-sm font-bold text-text-secondary">
+                        Preventivo Excel (XLSX)
+                      </p>
+                      <p className="mt-1 text-xs text-text-muted">
+                        Caricabile per la stessa versione progetto.
+                      </p>
+                      <p
+                        className="mt-2 truncate text-xs font-medium text-text-secondary"
+                        title={quotationXlsxName ?? ""}
+                      >
                         {quotationXlsxName ?? "Nessun file Excel collegato"}
                       </p>
                     </div>
@@ -1241,9 +1639,17 @@ export function ProjectForm({ id }: ProjectFormProps) {
                         accept=".xlsx,.xls,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                         className="hidden"
                         onChange={handleQuotationXlsxUpload}
-                        disabled={isSwitchingVersion || isUploadingQuotationXlsx || isDeletingQuotationXlsx}
+                        disabled={
+                          isSwitchingVersion ||
+                          isUploadingQuotationXlsx ||
+                          isDeletingQuotationXlsx
+                        }
                       />
-                      {isUploadingQuotationXlsx ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                      {isUploadingQuotationXlsx ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <Upload size={13} />
+                      )}
                       Carica Excel
                     </label>
 
@@ -1262,7 +1668,12 @@ export function ProjectForm({ id }: ProjectFormProps) {
                     <button
                       type="button"
                       onClick={() => void handleDeleteQuotationXlsx()}
-                      disabled={!quotationXlsxName || isSwitchingVersion || isUploadingQuotationXlsx || isDeletingQuotationXlsx}
+                      disabled={
+                        !quotationXlsxName ||
+                        isSwitchingVersion ||
+                        isUploadingQuotationXlsx ||
+                        isDeletingQuotationXlsx
+                      }
                       className="inline-flex h-9 items-center gap-1 rounded-md border border-status-danger-border px-3 py-1 text-[11px] font-medium text-status-danger-text transition-colors hover:bg-status-danger-bg disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Trash2 size={13} />
@@ -1284,9 +1695,12 @@ export function ProjectForm({ id }: ProjectFormProps) {
                     <Sparkles size={24} />
                   </div>
                   <div>
-                    <h4 className="font-bold text-text-primary">Abilita Motore AI</h4>
+                    <h4 className="font-bold text-text-primary">
+                      Abilita Motore AI
+                    </h4>
                     <p className="text-xs text-text-muted">
-                      Analizza in automatico le specifiche e suggerisce dettagli per il preventivo.
+                      Analizza in automatico le specifiche e suggerisce dettagli
+                      per il preventivo.
                     </p>
                   </div>
                 </div>
@@ -1307,13 +1721,20 @@ export function ProjectForm({ id }: ProjectFormProps) {
               Annulla
             </Button>
 
-            <Button type="submit" className="h-12 w-full rounded-[var(--radius-md)] px-8 py-3 sm:w-auto" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              className="h-12 w-full rounded-[var(--radius-md)] px-8 py-3 sm:w-auto"
+              disabled={isSubmitting}
+            >
               <Save size={18} />
               {isEdit ? "Salva modifiche" : "Crea progetto"}
             </Button>
 
             {!isEdit && (
-              <Button variant="accent" className="h-12 w-full rounded-[var(--radius-md)] px-8 py-3 sm:w-auto">
+              <Button
+                variant="accent"
+                className="h-12 w-full rounded-[var(--radius-md)] px-8 py-3 sm:w-auto"
+              >
                 <FileCheck size={18} />
                 Genera preventivo
               </Button>
@@ -1323,10 +1744,24 @@ export function ProjectForm({ id }: ProjectFormProps) {
       </Card>
 
       {isClientModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.target === event.currentTarget && !isCreatingClient) { setIsClientModalOpen(false); resetNewClientForm(); } }}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isCreatingClient) {
+              setIsClientModalOpen(false);
+              resetNewClientForm();
+            }
+          }}
+        >
           <div className="w-full max-w-lg rounded-[var(--radius-xl)] border border-border-default bg-bg-surface p-5 shadow-elevated">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">Nuovo Cliente</h3>
-            <p className="mt-1 text-xs text-text-muted">Crea il cliente senza uscire dalla pagina corrente.</p>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">
+              Nuovo Cliente
+            </h3>
+            <p className="mt-1 text-xs text-text-muted">
+              Crea il cliente senza uscire dalla pagina corrente.
+            </p>
 
             <div className="mt-4 grid grid-cols-1 gap-3">
               <Input
@@ -1368,8 +1803,16 @@ export function ProjectForm({ id }: ProjectFormProps) {
                 <X size={16} />
                 Annulla
               </Button>
-              <Button type="button" onClick={() => void handleCreateClientInline()} disabled={isCreatingClient}>
-                {isCreatingClient ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              <Button
+                type="button"
+                onClick={() => void handleCreateClientInline()}
+                disabled={isCreatingClient}
+              >
+                {isCreatingClient ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Save size={16} />
+                )}
                 Salva cliente
               </Button>
             </div>
@@ -1381,7 +1824,9 @@ export function ProjectForm({ id }: ProjectFormProps) {
         <div className="fixed bottom-4 right-4 z-50 w-[min(460px,calc(100vw-2rem))] rounded-xl border border-border-default bg-bg-surface/95 p-4 shadow-elevated backdrop-blur">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">Elaborazione preventivo</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">
+                Elaborazione preventivo
+              </p>
               <p className="mt-1 text-sm font-medium text-text-secondary">
                 {jobStatus === "completed"
                   ? "Completata"
@@ -1389,7 +1834,9 @@ export function ProjectForm({ id }: ProjectFormProps) {
                     ? "Terminata con errore"
                     : "In esecuzione"}
               </p>
-              <p className="mt-0.5 text-xs text-text-muted line-clamp-2">{jobMessage}</p>
+              <p className="mt-0.5 text-xs text-text-muted line-clamp-2">
+                {jobMessage}
+              </p>
             </div>
 
             <button
@@ -1418,7 +1865,11 @@ export function ProjectForm({ id }: ProjectFormProps) {
             />
           </div>
           <div className="mt-2 flex items-center justify-between text-[11px] text-text-muted">
-            <span>{activeJobId ? `Job: ${activeJobId.slice(0, 8)}` : "Job in attesa"}</span>
+            <span>
+              {activeJobId
+                ? `Job: ${activeJobId.slice(0, 8)}`
+                : "Job in attesa"}
+            </span>
             <span>{jobProgress}%</span>
           </div>
         </div>

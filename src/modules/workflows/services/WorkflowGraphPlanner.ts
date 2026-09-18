@@ -61,7 +61,10 @@ export class WorkflowGraphPlanner {
       if (!edge.is_enabled) {
         continue;
       }
-      if (!eligibleNodeIds.has(edge.source_node_id) || !eligibleNodeIds.has(edge.target_node_id)) {
+      if (
+        !eligibleNodeIds.has(edge.source_node_id) ||
+        !eligibleNodeIds.has(edge.target_node_id)
+      ) {
         continue;
       }
       if (!evaluateCondition(edge.condition_payload)) {
@@ -69,11 +72,16 @@ export class WorkflowGraphPlanner {
       }
 
       outgoing.get(edge.source_node_id)?.push(edge.target_node_id);
-      incoming.set(edge.target_node_id, (incoming.get(edge.target_node_id) ?? 0) + 1);
+      incoming.set(
+        edge.target_node_id,
+        (incoming.get(edge.target_node_id) ?? 0) + 1,
+      );
     }
 
     const ordered: TNode[] = [];
-    const queue = eligibleNodes.filter((node) => (incoming.get(node.id) ?? 0) === 0).map((node) => node.id);
+    const queue = eligibleNodes
+      .filter((node) => (incoming.get(node.id) ?? 0) === 0)
+      .map((node) => node.id);
     const byId = new Map(eligibleNodes.map((node) => [node.id, node]));
 
     while (queue.length > 0) {
@@ -101,7 +109,9 @@ export class WorkflowGraphPlanner {
     return ordered;
   }
 
-  private filterEligibleNodes<TNode extends WorkflowGraphNode>(nodes: TNode[]): TNode[] {
+  private filterEligibleNodes<TNode extends WorkflowGraphNode>(
+    nodes: TNode[],
+  ): TNode[] {
     return nodes.filter((node) => node.is_enabled || node.is_required);
   }
 }

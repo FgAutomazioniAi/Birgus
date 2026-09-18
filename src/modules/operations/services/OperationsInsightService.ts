@@ -2,7 +2,9 @@ import { Inject, Injectable } from "@nestjs/common";
 
 import { PrismaService } from "../../../nest/prisma/prisma.service.js";
 
-const toNumber = (value: { toNumber: () => number } | number | null | undefined): number | null => {
+const toNumber = (
+  value: { toNumber: () => number } | number | null | undefined,
+): number | null => {
   if (value === null || value === undefined) {
     return null;
   }
@@ -17,7 +19,10 @@ export class OperationsInsightService {
     private readonly prisma: PrismaService,
   ) {}
 
-  public async listMyQueuedOperations(workspaceId: string, userId: string): Promise<Array<Record<string, unknown>>> {
+  public async listMyQueuedOperations(
+    workspaceId: string,
+    userId: string,
+  ): Promise<Array<Record<string, unknown>>> {
     const runs = await this.prisma.moduleWorkflowRun.findMany({
       where: {
         workspace_id: workspaceId,
@@ -59,7 +64,9 @@ export class OperationsInsightService {
       // Un ramo non selezionato da Verifica e instrada e' SKIPPED per progetto,
       // non un errore della run. Gli errori reali hanno stato FAILED.
       status: run.status,
-      currentStepLabel: run.steps.find((step) => step.status === "RUNNING")?.workflow_node?.label ?? null,
+      currentStepLabel:
+        run.steps.find((step) => step.status === "RUNNING")?.workflow_node
+          ?.label ?? null,
       errorMessage: run.error_message,
       queuedAt: run.queued_at,
       startedAt: run.started_at,
@@ -67,7 +74,9 @@ export class OperationsInsightService {
     }));
   }
 
-  public async listCustomerMap(workspaceId: string): Promise<Array<Record<string, unknown>>> {
+  public async listCustomerMap(
+    workspaceId: string,
+  ): Promise<Array<Record<string, unknown>>> {
     const companies = await this.prisma.company.findMany({
       where: {
         workspace_id: workspaceId,
@@ -85,7 +94,14 @@ export class OperationsInsightService {
       customerName: company.name,
       customerEmail: company.email,
       customerPhone: company.phone,
-      label: [company.is_headquarters ? "Sede principale" : "Sede", company.address, company.postal_code, company.city, company.province, company.country]
+      label: [
+        company.is_headquarters ? "Sede principale" : "Sede",
+        company.address,
+        company.postal_code,
+        company.city,
+        company.province,
+        company.country,
+      ]
         .filter(Boolean)
         .join(" - "),
       addressLine1: company.address,
@@ -102,7 +118,9 @@ export class OperationsInsightService {
     }));
   }
 
-  public async listOfferPriority(workspaceId: string): Promise<Array<Record<string, unknown>>> {
+  public async listOfferPriority(
+    workspaceId: string,
+  ): Promise<Array<Record<string, unknown>>> {
     const offers = await this.prisma.commercialOffer.findMany({
       where: {
         workspace_id: workspaceId,
@@ -128,7 +146,11 @@ export class OperationsInsightService {
           take: 3,
         },
       },
-      orderBy: [{ priority_score: "desc" }, { total_amount: "desc" }, { issued_at: "asc" }],
+      orderBy: [
+        { priority_score: "desc" },
+        { total_amount: "desc" },
+        { issued_at: "asc" },
+      ],
     });
 
     return offers.map((offer) => ({
@@ -164,37 +186,49 @@ export class OperationsInsightService {
     }));
   }
 
-  public async listMaintenanceProposals(workspaceId: string): Promise<Record<string, unknown>> {
+  public async listMaintenanceProposals(
+    workspaceId: string,
+  ): Promise<Record<string, unknown>> {
     const proposals = await this.prisma.maintenanceProposal.findMany({
-        where: {
-          workspace_id: workspaceId,
-          deleted_at: null,
-        },
-        include: {
-          work_reference: {
-            select: {
-              id: true,
-              code: true,
-              name: true,
-              customer: {
-                select: {
-                  id: true,
-                  name: true,
-                },
+      where: {
+        workspace_id: workspaceId,
+        deleted_at: null,
+      },
+      include: {
+        work_reference: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            customer: {
+              select: {
+                id: true,
+                name: true,
               },
             },
           },
         },
-        orderBy: [{ urgency: "asc" }, { suggested_at: "asc" }, { updated_at: "desc" }],
-      });
+      },
+      orderBy: [
+        { urgency: "asc" },
+        { suggested_at: "asc" },
+        { updated_at: "desc" },
+      ],
+    });
 
     return {
       proposals: proposals.map((proposal) => ({
         id: proposal.id,
-        customerName: proposal.work_reference?.customer?.name ?? proposal.customer_name_snapshot ?? "",
+        customerName:
+          proposal.work_reference?.customer?.name ??
+          proposal.customer_name_snapshot ??
+          "",
         workReferenceId: proposal.work_reference_id,
         workReferenceCode: proposal.work_reference?.code ?? "",
-        workReferenceName: proposal.work_reference?.name ?? proposal.work_reference_snapshot ?? "",
+        workReferenceName:
+          proposal.work_reference?.name ??
+          proposal.work_reference_snapshot ??
+          "",
         lastServiceAt: proposal.last_service_at,
         suggestedAt: proposal.suggested_at,
         estimatedFrequencyDays: proposal.estimated_frequency_days,
@@ -210,7 +244,9 @@ export class OperationsInsightService {
     };
   }
 
-  public async listMaintenanceCalendar(workspaceId: string): Promise<Array<Record<string, unknown>>> {
+  public async listMaintenanceCalendar(
+    workspaceId: string,
+  ): Promise<Array<Record<string, unknown>>> {
     const planEntries = await this.prisma.maintenancePlanEntry.findMany({
       where: {
         workspace_id: workspaceId,

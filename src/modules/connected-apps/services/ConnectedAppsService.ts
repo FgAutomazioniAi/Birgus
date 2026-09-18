@@ -1,6 +1,11 @@
 import { createHash, randomInt } from "node:crypto";
 
-import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 
 import { PrismaService } from "../../../nest/prisma/prisma.service.js";
 
@@ -25,13 +30,18 @@ export class ConnectedAppsService {
     private readonly prisma: PrismaService,
   ) {}
 
-  public async createTelegramLinkCode(input: { workspaceId: string; userId: string }): Promise<{
+  public async createTelegramLinkCode(input: {
+    workspaceId: string;
+    userId: string;
+  }): Promise<{
     code: string;
     expiresAt: Date;
     botUsername: string | null;
   }> {
     if (!process.env.TELEGRAM_BOT_TOKEN?.trim()) {
-      throw new BadRequestException("Bot Telegram non configurato. Imposta TELEGRAM_BOT_TOKEN prima di collegare un account.");
+      throw new BadRequestException(
+        "Bot Telegram non configurato. Imposta TELEGRAM_BOT_TOKEN prima di collegare un account.",
+      );
     }
 
     const code = this.createLinkCode();
@@ -55,7 +65,9 @@ export class ConnectedAppsService {
     return {
       code,
       expiresAt,
-      botUsername: this.normalizeBotUsername(process.env.TELEGRAM_BOT_USERNAME ?? null),
+      botUsername: this.normalizeBotUsername(
+        process.env.TELEGRAM_BOT_USERNAME ?? null,
+      ),
     };
   }
 
@@ -179,15 +191,21 @@ export class ConnectedAppsService {
     channelId?: unknown;
     fallbackChatId?: unknown;
   }): Promise<string> {
-    const fallback = typeof params.fallbackChatId === "string" ? params.fallbackChatId.trim() : "";
-    const channelId = typeof params.channelId === "string" ? params.channelId.trim() : "";
+    const fallback =
+      typeof params.fallbackChatId === "string"
+        ? params.fallbackChatId.trim()
+        : "";
+    const channelId =
+      typeof params.channelId === "string" ? params.channelId.trim() : "";
 
     if (!channelId) {
       return fallback;
     }
 
     if (!params.userId) {
-      throw new BadRequestException("Impossibile usare il collegamento Telegram: utente workflow assente.");
+      throw new BadRequestException(
+        "Impossibile usare il collegamento Telegram: utente workflow assente.",
+      );
     }
 
     const row = await this.prisma.userMessagingChannel.findFirst({
@@ -201,7 +219,9 @@ export class ConnectedAppsService {
     });
 
     if (!row) {
-      throw new BadRequestException("Collegamento Telegram non trovato per questo utente.");
+      throw new BadRequestException(
+        "Collegamento Telegram non trovato per questo utente.",
+      );
     }
 
     return row.recipient_id;
@@ -241,7 +261,10 @@ export class ConnectedAppsService {
 
   private createLinkCode(): string {
     const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    return Array.from({ length: 6 }, () => alphabet[randomInt(alphabet.length)]).join("");
+    return Array.from(
+      { length: 6 },
+      () => alphabet[randomInt(alphabet.length)],
+    ).join("");
   }
 
   private normalizeBotUsername(value: string | null): string | null {

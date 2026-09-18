@@ -2,6 +2,7 @@
 key: superadmin_center
 ui: Superadmin
 ---
+
 # superadmin_center
 
 Console di amministrazione globale dell'istanza, visibile solo ai superuser: workspace, utenti, ruoli, moduli e stato d'installazione.

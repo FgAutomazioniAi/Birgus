@@ -2,6 +2,7 @@
 key: ai_runtime_control
 ui: AI Runtime
 ---
+
 # ai_runtime_control
 
 Capability AI sempre presente nell'architettura. Gestisce il lifecycle del runtime locale vLLM quando esiste; il provider puo anche essere Brainyware o OpenAI-compatible esterno.

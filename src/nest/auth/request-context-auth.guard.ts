@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, Inject, Injectable } from "@nestjs/common";
+import {
+  CanActivate,
+  ExecutionContext,
+  Inject,
+  Injectable,
+} from "@nestjs/common";
 import { FastifyRequest } from "fastify";
 
 import { AppError } from "../../core/errors/AppError.js";
@@ -17,18 +22,25 @@ export class RequestContextAuthGuard implements CanActivate {
     @Inject(TenancyGuard)
     private readonly tenancyGuard: TenancyGuard,
   ) {
-    this.cookieSessionName = (process.env.AUTH_COOKIE_NAME ?? "vl_session").trim() || "vl_session";
+    this.cookieSessionName =
+      (process.env.AUTH_COOKIE_NAME ?? "vl_session").trim() || "vl_session";
   }
 
   public async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<FastifyRequest & { requestContext?: RequestContext }>();
+    const request = context
+      .switchToHttp()
+      .getRequest<FastifyRequest & { requestContext?: RequestContext }>();
 
     const token = this.extractSessionToken(request);
     const preferredWorkspaceId = this.extractWorkspaceId(request);
     const session = await this.authService.validateToken(token);
 
     if (!session) {
-      throw new AppError("Invalid or expired session.", "AUTH_SESSION_INVALID", 401);
+      throw new AppError(
+        "Invalid or expired session.",
+        "AUTH_SESSION_INVALID",
+        401,
+      );
     }
 
     if (session.mustChangePassword && !this.isPasswordChangeRoute(request)) {
@@ -39,7 +51,10 @@ export class RequestContextAuthGuard implements CanActivate {
       );
     }
 
-    const workspaceId = await this.tenancyGuard.resolveWorkspaceIdForUser(session.userId, preferredWorkspaceId);
+    const workspaceId = await this.tenancyGuard.resolveWorkspaceIdForUser(
+      session.userId,
+      preferredWorkspaceId,
+    );
     request.requestContext = new RequestContext({
       workspace: new WorkspaceContext(workspaceId, session.userId),
       sessionId: session.sessionId,
@@ -62,7 +77,11 @@ export class RequestContextAuthGuard implements CanActivate {
 
     const cookieToken = this.extractCookieToken(request.headers.cookie ?? null);
     if (!cookieToken) {
-      throw new AppError("Missing authentication token.", "AUTH_TOKEN_REQUIRED", 401);
+      throw new AppError(
+        "Missing authentication token.",
+        "AUTH_TOKEN_REQUIRED",
+        401,
+      );
     }
 
     return cookieToken;
@@ -70,11 +89,13 @@ export class RequestContextAuthGuard implements CanActivate {
 
   private isPasswordChangeRoute(request: FastifyRequest): boolean {
     const path = request.url.split("?", 1)[0] ?? "";
-    return path === "/api/auth/password/change"
-      || path === "/api/auth/password/forgot"
-      || path === "/api/auth/password/reset"
-      || path === "/api/auth/logout"
-      || path === "/api/auth/session";
+    return (
+      path === "/api/auth/password/change" ||
+      path === "/api/auth/password/forgot" ||
+      path === "/api/auth/password/reset" ||
+      path === "/api/auth/logout" ||
+      path === "/api/auth/session"
+    );
   }
 
   private extractCookieToken(cookieHeader: string | null): string | null {
@@ -116,12 +137,15 @@ export class RequestContextAuthGuard implements CanActivate {
       return workspaceId.trim();
     }
 
-    const query = request.query as { workspaceId?: unknown; workspace_id?: unknown } | undefined;
-    const candidate = typeof query?.workspaceId === "string"
-      ? query.workspaceId
-      : typeof query?.workspace_id === "string"
-        ? query.workspace_id
-        : null;
+    const query = request.query as
+      | { workspaceId?: unknown; workspace_id?: unknown }
+      | undefined;
+    const candidate =
+      typeof query?.workspaceId === "string"
+        ? query.workspaceId
+        : typeof query?.workspace_id === "string"
+          ? query.workspace_id
+          : null;
 
     return candidate?.trim() ? candidate.trim() : null;
   }

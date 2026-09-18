@@ -4,7 +4,9 @@ import { test } from "node:test";
 import { HealthController } from "../../src/nest/health/health.controller.js";
 import type { AiGatewayService } from "../../src/modules/ai-runtime/services/AiGatewayService.js";
 
-function buildController(health: Awaited<ReturnType<AiGatewayService["health"]>>): HealthController {
+function buildController(
+  health: Awaited<ReturnType<AiGatewayService["health"]>>,
+): HealthController {
   const gateway = {
     health: async () => health,
   } as AiGatewayService;

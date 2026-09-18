@@ -23,7 +23,9 @@ export class SessionCookieFactory {
     this.path = options?.path?.trim() ? options.path.trim() : "/";
     this.secure = options?.secure ?? false;
     this.sameSite = options?.sameSite ?? "Lax";
-    this.trustedDeviceCookieName = options?.trustedDeviceCookieName?.trim() || `${this.cookieName}_trusted_device`;
+    this.trustedDeviceCookieName =
+      options?.trustedDeviceCookieName?.trim() ||
+      `${this.cookieName}_trusted_device`;
   }
 
   public getTrustedDeviceCookieName(): string {
@@ -70,15 +72,26 @@ export class SessionCookieFactory {
     return parts.join("; ");
   }
 
-  public createTrustedDeviceCookie(token: string, maxAgeSeconds: number): string {
-    return this.createCookie(this.trustedDeviceCookieName, token, maxAgeSeconds);
+  public createTrustedDeviceCookie(
+    token: string,
+    maxAgeSeconds: number,
+  ): string {
+    return this.createCookie(
+      this.trustedDeviceCookieName,
+      token,
+      maxAgeSeconds,
+    );
   }
 
   public createExpiredTrustedDeviceCookie(): string {
     return this.createCookie(this.trustedDeviceCookieName, "", 0);
   }
 
-  private createCookie(name: string, value: string, maxAgeSeconds: number): string {
+  private createCookie(
+    name: string,
+    value: string,
+    maxAgeSeconds: number,
+  ): string {
     const parts = [
       `${name}=${encodeURIComponent(value)}`,
       `Path=${this.path}`,

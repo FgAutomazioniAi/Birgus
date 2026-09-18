@@ -39,12 +39,28 @@ export class ScheduledWorkflowDeliveryService {
     private readonly pythonModulesClient: BackendPythonModulesClient,
     options: { pollIntervalMs?: number; maxAttempts?: number } = {},
   ) {
-    this.pollIntervalMs = options.pollIntervalMs ?? this.readPositiveInt("SCHEDULED_WORKFLOW_DELIVERY_POLL_MS", 15_000);
-    this.maxAttempts = options.maxAttempts ?? this.readPositiveInt("SCHEDULED_WORKFLOW_DELIVERY_MAX_ATTEMPTS", 5);
-    this.maxPendingPerWorkspace = this.readPositiveInt("SCHEDULED_WORKFLOW_DELIVERY_MAX_PENDING", 200);
-    this.pastScheduleGraceMs = this.readPositiveInt("SCHEDULED_WORKFLOW_DELIVERY_PAST_GRACE_MS", 90_000);
-    this.processingLeaseMs = this.readPositiveInt("SCHEDULED_WORKFLOW_DELIVERY_PROCESSING_LEASE_MS", 5 * 60_000);
-    this.minRepeatSeconds = this.readPositiveInt("SCHEDULED_WORKFLOW_DELIVERY_MIN_REPEAT_SECONDS", 60);
+    this.pollIntervalMs =
+      options.pollIntervalMs ??
+      this.readPositiveInt("SCHEDULED_WORKFLOW_DELIVERY_POLL_MS", 15_000);
+    this.maxAttempts =
+      options.maxAttempts ??
+      this.readPositiveInt("SCHEDULED_WORKFLOW_DELIVERY_MAX_ATTEMPTS", 5);
+    this.maxPendingPerWorkspace = this.readPositiveInt(
+      "SCHEDULED_WORKFLOW_DELIVERY_MAX_PENDING",
+      200,
+    );
+    this.pastScheduleGraceMs = this.readPositiveInt(
+      "SCHEDULED_WORKFLOW_DELIVERY_PAST_GRACE_MS",
+      90_000,
+    );
+    this.processingLeaseMs = this.readPositiveInt(
+      "SCHEDULED_WORKFLOW_DELIVERY_PROCESSING_LEASE_MS",
+      5 * 60_000,
+    );
+    this.minRepeatSeconds = this.readPositiveInt(
+      "SCHEDULED_WORKFLOW_DELIVERY_MIN_REPEAT_SECONDS",
+      60,
+    );
   }
 
   public start(): void {
@@ -53,9 +69,14 @@ export class ScheduledWorkflowDeliveryService {
     }
 
     void this.processDueDeliveries();
-    this.timer = setInterval(() => void this.processDueDeliveries(), this.pollIntervalMs);
+    this.timer = setInterval(
+      () => void this.processDueDeliveries(),
+      this.pollIntervalMs,
+    );
     this.timer.unref?.();
-    this.logger.log(`Scheduled workflow delivery worker started every ${this.pollIntervalMs}ms.`);
+    this.logger.log(
+      `Scheduled workflow delivery worker started every ${this.pollIntervalMs}ms.`,
+    );
   }
 
   public async schedule(command: ScheduleWorkflowDeliveryCommand): Promise<{
@@ -75,7 +96,10 @@ export class ScheduledWorkflowDeliveryService {
     if (Number.isNaN(command.runAt.getTime())) {
       throw new Error("Data pianificazione non valida.");
     }
-    this.validateScheduleTiming(command.runAt, command.repeatEverySeconds ?? null);
+    this.validateScheduleTiming(
+      command.runAt,
+      command.repeatEverySeconds ?? null,
+    );
 
     const prisma = PrismaClientManager.getClient();
     const pendingCount = await prisma.scheduledWorkflowDelivery.count({
@@ -85,7 +109,9 @@ export class ScheduledWorkflowDeliveryService {
       },
     });
     if (pendingCount >= this.maxPendingPerWorkspace) {
-      throw new Error(`Limite di ${this.maxPendingPerWorkspace} invii pianificati attivi raggiunto nel workspace.`);
+      throw new Error(
+        `Limite di ${this.maxPendingPerWorkspace} invii pianificati attivi raggiunto nel workspace.`,
+      );
     }
     const row = await prisma.scheduledWorkflowDelivery.create({
       data: {
@@ -166,7 +192,9 @@ export class ScheduledWorkflowDeliveryService {
       return false;
     }
 
-    const row = await prisma.scheduledWorkflowDelivery.findUnique({ where: { id } });
+    const row = await prisma.scheduledWorkflowDelivery.findUnique({
+      where: { id },
+    });
     if (!row) {
       return false;
     }
@@ -180,7 +208,9 @@ export class ScheduledWorkflowDeliveryService {
           data: {
             status: ScheduledWorkflowDeliveryStatus.ACTIVE,
             last_run_at: now,
-            next_run_at: new Date(now.getTime() + row.repeat_every_seconds * 1000),
+            next_run_at: new Date(
+              now.getTime() + row.repeat_every_seconds * 1000,
+            ),
             last_error: null,
           },
         });
@@ -200,9 +230,10 @@ export class ScheduledWorkflowDeliveryService {
       await prisma.scheduledWorkflowDelivery.update({
         where: { id },
         data: {
-          status: row.attempts >= this.maxAttempts
-            ? ScheduledWorkflowDeliveryStatus.FAILED
-            : ScheduledWorkflowDeliveryStatus.ACTIVE,
+          status:
+            row.attempts >= this.maxAttempts
+              ? ScheduledWorkflowDeliveryStatus.FAILED
+              : ScheduledWorkflowDeliveryStatus.ACTIVE,
           next_run_at: new Date(Date.now() + retryDelaySeconds * 1000),
           last_error: this.sanitizeError(error),
         },
@@ -221,11 +252,14 @@ export class ScheduledWorkflowDeliveryService {
       },
       data: {
         status: ScheduledWorkflowDeliveryStatus.ACTIVE,
-        last_error: "Invio ripreso automaticamente dopo un'interruzione del worker.",
+        last_error:
+          "Invio ripreso automaticamente dopo un'interruzione del worker.",
       },
     });
     if (recovered.count > 0) {
-      this.logger.warn(`Recovered ${recovered.count} abandoned scheduled workflow deliveries.`);
+      this.logger.warn(
+        `Recovered ${recovered.count} abandoned scheduled workflow deliveries.`,
+      );
     }
   }
 
@@ -238,18 +272,26 @@ export class ScheduledWorkflowDeliveryService {
     provider_payload: Prisma.JsonValue | null;
   }): Promise<void> {
     if (row.channel === ScheduledWorkflowDeliveryChannel.TELEGRAM) {
-      await this.pythonModulesClient.execute("messaging_engine", "send_telegram", {
-        chat_id: row.recipient,
-        text: row.message,
-      });
+      await this.pythonModulesClient.execute(
+        "messaging_engine",
+        "send_telegram",
+        {
+          chat_id: row.recipient,
+          text: row.message,
+        },
+      );
       return;
     }
 
     if (row.channel === ScheduledWorkflowDeliveryChannel.WHATSAPP) {
-      await this.pythonModulesClient.execute("messaging_engine", "send_whatsapp", {
-        to: row.recipient,
-        text: row.message,
-      });
+      await this.pythonModulesClient.execute(
+        "messaging_engine",
+        "send_whatsapp",
+        {
+          to: row.recipient,
+          text: row.message,
+        },
+      );
       return;
     }
 
@@ -262,7 +304,9 @@ export class ScheduledWorkflowDeliveryService {
     });
   }
 
-  private toPrismaChannel(channel: ScheduledDeliveryChannel): ScheduledWorkflowDeliveryChannel {
+  private toPrismaChannel(
+    channel: ScheduledDeliveryChannel,
+  ): ScheduledWorkflowDeliveryChannel {
     if (channel === "telegram") {
       return ScheduledWorkflowDeliveryChannel.TELEGRAM;
     }
@@ -272,7 +316,9 @@ export class ScheduledWorkflowDeliveryService {
     return ScheduledWorkflowDeliveryChannel.EMAIL;
   }
 
-  private fromPrismaChannel(channel: ScheduledWorkflowDeliveryChannel): ScheduledDeliveryChannel {
+  private fromPrismaChannel(
+    channel: ScheduledWorkflowDeliveryChannel,
+  ): ScheduledDeliveryChannel {
     if (channel === ScheduledWorkflowDeliveryChannel.TELEGRAM) {
       return "telegram";
     }
@@ -289,9 +335,11 @@ export class ScheduledWorkflowDeliveryService {
     return value as Prisma.InputJsonValue;
   }
 
-  private toProviderPayload(value: Prisma.JsonValue | null): Record<string, unknown> | null {
+  private toProviderPayload(
+    value: Prisma.JsonValue | null,
+  ): Record<string, unknown> | null {
     return value && typeof value === "object" && !Array.isArray(value)
-      ? value as Record<string, unknown>
+      ? (value as Record<string, unknown>)
       : null;
   }
 
@@ -300,12 +348,23 @@ export class ScheduledWorkflowDeliveryService {
     return message.slice(0, 500);
   }
 
-  private validateScheduleTiming(runAt: Date, repeatEverySeconds: number | null): void {
+  private validateScheduleTiming(
+    runAt: Date,
+    repeatEverySeconds: number | null,
+  ): void {
     if (runAt.getTime() < Date.now() - this.pastScheduleGraceMs) {
-      throw new Error("L'orario pianificato e' gia' trascorso. Scegli un orario futuro.");
+      throw new Error(
+        "L'orario pianificato e' gia' trascorso. Scegli un orario futuro.",
+      );
     }
-    if (repeatEverySeconds !== null && (!Number.isInteger(repeatEverySeconds) || repeatEverySeconds < this.minRepeatSeconds)) {
-      throw new Error(`La ripetizione minima consentita e' di ${this.minRepeatSeconds} secondi.`);
+    if (
+      repeatEverySeconds !== null &&
+      (!Number.isInteger(repeatEverySeconds) ||
+        repeatEverySeconds < this.minRepeatSeconds)
+    ) {
+      throw new Error(
+        `La ripetizione minima consentita e' di ${this.minRepeatSeconds} secondi.`,
+      );
     }
   }
 

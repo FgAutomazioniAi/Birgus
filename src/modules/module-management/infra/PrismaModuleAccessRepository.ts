@@ -6,7 +6,10 @@ import { WorkspaceModuleState } from "../domain/WorkspaceModuleState.js";
 import { activationGroupFor } from "../domain/ModuleActivationGroups.js";
 
 export class PrismaModuleAccessRepository implements ModuleAccessRepository {
-  public async isModuleEnabledForWorkspace(workspaceId: string, moduleKey: string): Promise<boolean> {
+  public async isModuleEnabledForWorkspace(
+    workspaceId: string,
+    moduleKey: string,
+  ): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
     const groupModuleKeys = activationGroupFor(moduleKey);
     const workspaceModules = await prisma.workspaceModule.findMany({
@@ -24,7 +27,11 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
     return workspaceModules.length === groupModuleKeys.length;
   }
 
-  public async isModuleEnabledForUser(workspaceId: string, userId: string, moduleKey: string): Promise<boolean> {
+  public async isModuleEnabledForUser(
+    workspaceId: string,
+    userId: string,
+    moduleKey: string,
+  ): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
 
     const moduleRecord = await prisma.module.findFirst({
@@ -36,11 +43,16 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
       return false;
     }
 
-    if (await this.isDeveloper(userId)) {
-      return true;
-    }
+    const [isDeveloper, isWorkspaceSuperuser] = await Promise.all([
+      this.isDeveloper(userId),
+      this.isWorkspaceSuperuser(workspaceId, userId),
+    ]);
 
-    if (moduleKey === "superadmin_center" && await this.isWorkspaceSuperuser(workspaceId, userId)) {
+    // The management module remains available to the people who can restore a disabled module.
+    if (
+      moduleKey === "superadmin_center" &&
+      (isDeveloper || isWorkspaceSuperuser)
+    ) {
       return true;
     }
 
@@ -67,8 +79,9 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
       },
     });
 
-    const isGroupEnabled = workspaceModules.length === groupModuleKeys.length
-      && workspaceModules.every((item) => item.is_enabled);
+    const isGroupEnabled =
+      workspaceModules.length === groupModuleKeys.length &&
+      workspaceModules.every((item) => item.is_enabled);
     if (!isGroupEnabled) {
       return false;
     }
@@ -84,7 +97,9 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
     return true;
   }
 
-  public async listWorkspaceModules(workspaceId: string): Promise<WorkspaceModuleState[]> {
+  public async listWorkspaceModules(
+    workspaceId: string,
+  ): Promise<WorkspaceModuleState[]> {
     const prisma = PrismaClientManager.getClient();
 
     const rows = await prisma.module.findMany({
@@ -107,10 +122,19 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
       },
     });
 
-    return rows.map((row) => new WorkspaceModuleState(row.key, row.workspace_modules[0]?.is_enabled ?? false));
+    return rows.map(
+      (row) =>
+        new WorkspaceModuleState(
+          row.key,
+          row.workspace_modules[0]?.is_enabled ?? false,
+        ),
+    );
   }
 
-  public async listUserModules(workspaceId: string, userId: string): Promise<UserModuleState[]> {
+  public async listUserModules(
+    workspaceId: string,
+    userId: string,
+  ): Promise<UserModuleState[]> {
     const prisma = PrismaClientManager.getClient();
     const [isDeveloper, isWorkspaceSuperuser] = await Promise.all([
       this.isDeveloper(userId),
@@ -146,20 +170,28 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
       },
     });
 
-    const enabledByKey = new Map(rows.map((row) => [row.key, row.workspace_modules[0]?.is_enabled ?? false]));
+    const enabledByKey = new Map(
+      rows.map((row) => [
+        row.key,
+        row.workspace_modules[0]?.is_enabled ?? false,
+      ]),
+    );
     return rows.map((row) => {
       const workspaceEnabled = row.workspace_modules[0]?.is_enabled ?? false;
       const override = row.user_module_overrides[0]?.mode ?? null;
-      const groupEnabled = activationGroupFor(row.key).every((key) => enabledByKey.get(key) === true);
-      const effectiveEnabled = isDeveloper || (isWorkspaceSuperuser && row.key === "superadmin_center")
-        ? true
-        : !groupEnabled
-        ? false
-        : override === "ALLOW"
+      const groupEnabled = activationGroupFor(row.key).every(
+        (key) => enabledByKey.get(key) === true,
+      );
+      const effectiveEnabled =
+        (isDeveloper || isWorkspaceSuperuser) && row.key === "superadmin_center"
           ? true
-          : override === "DENY"
+          : !groupEnabled
             ? false
-            : true;
+            : override === "ALLOW"
+              ? true
+              : override === "DENY"
+                ? false
+                : true;
 
       return new UserModuleState({
         moduleKey: row.key,
@@ -238,7 +270,11 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
     });
   }
 
-  public async clearUserModuleOverride(workspaceId: string, userId: string, moduleKey: string): Promise<void> {
+  public async clearUserModuleOverride(
+    workspaceId: string,
+    userId: string,
+    moduleKey: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     const moduleRecord = await this.resolveModuleOrThrow(moduleKey);
 
@@ -251,7 +287,10 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
     });
   }
 
-  public async listMissingDependenciesForEnable(workspaceId: string, moduleKey: string): Promise<string[]> {
+  public async listMissingDependenciesForEnable(
+    workspaceId: string,
+    moduleKey: string,
+  ): Promise<string[]> {
     const prisma = PrismaClientManager.getClient();
     const moduleRecord = await this.resolveModuleOrThrow(moduleKey);
 
@@ -291,11 +330,18 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
     const enabledIds = new Set(enabledRows.map((row) => row.module_id));
 
     return dependencies
-      .filter((item) => !item.depends_on_module.is_active || !enabledIds.has(item.depends_on_module.id))
+      .filter(
+        (item) =>
+          !item.depends_on_module.is_active ||
+          !enabledIds.has(item.depends_on_module.id),
+      )
       .map((item) => item.depends_on_module.key);
   }
 
-  public async listEnabledDependents(workspaceId: string, moduleKey: string): Promise<string[]> {
+  public async listEnabledDependents(
+    workspaceId: string,
+    moduleKey: string,
+  ): Promise<string[]> {
     const prisma = PrismaClientManager.getClient();
     const moduleRecord = await this.resolveModuleOrThrow(moduleKey);
 
@@ -351,7 +397,9 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
     return enabledRows.map((item) => item.module.key);
   }
 
-  public async isModuleEnabledInAnyActiveWorkspace(moduleKey: string): Promise<boolean> {
+  public async isModuleEnabledInAnyActiveWorkspace(
+    moduleKey: string,
+  ): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.workspaceModule.findFirst({
       where: {
@@ -365,7 +413,9 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
     return row !== null;
   }
 
-  private async resolveModuleOrThrow(moduleKey: string): Promise<{ id: number }> {
+  private async resolveModuleOrThrow(
+    moduleKey: string,
+  ): Promise<{ id: number }> {
     const prisma = PrismaClientManager.getClient();
     const moduleRecord = await prisma.module.findFirst({
       where: {
@@ -378,13 +428,20 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
     });
 
     if (!moduleRecord) {
-      throw new AppError(`Module '${moduleKey}' does not exist or is inactive.`, "MODULE_NOT_FOUND", 404);
+      throw new AppError(
+        `Module '${moduleKey}' does not exist or is inactive.`,
+        "MODULE_NOT_FOUND",
+        404,
+      );
     }
 
     return moduleRecord;
   }
 
-  private async ensureUserActiveMembership(workspaceId: string, userId: string): Promise<void> {
+  private async ensureUserActiveMembership(
+    workspaceId: string,
+    userId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     const membership = await prisma.workspaceMembership.findFirst({
       where: {
@@ -398,7 +455,11 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
     });
 
     if (!membership) {
-      throw new AppError("Target user is not active in workspace.", "MODULE_USER_NOT_IN_WORKSPACE", 400);
+      throw new AppError(
+        "Target user is not active in workspace.",
+        "MODULE_USER_NOT_IN_WORKSPACE",
+        400,
+      );
     }
   }
 
@@ -411,10 +472,17 @@ export class PrismaModuleAccessRepository implements ModuleAccessRepository {
     return assignment !== null;
   }
 
-  private async isWorkspaceSuperuser(workspaceId: string, userId: string): Promise<boolean> {
+  private async isWorkspaceSuperuser(
+    workspaceId: string,
+    userId: string,
+  ): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
     const assignment = await prisma.userWorkspaceRole.findFirst({
-      where: { workspace_id: workspaceId, user_id: userId, role: { key: "superuser" } },
+      where: {
+        workspace_id: workspaceId,
+        user_id: userId,
+        role: { key: "superuser" },
+      },
       select: { id: true },
     });
     return assignment !== null;

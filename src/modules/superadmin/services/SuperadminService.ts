@@ -1,12 +1,16 @@
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { AppError } from "../../../core/errors/AppError.js";
-import { ArchivedItemsService, ArchivedItemDto } from "../../document-archive/services/ArchivedItemsService.js";
+import {
+  ArchivedItemsService,
+  ArchivedItemDto,
+} from "../../document-archive/services/ArchivedItemsService.js";
 import { PasswordHasher } from "../../identity/services/PasswordHasher.js";
 import { PasswordPolicy } from "../../identity/services/PasswordPolicy.js";
 import { AuthSessionRepository } from "../../identity/repositories/AuthSessionRepository.js";
 import { ModuleManagementService } from "../../module-management/services/ModuleManagementService.js";
 import { AuditLogService } from "../../audit/services/AuditLogService.js";
 import { ModuleOverrideMode } from "@prisma/client";
+import { PERMISSION_CATALOG } from "../../../core/authorization/PermissionCatalog.js";
 
 interface AuditContext {
   actorUserId: string;
@@ -41,7 +45,10 @@ export class SuperadminService {
     this.auditLogService = params.auditLogService;
   }
 
-  public async resolveManagementScope(userId: string, workspaceId: string): Promise<ManagementScope> {
+  public async resolveManagementScope(
+    userId: string,
+    workspaceId: string,
+  ): Promise<ManagementScope> {
     const prisma = PrismaClientManager.getClient();
     const developerAssignment = await prisma.userWorkspaceRole.findFirst({
       where: {
@@ -53,51 +60,92 @@ export class SuperadminService {
     if (developerAssignment) return "GLOBAL";
 
     const superuserAssignment = await prisma.userWorkspaceRole.findFirst({
-      where: { user_id: userId, workspace_id: workspaceId, role: { key: "superuser" } },
+      where: {
+        user_id: userId,
+        workspace_id: workspaceId,
+        role: { key: "superuser" },
+      },
       select: { id: true },
     });
     if (superuserAssignment) return "WORKSPACE";
 
-    throw new AppError("Accesso consentito solo a Developer o Superuser.", "WORKSPACE_MANAGEMENT_FORBIDDEN", 403);
+    throw new AppError(
+      "Accesso consentito solo a Developer o Superuser.",
+      "WORKSPACE_MANAGEMENT_FORBIDDEN",
+      403,
+    );
   }
 
-  public assertWorkspaceInScope(scope: ManagementScope, actorWorkspaceId: string, targetWorkspaceId: string): void {
+  public assertWorkspaceInScope(
+    scope: ManagementScope,
+    actorWorkspaceId: string,
+    targetWorkspaceId: string,
+  ): void {
     if (scope === "WORKSPACE" && actorWorkspaceId !== targetWorkspaceId) {
-      throw new AppError("Il Superuser puo gestire solo il proprio workspace.", "WORKSPACE_MANAGEMENT_SCOPE_DENIED", 403);
+      throw new AppError(
+        "Il Superuser puo gestire solo il proprio workspace.",
+        "WORKSPACE_MANAGEMENT_SCOPE_DENIED",
+        403,
+      );
     }
   }
 
   public assertGlobalScope(scope: ManagementScope): void {
     if (scope !== "GLOBAL") {
-      throw new AppError("Operazione riservata al Developer.", "DEVELOPER_ONLY", 403);
+      throw new AppError(
+        "Operazione riservata al Developer.",
+        "DEVELOPER_ONLY",
+        403,
+      );
     }
   }
 
-  public async assertRoleAssignable(scope: ManagementScope, roleKey: string, targetUserId?: string): Promise<void> {
+  public async assertRoleAssignable(
+    scope: ManagementScope,
+    roleKey: string,
+    targetUserId?: string,
+  ): Promise<void> {
     if (roleKey !== "developer") return;
 
     if (scope === "WORKSPACE") {
-      throw new AppError("Solo un Developer puo assegnare il ruolo Developer.", "DEVELOPER_ROLE_ASSIGNMENT_FORBIDDEN", 403);
+      throw new AppError(
+        "Solo un Developer puo assegnare il ruolo Developer.",
+        "DEVELOPER_ROLE_ASSIGNMENT_FORBIDDEN",
+        403,
+      );
     }
 
-    const existingDeveloper = await PrismaClientManager.getClient().userWorkspaceRole.findFirst({
-      where: {
-        role: { key: "developer" },
-        ...(targetUserId ? { user_id: { not: targetUserId } } : {}),
-      },
-      select: { id: true },
-    });
+    const existingDeveloper =
+      await PrismaClientManager.getClient().userWorkspaceRole.findFirst({
+        where: {
+          role: { key: "developer" },
+          ...(targetUserId ? { user_id: { not: targetUserId } } : {}),
+        },
+        select: { id: true },
+      });
     if (existingDeveloper) {
-      throw new AppError("L'istanza puo avere un solo account Developer.", "DEVELOPER_ROLE_SINGLETON", 409);
+      throw new AppError(
+        "L'istanza puo avere un solo account Developer.",
+        "DEVELOPER_ROLE_SINGLETON",
+        409,
+      );
     }
   }
 
-  public async assertUserInScope(scope: ManagementScope, actorWorkspaceId: string, targetUserId: string): Promise<void> {
+  public async assertUserInScope(
+    scope: ManagementScope,
+    actorWorkspaceId: string,
+    targetUserId: string,
+  ): Promise<void> {
     if (scope === "GLOBAL") return;
     const prisma = PrismaClientManager.getClient();
     const [membership, developerAssignment] = await Promise.all([
       prisma.workspaceMembership.findFirst({
-        where: { workspace_id: actorWorkspaceId, user_id: targetUserId, status: "ACTIVE" },
+        where: {
+          workspace_id: actorWorkspaceId,
+          user_id: targetUserId,
+          status: "ACTIVE",
+        },
         select: { id: true },
       }),
       prisma.userWorkspaceRole.findFirst({
@@ -106,11 +154,19 @@ export class SuperadminService {
       }),
     ]);
     if (!membership || developerAssignment) {
-      throw new AppError("Il Superuser non puo gestire questo utente.", "WORKSPACE_USER_MANAGEMENT_SCOPE_DENIED", 403);
+      throw new AppError(
+        "Il Superuser non puo gestire questo utente.",
+        "WORKSPACE_USER_MANAGEMENT_SCOPE_DENIED",
+        403,
+      );
     }
   }
 
-  public async assertUserAccountInScope(scope: ManagementScope, actorWorkspaceId: string, targetUserId: string): Promise<void> {
+  public async assertUserAccountInScope(
+    scope: ManagementScope,
+    actorWorkspaceId: string,
+    targetUserId: string,
+  ): Promise<void> {
     await this.assertUserInScope(scope, actorWorkspaceId, targetUserId);
     if (scope === "GLOBAL") return;
 
@@ -132,14 +188,16 @@ export class SuperadminService {
     }
   }
 
-  public async listWorkspaces(onlyWorkspaceId?: string | null): Promise<Array<{
-    id: string;
-    code: string;
-    name: string;
-    organizationCode: string;
-    organizationName: string;
-    isActive: boolean;
-  }>> {
+  public async listWorkspaces(onlyWorkspaceId?: string | null): Promise<
+    Array<{
+      id: string;
+      code: string;
+      name: string;
+      organizationCode: string;
+      organizationName: string;
+      isActive: boolean;
+    }>
+  > {
     const prisma = PrismaClientManager.getClient();
     const rows = await prisma.workspace.findMany({
       where: {
@@ -171,7 +229,9 @@ export class SuperadminService {
     }));
   }
 
-  public async listRoles(includeDeveloper: boolean): Promise<Array<{ key: string; label: string }>> {
+  public async listRoles(
+    includeDeveloper: boolean,
+  ): Promise<Array<{ key: string; label: string }>> {
     const prisma = PrismaClientManager.getClient();
     const roles = await prisma.role.findMany({
       where: includeDeveloper ? undefined : { key: { not: "developer" } },
@@ -185,6 +245,92 @@ export class SuperadminService {
     });
 
     return roles;
+  }
+
+  public async listRolePermissions(): Promise<
+    Array<{
+      key: string;
+      label: string;
+      permissions: Array<{
+        key: string;
+        label: { it: string; en: string };
+        category: string;
+        description: { it: string; en: string };
+        sensitive?: boolean;
+        enabled: boolean;
+      }>;
+    }>
+  > {
+    const prisma = PrismaClientManager.getClient();
+    const roles = await prisma.role.findMany({
+      orderBy: { id: "asc" },
+      select: {
+        key: true,
+        label: true,
+        role_permissions: { select: { permission: { select: { key: true } } } },
+      },
+    });
+    return roles.map((role) => {
+      const assigned = new Set(
+        role.role_permissions.map((item) => item.permission.key),
+      );
+      return {
+        key: role.key,
+        label: role.label,
+        permissions: PERMISSION_CATALOG.map((entry) => ({
+          ...entry,
+          enabled: assigned.has(entry.key),
+        })),
+      };
+    });
+  }
+
+  public async replaceRolePermissions(
+    roleKey: string,
+    permissionKeys: string[],
+    auditContext: AuditContext,
+  ): Promise<void> {
+    const prisma = PrismaClientManager.getClient();
+    const role = await prisma.role.findUnique({
+      where: { key: roleKey },
+      select: { id: true, key: true },
+    });
+    if (!role || role.key === "developer")
+      throw new AppError(
+        "Ruolo non modificabile.",
+        "ROLE_PERMISSION_ROLE_FORBIDDEN",
+        400,
+      );
+    const validKeys = new Set(PERMISSION_CATALOG.map((entry) => entry.key));
+    const keys = [...new Set(permissionKeys)].filter((key) =>
+      validKeys.has(key),
+    );
+    await prisma.$transaction(async (tx) => {
+      await tx.rolePermission.deleteMany({ where: { role_id: role.id } });
+      const permissions = await tx.permission.findMany({
+        where: { key: { in: keys } },
+        select: { id: true },
+      });
+      if (permissions.length)
+        await tx.rolePermission.createMany({
+          data: permissions.map((permission) => ({
+            role_id: role.id,
+            permission_id: permission.id,
+          })),
+          skipDuplicates: true,
+        });
+    });
+    await this.auditLogService.record({
+      workspaceId: auditContext.actorWorkspaceId,
+      userId: auditContext.actorUserId,
+      moduleKey: "superadmin_center",
+      action: "superadmin.role_permissions.replaced",
+      entityType: "Role",
+      entityId: role.key,
+      payload: { roleKey: role.key, permissionKeys: keys },
+      ipAddress: auditContext.ipAddress ?? null,
+      userAgent: auditContext.userAgent ?? null,
+    });
   }
 
   public async listModules(): Promise<Array<{ key: string; name: string }>> {
@@ -205,53 +351,85 @@ export class SuperadminService {
     return modules;
   }
 
-  public async listWorkspaceModules(workspaceId: string): Promise<Array<{
-    moduleKey: string;
-    enabled: boolean;
-  }>> {
+  public async recordExternalDatabaseAccessChange(params: {
+    workspaceId: string;
+    targetUserId: string;
+    connectionIds: string[];
+    auditContext: AuditContext;
+  }): Promise<void> {
+    await this.auditLogService.record({
+      workspaceId: params.workspaceId,
+      userId: params.auditContext.actorUserId,
+      moduleKey: "commission_details",
+      action: "settings.external_database.user_access.updated",
+      entityType: "User",
+      entityId: params.targetUserId,
+      payload: {
+        connectionIds: [...new Set(params.connectionIds)],
+      },
+      ipAddress: params.auditContext.ipAddress ?? null,
+      userAgent: params.auditContext.userAgent ?? null,
+    });
+  }
+
+  public async listWorkspaceModules(workspaceId: string): Promise<
+    Array<{
+      moduleKey: string;
+      enabled: boolean;
+    }>
+  > {
     await this.ensureWorkspaceExists(workspaceId);
-    const modules = await this.moduleManagementService.listWorkspaceModules(workspaceId);
+    const modules =
+      await this.moduleManagementService.listWorkspaceModules(workspaceId);
     return modules.map((item) => ({
       moduleKey: item.moduleKey,
       enabled: item.enabled,
     }));
   }
 
-  public async listUsers(searchText?: string | null, workspaceId?: string | null, includeDevelopers = true): Promise<Array<{
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string | null;
-    isActive: boolean;
-    workspaceCount: number;
-    developer: boolean;
-    superuser: boolean;
-  }>> {
+  public async listUsers(
+    searchText?: string | null,
+    workspaceId?: string | null,
+    includeDevelopers = true,
+  ): Promise<
+    Array<{
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string | null;
+      isActive: boolean;
+      workspaceCount: number;
+      developer: boolean;
+      superuser: boolean;
+    }>
+  > {
     const prisma = PrismaClientManager.getClient();
     const search = searchText?.trim() ?? "";
 
     const rows = await prisma.user.findMany({
       where: {
         deleted_at: null,
-        ...(!includeDevelopers ? { user_workspace_roles: { none: { role: { key: "developer" } } } } : {}),
+        ...(!includeDevelopers
+          ? { user_workspace_roles: { none: { role: { key: "developer" } } } }
+          : {}),
         ...(search
           ? {
-            OR: [
-              { email: { contains: search, mode: "insensitive" } },
-              { first_name: { contains: search, mode: "insensitive" } },
-              { last_name: { contains: search, mode: "insensitive" } },
-            ],
-          }
+              OR: [
+                { email: { contains: search, mode: "insensitive" } },
+                { first_name: { contains: search, mode: "insensitive" } },
+                { last_name: { contains: search, mode: "insensitive" } },
+              ],
+            }
           : {}),
         ...(workspaceId
           ? {
-            memberships: {
-              some: {
-                workspace_id: workspaceId,
-                status: "ACTIVE",
+              memberships: {
+                some: {
+                  workspace_id: workspaceId,
+                  status: "ACTIVE",
+                },
               },
-            },
-          }
+            }
           : {}),
       },
       select: {
@@ -287,19 +465,29 @@ export class SuperadminService {
       firstName: row.first_name,
       lastName: row.last_name,
       isActive: row.is_active,
-      workspaceCount: new Set(row.memberships.map((item) => item.workspace_id)).size,
-      developer: row.user_workspace_roles.some((entry) => entry.role.key === "developer"),
-      superuser: row.user_workspace_roles.some((entry) => entry.role.key === "superuser"),
+      workspaceCount: new Set(row.memberships.map((item) => item.workspace_id))
+        .size,
+      developer: row.user_workspace_roles.some(
+        (entry) => entry.role.key === "developer",
+      ),
+      superuser: row.user_workspace_roles.some(
+        (entry) => entry.role.key === "superuser",
+      ),
     }));
   }
 
-  public async listUserMemberships(userId: string, onlyWorkspaceId?: string | null): Promise<Array<{
-    workspaceId: string;
-    workspaceCode: string;
-    workspaceName: string;
-    status: string;
-    roleKeys: string[];
-  }>> {
+  public async listUserMemberships(
+    userId: string,
+    onlyWorkspaceId?: string | null,
+  ): Promise<
+    Array<{
+      workspaceId: string;
+      workspaceCode: string;
+      workspaceName: string;
+      status: string;
+      roleKeys: string[];
+    }>
+  > {
     const prisma = PrismaClientManager.getClient();
     const memberships = await prisma.workspaceMembership.findMany({
       where: {
@@ -347,13 +535,18 @@ export class SuperadminService {
   public async listUserModules(params: {
     workspaceId: string;
     userId: string;
-  }): Promise<Array<{
-    moduleKey: string;
-    workspaceEnabled: boolean;
-    overrideMode: ModuleOverrideMode | null;
-    effectiveEnabled: boolean;
-  }>> {
-    const modules = await this.moduleManagementService.listUserModules(params.workspaceId, params.userId);
+  }): Promise<
+    Array<{
+      moduleKey: string;
+      workspaceEnabled: boolean;
+      overrideMode: ModuleOverrideMode | null;
+      effectiveEnabled: boolean;
+    }>
+  > {
+    const modules = await this.moduleManagementService.listUserModules(
+      params.workspaceId,
+      params.userId,
+    );
     return modules.map((item) => ({
       moduleKey: item.moduleKey,
       workspaceEnabled: item.workspaceEnabled,
@@ -376,7 +569,11 @@ export class SuperadminService {
 
     const normalizedEmail = params.email.trim().toLowerCase();
     if (!normalizedEmail) {
-      throw new AppError("Email obbligatoria.", "SUPERADMIN_CREATE_USER_EMAIL_REQUIRED", 400);
+      throw new AppError(
+        "Email obbligatoria.",
+        "SUPERADMIN_CREATE_USER_EMAIL_REQUIRED",
+        400,
+      );
     }
 
     const existingUser = await prisma.user.findFirst({
@@ -390,12 +587,22 @@ export class SuperadminService {
     });
 
     if (existingUser && !existingUser.deleted_at) {
-      throw new AppError("Esiste gia un utente con questa email.", "SUPERADMIN_USER_ALREADY_EXISTS", 409);
+      throw new AppError(
+        "Esiste gia un utente con questa email.",
+        "SUPERADMIN_USER_ALREADY_EXISTS",
+        409,
+      );
     }
 
-    const roleKeys = [...new Set(params.roleKeys.map((item) => item.trim()).filter(Boolean))];
+    const roleKeys = [
+      ...new Set(params.roleKeys.map((item) => item.trim()).filter(Boolean)),
+    ];
     if (roleKeys.length !== 1) {
-      throw new AppError("Seleziona un solo ruolo.", "SUPERADMIN_SINGLE_ROLE_REQUIRED", 400);
+      throw new AppError(
+        "Seleziona un solo ruolo.",
+        "SUPERADMIN_SINGLE_ROLE_REQUIRED",
+        400,
+      );
     }
 
     const roles = await prisma.role.findMany({
@@ -411,43 +618,49 @@ export class SuperadminService {
     });
 
     if (roles.length !== roleKeys.length) {
-      throw new AppError("Uno o piu ruoli non esistono.", "SUPERADMIN_ROLE_UNKNOWN", 400);
+      throw new AppError(
+        "Uno o piu ruoli non esistono.",
+        "SUPERADMIN_ROLE_UNKNOWN",
+        400,
+      );
     }
 
-    const passwordHash = await this.passwordHasher.hashPassword(this.passwordPolicy.ensureValid(params.password));
+    const passwordHash = await this.passwordHasher.hashPassword(
+      this.passwordPolicy.ensureValid(params.password),
+    );
 
     const created = await prisma.$transaction(async (tx) => {
       const user = existingUser
         ? await tx.user.update({
-          where: { id: existingUser.id },
-          data: {
-            first_name: params.firstName.trim(),
-            last_name: params.lastName?.trim() || null,
-            password_hash: passwordHash,
-            password_updated_at: new Date(),
-            must_change_password: true,
-            is_active: true,
-            deleted_at: null,
-          },
-          select: {
-            id: true,
-            email: true,
-          },
-        })
+            where: { id: existingUser.id },
+            data: {
+              first_name: params.firstName.trim(),
+              last_name: params.lastName?.trim() || null,
+              password_hash: passwordHash,
+              password_updated_at: new Date(),
+              must_change_password: true,
+              is_active: true,
+              deleted_at: null,
+            },
+            select: {
+              id: true,
+              email: true,
+            },
+          })
         : await tx.user.create({
-          data: {
-            first_name: params.firstName.trim(),
-            last_name: params.lastName?.trim() || null,
-            email: normalizedEmail,
-            password_hash: passwordHash,
-            must_change_password: true,
-            is_active: true,
-          },
-          select: {
-            id: true,
-            email: true,
-          },
-        });
+            data: {
+              first_name: params.firstName.trim(),
+              last_name: params.lastName?.trim() || null,
+              email: normalizedEmail,
+              password_hash: passwordHash,
+              must_change_password: true,
+              is_active: true,
+            },
+            select: {
+              id: true,
+              email: true,
+            },
+          });
 
       await tx.workspaceMembership.upsert({
         where: {
@@ -543,11 +756,22 @@ export class SuperadminService {
     });
 
     if (!target) {
-      throw new AppError("Utente non trovato.", "SUPERADMIN_USER_NOT_FOUND", 404);
+      throw new AppError(
+        "Utente non trovato.",
+        "SUPERADMIN_USER_NOT_FOUND",
+        404,
+      );
     }
 
-    if (params.auditContext.actorUserId === params.targetUserId && !params.isActive) {
-      throw new AppError("Non puoi disattivare il tuo account.", "SUPERADMIN_SELF_DEACTIVATE_FORBIDDEN", 400);
+    if (
+      params.auditContext.actorUserId === params.targetUserId &&
+      !params.isActive
+    ) {
+      throw new AppError(
+        "Non puoi disattivare il tuo account.",
+        "SUPERADMIN_SELF_DEACTIVATE_FORBIDDEN",
+        400,
+      );
     }
 
     if (target.is_active === params.isActive) {
@@ -612,7 +836,9 @@ export class SuperadminService {
       workspaceId: params.auditContext.actorWorkspaceId,
       userId: params.auditContext.actorUserId,
       moduleKey: "superadmin_center",
-      action: params.isActive ? "superadmin.user.activated" : "superadmin.user.deactivated",
+      action: params.isActive
+        ? "superadmin.user.activated"
+        : "superadmin.user.deactivated",
       entityType: "User",
       entityId: params.targetUserId,
       payload: {
@@ -728,7 +954,9 @@ export class SuperadminService {
     const prisma = PrismaClientManager.getClient();
     await this.ensureUserExists(params.targetUserId);
 
-    const passwordHash = await this.passwordHasher.hashPassword(this.passwordPolicy.ensureValid(params.newPassword));
+    const passwordHash = await this.passwordHasher.hashPassword(
+      this.passwordPolicy.ensureValid(params.newPassword),
+    );
     await prisma.user.update({
       where: {
         id: params.targetUserId,
@@ -884,7 +1112,9 @@ export class SuperadminService {
       workspaceId: params.auditContext.actorWorkspaceId,
       userId: params.auditContext.actorUserId,
       moduleKey: "superadmin_center",
-      action: params.enabled ? "superadmin.workspace.module_enabled" : "superadmin.workspace.module_disabled",
+      action: params.enabled
+        ? "superadmin.workspace.module_enabled"
+        : "superadmin.workspace.module_disabled",
       entityType: "WorkspaceModule",
       entityId: params.workspaceId,
       payload: {
@@ -925,7 +1155,11 @@ export class SuperadminService {
     });
 
     if (!workspace) {
-      throw new AppError("Workspace non trovato.", "SUPERADMIN_WORKSPACE_NOT_FOUND", 404);
+      throw new AppError(
+        "Workspace non trovato.",
+        "SUPERADMIN_WORKSPACE_NOT_FOUND",
+        404,
+      );
     }
 
     if (params.confirmText.trim() !== workspace.code) {
@@ -1005,9 +1239,15 @@ export class SuperadminService {
     await this.ensureUserExists(params.targetUserId);
     await this.ensureActiveMembership(params.workspaceId, params.targetUserId);
 
-    const deduplicatedRoleKeys = [...new Set(params.roleKeys.map((item) => item.trim()).filter(Boolean))];
+    const deduplicatedRoleKeys = [
+      ...new Set(params.roleKeys.map((item) => item.trim()).filter(Boolean)),
+    ];
     if (deduplicatedRoleKeys.length !== 1) {
-      throw new AppError("Un solo ruolo deve rimanere assegnato.", "SUPERADMIN_SINGLE_ROLE_REQUIRED", 400);
+      throw new AppError(
+        "Un solo ruolo deve rimanere assegnato.",
+        "SUPERADMIN_SINGLE_ROLE_REQUIRED",
+        400,
+      );
     }
 
     const roles = await prisma.role.findMany({
@@ -1023,28 +1263,33 @@ export class SuperadminService {
     });
 
     if (roles.length !== deduplicatedRoleKeys.length) {
-      throw new AppError("Uno o piu ruoli non esistono.", "SUPERADMIN_ROLE_UNKNOWN", 400);
+      throw new AppError(
+        "Uno o piu ruoli non esistono.",
+        "SUPERADMIN_ROLE_UNKNOWN",
+        400,
+      );
     }
 
     if (!deduplicatedRoleKeys.includes("developer")) {
-      const [workspaceDeveloperAssignment, otherDeveloperAssignment] = await Promise.all([
-        prisma.userWorkspaceRole.findFirst({
-          where: {
-            workspace_id: params.workspaceId,
-            user_id: params.targetUserId,
-            role: { key: "developer" },
-          },
-          select: { id: true },
-        }),
-        prisma.userWorkspaceRole.findFirst({
-          where: {
-            workspace_id: { not: params.workspaceId },
-            user_id: params.targetUserId,
-            role: { key: "developer" },
-          },
-          select: { id: true },
-        }),
-      ]);
+      const [workspaceDeveloperAssignment, otherDeveloperAssignment] =
+        await Promise.all([
+          prisma.userWorkspaceRole.findFirst({
+            where: {
+              workspace_id: params.workspaceId,
+              user_id: params.targetUserId,
+              role: { key: "developer" },
+            },
+            select: { id: true },
+          }),
+          prisma.userWorkspaceRole.findFirst({
+            where: {
+              workspace_id: { not: params.workspaceId },
+              user_id: params.targetUserId,
+              role: { key: "developer" },
+            },
+            select: { id: true },
+          }),
+        ]);
       if (workspaceDeveloperAssignment && !otherDeveloperAssignment) {
         throw new AppError(
           "Non puoi rimuovere l'ultima assegnazione del Developer.",
@@ -1165,7 +1410,11 @@ export class SuperadminService {
     });
 
     if (!workspace) {
-      throw new AppError("Workspace non trovato.", "SUPERADMIN_WORKSPACE_NOT_FOUND", 404);
+      throw new AppError(
+        "Workspace non trovato.",
+        "SUPERADMIN_WORKSPACE_NOT_FOUND",
+        404,
+      );
     }
   }
 
@@ -1182,11 +1431,18 @@ export class SuperadminService {
     });
 
     if (!user) {
-      throw new AppError("Utente non trovato.", "SUPERADMIN_USER_NOT_FOUND", 404);
+      throw new AppError(
+        "Utente non trovato.",
+        "SUPERADMIN_USER_NOT_FOUND",
+        404,
+      );
     }
   }
 
-  private async ensureActiveMembership(workspaceId: string, userId: string): Promise<void> {
+  private async ensureActiveMembership(
+    workspaceId: string,
+    userId: string,
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     const membership = await prisma.workspaceMembership.findFirst({
       where: {
@@ -1200,7 +1456,11 @@ export class SuperadminService {
     });
 
     if (!membership) {
-      throw new AppError("Utente non attivo nel workspace selezionato.", "SUPERADMIN_USER_NOT_IN_WORKSPACE", 400);
+      throw new AppError(
+        "Utente non attivo nel workspace selezionato.",
+        "SUPERADMIN_USER_NOT_IN_WORKSPACE",
+        400,
+      );
     }
   }
 }

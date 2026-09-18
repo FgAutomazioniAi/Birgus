@@ -11,7 +11,8 @@ import { NestPreferencesController } from "./preferences.controller.js";
   providers: [
     {
       provide: UserPreferenceService,
-      useFactory: (repository: PrismaUserPreferenceRepository) => new UserPreferenceService(repository),
+      useFactory: (repository: PrismaUserPreferenceRepository) =>
+        new UserPreferenceService(repository),
       inject: [PrismaUserPreferenceRepository],
     },
   ],

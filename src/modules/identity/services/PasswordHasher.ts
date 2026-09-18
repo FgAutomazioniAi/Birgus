@@ -16,7 +16,10 @@ export class PasswordHasher {
     return `${this.hashPrefix}$${salt}$${derived.toString("base64url")}`;
   }
 
-  public async verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  public async verifyPassword(
+    password: string,
+    storedHash: string,
+  ): Promise<boolean> {
     const [prefix, salt, encodedHash] = storedHash.split("$");
 
     if (prefix !== this.hashPrefix || !salt || !encodedHash) {
@@ -24,7 +27,11 @@ export class PasswordHasher {
     }
 
     const expectedHash = Buffer.from(encodedHash, "base64url");
-    const derived = await this.derive(this.normalize(password), salt, expectedHash.length);
+    const derived = await this.derive(
+      this.normalize(password),
+      salt,
+      expectedHash.length,
+    );
 
     if (expectedHash.length !== derived.length) {
       return false;
@@ -37,16 +44,26 @@ export class PasswordHasher {
     return `${value.normalize("NFKC")}${this.pepper}`;
   }
 
-  private async derive(password: string, salt: string, keyLength: number): Promise<Buffer> {
+  private async derive(
+    password: string,
+    salt: string,
+    keyLength: number,
+  ): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
-      scrypt(password, salt, keyLength, { N: 16384, p: 1, r: 8 }, (error, derivedKey) => {
-        if (error) {
-          reject(error);
-          return;
-        }
+      scrypt(
+        password,
+        salt,
+        keyLength,
+        { N: 16384, p: 1, r: 8 },
+        (error, derivedKey) => {
+          if (error) {
+            reject(error);
+            return;
+          }
 
-        resolve(Buffer.from(derivedKey));
-      });
+          resolve(Buffer.from(derivedKey));
+        },
+      );
     });
   }
 }

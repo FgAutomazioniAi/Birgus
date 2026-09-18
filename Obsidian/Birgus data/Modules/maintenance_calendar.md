@@ -2,6 +2,7 @@
 key: maintenance_calendar
 ui: Calendario manutenzioni
 ---
+
 # maintenance_calendar
 
 Pianificazione temporale delle manutenzioni e gestione dello stato delle attivita pianificate.

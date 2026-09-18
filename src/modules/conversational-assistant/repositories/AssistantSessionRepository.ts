@@ -3,7 +3,10 @@ import { AssistantSessionEntity } from "../domain/AssistantSessionEntity.js";
 import { AssistantToolCallEntity } from "../domain/AssistantToolCallEntity.js";
 
 export interface AssistantSessionRepository {
-  listSessions(workspaceId: string, userId: string): Promise<AssistantSessionEntity[]>;
+  listSessions(
+    workspaceId: string,
+    userId: string,
+  ): Promise<AssistantSessionEntity[]>;
   createSession(params: {
     workspaceId: string;
     openedByUserId: string;
@@ -18,7 +21,10 @@ export interface AssistantSessionRepository {
     ddtDocumentId: string | null;
     configuration: Record<string, unknown> | null;
   }): Promise<AssistantSessionEntity>;
-  findSessionById(workspaceId: string, sessionId: string): Promise<AssistantSessionEntity | null>;
+  findSessionById(
+    workspaceId: string,
+    sessionId: string,
+  ): Promise<AssistantSessionEntity | null>;
   updateSessionConfiguration(params: {
     workspaceId: string;
     sessionId: string;
@@ -36,7 +42,10 @@ export interface AssistantSessionRepository {
     promptTokens?: number | null;
     completionTokens?: number | null;
   }): Promise<AssistantMessageEntity>;
-  listMessages(workspaceId: string, sessionId: string): Promise<AssistantMessageEntity[]>;
+  listMessages(
+    workspaceId: string,
+    sessionId: string,
+  ): Promise<AssistantMessageEntity[]>;
   createToolCall(params: {
     sessionId: string;
     messageId: string | null;

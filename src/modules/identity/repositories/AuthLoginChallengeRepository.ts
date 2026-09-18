@@ -11,7 +11,9 @@ export interface AuthLoginChallengeRepository {
     userAgent: string | null;
     expiresAt: Date;
   }): Promise<AuthLoginChallengeEntity>;
-  findByChallengeHash(challengeHash: string): Promise<AuthLoginChallengeEntity | null>;
+  findByChallengeHash(
+    challengeHash: string,
+  ): Promise<AuthLoginChallengeEntity | null>;
   consumeById(id: string): Promise<void>;
   deleteExpired(now: Date): Promise<void>;
 }

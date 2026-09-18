@@ -4,8 +4,17 @@ import type { ReactNode } from "react";
 import "@/app/globals.css";
 import "leaflet/dist/leaflet.css";
 import "@xyflow/react/dist/style.css";
-import { LanguageProvider, ThemeProvider, ToasterProvider } from "@/components/organisms";
-import { CORNER_STYLE_STORAGE_KEY, DEFAULT_CORNER_STYLE, DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/themes";
+import {
+  LanguageProvider,
+  ThemeProvider,
+  ToasterProvider,
+} from "@/components/organisms";
+import {
+  CORNER_STYLE_STORAGE_KEY,
+  DEFAULT_CORNER_STYLE,
+  DEFAULT_THEME,
+  THEME_STORAGE_KEY,
+} from "@/lib/themes";
 
 export const metadata: Metadata = {
   title: "Birgus",
@@ -26,7 +35,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   })();`;
 
   return (
-    <html lang="it" data-theme={DEFAULT_THEME} data-corners={DEFAULT_CORNER_STYLE} suppressHydrationWarning>
+    <html
+      lang="it"
+      data-theme={DEFAULT_THEME}
+      data-corners={DEFAULT_CORNER_STYLE}
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>

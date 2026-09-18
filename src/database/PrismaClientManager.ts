@@ -5,7 +5,9 @@ export class PrismaClientManager {
 
   public static getClient(): PrismaClient {
     if (!PrismaClientManager.instance) {
-      throw new Error("PrismaClientManager not initialized. Use the Nest PrismaService runtime.");
+      throw new Error(
+        "PrismaClientManager not initialized. Use the Nest PrismaService runtime.",
+      );
     }
 
     return PrismaClientManager.instance;

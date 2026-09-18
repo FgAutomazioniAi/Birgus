@@ -21,15 +21,24 @@ export class NotificationService {
     });
   }
 
-  public async listForUser(workspaceId: string, userId: string): Promise<NotificationEntity[]> {
+  public async listForUser(
+    workspaceId: string,
+    userId: string,
+  ): Promise<NotificationEntity[]> {
     return this.repository.listForUser(workspaceId, userId);
   }
 
-  public async markAllAsRead(workspaceId: string, userId: string): Promise<void> {
+  public async markAllAsRead(
+    workspaceId: string,
+    userId: string,
+  ): Promise<void> {
     await this.repository.markAllAsRead(workspaceId, userId);
   }
 
-  public async clearForUser(workspaceId: string, userId: string): Promise<void> {
+  public async clearForUser(
+    workspaceId: string,
+    userId: string,
+  ): Promise<void> {
     await this.repository.clearForUser(workspaceId, userId);
   }
 }

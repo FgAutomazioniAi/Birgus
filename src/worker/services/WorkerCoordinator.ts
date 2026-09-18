@@ -20,8 +20,14 @@ export class WorkerCoordinator {
   }
 
   public registerHandlers(): void {
-    this.queue.register(QueueWorkflowRunDispatcher.JOB_NAME, this.workflowRunWorker);
-    this.queue.register(QuotationOrchestratorService.JOB_NAME, this.quotationOrchestratorWorker);
+    this.queue.register(
+      QueueWorkflowRunDispatcher.JOB_NAME,
+      this.workflowRunWorker,
+    );
+    this.queue.register(
+      QuotationOrchestratorService.JOB_NAME,
+      this.quotationOrchestratorWorker,
+    );
     this.queue.start();
   }
 }

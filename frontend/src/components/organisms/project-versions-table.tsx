@@ -17,10 +17,17 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, CheckboxControl, Input, Text } from "@/components/atoms";
-import { PageHelpHint, SearchField, SelectDropdown } from "@/components/molecules";
+import {
+  PageHelpHint,
+  SearchField,
+  SelectDropdown,
+} from "@/components/molecules";
 import { cn } from "@/lib/cn";
 import { downloadTablePdf } from "@/lib/pdf-export";
-import { PROJECT_STATUS_OPTIONS, getProjectStatusLabel } from "@/lib/project-status";
+import {
+  PROJECT_STATUS_OPTIONS,
+  getProjectStatusLabel,
+} from "@/lib/project-status";
 import { APP_ROUTES } from "@/lib/routes";
 import { scheduleUndoableAction } from "@/lib/undoable-action";
 import type { ProjectStatus } from "@/lib/types";
@@ -50,7 +57,13 @@ interface ClientItem {
   name: string;
 }
 
-type VersionColumnKey = "description" | "versionLabel" | "clientName" | "status" | "createdAt" | "actions";
+type VersionColumnKey =
+  | "description"
+  | "versionLabel"
+  | "clientName"
+  | "status"
+  | "createdAt"
+  | "actions";
 
 interface VersionColumnDef {
   cellClassName?: string;
@@ -141,7 +154,9 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newDescription, setNewDescription] = useState("");
-  const [newStatus, setNewStatus] = useState<ProjectStatus>(PROJECT_STATUS_OPTIONS[0].key);
+  const [newStatus, setNewStatus] = useState<ProjectStatus>(
+    PROJECT_STATUS_OPTIONS[0].key,
+  );
   const [newClientId, setNewClientId] = useState<string>("");
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isCreatingClient, setIsCreatingClient] = useState(false);
@@ -151,51 +166,62 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
   const [newClientNotes, setNewClientNotes] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [isColumnsMenuOpen, setIsColumnsMenuOpen] = useState(false);
-  const [columnOrder, setColumnOrder] = useState<VersionColumnKey[]>(DEFAULT_VERSION_COLUMN_ORDER);
+  const [columnOrder, setColumnOrder] = useState<VersionColumnKey[]>(
+    DEFAULT_VERSION_COLUMN_ORDER,
+  );
   const [hiddenColumns, setHiddenColumns] = useState<VersionColumnKey[]>([]);
   const [isExporting, setIsExporting] = useState(false);
   const columnsMenuRef = useRef<HTMLDivElement | null>(null);
 
   const selectedRow = useMemo(
-    () => versions.find((version) => version.versionLabel === selectedVersionLabel) ?? versions[0] ?? null,
+    () =>
+      versions.find(
+        (version) => version.versionLabel === selectedVersionLabel,
+      ) ??
+      versions[0] ??
+      null,
     [selectedVersionLabel, versions],
   );
 
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [projectResponse, versionsResponse, clientsResponse] = await Promise.all([
-        fetch(`/api/projects/${id}`, { cache: "no-store" }),
-        fetch(`/api/projects/${id}/versions`, { cache: "no-store" }),
-        fetch("/api/clients", { cache: "no-store" }),
-      ]);
+      const [projectResponse, versionsResponse, clientsResponse] =
+        await Promise.all([
+          fetch(`/api/projects/${id}`, { cache: "no-store" }),
+          fetch(`/api/projects/${id}/versions`, { cache: "no-store" }),
+          fetch("/api/clients", { cache: "no-store" }),
+        ]);
 
       if (!projectResponse.ok || !versionsResponse.ok || !clientsResponse.ok) {
         throw new Error("Errore caricamento dati");
       }
 
       const project = (await projectResponse.json()) as ProjectSummary;
-      const versionsPayload = (await versionsResponse.json()) as VersionsPayload;
+      const versionsPayload =
+        (await versionsResponse.json()) as VersionsPayload;
       const clientsPayload = (await clientsResponse.json()) as ClientItem[];
 
       setProjectName(project.projectName);
       setVersions(versionsPayload.versions ?? []);
       setSelectedVersionLabel(
         versionsPayload.selectedVersionLabel ??
-        versionsPayload.versions?.find((version) => version.isDefault)?.versionLabel ??
-        versionsPayload.versions?.[0]?.versionLabel ??
-        "v1",
+          versionsPayload.versions?.find((version) => version.isDefault)
+            ?.versionLabel ??
+          versionsPayload.versions?.[0]?.versionLabel ??
+          "v1",
       );
       setClients(clientsPayload);
 
       const suggestedClientId =
-        versionsPayload.versions?.find((version) => version.isDefault)?.clientId ??
+        versionsPayload.versions?.find((version) => version.isDefault)
+          ?.clientId ??
         versionsPayload.versions?.[0]?.clientId ??
         clientsPayload[0]?.id ??
         "";
       const suggestedStatus =
-        versionsPayload.versions?.find((version) => version.isDefault)?.status ??
-        PROJECT_STATUS_OPTIONS[0].key;
+        versionsPayload.versions?.find((version) => version.isDefault)
+          ?.status ?? PROJECT_STATUS_OPTIONS[0].key;
 
       setNewClientId(suggestedClientId ?? "");
       setNewStatus(suggestedStatus);
@@ -225,24 +251,40 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
-  const applyColumnConfig = (config: Partial<StoredColumnConfig> | null | undefined) => {
+  const applyColumnConfig = (
+    config: Partial<StoredColumnConfig> | null | undefined,
+  ) => {
     if (!config) {
       return;
     }
 
     const parsedOrder = Array.isArray(config.order)
-      ? config.order.filter((column): column is VersionColumnKey => isVersionColumnKey(String(column)))
+      ? config.order.filter((column): column is VersionColumnKey =>
+          isVersionColumnKey(String(column)),
+        )
       : [];
     const uniqueOrder = Array.from(new Set(parsedOrder));
-    const nextOrder = DEFAULT_VERSION_COLUMN_ORDER.filter((column) => uniqueOrder.includes(column));
-    const missing = DEFAULT_VERSION_COLUMN_ORDER.filter((column) => !nextOrder.includes(column));
+    const nextOrder = DEFAULT_VERSION_COLUMN_ORDER.filter((column) =>
+      uniqueOrder.includes(column),
+    );
+    const missing = DEFAULT_VERSION_COLUMN_ORDER.filter(
+      (column) => !nextOrder.includes(column),
+    );
     setColumnOrder([...nextOrder, ...missing]);
 
     const parsedHidden = Array.isArray(config.hidden)
-      ? config.hidden.filter((column): column is VersionColumnKey => isVersionColumnKey(String(column)))
+      ? config.hidden.filter((column): column is VersionColumnKey =>
+          isVersionColumnKey(String(column)),
+        )
       : [];
-    const optionalColumns = new Set(VERSION_COLUMN_DEFS.filter((column) => !column.required).map((column) => column.key));
-    setHiddenColumns(parsedHidden.filter((column) => optionalColumns.has(column)));
+    const optionalColumns = new Set(
+      VERSION_COLUMN_DEFS.filter((column) => !column.required).map(
+        (column) => column.key,
+      ),
+    );
+    setHiddenColumns(
+      parsedHidden.filter((column) => optionalColumns.has(column)),
+    );
   };
 
   useEffect(() => {
@@ -261,8 +303,14 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
   }, []);
 
   useEffect(() => {
-    const payload: StoredColumnConfig = { order: columnOrder, hidden: hiddenColumns };
-    window.localStorage.setItem(VERSION_COLUMNS_STORAGE_KEY, JSON.stringify(payload));
+    const payload: StoredColumnConfig = {
+      order: columnOrder,
+      hidden: hiddenColumns,
+    };
+    window.localStorage.setItem(
+      VERSION_COLUMNS_STORAGE_KEY,
+      JSON.stringify(payload),
+    );
   }, [columnOrder, hiddenColumns]);
 
   const selectVersion = async (versionLabel: string) => {
@@ -310,7 +358,9 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
         throw new Error("Creazione versione fallita");
       }
 
-      const payload = (await response.json()) as VersionsPayload & { selectedVersionLabel?: string };
+      const payload = (await response.json()) as VersionsPayload & {
+        selectedVersionLabel?: string;
+      };
       setVersions(payload.versions ?? []);
       setSelectedVersionLabel(payload.selectedVersionLabel ?? "v1");
       setNewDescription("");
@@ -323,7 +373,12 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
   };
 
   const createClientInline = async () => {
-    if (!newClientName.trim() || !newClientEmail.trim() || !newClientPhone.trim() || !newClientNotes.trim()) {
+    if (
+      !newClientName.trim() ||
+      !newClientEmail.trim() ||
+      !newClientPhone.trim() ||
+      !newClientNotes.trim()
+    ) {
       toast.error("Compila tutti i campi del cliente.");
       return;
     }
@@ -346,8 +401,12 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
       }
 
       const created = (await response.json()) as ClientItem;
-      const refreshedResponse = await fetch("/api/clients", { cache: "no-store" });
-      const refreshed = refreshedResponse.ok ? ((await refreshedResponse.json()) as ClientItem[]) : [...clients, created];
+      const refreshedResponse = await fetch("/api/clients", {
+        cache: "no-store",
+      });
+      const refreshed = refreshedResponse.ok
+        ? ((await refreshedResponse.json()) as ClientItem[])
+        : [...clients, created];
       setClients(refreshed);
       setNewClientId(created.id);
       setIsClientModalOpen(false);
@@ -367,7 +426,9 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
     const previousVersions = versions;
     const previousSelectedVersionLabel = selectedVersionLabel;
 
-    const filtered = versions.filter((item) => item.versionLabel !== version.versionLabel);
+    const filtered = versions.filter(
+      (item) => item.versionLabel !== version.versionLabel,
+    );
     setVersions(filtered);
     if (previousSelectedVersionLabel === version.versionLabel) {
       setSelectedVersionLabel(filtered[0]?.versionLabel ?? "v1");
@@ -392,7 +453,11 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
         });
 
         if (!response.ok) {
-          const payload = (await response.json().catch(() => ({ message: "Errore archiviazione versione" }))) as { message?: string };
+          const payload = (await response
+            .json()
+            .catch(() => ({ message: "Errore archiviazione versione" }))) as {
+            message?: string;
+          };
           throw new Error(payload.message ?? "Errore archiviazione versione");
         }
 
@@ -411,7 +476,9 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
           version.description.toLowerCase().includes(lowered) ||
           version.versionLabel.toLowerCase().includes(lowered) ||
           (version.clientName ?? "").toLowerCase().includes(lowered) ||
-          getProjectStatusLabel(version.status).toLowerCase().includes(lowered) ||
+          getProjectStatusLabel(version.status)
+            .toLowerCase()
+            .includes(lowered) ||
           formatDate(version.createdAt).toLowerCase().includes(lowered)
         );
       }),
@@ -433,7 +500,9 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
       return;
     }
 
-    setHiddenColumns((prev) => (prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]));
+    setHiddenColumns((prev) =>
+      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key],
+    );
   };
 
   const moveColumn = (key: VersionColumnKey, direction: "up" | "down") => {
@@ -483,7 +552,11 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
       });
       toast.success("PDF versionamenti generato con successo.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Errore durante l'esportazione versionamenti.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Errore durante l'esportazione versionamenti.",
+      );
     } finally {
       setIsExporting(false);
     }
@@ -507,7 +580,9 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
               </Text>
               <PageHelpHint text="Crea e gestisci le versioni del progetto." />
             </div>
-            <Text variant="muted">Cliente e stato sono gestiti per singola versione</Text>
+            <Text variant="muted">
+              Cliente e stato sono gestiti per singola versione
+            </Text>
           </div>
         </div>
         <Button
@@ -521,7 +596,9 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
       </div>
 
       <Card className="overflow-hidden p-6">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">Nuova Versione</h3>
+        <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">
+          Nuova Versione
+        </h3>
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
           <Input
             value={newDescription}
@@ -552,11 +629,21 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
             placeholder="Nessun cliente associato"
             allowEmpty
           />
-          <Button type="button" variant="outline" onClick={() => setIsClientModalOpen(true)} className="h-11 px-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsClientModalOpen(true)}
+            className="h-11 px-4"
+          >
             <PlusCircle size={16} />
             Nuovo cliente
           </Button>
-          <Button type="button" onClick={() => void createVersion()} disabled={isSubmitting} className="h-11 px-4">
+          <Button
+            type="button"
+            onClick={() => void createVersion()}
+            disabled={isSubmitting}
+            className="h-11 px-4"
+          >
             <Save size={16} />
             Crea versione
           </Button>
@@ -565,7 +652,9 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
 
       <Card className="overflow-visible">
         <div className="flex flex-col justify-between gap-4 border-b border-border-subtle p-4 md:flex-row md:items-center">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">Versionamenti</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">
+            Versionamenti
+          </h3>
 
           <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
             <SearchField
@@ -588,12 +677,18 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
 
                 {isColumnsMenuOpen && (
                   <div className="absolute right-0 top-12 z-20 w-80 rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-3 shadow-elevated">
-                    <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">Configura colonne</p>
-                    <p className="mt-1 text-xs text-text-muted">Mostra, nascondi e riordina le colonne della tabella.</p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">
+                      Configura colonne
+                    </p>
+                    <p className="mt-1 text-xs text-text-muted">
+                      Mostra, nascondi e riordina le colonne della tabella.
+                    </p>
 
                     <div className="mt-3 space-y-2">
                       {columnOrder.map((key, index) => {
-                        const column = VERSION_COLUMN_DEFS.find((item) => item.key === key);
+                        const column = VERSION_COLUMN_DEFS.find(
+                          (item) => item.key === key,
+                        );
                         if (!column) {
                           return null;
                         }
@@ -609,12 +704,25 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
                                 type="checkbox"
                                 checked={!hidden}
                                 disabled={column.required}
-                                onChange={() => toggleColumnVisibility(column.key)}
+                                onChange={() =>
+                                  toggleColumnVisibility(column.key)
+                                }
                               />
-                              <span className={cn("font-medium", column.required ? "text-text-primary" : "text-text-secondary")}>
+                              <span
+                                className={cn(
+                                  "font-medium",
+                                  column.required
+                                    ? "text-text-primary"
+                                    : "text-text-secondary",
+                                )}
+                              >
                                 {column.label}
                               </span>
-                              {column.required && <span className="text-[10px] font-bold uppercase text-brand-primary">🔒</span>}
+                              {column.required && (
+                                <span className="text-[10px] font-bold uppercase text-brand-primary">
+                                  🔒
+                                </span>
+                              )}
                             </label>
 
                             <div className="flex items-center gap-1">
@@ -665,7 +773,10 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
                     key={column.key}
                     className={cn(
                       "px-6 py-4 text-xs font-bold uppercase tracking-wider text-text-muted",
-                      column.key === visibleColumns[visibleColumns.length - 1]?.key ? "text-right" : "text-left",
+                      column.key ===
+                        visibleColumns[visibleColumns.length - 1]?.key
+                        ? "text-right"
+                        : "text-left",
                     )}
                   >
                     {column.label}
@@ -675,14 +786,22 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
             </thead>
             <tbody className="divide-y divide-border-subtle">
               {filteredVersions.map((version) => (
-                <tr key={version.versionLabel} className="transition-colors hover:bg-bg-muted/60">
+                <tr
+                  key={version.versionLabel}
+                  className="transition-colors hover:bg-bg-muted/60"
+                >
                   {visibleColumns.map((column) => (
-                    <td key={`${version.versionLabel}-${column.key}`} className={cn("px-6 py-4", column.cellClassName)}>
+                    <td
+                      key={`${version.versionLabel}-${column.key}`}
+                      className={cn("px-6 py-4", column.cellClassName)}
+                    >
                       {column.key === "actions" ? (
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
-                            onClick={() => void selectVersion(version.versionLabel)}
+                            onClick={() =>
+                              void selectVersion(version.versionLabel)
+                            }
                             className="inline-flex h-8 items-center gap-1 rounded-md border border-border-default px-2.5 text-[11px] font-medium text-text-secondary transition-colors hover:bg-bg-subtle"
                           >
                             Imposta attiva
@@ -706,7 +825,14 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
                           )}
                         </span>
                       ) : (
-                        <span className={cn("text-sm", column.key === "createdAt" ? "text-text-muted" : "text-text-secondary")}>
+                        <span
+                          className={cn(
+                            "text-sm",
+                            column.key === "createdAt"
+                              ? "text-text-muted"
+                              : "text-text-secondary",
+                          )}
+                        >
                           {column.render(version)}
                         </span>
                       )}
@@ -717,7 +843,10 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
 
               {!isLoading && filteredVersions.length === 0 && (
                 <tr>
-                  <td colSpan={totalVisibleColumns} className="px-6 py-12 text-center text-text-muted">
+                  <td
+                    colSpan={totalVisibleColumns}
+                    className="px-6 py-12 text-center text-text-muted"
+                  >
                     Nessuna versione disponibile.
                   </td>
                 </tr>
@@ -725,7 +854,10 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
 
               {isLoading && (
                 <tr>
-                  <td colSpan={totalVisibleColumns} className="px-6 py-12 text-center text-text-muted">
+                  <td
+                    colSpan={totalVisibleColumns}
+                    className="px-6 py-12 text-center text-text-muted"
+                  >
                     Caricamento versioni...
                   </td>
                 </tr>
@@ -737,26 +869,56 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
 
       {selectedRow && (
         <Card className="p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">Versione attiva</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">
+            Versione attiva
+          </p>
           <p className="mt-1 text-sm font-semibold text-text-secondary">
             {selectedRow.description} ({selectedRow.versionLabel.toUpperCase()})
           </p>
           <p className="mt-0.5 text-xs text-text-muted">
-            Cliente: {selectedRow.clientName ?? "N/D"} · Stato: {selectedRow.status}
+            Cliente: {selectedRow.clientName ?? "N/D"} · Stato:{" "}
+            {selectedRow.status}
           </p>
         </Card>
       )}
 
       {isClientModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.target === event.currentTarget && !isCreatingClient) setIsClientModalOpen(false); }}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isCreatingClient)
+              setIsClientModalOpen(false);
+          }}
+        >
           <div className="w-full max-w-lg rounded-[var(--radius-xl)] border border-border-default bg-bg-surface p-5 shadow-elevated">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">Nuovo Cliente</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">
+              Nuovo Cliente
+            </h3>
             {/*<p className="mt-1 text-xs text-text-muted"></p>*/}
             <div className="mt-4 grid grid-cols-1 gap-3">
-              <Input value={newClientName} onChange={(event) => setNewClientName(event.target.value)} placeholder="Nome e cognome" />
-              <Input type="email" value={newClientEmail} onChange={(event) => setNewClientEmail(event.target.value)} placeholder="Email" />
-              <Input value={newClientPhone} onChange={(event) => setNewClientPhone(event.target.value)} placeholder="Telefono" />
-              <Input value={newClientNotes} onChange={(event) => setNewClientNotes(event.target.value)} placeholder="Note" />
+              <Input
+                value={newClientName}
+                onChange={(event) => setNewClientName(event.target.value)}
+                placeholder="Nome e cognome"
+              />
+              <Input
+                type="email"
+                value={newClientEmail}
+                onChange={(event) => setNewClientEmail(event.target.value)}
+                placeholder="Email"
+              />
+              <Input
+                value={newClientPhone}
+                onChange={(event) => setNewClientPhone(event.target.value)}
+                placeholder="Telefono"
+              />
+              <Input
+                value={newClientNotes}
+                onChange={(event) => setNewClientNotes(event.target.value)}
+                placeholder="Note"
+              />
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <Button
@@ -768,7 +930,11 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
                 <X size={16} />
                 Annulla
               </Button>
-              <Button type="button" onClick={() => void createClientInline()} disabled={isCreatingClient}>
+              <Button
+                type="button"
+                onClick={() => void createClientInline()}
+                disabled={isCreatingClient}
+              >
                 <Save size={16} />
                 Salva cliente
               </Button>
@@ -776,7 +942,6 @@ export function ProjectVersionsTable({ id }: ProjectVersionsTableProps) {
           </div>
         </div>
       )}
-
     </div>
   );
 }

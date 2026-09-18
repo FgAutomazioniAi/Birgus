@@ -39,7 +39,9 @@ export class PasswordResetService {
     this.trustedDeviceRepository = trustedDeviceRepository;
   }
 
-  public async requestReset(email: string): Promise<{ expiresAt: Date; debugCode: string | null } | null> {
+  public async requestReset(
+    email: string,
+  ): Promise<{ expiresAt: Date; debugCode: string | null } | null> {
     const normalizedEmail = email.trim().toLowerCase();
     const user = await this.userRepository.findByEmail(normalizedEmail);
 
@@ -49,7 +51,7 @@ export class PasswordResetService {
 
     const code = this.generateCode();
     const codeHash = this.hashCode(code);
-    const expiresAt = new Date(Date.now() + (this.ttlMinutes * 60 * 1000));
+    const expiresAt = new Date(Date.now() + this.ttlMinutes * 60 * 1000);
 
     await this.codeRepository.invalidateActiveCodesForUser(user.id);
     await this.codeRepository.createCode(user.id, codeHash, expiresAt);
@@ -64,23 +66,43 @@ export class PasswordResetService {
     return { expiresAt, debugCode };
   }
 
-  public async resetPassword(params: { email: string; code: string; newPassword: string }): Promise<void> {
+  public async resetPassword(params: {
+    email: string;
+    code: string;
+    newPassword: string;
+  }): Promise<void> {
     const normalizedEmail = params.email.trim().toLowerCase();
     const user = await this.userRepository.findByEmail(normalizedEmail);
 
     if (!user || !user.isActive) {
-      throw new AppError("Invalid reset credentials.", "AUTH_PASSWORD_RESET_INVALID", 400);
+      throw new AppError(
+        "Invalid reset credentials.",
+        "AUTH_PASSWORD_RESET_INVALID",
+        400,
+      );
     }
 
-    const normalizedPassword = this.passwordPolicy.ensureValid(params.newPassword, "AUTH_PASSWORD_RESET_WEAK");
+    const normalizedPassword = this.passwordPolicy.ensureValid(
+      params.newPassword,
+      "AUTH_PASSWORD_RESET_WEAK",
+    );
     const codeHash = this.hashCode(params.code.trim());
-    const record = await this.codeRepository.findValidCode(user.id, codeHash, new Date());
+    const record = await this.codeRepository.findValidCode(
+      user.id,
+      codeHash,
+      new Date(),
+    );
     if (!record) {
       await this.codeRepository.recordFailedAttempt(user.id, 4);
-      throw new AppError("Codice non valido, scaduto o tentativi esauriti.", "AUTH_PASSWORD_RESET_CODE_INVALID", 400);
+      throw new AppError(
+        "Codice non valido, scaduto o tentativi esauriti.",
+        "AUTH_PASSWORD_RESET_CODE_INVALID",
+        400,
+      );
     }
 
-    const passwordHash = await this.passwordHasher.hashPassword(normalizedPassword);
+    const passwordHash =
+      await this.passwordHasher.hashPassword(normalizedPassword);
     await this.userRepository.updatePassword(user.id, passwordHash);
     await this.sessionRepository.revokeAllForUser(user.id);
     await this.trustedDeviceRepository?.revokeAllForUser(user.id, new Date());

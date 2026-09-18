@@ -66,18 +66,33 @@ export class TelegramLinkPollingService {
     this.isPolling = true;
     try {
       const offset = await this.getOffset();
-      const response = await fetch(`https://api.telegram.org/bot${token}/getUpdates`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ offset, timeout: 10, allowed_updates: ["message", "callback_query"] }),
-      });
+      const response = await fetch(
+        `https://api.telegram.org/bot${token}/getUpdates`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            offset,
+            timeout: 10,
+            allowed_updates: ["message", "callback_query"],
+          }),
+        },
+      );
       if (!response.ok) {
-        this.logger.warn(`Telegram polling failed with HTTP ${response.status}.`);
+        this.logger.warn(
+          `Telegram polling failed with HTTP ${response.status}.`,
+        );
         return;
       }
-      const payload = await response.json() as { ok?: boolean; result?: TelegramUpdate[]; description?: string };
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        result?: TelegramUpdate[];
+        description?: string;
+      };
       if (!payload.ok || !Array.isArray(payload.result)) {
-        this.logger.warn(`Telegram polling rejected: ${payload.description ?? "invalid payload"}`);
+        this.logger.warn(
+          `Telegram polling rejected: ${payload.description ?? "invalid payload"}`,
+        );
         return;
       }
       for (const update of payload.result) {
@@ -87,13 +102,18 @@ export class TelegramLinkPollingService {
         }
       }
     } catch (error) {
-      this.logger.warn(`Telegram polling unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
+      this.logger.warn(
+        `Telegram polling unavailable: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
     } finally {
       this.isPolling = false;
     }
   }
 
-  private async processUpdate(token: string, update: TelegramUpdate): Promise<void> {
+  private async processUpdate(
+    token: string,
+    update: TelegramUpdate,
+  ): Promise<void> {
     if (update.callback_query) {
       await this.processCallbackQuery(token, update.callback_query);
       return;
@@ -106,9 +126,12 @@ export class TelegramLinkPollingService {
       return;
     }
     const recipientId = String(chatId);
-    const explicitMatch = text.match(/^\/(?:link|start)(?:@\w+)?\s+([A-Za-z0-9_-]{6,64})$/i);
+    const explicitMatch = text.match(
+      /^\/(?:link|start)(?:@\w+)?\s+([A-Za-z0-9_-]{6,64})$/i,
+    );
     const codeOnlyMatch = text.match(/^([A-Za-z0-9_-]{6,64})$/i);
-    const hasPendingLink = (this.pendingLinkChats.get(recipientId) ?? 0) > Date.now();
+    const hasPendingLink =
+      (this.pendingLinkChats.get(recipientId) ?? 0) > Date.now();
 
     if (/^\/start(?:@\w+)?$/i.test(text)) {
       await this.deleteIncomingMessage(token, recipientId, message?.message_id);
@@ -118,7 +141,11 @@ export class TelegramLinkPollingService {
 
     if (!explicitMatch && !hasPendingLink) {
       if (/^\/link(?:@\w+)?$/i.test(text)) {
-        await this.deleteIncomingMessage(token, recipientId, message?.message_id);
+        await this.deleteIncomingMessage(
+          token,
+          recipientId,
+          message?.message_id,
+        );
         await this.showLinkInstructions(token, recipientId);
       }
       return;
@@ -134,13 +161,18 @@ export class TelegramLinkPollingService {
     const app = await this.connectedAppsService.completeTelegramLink({
       code,
       chatId: recipientId,
-      telegramUserId: message?.from?.id === undefined ? null : String(message.from.id),
+      telegramUserId:
+        message?.from?.id === undefined ? null : String(message.from.id),
       username: message?.from?.username ?? null,
     });
     await this.deleteIncomingMessage(token, recipientId, message?.message_id);
-    await this.showMainMenu(token, recipientId, app
-      ? "Account Birgus collegato. Ora puoi selezionare questo canale nei workflow."
-      : "Codice non valido o scaduto. Generane uno nuovo dalla dashboard Birgus.");
+    await this.showMainMenu(
+      token,
+      recipientId,
+      app
+        ? "Account Birgus collegato. Ora puoi selezionare questo canale nei workflow."
+        : "Codice non valido o scaduto. Generane uno nuovo dalla dashboard Birgus.",
+    );
   }
 
   private async processCallbackQuery(
@@ -176,41 +208,74 @@ export class TelegramLinkPollingService {
     }
   }
 
-  private async showMainMenu(token: string, chatId: string, status?: string, messageId?: number): Promise<void> {
-    const text = status ? `${status}\n\nCosa vuoi fare?` : "Benvenuto in Birgus. Cosa vuoi fare?";
+  private async showMainMenu(
+    token: string,
+    chatId: string,
+    status?: string,
+    messageId?: number,
+  ): Promise<void> {
+    const text = status
+      ? `${status}\n\nCosa vuoi fare?`
+      : "Benvenuto in Birgus. Cosa vuoi fare?";
     const keyboard: InlineKeyboard = [
       [{ text: "Collega account", callback_data: "birgus:link" }],
       [{ text: "Info", callback_data: "birgus:info" }],
     ];
     const targetMessageId = messageId ?? this.menuMessageIds.get(chatId);
     if (targetMessageId) {
-      await this.editMenuMessage(token, chatId, targetMessageId, text, keyboard);
+      await this.editMenuMessage(
+        token,
+        chatId,
+        targetMessageId,
+        text,
+        keyboard,
+      );
       return;
     }
-    const result = await this.telegramApi<{ message_id?: number }>(token, "sendMessage", {
-      chat_id: chatId,
-      text,
-      reply_markup: { inline_keyboard: keyboard },
-    });
+    const result = await this.telegramApi<{ message_id?: number }>(
+      token,
+      "sendMessage",
+      {
+        chat_id: chatId,
+        text,
+        reply_markup: { inline_keyboard: keyboard },
+      },
+    );
     if (typeof result?.message_id === "number") {
       this.menuMessageIds.set(chatId, result.message_id);
     }
   }
 
-  private async showLinkInstructions(token: string, chatId: string, messageId?: number): Promise<void> {
+  private async showLinkInstructions(
+    token: string,
+    chatId: string,
+    messageId?: number,
+  ): Promise<void> {
     this.pendingLinkChats.set(chatId, Date.now() + 10 * 60 * 1000);
-    const keyboard: InlineKeyboard = [[{ text: "Annulla", callback_data: "birgus:menu" }]];
+    const keyboard: InlineKeyboard = [
+      [{ text: "Annulla", callback_data: "birgus:menu" }],
+    ];
     const text = "Mandami il codice generato dalla tua Dashboard su Birgus.";
     const targetMessageId = messageId ?? this.menuMessageIds.get(chatId);
     if (targetMessageId) {
-      await this.editMenuMessage(token, chatId, targetMessageId, text, keyboard);
+      await this.editMenuMessage(
+        token,
+        chatId,
+        targetMessageId,
+        text,
+        keyboard,
+      );
       return;
     }
-    const result = await this.telegramApi<{ message_id?: number }>(token, "sendMessage", {
-      chat_id: chatId,
-      text,
-      reply_markup: { inline_keyboard: keyboard },
-    });
+    const result = await this.telegramApi<{ message_id?: number }>(
+      token,
+      "sendMessage",
+      {
+        chat_id: chatId,
+        text,
+        reply_markup: { inline_keyboard: keyboard },
+      },
+    );
     if (typeof result?.message_id === "number") {
       this.menuMessageIds.set(chatId, result.message_id);
     }
@@ -231,31 +296,52 @@ export class TelegramLinkPollingService {
     });
   }
 
-  private async answerCallbackQuery(token: string, callbackQueryId: string): Promise<void> {
-    await this.telegramApi(token, "answerCallbackQuery", { callback_query_id: callbackQueryId });
+  private async answerCallbackQuery(
+    token: string,
+    callbackQueryId: string,
+  ): Promise<void> {
+    await this.telegramApi(token, "answerCallbackQuery", {
+      callback_query_id: callbackQueryId,
+    });
   }
 
-  private async deleteIncomingMessage(token: string, chatId: string, messageId: number | undefined): Promise<void> {
+  private async deleteIncomingMessage(
+    token: string,
+    chatId: string,
+    messageId: number | undefined,
+  ): Promise<void> {
     if (messageId) {
-      await this.telegramApi(token, "deleteMessage", { chat_id: chatId, message_id: messageId });
+      await this.telegramApi(token, "deleteMessage", {
+        chat_id: chatId,
+        message_id: messageId,
+      });
     }
   }
 
-  private async telegramApi<T = unknown>(token: string, method: string, body: Record<string, unknown>): Promise<T | null> {
+  private async telegramApi<T = unknown>(
+    token: string,
+    method: string,
+    body: Record<string, unknown>,
+  ): Promise<T | null> {
     try {
-      const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const payload = await response.json() as { ok?: boolean; result?: T };
+      const response = await fetch(
+        `https://api.telegram.org/bot${token}/${method}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      const payload = (await response.json()) as { ok?: boolean; result?: T };
       if (!response.ok || !payload.ok) {
         this.logger.warn(`Telegram ${method} failed.`);
         return null;
       }
       return payload.result ?? null;
     } catch (error) {
-      this.logger.warn(`Telegram ${method} unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
+      this.logger.warn(
+        `Telegram ${method} unavailable: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
       return null;
     }
   }
@@ -266,7 +352,10 @@ export class TelegramLinkPollingService {
       select: { value: true },
     });
     const value = setting?.value;
-    return typeof value === "object" && value !== null && "offset" in value && typeof value.offset === "number"
+    return typeof value === "object" &&
+      value !== null &&
+      "offset" in value &&
+      typeof value.offset === "number"
       ? value.offset
       : undefined;
   }

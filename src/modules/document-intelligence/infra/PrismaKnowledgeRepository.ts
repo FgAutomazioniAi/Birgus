@@ -3,10 +3,17 @@ import { Prisma } from "@prisma/client";
 import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { KnowledgeDocumentEntity } from "../domain/KnowledgeDocumentEntity.js";
 import { KnowledgeSearchHitEntity } from "../domain/KnowledgeSearchHitEntity.js";
-import { KnowledgeChunkWriteModel, KnowledgeRepository, SourceDocumentRecord } from "../repositories/KnowledgeRepository.js";
+import {
+  KnowledgeChunkWriteModel,
+  KnowledgeRepository,
+  SourceDocumentRecord,
+} from "../repositories/KnowledgeRepository.js";
 
 export class PrismaKnowledgeRepository implements KnowledgeRepository {
-  public async findSourceDocumentById(workspaceId: string, documentId: string): Promise<SourceDocumentRecord | null> {
+  public async findSourceDocumentById(
+    workspaceId: string,
+    documentId: string,
+  ): Promise<SourceDocumentRecord | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.document.findFirst({
       where: {
@@ -54,7 +61,11 @@ export class PrismaKnowledgeRepository implements KnowledgeRepository {
     };
   }
 
-  public async findKnowledgeDocumentByDocumentId(workspaceId: string, documentId: string, representationKey: string): Promise<KnowledgeDocumentEntity | null> {
+  public async findKnowledgeDocumentByDocumentId(
+    workspaceId: string,
+    documentId: string,
+    representationKey: string,
+  ): Promise<KnowledgeDocumentEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.knowledgeDocument.findFirst({
       where: {
@@ -134,7 +145,11 @@ export class PrismaKnowledgeRepository implements KnowledgeRepository {
     return this.toKnowledgeDocumentEntity(row);
   }
 
-  public async replaceKnowledgeChunks(workspaceId: string, knowledgeDocumentId: string, chunks: KnowledgeChunkWriteModel[]): Promise<void> {
+  public async replaceKnowledgeChunks(
+    workspaceId: string,
+    knowledgeDocumentId: string,
+    chunks: KnowledgeChunkWriteModel[],
+  ): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     await prisma.$transaction(async (tx) => {
       await tx.knowledgeChunk.deleteMany({
@@ -218,7 +233,10 @@ export class PrismaKnowledgeRepository implements KnowledgeRepository {
       `kc.embedding_vector IS NOT NULL`,
       `kc.embedding_status = 'READY'`,
     ];
-    const values: Array<string | number | null> = [vectorLiteral, params.workspaceId];
+    const values: Array<string | number | null> = [
+      vectorLiteral,
+      params.workspaceId,
+    ];
 
     if (params.moduleId) {
       values.push(params.moduleId);
@@ -255,19 +273,27 @@ export class PrismaKnowledgeRepository implements KnowledgeRepository {
       LIMIT $${values.length}
     `;
 
-    const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(sql, ...values);
-    return rows.map((row) => new KnowledgeSearchHitEntity({
-      chunkId: String(row.chunk_id),
-      knowledgeDocumentId: String(row.knowledge_document_id),
-      documentId: typeof row.document_id === "string" ? row.document_id : null,
-      sourceEntityType: String(row.source_entity_type),
-      sourceEntityId: String(row.source_entity_id),
-      title: typeof row.title === "string" ? row.title : null,
-      sourceLabel: typeof row.source_label === "string" ? row.source_label : null,
-      chunkIndex: Number(row.chunk_index),
-      contentText: String(row.content_text ?? ""),
-      distance: Number(row.distance ?? 1),
-    }));
+    const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      sql,
+      ...values,
+    );
+    return rows.map(
+      (row) =>
+        new KnowledgeSearchHitEntity({
+          chunkId: String(row.chunk_id),
+          knowledgeDocumentId: String(row.knowledge_document_id),
+          documentId:
+            typeof row.document_id === "string" ? row.document_id : null,
+          sourceEntityType: String(row.source_entity_type),
+          sourceEntityId: String(row.source_entity_id),
+          title: typeof row.title === "string" ? row.title : null,
+          sourceLabel:
+            typeof row.source_label === "string" ? row.source_label : null,
+          chunkIndex: Number(row.chunk_index),
+          contentText: String(row.content_text ?? ""),
+          distance: Number(row.distance ?? 1),
+        }),
+    );
   }
 
   public async keywordSearch(params: {
@@ -290,7 +316,10 @@ export class PrismaKnowledgeRepository implements KnowledgeRepository {
       `kd.deleted_at IS NULL`,
       `kc.content_text ILIKE '%' || $1 || '%'`,
     ];
-    const values: Array<string | number | null> = [queryText, params.workspaceId];
+    const values: Array<string | number | null> = [
+      queryText,
+      params.workspaceId,
+    ];
 
     if (params.moduleId) {
       values.push(params.moduleId);
@@ -331,26 +360,36 @@ export class PrismaKnowledgeRepository implements KnowledgeRepository {
       LIMIT $${values.length}
     `;
 
-    const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(sql, ...values);
-    return rows.map((row) => new KnowledgeSearchHitEntity({
-      chunkId: String(row.chunk_id),
-      knowledgeDocumentId: String(row.knowledge_document_id),
-      documentId: typeof row.document_id === "string" ? row.document_id : null,
-      sourceEntityType: String(row.source_entity_type),
-      sourceEntityId: String(row.source_entity_id),
-      title: typeof row.title === "string" ? row.title : null,
-      sourceLabel: typeof row.source_label === "string" ? row.source_label : null,
-      chunkIndex: Number(row.chunk_index),
-      contentText: String(row.content_text ?? ""),
-      distance: Number(row.distance ?? 999999),
-    }));
+    const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      sql,
+      ...values,
+    );
+    return rows.map(
+      (row) =>
+        new KnowledgeSearchHitEntity({
+          chunkId: String(row.chunk_id),
+          knowledgeDocumentId: String(row.knowledge_document_id),
+          documentId:
+            typeof row.document_id === "string" ? row.document_id : null,
+          sourceEntityType: String(row.source_entity_type),
+          sourceEntityId: String(row.source_entity_id),
+          title: typeof row.title === "string" ? row.title : null,
+          sourceLabel:
+            typeof row.source_label === "string" ? row.source_label : null,
+          chunkIndex: Number(row.chunk_index),
+          contentText: String(row.content_text ?? ""),
+          distance: Number(row.distance ?? 999999),
+        }),
+    );
   }
 
   private toVectorLiteral(values: number[]): string {
-    return `[${values.map((value) => Number.isFinite(value) ? value.toFixed(8) : "0").join(",")}]`;
+    return `[${values.map((value) => (Number.isFinite(value) ? value.toFixed(8) : "0")).join(",")}]`;
   }
 
-  private toInputJson(value: Record<string, unknown> | null | undefined): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined {
+  private toInputJson(
+    value: Record<string, unknown> | null | undefined,
+  ): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined {
     if (value === undefined) {
       return undefined;
     }
@@ -362,7 +401,9 @@ export class PrismaKnowledgeRepository implements KnowledgeRepository {
     return value as Prisma.InputJsonValue;
   }
 
-  private toKnowledgeDocumentEntity(row: Record<string, unknown>): KnowledgeDocumentEntity {
+  private toKnowledgeDocumentEntity(
+    row: Record<string, unknown>,
+  ): KnowledgeDocumentEntity {
     return new KnowledgeDocumentEntity({
       id: String(row.id),
       workspaceId: String(row.workspace_id),
@@ -372,17 +413,36 @@ export class PrismaKnowledgeRepository implements KnowledgeRepository {
       sourceEntityId: String(row.source_entity_id),
       representationKey: String(row.representation_key),
       title: typeof row.title === "string" ? row.title : null,
-      sourceLabel: typeof row.source_label === "string" ? row.source_label : null,
-      contentText: typeof row.content_text === "string" ? row.content_text : null,
-      summaryText: typeof row.summary_text === "string" ? row.summary_text : null,
-      structuredPayload: row.structured_payload && typeof row.structured_payload === "object" ? row.structured_payload as Record<string, unknown> : null,
+      sourceLabel:
+        typeof row.source_label === "string" ? row.source_label : null,
+      contentText:
+        typeof row.content_text === "string" ? row.content_text : null,
+      summaryText:
+        typeof row.summary_text === "string" ? row.summary_text : null,
+      structuredPayload:
+        row.structured_payload && typeof row.structured_payload === "object"
+          ? (row.structured_payload as Record<string, unknown>)
+          : null,
       extractionStatus: String(row.extraction_status),
-      extractionKind: typeof row.extraction_kind === "string" ? row.extraction_kind : null,
-      contentHash: typeof row.content_hash === "string" ? row.content_hash : null,
+      extractionKind:
+        typeof row.extraction_kind === "string" ? row.extraction_kind : null,
+      contentHash:
+        typeof row.content_hash === "string" ? row.content_hash : null,
       lastError: typeof row.last_error === "string" ? row.last_error : null,
-      extractedAt: row.extracted_at instanceof Date ? row.extracted_at : row.extracted_at ? new Date(String(row.extracted_at)) : null,
-      createdAt: row.created_at instanceof Date ? row.created_at : new Date(String(row.created_at)),
-      updatedAt: row.updated_at instanceof Date ? row.updated_at : new Date(String(row.updated_at)),
+      extractedAt:
+        row.extracted_at instanceof Date
+          ? row.extracted_at
+          : row.extracted_at
+            ? new Date(String(row.extracted_at))
+            : null,
+      createdAt:
+        row.created_at instanceof Date
+          ? row.created_at
+          : new Date(String(row.created_at)),
+      updatedAt:
+        row.updated_at instanceof Date
+          ? row.updated_at
+          : new Date(String(row.updated_at)),
     });
   }
 }

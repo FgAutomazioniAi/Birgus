@@ -22,7 +22,8 @@ import { NestAssistantController } from "./assistant.controller.js";
   providers: [
     {
       provide: AssistantSessionService,
-      useFactory: (repository: PrismaAssistantSessionRepository) => new AssistantSessionService(repository),
+      useFactory: (repository: PrismaAssistantSessionRepository) =>
+        new AssistantSessionService(repository),
       inject: [PrismaAssistantSessionRepository],
     },
     {
@@ -30,7 +31,8 @@ import { NestAssistantController } from "./assistant.controller.js";
       useFactory: (
         projectService: ProjectService,
         documentIntelligenceService: DocumentIntelligenceService,
-      ) => new AssistantToolRegistry(projectService, documentIntelligenceService),
+      ) =>
+        new AssistantToolRegistry(projectService, documentIntelligenceService),
       inject: [ProjectService, DocumentIntelligenceService],
     },
     {
@@ -43,7 +45,8 @@ import { NestAssistantController } from "./assistant.controller.js";
     },
     {
       provide: AssistantSessionDocumentService,
-      useFactory: (documentIntelligenceService: DocumentIntelligenceService) => new AssistantSessionDocumentService(documentIntelligenceService),
+      useFactory: (documentIntelligenceService: DocumentIntelligenceService) =>
+        new AssistantSessionDocumentService(documentIntelligenceService),
       inject: [DocumentIntelligenceService],
     },
     {
@@ -55,14 +58,15 @@ import { NestAssistantController } from "./assistant.controller.js";
         documentIntelligenceService: DocumentIntelligenceService,
         chatClient: OpenAiCompatibleToolChatClient,
         repository: PrismaAssistantSessionRepository,
-      ) => new AssistantConversationService({
-        sessionService,
-        toolRegistry,
-        toolAccessService,
-        documentIntelligenceService,
-        chatClient,
-        repository,
-      }),
+      ) =>
+        new AssistantConversationService({
+          sessionService,
+          toolRegistry,
+          toolAccessService,
+          documentIntelligenceService,
+          chatClient,
+          repository,
+        }),
       inject: [
         AssistantSessionService,
         AssistantToolRegistry,

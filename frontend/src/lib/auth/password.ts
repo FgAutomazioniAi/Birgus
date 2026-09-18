@@ -12,7 +12,11 @@ const SCRYPT_OPTIONS = {
 
 const normalizePassword = (password: string) => password.normalize("NFKC");
 
-const deriveScryptHash = async (password: string, salt: string, keyLength: number): Promise<Buffer> =>
+const deriveScryptHash = async (
+  password: string,
+  salt: string,
+  keyLength: number,
+): Promise<Buffer> =>
   new Promise((resolve, reject) => {
     scrypt(password, salt, keyLength, SCRYPT_OPTIONS, (error, derivedKey) => {
       if (error) {
@@ -26,19 +30,30 @@ const deriveScryptHash = async (password: string, salt: string, keyLength: numbe
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("base64url");
-  const derived = await deriveScryptHash(normalizePassword(password) + AUTH_PEPPER, salt, SCRYPT_KEY_LENGTH);
+  const derived = await deriveScryptHash(
+    normalizePassword(password) + AUTH_PEPPER,
+    salt,
+    SCRYPT_KEY_LENGTH,
+  );
 
   return `${PASSWORD_HASH_PREFIX}$${salt}$${derived.toString("base64url")}`;
 }
 
-export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+export async function verifyPassword(
+  password: string,
+  storedHash: string,
+): Promise<boolean> {
   const [prefix, salt, hash] = storedHash.split("$");
   if (prefix !== PASSWORD_HASH_PREFIX || !salt || !hash) {
     return false;
   }
 
   const expectedHash = Buffer.from(hash, "base64url");
-  const derived = await deriveScryptHash(normalizePassword(password) + AUTH_PEPPER, salt, expectedHash.length);
+  const derived = await deriveScryptHash(
+    normalizePassword(password) + AUTH_PEPPER,
+    salt,
+    expectedHash.length,
+  );
 
   if (expectedHash.length !== derived.length) {
     return false;

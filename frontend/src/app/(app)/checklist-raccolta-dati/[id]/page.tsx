@@ -1,4 +1,4 @@
-import { CommissionDetailPanel } from "@/components/organisms";
+import { redirect } from "next/navigation";
 
 export default async function DataCollectionChecklistPage({
   params,
@@ -6,5 +6,5 @@ export default async function DataCollectionChecklistPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <CommissionDetailPanel id={id} />;
+  redirect(`/preventivazione/${id}`);
 }

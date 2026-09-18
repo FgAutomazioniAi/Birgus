@@ -1,4 +1,18 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 import {
   CommissionRecordPriority,
   CommissionRecordStatus,
@@ -13,6 +27,7 @@ import { RequestContext } from "../../core/tenancy/RequestContext.js";
 import { CommissionRecordEntity } from "../../modules/commission-intake/domain/CommissionRecordEntity.js";
 import { CommissionIntakeService } from "../../modules/commission-intake/services/CommissionIntakeService.js";
 import { CommissionVendorListService } from "../../modules/commission-intake/services/CommissionVendorListService.js";
+import { ExternalDatabaseConnectionService } from "../../modules/external-databases/services/ExternalDatabaseConnectionService.js";
 import { MultipartFormReader } from "../../shared/http/MultipartFormReader.js";
 import { AccessPolicyGuard } from "../auth/access-policy.guard.js";
 import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
@@ -28,7 +43,14 @@ const listRecordsQuerySchema = z.object({
   status: z.nativeEnum(CommissionRecordStatus).optional(),
 });
 
-const decimalStringSchema = z.string().trim().regex(/^-?\d+(\.\d{1,6})?$/).optional().nullable();
+const externalRecordsQuerySchema = z.object({});
+
+const decimalStringSchema = z
+  .string()
+  .trim()
+  .regex(/^-?\d+(\.\d{1,6})?$/)
+  .optional()
+  .nullable();
 
 const createRecordSchema = z.object({
   title: z.string().trim().min(2).max(240),
@@ -66,10 +88,14 @@ const saveFieldValueSchema = z.object({
 });
 
 const replaceTableRowsSchema = z.object({
-  rows: z.array(z.object({
-    rowKey: z.string().trim().max(120).optional().nullable(),
-    cells: z.record(z.string(), z.unknown()),
-  })).max(200),
+  rows: z
+    .array(
+      z.object({
+        rowKey: z.string().trim().max(120).optional().nullable(),
+        cells: z.record(z.string(), z.unknown()),
+      }),
+    )
+    .max(200),
 });
 
 const signChecklistSchema = z.object({
@@ -77,14 +103,23 @@ const signChecklistSchema = z.object({
 });
 
 const vendorListSchema = z.object({
-  categories: z.array(z.object({
-    name: z.string().trim().min(1).max(240),
-    note: z.string().trim().max(2000).optional().default(""),
-    items: z.array(z.object({
-      component: z.string().trim().min(1).max(2000),
-      brands: z.string().trim().max(2000).optional().default(""),
-    })).max(200),
-  })).min(1).max(80),
+  categories: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(240),
+        note: z.string().trim().max(2000).optional().default(""),
+        items: z
+          .array(
+            z.object({
+              component: z.string().trim().min(1).max(2000),
+              brands: z.string().trim().max(2000).optional().default(""),
+            }),
+          )
+          .max(200),
+      }),
+    )
+    .min(1)
+    .max(80),
 });
 
 @Controller("/api/commission-intake")
@@ -97,28 +132,50 @@ export class CommissionIntakeController {
     private readonly vendorListService: CommissionVendorListService,
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
+    @Inject(ExternalDatabaseConnectionService)
+    private readonly externalDatabaseConnectionService: ExternalDatabaseConnectionService,
   ) {}
 
   @Get("vendor-list")
   @RequireModule(ModuleKey.COMMISSION_INTAKE)
   @RequirePermission(PermissionKey.COMMISSION_INTAKE_CONFIGURE)
-  public async getVendorList(@CurrentRequestContext() requestContext: RequestContext): Promise<Record<string, unknown>> {
-    return { vendorList: await this.vendorListService.get(requestContext.workspace.workspaceId) };
+  public async getVendorList(
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    return {
+      vendorList: await this.vendorListService.get(
+        requestContext.workspace.workspaceId,
+      ),
+    };
   }
 
   @Put("vendor-list")
   @RequireModule(ModuleKey.COMMISSION_INTAKE)
   @RequirePermission(PermissionKey.COMMISSION_INTAKE_CONFIGURE)
-  public async saveVendorList(@Body() bodyRaw: unknown, @CurrentRequestContext() requestContext: RequestContext): Promise<Record<string, unknown>> {
+  public async saveVendorList(
+    @Body() bodyRaw: unknown,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
     const body = vendorListSchema.parse(bodyRaw);
-    return { vendorList: await this.vendorListService.save(requestContext.workspace.workspaceId, body.categories) };
+    return {
+      vendorList: await this.vendorListService.save(
+        requestContext.workspace.workspaceId,
+        body.categories,
+      ),
+    };
   }
 
   @Delete("vendor-list")
   @RequireModule(ModuleKey.COMMISSION_INTAKE)
   @RequirePermission(PermissionKey.COMMISSION_INTAKE_CONFIGURE)
-  public async resetVendorList(@CurrentRequestContext() requestContext: RequestContext): Promise<Record<string, unknown>> {
-    return { vendorList: await this.vendorListService.reset(requestContext.workspace.workspaceId) };
+  public async resetVendorList(
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    return {
+      vendorList: await this.vendorListService.reset(
+        requestContext.workspace.workspaceId,
+      ),
+    };
   }
 
   @Get("records")
@@ -137,6 +194,77 @@ export class CommissionIntakeController {
     });
 
     return { records: records.map((record) => this.serializeRecord(record)) };
+  }
+
+  @Get("external-records/connections")
+  @RequireModule(ModuleKey.COMMISSION_REGISTRY)
+  @RequirePermission(PermissionKey.COMMISSION_REGISTRY_READ)
+  public async listExternalRecordConnections(
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    return {
+      connection:
+        await this.externalDatabaseConnectionService.getModuleConnectionForUser(
+          requestContext.workspace.workspaceId,
+          requestContext.workspace.userId,
+          "commission_registry",
+        ),
+    };
+  }
+
+  @Get("external-records")
+  @RequireModule(ModuleKey.COMMISSION_REGISTRY)
+  @RequirePermission(PermissionKey.COMMISSION_REGISTRY_READ)
+  public async listExternalRecords(
+    @Query() queryRaw: unknown,
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const query = externalRecordsQuerySchema.parse(queryRaw);
+    const connection =
+      await this.externalDatabaseConnectionService.getModuleConnectionForUser(
+        requestContext.workspace.workspaceId,
+        requestContext.workspace.userId,
+        "commission_registry",
+      );
+    return this.externalDatabaseConnectionService.queryExternalCommissionRows(
+      requestContext.workspace.workspaceId,
+      requestContext.workspace.userId,
+      connection.id,
+      query,
+    );
+  }
+
+  @Get("details/records")
+  @RequireModule(ModuleKey.COMMISSION_DETAILS)
+  @RequirePermission(PermissionKey.COMMISSION_DETAILS_READ)
+  public async listDetailRecords(
+    @CurrentRequestContext() requestContext: RequestContext,
+  ): Promise<Record<string, unknown>> {
+    const connection =
+      await this.externalDatabaseConnectionService.getModuleConnectionForUser(
+        requestContext.workspace.workspaceId,
+        requestContext.workspace.userId,
+        "commission_registry",
+      );
+    const external =
+      await this.externalDatabaseConnectionService.queryExternalCommissionRows(
+        requestContext.workspace.workspaceId,
+        requestContext.workspace.userId,
+        connection.id,
+        {},
+      );
+    return {
+      records: external.rows.map((row) => ({
+        id: String(row.COMMESSA ?? row.ID_COMMESSA ?? ""),
+        code: String(row.COMMESSA ?? row.ID_COMMESSA ?? "Non disponibile"),
+        companyName: String(
+          row.AZIENDA ??
+            row.RAGIONE_SOCIALE ??
+            row.CLIENTE ??
+            "Non disponibile",
+        ),
+      })),
+    };
   }
 
   @Post("records")
@@ -250,7 +378,11 @@ export class CommissionIntakeController {
       recordId,
     });
     if (body.confirmText !== record.code && body.confirmText !== record.title) {
-      throw new AppError("Conferma eliminazione non valida: inserisci codice o titolo della commessa.", "COMMISSION_DELETE_CONFIRMATION_INVALID", 400);
+      throw new AppError(
+        "Conferma eliminazione non valida: inserisci codice o titolo della commessa.",
+        "COMMISSION_DELETE_CONFIRMATION_INVALID",
+        400,
+      );
     }
 
     await this.service.deleteRecord({
@@ -310,10 +442,15 @@ export class CommissionIntakeController {
       value: body.value ?? null,
     });
 
-    return { fieldValue: result.fieldValue, progressPercent: result.progressPercent };
+    return {
+      fieldValue: result.fieldValue,
+      progressPercent: result.progressPercent,
+    };
   }
 
-  @Put("records/:recordId/checklists/:checklistId/tables/:tableDefinitionId/rows")
+  @Put(
+    "records/:recordId/checklists/:checklistId/tables/:tableDefinitionId/rows",
+  )
   @HttpCode(200)
   @RequireModule(ModuleKey.COMMISSION_INTAKE)
   @RequirePermission(PermissionKey.COMMISSION_INTAKE_WRITE)
@@ -348,9 +485,15 @@ export class CommissionIntakeController {
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Record<string, unknown>> {
     const multipart = await MultipartFormReader.read(request);
-    const uploaded = multipart.files.find((item) => item.fieldName === "file") ?? multipart.files[0];
+    const uploaded =
+      multipart.files.find((item) => item.fieldName === "file") ??
+      multipart.files[0];
     if (!uploaded) {
-      throw new AppError("Nessun file ricevuto.", "COMMISSION_ATTACHMENT_FILE_MISSING", 400);
+      throw new AppError(
+        "Nessun file ricevuto.",
+        "COMMISSION_ATTACHMENT_FILE_MISSING",
+        400,
+      );
     }
 
     const attachment = await this.service.uploadAttachment({
@@ -462,7 +605,9 @@ export class CommissionIntakeController {
     @Body() bodyRaw: unknown,
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Record<string, unknown>> {
-    const body = z.object({ reason: z.string().trim().max(120).optional().nullable() }).parse(bodyRaw ?? {});
+    const body = z
+      .object({ reason: z.string().trim().max(120).optional().nullable() })
+      .parse(bodyRaw ?? {});
     await this.service.releaseOwnChecklistLock({
       workspaceId: requestContext.workspace.workspaceId,
       recordId: uuidSchema.parse(recordIdRaw),
@@ -497,7 +642,9 @@ export class CommissionIntakeController {
     };
   }
 
-  private serializeRecord(record: CommissionRecordEntity): Record<string, unknown> {
+  private serializeRecord(
+    record: CommissionRecordEntity,
+  ): Record<string, unknown> {
     return {
       id: record.id,
       workspaceId: record.workspaceId,
@@ -526,7 +673,9 @@ export class CommissionIntakeController {
     };
   }
 
-  private async ensureRegistryManagementRole(context: RequestContext): Promise<void> {
+  private async ensureRegistryManagementRole(
+    context: RequestContext,
+  ): Promise<void> {
     const assignment = await this.prisma.userWorkspaceRole.findFirst({
       where: {
         workspace_id: context.workspace.workspaceId,
@@ -536,7 +685,11 @@ export class CommissionIntakeController {
       select: { id: true },
     });
     if (!assignment) {
-      throw new AppError("Solo Admin, Superuser e Developer possono gestire le commesse.", "COMMISSION_REGISTRY_MANAGEMENT_REQUIRED", 403);
+      throw new AppError(
+        "Solo Admin, Superuser e Developer possono gestire le commesse.",
+        "COMMISSION_REGISTRY_MANAGEMENT_REQUIRED",
+        403,
+      );
     }
   }
 }

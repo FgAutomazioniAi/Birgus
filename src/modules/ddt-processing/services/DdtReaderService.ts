@@ -85,7 +85,9 @@ export class DdtReaderService {
     this.notificationService = notificationService ?? null;
   }
 
-  public async listDocuments(workspaceId: string): Promise<DdtReaderDocumentDto[]> {
+  public async listDocuments(
+    workspaceId: string,
+  ): Promise<DdtReaderDocumentDto[]> {
     const prisma = PrismaClientManager.getClient();
 
     const rows = await prisma.ddtDocument.findMany({
@@ -121,10 +123,15 @@ export class DdtReaderService {
       },
     });
 
-    return rows.map((row) => this.toDocumentDto(row as unknown as DdtDocumentRow));
+    return rows.map((row) =>
+      this.toDocumentDto(row as unknown as DdtDocumentRow),
+    );
   }
 
-  public async getDocument(workspaceId: string, ddtDocumentId: string): Promise<DdtReaderDocumentDto | null> {
+  public async getDocument(
+    workspaceId: string,
+    ddtDocumentId: string,
+  ): Promise<DdtReaderDocumentDto | null> {
     const row = await this.findDdtDocument(workspaceId, ddtDocumentId);
     return row ? this.toDocumentDto(row) : null;
   }
@@ -143,12 +150,19 @@ export class DdtReaderService {
     const prisma = PrismaClientManager.getClient();
     const fileName = this.resolveFileName(params.fileName);
     const fileSha = this.objectStorage.sha256Hex(params.bytes);
-    const existing = await this.findDdtDocumentByFileSha(params.workspaceId, fileSha);
+    const existing = await this.findDdtDocumentByFileSha(
+      params.workspaceId,
+      fileSha,
+    );
     if (existing) {
       return this.toDocumentDto(existing);
     }
 
-    const objectKey = this.buildObjectKey(params.workspaceId, fileName, fileSha);
+    const objectKey = this.buildObjectKey(
+      params.workspaceId,
+      fileName,
+      fileSha,
+    );
 
     const storedObject = await this.objectStorage.putObject({
       bucket: this.objectStorage.defaultBucket(),
@@ -161,7 +175,10 @@ export class DdtReaderService {
       },
     });
 
-    const storagePath = GaragePath.toStoragePath(storedObject.bucket, storedObject.objectKey);
+    const storagePath = GaragePath.toStoragePath(
+      storedObject.bucket,
+      storedObject.objectKey,
+    );
     const ddtNode = await this.ensureDdtNode(params.workspaceId);
 
     const [pdfType, uploadedStatus, ddtModule] = await Promise.all([
@@ -259,7 +276,12 @@ export class DdtReaderService {
     workspaceId: string;
     requestedByUserId: string | null;
     ddtDocumentId: string;
-  }): Promise<{ queued: boolean; docId: string; status: string; jobId: string }> {
+  }): Promise<{
+    queued: boolean;
+    docId: string;
+    status: string;
+    jobId: string;
+  }> {
     const prisma = PrismaClientManager.getClient();
 
     const row = await prisma.ddtDocument.findFirst({
@@ -285,7 +307,11 @@ export class DdtReaderService {
     });
 
     if (!row) {
-      throw new AppError("Documento non trovato.", "DDT_DOCUMENT_NOT_FOUND", 404);
+      throw new AppError(
+        "Documento non trovato.",
+        "DDT_DOCUMENT_NOT_FOUND",
+        404,
+      );
     }
 
     await prisma.ddtDocument.update({
@@ -305,7 +331,11 @@ export class DdtReaderService {
     );
 
     if (!workflow) {
-      throw new AppError("Workflow DDT non configurato.", "DDT_WORKFLOW_NOT_FOUND", 503);
+      throw new AppError(
+        "Workflow DDT non configurato.",
+        "DDT_WORKFLOW_NOT_FOUND",
+        503,
+      );
     }
 
     const run = await this.workflowService.createWorkflowRun({
@@ -327,8 +357,15 @@ export class DdtReaderService {
       },
     });
 
-    const displayName = this.resolveDocumentDisplayName(row.original_filename, row.document?.filename ?? null);
-    await this.notify(params.workspaceId, "DDT", `Analisi avviata su "${displayName}".`);
+    const displayName = this.resolveDocumentDisplayName(
+      row.original_filename,
+      row.document?.filename ?? null,
+    );
+    await this.notify(
+      params.workspaceId,
+      "DDT",
+      `Analisi avviata su "${displayName}".`,
+    );
 
     return {
       queued: true,
@@ -338,7 +375,10 @@ export class DdtReaderService {
     };
   }
 
-  public async deleteDocument(workspaceId: string, ddtDocumentId: string): Promise<boolean> {
+  public async deleteDocument(
+    workspaceId: string,
+    ddtDocumentId: string,
+  ): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
 
     const row = await prisma.ddtDocument.findFirst({
@@ -384,7 +424,10 @@ export class DdtReaderService {
     workspaceId: string;
     ddtDocumentId: string;
   }): Promise<{ bytes: Buffer; contentType: string; fileName: string } | null> {
-    const row = await this.findDdtDocument(params.workspaceId, params.ddtDocumentId);
+    const row = await this.findDdtDocument(
+      params.workspaceId,
+      params.ddtDocumentId,
+    );
     if (!row) {
       return null;
     }
@@ -397,11 +440,15 @@ export class DdtReaderService {
     return {
       bytes: payload.bytes,
       contentType: payload.contentType ?? "application/pdf",
-      fileName: row.original_filename ?? row.document.filename ?? "document.pdf",
+      fileName:
+        row.original_filename ?? row.document.filename ?? "document.pdf",
     };
   }
 
-  private async findDdtDocument(workspaceId: string, ddtDocumentId: string): Promise<DdtDocumentRow | null> {
+  private async findDdtDocument(
+    workspaceId: string,
+    ddtDocumentId: string,
+  ): Promise<DdtDocumentRow | null> {
     const prisma = PrismaClientManager.getClient();
 
     const row = await prisma.ddtDocument.findFirst({
@@ -438,8 +485,16 @@ export class DdtReaderService {
     return row ? (row as unknown as DdtDocumentRow) : null;
   }
 
-  private async ensureDdtNode(workspaceId: string): Promise<{ id: string; depth: number }> {
-    const root = await this.ensureNode(workspaceId, null, "ddt-reader", "/ddt-reader", 0);
+  private async ensureDdtNode(
+    workspaceId: string,
+  ): Promise<{ id: string; depth: number }> {
+    const root = await this.ensureNode(
+      workspaceId,
+      null,
+      "ddt-reader",
+      "/ddt-reader",
+      0,
+    );
 
     return this.ensureNode(
       workspaceId,
@@ -504,7 +559,8 @@ export class DdtReaderService {
 
     return {
       id: row.id,
-      original_filename: row.original_filename ?? row.document.filename ?? "document.pdf",
+      original_filename:
+        row.original_filename ?? row.document.filename ?? "document.pdf",
       status: this.toApiStatus(row.status),
       movement_type: analysis?.movement_type ?? null,
       movement_scope: analysis?.movement_scope ?? null,
@@ -528,9 +584,15 @@ export class DdtReaderService {
     };
   }
 
-  private extractTimingInfo(rawResponse: unknown): { ocrDurationMs: number | null; inferenceDurationMs: number | null } {
+  private extractTimingInfo(rawResponse: unknown): {
+    ocrDurationMs: number | null;
+    inferenceDurationMs: number | null;
+  } {
     const directTimings = this.readNestedRecord(rawResponse, ["timings"]);
-    const nestedTimings = this.readNestedRecord(rawResponse, ["response", "timings"]);
+    const nestedTimings = this.readNestedRecord(rawResponse, [
+      "response",
+      "timings",
+    ]);
     const timings = directTimings ?? nestedTimings;
 
     return {
@@ -552,7 +614,12 @@ export class DdtReaderService {
       return Number(value);
     }
 
-    if (value && typeof value === "object" && "toNumber" in value && typeof (value as { toNumber: unknown }).toNumber === "function") {
+    if (
+      value &&
+      typeof value === "object" &&
+      "toNumber" in value &&
+      typeof (value as { toNumber: unknown }).toNumber === "function"
+    ) {
       return (value as { toNumber: () => number }).toNumber();
     }
 
@@ -560,11 +627,19 @@ export class DdtReaderService {
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
-  private readNestedRecord(source: unknown, path: string[]): Record<string, unknown> | null {
+  private readNestedRecord(
+    source: unknown,
+    path: string[],
+  ): Record<string, unknown> | null {
     let current: unknown = source;
 
     for (const key of path) {
-      if (!current || typeof current !== "object" || Array.isArray(current) || !(key in current)) {
+      if (
+        !current ||
+        typeof current !== "object" ||
+        Array.isArray(current) ||
+        !(key in current)
+      ) {
         return null;
       }
 
@@ -588,12 +663,20 @@ export class DdtReaderService {
     return trimmed.length > 0 ? trimmed : "document.pdf";
   }
 
-  private resolveDocumentDisplayName(originalFileName: string | null, fallbackFileName: string | null): string {
-    const preferred = originalFileName?.trim() || fallbackFileName?.trim() || "";
+  private resolveDocumentDisplayName(
+    originalFileName: string | null,
+    fallbackFileName: string | null,
+  ): string {
+    const preferred =
+      originalFileName?.trim() || fallbackFileName?.trim() || "";
     return preferred.length > 0 ? preferred : "document.pdf";
   }
 
-  private async notify(workspaceId: string, title: string, message: string): Promise<void> {
+  private async notify(
+    workspaceId: string,
+    title: string,
+    message: string,
+  ): Promise<void> {
     if (!this.notificationService) {
       return;
     }
@@ -607,11 +690,20 @@ export class DdtReaderService {
         message,
       });
     } catch (error) {
-      console.error("[DdtReaderService] Unable to create notification", { workspaceId, title, message, error });
+      console.error("[DdtReaderService] Unable to create notification", {
+        workspaceId,
+        title,
+        message,
+        error,
+      });
     }
   }
 
-  private buildObjectKey(workspaceId: string, fileName: string, fileSha: string): string {
+  private buildObjectKey(
+    workspaceId: string,
+    fileName: string,
+    fileSha: string,
+  ): string {
     const safeName = this.sanitizeFileName(fileName);
 
     return [
@@ -624,7 +716,10 @@ export class DdtReaderService {
     ].join("/");
   }
 
-  private async findDdtDocumentByFileSha(workspaceId: string, fileSha: string): Promise<DdtDocumentRow | null> {
+  private async findDdtDocumentByFileSha(
+    workspaceId: string,
+    fileSha: string,
+  ): Promise<DdtDocumentRow | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.ddtDocument.findFirst({
       where: {
@@ -669,29 +764,38 @@ export class DdtReaderService {
     const trimmed = fileName.trim();
     const withFallback = trimmed || "document.pdf";
 
-    return withFallback
-      .normalize("NFKD")
-      .replace(/[^a-zA-Z0-9._-]+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "") || "document.pdf";
+    return (
+      withFallback
+        .normalize("NFKD")
+        .replace(/[^a-zA-Z0-9._-]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "") || "document.pdf"
+    );
   }
 
   private sanitizeSegment(value: string): string {
-    return value
-      .normalize("NFKD")
-      .toLowerCase()
-      .replace(/[^a-z0-9._-]+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "") || "na";
+    return (
+      value
+        .normalize("NFKD")
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "") || "na"
+    );
   }
 
-  private async readStoragePayload(storagePath: string): Promise<{ bytes: Buffer; contentType: string | null } | null> {
+  private async readStoragePayload(
+    storagePath: string,
+  ): Promise<{ bytes: Buffer; contentType: string | null } | null> {
     if (!storagePath.startsWith("garage://")) {
       return null;
     }
 
     const parsed = GaragePath.parse(storagePath);
-    const payload = await this.objectStorage.getObject(parsed.bucket, parsed.objectKey);
+    const payload = await this.objectStorage.getObject(
+      parsed.bucket,
+      parsed.objectKey,
+    );
     return {
       bytes: payload.bytes,
       contentType: payload.contentType,

@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 import { z } from "zod";
 
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
@@ -120,8 +131,14 @@ export class NestProjectCrudController {
   @Post("/api/companies/geocode")
   @HttpCode(200)
   @RequirePermission(PermissionKey.CLIENTS_WRITE)
-  public async geocodeCompany(@Body() bodyRaw: unknown): Promise<Record<string, unknown>> {
-    return { ...await this.companyGeocodingService.geocode(companyGeocodingPayloadSchema.parse(bodyRaw)) };
+  public async geocodeCompany(
+    @Body() bodyRaw: unknown,
+  ): Promise<Record<string, unknown>> {
+    return {
+      ...(await this.companyGeocodingService.geocode(
+        companyGeocodingPayloadSchema.parse(bodyRaw),
+      )),
+    };
   }
 
   @Get("/api/companies")
@@ -129,7 +146,9 @@ export class NestProjectCrudController {
   public async listCompanies(
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Array<Record<string, unknown>>> {
-    const items = await this.companyService.list(requestContext.workspace.workspaceId);
+    const items = await this.companyService.list(
+      requestContext.workspace.workspaceId,
+    );
     return items.map((item) => this.serializeCompany(item));
   }
 
@@ -144,7 +163,9 @@ export class NestProjectCrudController {
       this.getCompanyId(companyIdRaw),
     );
 
-    const clients = await this.clientService.list(requestContext.workspace.workspaceId);
+    const clients = await this.clientService.list(
+      requestContext.workspace.workspaceId,
+    );
     return {
       ...this.serializeCompany(item),
       clients: clients
@@ -261,11 +282,19 @@ export class NestProjectCrudController {
   ): Promise<Record<string, unknown>> {
     const body = permanentDeleteSchema.parse(bodyRaw);
     if (body.confirmText.trim() !== "elimina definitivamente") {
-      throw new AppError("Conferma non valida: digita 'elimina definitivamente'.", "DELETE_CONFIRMATION_INVALID", 400);
+      throw new AppError(
+        "Conferma non valida: digita 'elimina definitivamente'.",
+        "DELETE_CONFIRMATION_INVALID",
+        400,
+      );
     }
 
     const companyId = this.getCompanyId(companyIdRaw);
-    await this.companyService.permanentlyDelete(requestContext.workspace.workspaceId, companyId, requestContext.workspace.userId);
+    await this.companyService.permanentlyDelete(
+      requestContext.workspace.workspaceId,
+      companyId,
+      requestContext.workspace.userId,
+    );
     return { ok: true, id: companyId };
   }
 
@@ -274,7 +303,9 @@ export class NestProjectCrudController {
   public async listClients(
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Array<Record<string, unknown>>> {
-    const clients = await this.clientService.list(requestContext.workspace.workspaceId);
+    const clients = await this.clientService.list(
+      requestContext.workspace.workspaceId,
+    );
     return clients.map((item) => this.serializeClient(item));
   }
 
@@ -391,11 +422,19 @@ export class NestProjectCrudController {
   ): Promise<Record<string, unknown>> {
     const body = permanentDeleteSchema.parse(bodyRaw);
     if (body.confirmText.trim() !== "elimina definitivamente") {
-      throw new AppError("Conferma non valida: digita 'elimina definitivamente'.", "DELETE_CONFIRMATION_INVALID", 400);
+      throw new AppError(
+        "Conferma non valida: digita 'elimina definitivamente'.",
+        "DELETE_CONFIRMATION_INVALID",
+        400,
+      );
     }
 
     const clientId = this.getClientId(clientIdRaw);
-    await this.clientService.permanentlyDelete(requestContext.workspace.workspaceId, clientId, requestContext.workspace.userId);
+    await this.clientService.permanentlyDelete(
+      requestContext.workspace.workspaceId,
+      clientId,
+      requestContext.workspace.userId,
+    );
     return { ok: true, id: clientId };
   }
 
@@ -404,7 +443,9 @@ export class NestProjectCrudController {
   public async listProjectAuthors(
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Array<Record<string, unknown>>> {
-    const items = await this.projectAuthorService.list(requestContext.workspace.workspaceId);
+    const items = await this.projectAuthorService.list(
+      requestContext.workspace.workspaceId,
+    );
     return items.map((item) => ({
       id: item.id,
       firstName: item.firstName,
@@ -422,7 +463,11 @@ export class NestProjectCrudController {
   ): Promise<Record<string, unknown>> {
     const item = await this.projectAuthorService.getById(
       requestContext.workspace.workspaceId,
-      this.getNumericId(authorIdRaw, "Project author ID is invalid.", "PROJECT_AUTHOR_ID_INVALID"),
+      this.getNumericId(
+        authorIdRaw,
+        "Project author ID is invalid.",
+        "PROJECT_AUTHOR_ID_INVALID",
+      ),
     );
 
     return {
@@ -474,7 +519,11 @@ export class NestProjectCrudController {
     const updated = await this.projectAuthorService.update(
       new UpdateProjectAuthorCommand({
         workspaceId: requestContext.workspace.workspaceId,
-        authorId: this.getNumericId(authorIdRaw, "Project author ID is invalid.", "PROJECT_AUTHOR_ID_INVALID"),
+        authorId: this.getNumericId(
+          authorIdRaw,
+          "Project author ID is invalid.",
+          "PROJECT_AUTHOR_ID_INVALID",
+        ),
         firstName: body.firstName,
         lastName: body.lastName,
         displayName: body.displayName,
@@ -509,7 +558,11 @@ export class NestProjectCrudController {
       );
     }
 
-    const authorId = this.getNumericId(authorIdRaw, "Project author ID is invalid.", "PROJECT_AUTHOR_ID_INVALID");
+    const authorId = this.getNumericId(
+      authorIdRaw,
+      "Project author ID is invalid.",
+      "PROJECT_AUTHOR_ID_INVALID",
+    );
     await this.projectAuthorService.delete(
       requestContext.workspace.workspaceId,
       authorId,
@@ -524,8 +577,14 @@ export class NestProjectCrudController {
   public async listProjectRevisions(
     @CurrentRequestContext() requestContext: RequestContext,
   ): Promise<Array<Record<string, unknown>>> {
-    const items = await this.projectRevisionService.list(requestContext.workspace.workspaceId);
-    return items.map((item) => ({ id: item.id, code: item.code, createdAt: item.createdAt }));
+    const items = await this.projectRevisionService.list(
+      requestContext.workspace.workspaceId,
+    );
+    return items.map((item) => ({
+      id: item.id,
+      code: item.code,
+      createdAt: item.createdAt,
+    }));
   }
 
   @Get("/api/project-revisions/:revisionId")
@@ -536,7 +595,11 @@ export class NestProjectCrudController {
   ): Promise<Record<string, unknown>> {
     const item = await this.projectRevisionService.getById(
       requestContext.workspace.workspaceId,
-      this.getNumericId(revisionIdRaw, "Project revision ID is invalid.", "PROJECT_REVISION_ID_INVALID"),
+      this.getNumericId(
+        revisionIdRaw,
+        "Project revision ID is invalid.",
+        "PROJECT_REVISION_ID_INVALID",
+      ),
     );
 
     return { id: item.id, code: item.code, createdAt: item.createdAt };
@@ -573,7 +636,11 @@ export class NestProjectCrudController {
     const updated = await this.projectRevisionService.update(
       new UpdateProjectRevisionCommand({
         workspaceId: requestContext.workspace.workspaceId,
-        revisionId: this.getNumericId(revisionIdRaw, "Project revision ID is invalid.", "PROJECT_REVISION_ID_INVALID"),
+        revisionId: this.getNumericId(
+          revisionIdRaw,
+          "Project revision ID is invalid.",
+          "PROJECT_REVISION_ID_INVALID",
+        ),
         code: body.code,
         actorUserId: requestContext.workspace.userId,
       }),
@@ -599,7 +666,11 @@ export class NestProjectCrudController {
       );
     }
 
-    const revisionId = this.getNumericId(revisionIdRaw, "Project revision ID is invalid.", "PROJECT_REVISION_ID_INVALID");
+    const revisionId = this.getNumericId(
+      revisionIdRaw,
+      "Project revision ID is invalid.",
+      "PROJECT_REVISION_ID_INVALID",
+    );
     await this.projectRevisionService.delete(
       requestContext.workspace.workspaceId,
       revisionId,

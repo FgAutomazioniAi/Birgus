@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 import { z } from "zod";
 
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
@@ -93,7 +103,11 @@ export class NestAgentsController {
     const workspaceId = requestContext.workspace.workspaceId;
     const updatedByUserId = requestContext.workspace.userId;
     const agentId = this.getAgentId(agentIdRaw);
-    const updated = await this.service.resetModuleAgentPrompt(workspaceId, agentId, updatedByUserId);
+    const updated = await this.service.resetModuleAgentPrompt(
+      workspaceId,
+      agentId,
+      updatedByUserId,
+    );
 
     return {
       id: updated.id,
@@ -105,7 +119,11 @@ export class NestAgentsController {
 
   private getAgentId(agentId: string): string {
     if (!agentId || !agentId.trim()) {
-      throw new AppError("Agent ID is required.", "MODULE_AGENT_ID_REQUIRED", 400);
+      throw new AppError(
+        "Agent ID is required.",
+        "MODULE_AGENT_ID_REQUIRED",
+        400,
+      );
     }
 
     return agentId.trim();

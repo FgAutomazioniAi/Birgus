@@ -2,6 +2,7 @@
 key: document_intelligence
 ui: Knowledge
 ---
+
 # document_intelligence
 
 Knowledge base del workspace costruita sui documenti dell'Archivio: indicizzazione, embedding, ricerca semantica e analisi di insiemi documentali.

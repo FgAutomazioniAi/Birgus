@@ -3,7 +3,10 @@ export class GaragePath {
     return `garage://${bucket}/${objectKey}`;
   }
 
-  public static parse(storagePath: string): { bucket: string; objectKey: string } {
+  public static parse(storagePath: string): {
+    bucket: string;
+    objectKey: string;
+  } {
     if (!storagePath.startsWith("garage://")) {
       throw new Error(`Invalid storage path: ${storagePath}`);
     }
@@ -61,7 +64,10 @@ export class GaragePath {
     }
 
     const base = trimmed.slice(0, lastDot);
-    const ext = trimmed.slice(lastDot + 1).replace(/[^a-zA-Z0-9]+/g, "").toLowerCase();
+    const ext = trimmed
+      .slice(lastDot + 1)
+      .replace(/[^a-zA-Z0-9]+/g, "")
+      .toLowerCase();
 
     return `${this.normalize(base)}.${ext || "bin"}`;
   }

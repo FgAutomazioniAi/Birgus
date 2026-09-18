@@ -178,47 +178,48 @@ Regole:
 - Se non trovi nulla usa "out_of_tolerance_rows": [].
 - analysis_summary deve essere una frase breve naturale.`;
 
-export const DEFAULT_MODULE_AGENT_PROMPTS: DefaultModuleAgentPromptDefinition[] = [
-  {
-    moduleKey: "ddt_processing",
-    agentKey: "ddt_analysis_prompt",
-    name: "ddt_analysis_prompt",
-    label: "Prompt analisi DDT",
-    originalPrompt: DDT_ANALYSIS_PROMPT,
-  },
-  {
-    moduleKey: "project_management",
-    agentKey: "quotation_structuring_prompt",
-    name: "quotation_structuring_prompt",
-    label: "Prompt strutturazione preventivo",
-    originalPrompt: QUOTATION_STRUCTURING_PROMPT,
-  },
-  {
-    moduleKey: "measure_report",
-    agentKey: "measure_report_zeiss_1_prompt",
-    name: "measure_report_zeiss_1_prompt",
-    label: "Prompt Zeiss 1",
-    originalPrompt: MEASURE_REPORT_ZEISS1_PROMPT,
-  },
-  {
-    moduleKey: "measure_report",
-    agentKey: "measure_report_zeiss_2_prompt",
-    name: "measure_report_zeiss_2_prompt",
-    label: "Prompt Zeiss 2",
-    originalPrompt: MEASURE_REPORT_ZEISS2_PROMPT,
-  },
-  {
-    moduleKey: "measure_report",
-    agentKey: "measure_report_vicivision_prompt",
-    name: "measure_report_vicivision_prompt",
-    label: "Prompt Vicivision",
-    originalPrompt: MEASURE_REPORT_VICIVISION_PROMPT,
-  },
-  {
-    moduleKey: "measure_report",
-    agentKey: "measure_report_dea_prompt",
-    name: "measure_report_dea_prompt",
-    label: "Prompt DEA",
-    originalPrompt: MEASURE_REPORT_DEA_PROMPT,
-  },
-];
+export const DEFAULT_MODULE_AGENT_PROMPTS: DefaultModuleAgentPromptDefinition[] =
+  [
+    {
+      moduleKey: "ddt_processing",
+      agentKey: "ddt_analysis_prompt",
+      name: "ddt_analysis_prompt",
+      label: "Prompt analisi DDT",
+      originalPrompt: DDT_ANALYSIS_PROMPT,
+    },
+    {
+      moduleKey: "project_management",
+      agentKey: "quotation_structuring_prompt",
+      name: "quotation_structuring_prompt",
+      label: "Prompt strutturazione preventivo",
+      originalPrompt: QUOTATION_STRUCTURING_PROMPT,
+    },
+    {
+      moduleKey: "measure_report",
+      agentKey: "measure_report_zeiss_1_prompt",
+      name: "measure_report_zeiss_1_prompt",
+      label: "Prompt Zeiss 1",
+      originalPrompt: MEASURE_REPORT_ZEISS1_PROMPT,
+    },
+    {
+      moduleKey: "measure_report",
+      agentKey: "measure_report_zeiss_2_prompt",
+      name: "measure_report_zeiss_2_prompt",
+      label: "Prompt Zeiss 2",
+      originalPrompt: MEASURE_REPORT_ZEISS2_PROMPT,
+    },
+    {
+      moduleKey: "measure_report",
+      agentKey: "measure_report_vicivision_prompt",
+      name: "measure_report_vicivision_prompt",
+      label: "Prompt Vicivision",
+      originalPrompt: MEASURE_REPORT_VICIVISION_PROMPT,
+    },
+    {
+      moduleKey: "measure_report",
+      agentKey: "measure_report_dea_prompt",
+      name: "measure_report_dea_prompt",
+      label: "Prompt DEA",
+      originalPrompt: MEASURE_REPORT_DEA_PROMPT,
+    },
+  ];

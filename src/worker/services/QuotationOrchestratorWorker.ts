@@ -6,7 +6,9 @@ export interface QuotationJobPayload {
   jobId: string;
 }
 
-export class QuotationOrchestratorWorker implements JobHandler<QuotationJobPayload> {
+export class QuotationOrchestratorWorker
+  implements JobHandler<QuotationJobPayload>
+{
   private readonly service: QuotationOrchestratorService;
 
   public constructor(service: QuotationOrchestratorService) {

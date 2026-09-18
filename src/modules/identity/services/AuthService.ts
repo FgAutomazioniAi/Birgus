@@ -63,42 +63,64 @@ export class AuthService {
     const user = await this.userRepository.findByEmail(command.email);
 
     if (!user || !user.passwordHash || !user.isActive) {
-      throw new AppError("Invalid credentials.", "AUTH_INVALID_CREDENTIALS", 401);
+      throw new AppError(
+        "Invalid credentials.",
+        "AUTH_INVALID_CREDENTIALS",
+        401,
+      );
     }
 
-    const passwordValid = await this.passwordHasher.verifyPassword(command.password, user.passwordHash);
+    const passwordValid = await this.passwordHasher.verifyPassword(
+      command.password,
+      user.passwordHash,
+    );
     if (!passwordValid) {
-      throw new AppError("Invalid credentials.", "AUTH_INVALID_CREDENTIALS", 401);
+      throw new AppError(
+        "Invalid credentials.",
+        "AUTH_INVALID_CREDENTIALS",
+        401,
+      );
     }
 
     const fullName = [user.firstName, user.lastName ?? ""].join(" ").trim();
     const isDeveloper = await this.userRepository.isDeveloper(user.id);
-    const hasTrustedDevice = isDeveloper && await this.hasTrustedDevice(user.id, command.trustedDeviceToken);
-    const requiresTwoFactor = isDeveloper ? !hasTrustedDevice : user.twoFactorEnabled;
+    const hasTrustedDevice =
+      isDeveloper &&
+      (await this.hasTrustedDevice(user.id, command.trustedDeviceToken));
+    const requiresTwoFactor = isDeveloper
+      ? !hasTrustedDevice
+      : user.twoFactorEnabled;
 
     if (requiresTwoFactor) {
       const challengeToken = this.tokenService.generateToken();
       const challengeHash = this.tokenService.hashToken(challengeToken);
-      const setupRequired = !user.twoFactorEnabled || !user.twoFactorSecretCiphertext;
-      const setupSecret = setupRequired ? this.totpService.generateSecret() : null;
+      const setupRequired =
+        !user.twoFactorEnabled || !user.twoFactorSecretCiphertext;
+      const setupSecret = setupRequired
+        ? this.totpService.generateSecret()
+        : null;
 
       await this.authLoginChallengeRepository.create({
         userId: user.id,
         challengeHash,
         rememberMe: command.rememberMe,
         requiresTotpSetup: setupRequired,
-        setupSecretCiphertext: setupSecret ? this.totpSecretCipherService.encrypt(setupSecret) : null,
+        setupSecretCiphertext: setupSecret
+          ? this.totpSecretCipherService.encrypt(setupSecret)
+          : null,
         ipAddress: command.ipAddress,
         userAgent: command.userAgent,
-        expiresAt: new Date(Date.now() + this.twoFactorChallengeMinutes * 60 * 1000),
+        expiresAt: new Date(
+          Date.now() + this.twoFactorChallengeMinutes * 60 * 1000,
+        ),
       });
 
       const setupUri = setupSecret
         ? this.totpService.buildOtpAuthUri({
-          issuer: this.totpIssuer,
-          accountName: user.email,
-          secret: setupSecret,
-        })
+            issuer: this.totpIssuer,
+            accountName: user.email,
+            secret: setupSecret,
+          })
         : null;
 
       return new LoginResult({
@@ -134,16 +156,29 @@ export class AuthService {
     rememberTrustedDevice?: boolean;
   }): Promise<LoginResult> {
     await this.authLoginChallengeRepository.deleteExpired(new Date());
-    const challengeHash = this.tokenService.hashToken(params.challengeToken.trim());
-    const challenge = await this.authLoginChallengeRepository.findByChallengeHash(challengeHash);
+    const challengeHash = this.tokenService.hashToken(
+      params.challengeToken.trim(),
+    );
+    const challenge =
+      await this.authLoginChallengeRepository.findByChallengeHash(
+        challengeHash,
+      );
 
     if (!challenge || !challenge.isUsable(new Date())) {
-      throw new AppError("Challenge 2FA non valido o scaduto.", "AUTH_2FA_CHALLENGE_INVALID", 401);
+      throw new AppError(
+        "Challenge 2FA non valido o scaduto.",
+        "AUTH_2FA_CHALLENGE_INVALID",
+        401,
+      );
     }
 
     const user = await this.userRepository.findById(challenge.userId);
     if (!user || !user.isActive) {
-      throw new AppError("Invalid credentials.", "AUTH_INVALID_CREDENTIALS", 401);
+      throw new AppError(
+        "Invalid credentials.",
+        "AUTH_INVALID_CREDENTIALS",
+        401,
+      );
     }
 
     const fullName = [user.firstName, user.lastName ?? ""].join(" ").trim();
@@ -152,13 +187,27 @@ export class AuthService {
     let effectiveSecret: string;
     if (challenge.requiresTotpSetup) {
       if (!challenge.setupSecretCiphertext) {
-        throw new AppError("Setup 2FA non disponibile.", "AUTH_2FA_SETUP_MISSING", 400);
+        throw new AppError(
+          "Setup 2FA non disponibile.",
+          "AUTH_2FA_SETUP_MISSING",
+          400,
+        );
       }
 
-      effectiveSecret = this.totpSecretCipherService.decrypt(challenge.setupSecretCiphertext);
-      const isValidSetupOtp = this.totpService.verify({ secret: effectiveSecret, code: params.otpCode, window: 1 });
+      effectiveSecret = this.totpSecretCipherService.decrypt(
+        challenge.setupSecretCiphertext,
+      );
+      const isValidSetupOtp = this.totpService.verify({
+        secret: effectiveSecret,
+        code: params.otpCode,
+        window: 1,
+      });
       if (!isValidSetupOtp) {
-        throw new AppError("Codice 2FA non valido.", "AUTH_2FA_OTP_INVALID", 401);
+        throw new AppError(
+          "Codice 2FA non valido.",
+          "AUTH_2FA_OTP_INVALID",
+          401,
+        );
       }
 
       await this.userRepository.setTwoFactorSecret(
@@ -167,22 +216,40 @@ export class AuthService {
       );
     } else {
       if (!user.twoFactorEnabled || !user.twoFactorSecretCiphertext) {
-        throw new AppError("Autenticazione 2FA non configurata.", "AUTH_2FA_NOT_CONFIGURED", 400);
+        throw new AppError(
+          "Autenticazione 2FA non configurata.",
+          "AUTH_2FA_NOT_CONFIGURED",
+          400,
+        );
       }
 
-      effectiveSecret = this.totpSecretCipherService.decrypt(user.twoFactorSecretCiphertext);
-      const isValidOtp = this.totpService.verify({ secret: effectiveSecret, code: params.otpCode, window: 1 });
+      effectiveSecret = this.totpSecretCipherService.decrypt(
+        user.twoFactorSecretCiphertext,
+      );
+      const isValidOtp = this.totpService.verify({
+        secret: effectiveSecret,
+        code: params.otpCode,
+        window: 1,
+      });
       if (!isValidOtp) {
-        throw new AppError("Codice 2FA non valido.", "AUTH_2FA_OTP_INVALID", 401);
+        throw new AppError(
+          "Codice 2FA non valido.",
+          "AUTH_2FA_OTP_INVALID",
+          401,
+        );
       }
       await this.userRepository.markTwoFactorVerified(user.id);
     }
 
     await this.authLoginChallengeRepository.consumeById(challenge.id);
 
-    const trustedDeviceToken = isDeveloper && params.rememberTrustedDevice
-      ? await this.createTrustedDevice(user.id, params.userAgent ?? challenge.userAgent)
-      : null;
+    const trustedDeviceToken =
+      isDeveloper && params.rememberTrustedDevice
+        ? await this.createTrustedDevice(
+            user.id,
+            params.userAgent ?? challenge.userAgent,
+          )
+        : null;
 
     return this.createSessionLoginResult({
       userId: user.id,
@@ -268,7 +335,10 @@ export class AuthService {
     await this.sessionRepository.revokeByTokenHash(tokenHash);
   }
 
-  public async resetPassword(userId: string, newPassword: string): Promise<void> {
+  public async resetPassword(
+    userId: string,
+    newPassword: string,
+  ): Promise<void> {
     const normalizedPassword = this.passwordPolicy.ensureValid(newPassword);
     const hash = await this.passwordHasher.hashPassword(normalizedPassword);
     await this.userRepository.updatePassword(userId, hash);
@@ -286,15 +356,27 @@ export class AuthService {
       throw new AppError("Utente non valido.", "AUTH_USER_INVALID", 401);
     }
 
-    const currentPasswordValid = await this.passwordHasher.verifyPassword(params.currentPassword, user.passwordHash);
+    const currentPasswordValid = await this.passwordHasher.verifyPassword(
+      params.currentPassword,
+      user.passwordHash,
+    );
     if (!currentPasswordValid) {
-      throw new AppError("Password attuale non corretta.", "AUTH_CURRENT_PASSWORD_INVALID", 401);
+      throw new AppError(
+        "Password attuale non corretta.",
+        "AUTH_CURRENT_PASSWORD_INVALID",
+        401,
+      );
     }
 
-    const normalizedPassword = this.passwordPolicy.ensureValid(params.newPassword);
+    const normalizedPassword = this.passwordPolicy.ensureValid(
+      params.newPassword,
+    );
     const nextHash = await this.passwordHasher.hashPassword(normalizedPassword);
     await this.userRepository.updatePassword(user.id, nextHash);
-    await this.sessionRepository.revokeAllForUserExceptSession(user.id, params.currentSessionId);
+    await this.sessionRepository.revokeAllForUserExceptSession(
+      user.id,
+      params.currentSessionId,
+    );
     await this.trustedDeviceRepository?.revokeAllForUser(user.id, new Date());
   }
 
@@ -306,22 +388,33 @@ export class AuthService {
     return new Date(Date.now() + milliseconds);
   }
 
-  private async hasTrustedDevice(userId: string, token: string | null): Promise<boolean> {
+  private async hasTrustedDevice(
+    userId: string,
+    token: string | null,
+  ): Promise<boolean> {
     if (!this.trustedDeviceRepository || !token) return false;
-    const device = await this.trustedDeviceRepository.findUsableByTokenHash(this.tokenService.hashToken(token), new Date());
+    const device = await this.trustedDeviceRepository.findUsableByTokenHash(
+      this.tokenService.hashToken(token),
+      new Date(),
+    );
     if (!device || device.userId !== userId) return false;
     await this.trustedDeviceRepository.touch(device.id, new Date());
     return true;
   }
 
-  private async createTrustedDevice(userId: string, userAgent: string | null | undefined): Promise<string | null> {
+  private async createTrustedDevice(
+    userId: string,
+    userAgent: string | null | undefined,
+  ): Promise<string | null> {
     if (!this.trustedDeviceRepository) return null;
     const token = this.tokenService.generateToken();
     await this.trustedDeviceRepository.create({
       userId,
       tokenHash: this.tokenService.hashToken(token),
       userAgent: userAgent ?? null,
-      expiresAt: new Date(Date.now() + this.trustedDeviceDays * 24 * 60 * 60 * 1000),
+      expiresAt: new Date(
+        Date.now() + this.trustedDeviceDays * 24 * 60 * 60 * 1000,
+      ),
     });
     return token;
   }

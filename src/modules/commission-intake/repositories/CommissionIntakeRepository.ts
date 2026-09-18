@@ -236,9 +236,13 @@ export interface CommissionIntakeRepository {
     recordId: string;
   }): Promise<CommissionRecordEntity | null>;
 
-  createRecord(params: CommissionRecordWriteParams): Promise<CommissionRecordEntity>;
+  createRecord(
+    params: CommissionRecordWriteParams,
+  ): Promise<CommissionRecordEntity>;
 
-  updateRecord(params: CommissionRecordUpdateParams): Promise<CommissionRecordEntity | null>;
+  updateRecord(
+    params: CommissionRecordUpdateParams,
+  ): Promise<CommissionRecordEntity | null>;
 
   softDeleteRecord(params: {
     workspaceId: string;

@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { z } from "zod";
 
 import { PermissionKey } from "../../core/authorization/PermissionKey.js";
@@ -11,6 +22,7 @@ import {
   ArchivedItemsService,
 } from "../../modules/document-archive/services/ArchivedItemsService.js";
 import { ActiveDocumentsService } from "../../modules/document-archive/services/ActiveDocumentsService.js";
+import { AuditLogService } from "../../modules/audit/services/AuditLogService.js";
 import { AccessPolicyGuard } from "../auth/access-policy.guard.js";
 import { RequestContextAuthGuard } from "../auth/request-context-auth.guard.js";
 import { CurrentRequestContext } from "../common/decorators/request-context.decorator.js";
@@ -32,7 +44,13 @@ const documentParamsSchema = z.object({
 });
 
 const archiveParamsSchema = z.object({
-  entityType: z.enum(["project", "project_version", "document", "company", "client"]),
+  entityType: z.enum([
+    "project",
+    "project_version",
+    "document",
+    "company",
+    "client",
+  ]),
   entityId: z.string().min(1),
 });
 
@@ -55,6 +73,8 @@ export class NestDocumentArchiveController {
     private readonly activeDocumentsService: ActiveDocumentsService,
     @Inject(PermissionPolicy)
     private readonly permissionPolicy: PermissionPolicy,
+    @Inject(AuditLogService)
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   @Get("documents")
@@ -84,6 +104,14 @@ export class NestDocumentArchiveController {
       workspaceId: requestContext.workspace.workspaceId,
       documentId,
     });
+    await this.auditLogService.record({
+      workspaceId: requestContext.workspace.workspaceId,
+      userId: requestContext.workspace.userId,
+      moduleKey: ModuleKey.DOCUMENT_ARCHIVE,
+      action: "archive.document.deleted",
+      entityType: "Document",
+      entityId: documentId,
+    });
     return { ok: true };
   }
 
@@ -96,9 +124,20 @@ export class NestDocumentArchiveController {
   ): Promise<{ ok: true }> {
     const body = emptyTrashBodySchema.parse(bodyRaw);
     if (body.confirmText.trim() !== "svuota") {
-      throw new AppError("Conferma eliminazione non valida: digita 'svuota'.", "DELETE_CONFIRMATION_INVALID", 400);
+      throw new AppError(
+        "Conferma eliminazione non valida: digita 'svuota'.",
+        "DELETE_CONFIRMATION_INVALID",
+        400,
+      );
     }
     await this.service.emptyTrash(requestContext.workspace.workspaceId);
+    await this.auditLogService.record({
+      workspaceId: requestContext.workspace.workspaceId,
+      userId: requestContext.workspace.userId,
+      moduleKey: ModuleKey.DOCUMENT_ARCHIVE,
+      action: "archive.trash.emptied",
+      entityType: "Archive",
+    });
     return { ok: true };
   }
 
@@ -140,6 +179,14 @@ export class NestDocumentArchiveController {
       entityType: params.entityType,
       entityId: params.entityId.trim(),
     });
+    await this.auditLogService.record({
+      workspaceId,
+      userId: requestContext.workspace.userId,
+      moduleKey: ModuleKey.DOCUMENT_ARCHIVE,
+      action: "archive.item.restored",
+      entityType: params.entityType,
+      entityId: params.entityId.trim(),
+    });
 
     return { ok: true };
   }
@@ -165,6 +212,14 @@ export class NestDocumentArchiveController {
     const workspaceId = requestContext.workspace.workspaceId;
     await this.service.permanentlyDeleteArchivedItem({
       workspaceId,
+      entityType: params.entityType,
+      entityId: params.entityId.trim(),
+    });
+    await this.auditLogService.record({
+      workspaceId,
+      userId: requestContext.workspace.userId,
+      moduleKey: ModuleKey.DOCUMENT_ARCHIVE,
+      action: "archive.item.permanently_deleted",
       entityType: params.entityType,
       entityId: params.entityId.trim(),
     });

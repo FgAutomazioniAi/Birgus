@@ -97,7 +97,9 @@ export class MeasureReportService {
     };
   }
 
-  public async listDocuments(workspaceId: string): Promise<MeasureReportDocumentDto[]> {
+  public async listDocuments(
+    workspaceId: string,
+  ): Promise<MeasureReportDocumentDto[]> {
     const prisma = PrismaClientManager.getClient();
     const rows = await prisma.measureReportDocument.findMany({
       where: {
@@ -132,10 +134,15 @@ export class MeasureReportService {
       },
     });
 
-    return rows.map((row) => this.toDocumentDto(row as unknown as MeasureReportDocumentRow));
+    return rows.map((row) =>
+      this.toDocumentDto(row as unknown as MeasureReportDocumentRow),
+    );
   }
 
-  public async getDocument(workspaceId: string, measureReportDocumentId: string): Promise<MeasureReportDocumentDto | null> {
+  public async getDocument(
+    workspaceId: string,
+    measureReportDocumentId: string,
+  ): Promise<MeasureReportDocumentDto | null> {
     const row = await this.findDocument(workspaceId, measureReportDocumentId);
     return row ? this.toDocumentDto(row) : null;
   }
@@ -153,7 +160,11 @@ export class MeasureReportService {
 
     const prisma = PrismaClientManager.getClient();
     const fileName = this.resolveFileName(params.fileName);
-    const objectKey = this.buildObjectKey(params.workspaceId, fileName, params.bytes);
+    const objectKey = this.buildObjectKey(
+      params.workspaceId,
+      fileName,
+      params.bytes,
+    );
 
     const storedObject = await this.objectStorage.putObject({
       bucket: this.objectStorage.defaultBucket(),
@@ -166,7 +177,10 @@ export class MeasureReportService {
       },
     });
 
-    const storagePath = GaragePath.toStoragePath(storedObject.bucket, storedObject.objectKey);
+    const storagePath = GaragePath.toStoragePath(
+      storedObject.bucket,
+      storedObject.objectKey,
+    );
     const rootNode = await this.ensureMeasureReportNode(params.workspaceId);
 
     const [pdfType, uploadedStatus, measureReportModule] = await Promise.all([
@@ -246,7 +260,11 @@ export class MeasureReportService {
       },
     });
 
-    await this.notify(params.workspaceId, "Measure Report", `Caricato "${fileName}".`);
+    await this.notify(
+      params.workspaceId,
+      "Measure Report",
+      `Caricato "${fileName}".`,
+    );
     return this.toDocumentDto(created as unknown as MeasureReportDocumentRow);
   }
 
@@ -255,7 +273,12 @@ export class MeasureReportService {
     requestedByUserId: string | null;
     measureReportDocumentId: string;
     requestedDocumentType?: string | null;
-  }): Promise<{ queued: boolean; docId: string; status: string; jobId: string }> {
+  }): Promise<{
+    queued: boolean;
+    docId: string;
+    status: string;
+    jobId: string;
+  }> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.measureReportDocument.findFirst({
       where: {
@@ -281,14 +304,24 @@ export class MeasureReportService {
     });
 
     if (!row) {
-      throw new AppError("Documento non trovato.", "MEASURE_REPORT_DOCUMENT_NOT_FOUND", 404);
+      throw new AppError(
+        "Documento non trovato.",
+        "MEASURE_REPORT_DOCUMENT_NOT_FOUND",
+        404,
+      );
     }
 
     const requestedType = normalizeMeasureReportDocumentType(
       params.requestedDocumentType ?? row.document_type_requested,
     );
-    const displayName = this.resolveDocumentDisplayName(row.original_filename, row.document?.filename ?? null);
-    const effectiveType = resolveMeasureReportEffectiveDocumentType(requestedType, displayName);
+    const displayName = this.resolveDocumentDisplayName(
+      row.original_filename,
+      row.document?.filename ?? null,
+    );
+    const effectiveType = resolveMeasureReportEffectiveDocumentType(
+      requestedType,
+      displayName,
+    );
 
     await prisma.measureReportDocument.update({
       where: {
@@ -309,7 +342,11 @@ export class MeasureReportService {
     );
 
     if (!workflow) {
-      throw new AppError("Workflow Measure Report non configurato.", "MEASURE_REPORT_WORKFLOW_NOT_FOUND", 503);
+      throw new AppError(
+        "Workflow Measure Report non configurato.",
+        "MEASURE_REPORT_WORKFLOW_NOT_FOUND",
+        503,
+      );
     }
 
     const run = await this.workflowService.createWorkflowRun({
@@ -332,7 +369,11 @@ export class MeasureReportService {
       },
     });
 
-    await this.notify(params.workspaceId, "Measure Report", `Analisi avviata su "${displayName}".`);
+    await this.notify(
+      params.workspaceId,
+      "Measure Report",
+      `Analisi avviata su "${displayName}".`,
+    );
 
     return {
       queued: true,
@@ -342,7 +383,10 @@ export class MeasureReportService {
     };
   }
 
-  public async deleteDocument(workspaceId: string, measureReportDocumentId: string): Promise<boolean> {
+  public async deleteDocument(
+    workspaceId: string,
+    measureReportDocumentId: string,
+  ): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.measureReportDocument.findFirst({
       where: {
@@ -386,7 +430,10 @@ export class MeasureReportService {
     workspaceId: string;
     measureReportDocumentId: string;
   }): Promise<{ bytes: Buffer; contentType: string; fileName: string } | null> {
-    const row = await this.findDocument(params.workspaceId, params.measureReportDocumentId);
+    const row = await this.findDocument(
+      params.workspaceId,
+      params.measureReportDocumentId,
+    );
     if (!row) {
       return null;
     }
@@ -399,11 +446,15 @@ export class MeasureReportService {
     return {
       bytes: payload.bytes,
       contentType: payload.contentType ?? "application/pdf",
-      fileName: row.original_filename ?? row.document.filename ?? "document.pdf",
+      fileName:
+        row.original_filename ?? row.document.filename ?? "document.pdf",
     };
   }
 
-  private async findDocument(workspaceId: string, measureReportDocumentId: string): Promise<MeasureReportDocumentRow | null> {
+  private async findDocument(
+    workspaceId: string,
+    measureReportDocumentId: string,
+  ): Promise<MeasureReportDocumentRow | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.measureReportDocument.findFirst({
       where: {
@@ -439,13 +490,22 @@ export class MeasureReportService {
     return row ? (row as unknown as MeasureReportDocumentRow) : null;
   }
 
-  private toDocumentDto(row: MeasureReportDocumentRow): MeasureReportDocumentDto {
+  private toDocumentDto(
+    row: MeasureReportDocumentRow,
+  ): MeasureReportDocumentDto {
     return {
       id: row.id,
-      original_filename: this.resolveDocumentDisplayName(row.original_filename, row.document.filename),
+      original_filename: this.resolveDocumentDisplayName(
+        row.original_filename,
+        row.document.filename,
+      ),
       status: row.status.toLowerCase(),
-      document_type_requested: normalizeMeasureReportDocumentType(row.document_type_requested),
-      document_type_effective: row.document_type_effective ? normalizeMeasureReportDocumentType(row.document_type_effective) : null,
+      document_type_requested: normalizeMeasureReportDocumentType(
+        row.document_type_requested,
+      ),
+      document_type_effective: row.document_type_effective
+        ? normalizeMeasureReportDocumentType(row.document_type_effective)
+        : null,
       rows_count: row.analysis_result?.rows_count ?? 0,
       out_of_tolerance_rows: (row.analysis_result?.rows ?? []).map((item) => ({
         row_index: item.row_index,
@@ -461,8 +521,13 @@ export class MeasureReportService {
     };
   }
 
-  private resolveDocumentDisplayName(originalFileName: string | null, fallbackFileName: string | null): string {
-    return originalFileName?.trim() || fallbackFileName?.trim() || "document.pdf";
+  private resolveDocumentDisplayName(
+    originalFileName: string | null,
+    fallbackFileName: string | null,
+  ): string {
+    return (
+      originalFileName?.trim() || fallbackFileName?.trim() || "document.pdf"
+    );
   }
 
   private resolveFileName(fileName: string): string {
@@ -470,14 +535,26 @@ export class MeasureReportService {
     return trimmed.length > 0 ? trimmed : "measure-report.pdf";
   }
 
-  private buildObjectKey(workspaceId: string, fileName: string, bytes: Buffer): string {
+  private buildObjectKey(
+    workspaceId: string,
+    fileName: string,
+    bytes: Buffer,
+  ): string {
     const safeName = fileName.replace(/[^\w.\-]+/g, "_");
     const stamp = Date.now().toString(36);
     return `measure-report/${workspaceId}/${stamp}-${bytes.length}-${safeName}`;
   }
 
-  private async ensureMeasureReportNode(workspaceId: string): Promise<{ id: string }> {
-    const root = await this.ensureNode(workspaceId, null, "measure-report", "/measure-report", 0);
+  private async ensureMeasureReportNode(
+    workspaceId: string,
+  ): Promise<{ id: string }> {
+    const root = await this.ensureNode(
+      workspaceId,
+      null,
+      "measure-report",
+      "/measure-report",
+      0,
+    );
     return this.ensureNode(
       workspaceId,
       root.id,
@@ -524,25 +601,37 @@ export class MeasureReportService {
     });
   }
 
-  private async readStoragePayload(storagePath: string): Promise<{ bytes: Buffer; contentType: string | null } | null> {
+  private async readStoragePayload(
+    storagePath: string,
+  ): Promise<{ bytes: Buffer; contentType: string | null } | null> {
     if (!storagePath.startsWith("garage://")) {
       return null;
     }
 
     try {
       const parsed = GaragePath.parse(storagePath);
-      const payload = await this.objectStorage.getObject(parsed.bucket, parsed.objectKey);
+      const payload = await this.objectStorage.getObject(
+        parsed.bucket,
+        parsed.objectKey,
+      );
       return {
         bytes: payload.bytes,
         contentType: payload.contentType ?? null,
       };
     } catch (error) {
-      console.error("[MeasureReportService] Unable to read storage payload", { storagePath, error });
+      console.error("[MeasureReportService] Unable to read storage payload", {
+        storagePath,
+        error,
+      });
       return null;
     }
   }
 
-  private async notify(workspaceId: string, title: string, message: string): Promise<void> {
+  private async notify(
+    workspaceId: string,
+    title: string,
+    message: string,
+  ): Promise<void> {
     if (!this.notificationService) {
       return;
     }
@@ -556,7 +645,12 @@ export class MeasureReportService {
         message,
       });
     } catch (error) {
-      console.error("[MeasureReportService] Unable to create notification", { workspaceId, title, message, error });
+      console.error("[MeasureReportService] Unable to create notification", {
+        workspaceId,
+        title,
+        message,
+        error,
+      });
     }
   }
 }

@@ -6,7 +6,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, Input, Text } from "@/components/atoms";
-import { BirgusDialog, PageHelpHint, SelectDropdown } from "@/components/molecules";
+import {
+  BirgusDialog,
+  PageHelpHint,
+  SelectDropdown,
+} from "@/components/molecules";
 import { APP_ROUTES } from "@/lib/routes";
 import { appendWorkspaceId } from "@/lib/workspace";
 
@@ -36,10 +40,16 @@ const AUTH_ERROR_CODES = new Set([
 const getErrorMessage = (payload: unknown, fallback: string) => {
   if (payload && typeof payload === "object") {
     const maybePayload = payload as ApiErrorPayload;
-    if (typeof maybePayload.detail === "string" && maybePayload.detail.trim().length > 0) {
+    if (
+      typeof maybePayload.detail === "string" &&
+      maybePayload.detail.trim().length > 0
+    ) {
       return maybePayload.detail;
     }
-    if (typeof maybePayload.message === "string" && maybePayload.message.trim().length > 0) {
+    if (
+      typeof maybePayload.message === "string" &&
+      maybePayload.message.trim().length > 0
+    ) {
       return maybePayload.message;
     }
   }
@@ -69,19 +79,28 @@ const readPayload = async (response: Response): Promise<unknown> => {
   return text.length > 0 ? text : null;
 };
 
-const requestJson = async <T,>(input: RequestInfo | URL, init: RequestInit, fallbackErrorMessage: string): Promise<T> => {
+const requestJson = async <T,>(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  fallbackErrorMessage: string,
+): Promise<T> => {
   const response = await fetch(input, init);
   const payload = await readPayload(response);
 
   if (!response.ok) {
     if (response.status === 401) {
       const code =
-        payload && typeof payload === "object" && "code" in payload && typeof (payload as ApiErrorPayload).code === "string"
-          ? (payload as ApiErrorPayload).code ?? null
+        payload &&
+        typeof payload === "object" &&
+        "code" in payload &&
+        typeof (payload as ApiErrorPayload).code === "string"
+          ? ((payload as ApiErrorPayload).code ?? null)
           : null;
 
       if (!code || AUTH_ERROR_CODES.has(code)) {
-        throw new AuthSessionExpiredError(getErrorMessage(payload, "Sessione non valida o scaduta."));
+        throw new AuthSessionExpiredError(
+          getErrorMessage(payload, "Sessione non valida o scaduta."),
+        );
       }
     }
 
@@ -140,7 +159,8 @@ export function MeasureReportPanel() {
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
-  const [documentToDelete, setDocumentToDelete] = useState<MeasureReportDocument | null>(null);
+  const [documentToDelete, setDocumentToDelete] =
+    useState<MeasureReportDocument | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const previewObjectUrlRef = useRef("");
@@ -150,46 +170,65 @@ export function MeasureReportPanel() {
     [documents, selectedDocId],
   );
 
-  const selectedIsProcessing = Boolean(selectedDocument && PROCESSING_STATUSES.has(selectedDocument.status));
-  const hasProcessing = documents.some((document) => PROCESSING_STATUSES.has(document.status));
+  const selectedIsProcessing = Boolean(
+    selectedDocument && PROCESSING_STATUSES.has(selectedDocument.status),
+  );
+  const hasProcessing = documents.some((document) =>
+    PROCESSING_STATUSES.has(document.status),
+  );
 
   const redirectToLogin = useCallback(() => {
     setPdfPreviewUrl("");
     router.replace(APP_ROUTES.login);
   }, [router]);
 
-  const handleRequestError = useCallback((requestError: unknown, fallbackMessage: string): string => {
-    if (requestError instanceof AuthSessionExpiredError) {
-      redirectToLogin();
-      return requestError.message;
-    }
-
-    if (requestError instanceof Error) {
-      return requestError.message;
-    }
-
-    return fallbackMessage;
-  }, [redirectToLogin]);
-
-  const refreshDocuments = useCallback(async (clearMessages = false) => {
-    try {
-      const docs = await requestJson<MeasureReportDocument[]>(
-        "/api/measure-reports/documents",
-        { method: "GET", cache: "no-store" },
-        "Impossibile leggere i measure report.",
-      );
-
-      setDocuments(docs);
-      setSelectedDocId((current) => (current && docs.some((document) => document.id === current) ? current : docs[0]?.id ?? null));
-
-      if (clearMessages) {
-        setFeedback("");
-        setError("");
+  const handleRequestError = useCallback(
+    (requestError: unknown, fallbackMessage: string): string => {
+      if (requestError instanceof AuthSessionExpiredError) {
+        redirectToLogin();
+        return requestError.message;
       }
-    } catch (refreshError) {
-      setError(handleRequestError(refreshError, "Impossibile leggere i measure report."));
-    }
-  }, [handleRequestError]);
+
+      if (requestError instanceof Error) {
+        return requestError.message;
+      }
+
+      return fallbackMessage;
+    },
+    [redirectToLogin],
+  );
+
+  const refreshDocuments = useCallback(
+    async (clearMessages = false) => {
+      try {
+        const docs = await requestJson<MeasureReportDocument[]>(
+          "/api/measure-reports/documents",
+          { method: "GET", cache: "no-store" },
+          "Impossibile leggere i measure report.",
+        );
+
+        setDocuments(docs);
+        setSelectedDocId((current) =>
+          current && docs.some((document) => document.id === current)
+            ? current
+            : (docs[0]?.id ?? null),
+        );
+
+        if (clearMessages) {
+          setFeedback("");
+          setError("");
+        }
+      } catch (refreshError) {
+        setError(
+          handleRequestError(
+            refreshError,
+            "Impossibile leggere i measure report.",
+          ),
+        );
+      }
+    },
+    [handleRequestError],
+  );
 
   const loadConfig = useCallback(async () => {
     try {
@@ -223,7 +262,11 @@ export function MeasureReportPanel() {
       return;
     }
 
-    setSelectedDocumentType(selectedDocument.document_type_effective ?? selectedDocument.document_type_requested ?? "auto");
+    setSelectedDocumentType(
+      selectedDocument.document_type_effective ??
+        selectedDocument.document_type_requested ??
+        "auto",
+    );
   }, [selectedDocument]);
 
   useEffect(() => {
@@ -244,17 +287,25 @@ export function MeasureReportPanel() {
       }
 
       try {
-        const response = await fetch(appendWorkspaceId(`/api/measure-reports/documents/${selectedDocId}/file`), {
-          method: "GET",
-          cache: "no-store",
-        });
+        const response = await fetch(
+          appendWorkspaceId(
+            `/api/measure-reports/documents/${selectedDocId}/file`,
+          ),
+          {
+            method: "GET",
+            cache: "no-store",
+          },
+        );
 
         if (!response.ok) {
           if (response.status === 401) {
             const payload = await readPayload(response);
             const code =
-              payload && typeof payload === "object" && "code" in payload && typeof (payload as ApiErrorPayload).code === "string"
-                ? (payload as ApiErrorPayload).code ?? null
+              payload &&
+              typeof payload === "object" &&
+              "code" in payload &&
+              typeof (payload as ApiErrorPayload).code === "string"
+                ? ((payload as ApiErrorPayload).code ?? null)
                 : null;
 
             if (!code || AUTH_ERROR_CODES.has(code)) {
@@ -360,7 +411,10 @@ export function MeasureReportPanel() {
       toast.success("PDF caricato con successo.");
       await refreshDocuments();
     } catch (uploadError) {
-      const message = handleRequestError(uploadError, "Errore durante il caricamento del PDF.");
+      const message = handleRequestError(
+        uploadError,
+        "Errore durante il caricamento del PDF.",
+      );
       setError(message);
       toast.error(message);
     } finally {
@@ -391,11 +445,16 @@ export function MeasureReportPanel() {
         "Errore durante l'avvio dell'analisi.",
       );
 
-      setFeedback("Analisi avviata: estrazione righe fuori tolleranza in corso.");
+      setFeedback(
+        "Analisi avviata: estrazione righe fuori tolleranza in corso.",
+      );
       toast.success("Analisi avviata.");
       await refreshDocuments();
     } catch (analyzeError) {
-      const message = handleRequestError(analyzeError, "Errore durante l'avvio dell'analisi.");
+      const message = handleRequestError(
+        analyzeError,
+        "Errore durante l'avvio dell'analisi.",
+      );
       setError(message);
       toast.error(message);
     } finally {
@@ -427,7 +486,10 @@ export function MeasureReportPanel() {
       toast.success("Documento eliminato.");
       await refreshDocuments();
     } catch (deleteError) {
-      const message = handleRequestError(deleteError, "Errore durante l'eliminazione del documento.");
+      const message = handleRequestError(
+        deleteError,
+        "Errore durante l'eliminazione del documento.",
+      );
       setError(message);
       toast.error(message);
     } finally {
@@ -439,26 +501,45 @@ export function MeasureReportPanel() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-2">
-          <Text as="h1" variant="h1">Measure Report</Text>
+          <Text as="h1" variant="h1">
+            Measure Report
+          </Text>
           <Text variant="muted">
-            Carica i PDF di misurazione, scegli il tipo documento e registra le righe fuori tolleranza come output strutturato.
+            Carica i PDF di misurazione, scegli il tipo documento e registra le
+            righe fuori tolleranza come output strutturato.
           </Text>
         </div>
-        <PageHelpHint
-          text={`Modalita: ${config?.analysis_mode || "auto"}`}
-        />
+        <PageHelpHint text={`Modalita: ${config?.analysis_mode || "auto"}`} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)_minmax(0,1.1fr)]">
         <Card className="space-y-4 p-5">
           <div className="space-y-2">
-            <Text as="h2" variant="h2">Carica PDF</Text>
-            <Text variant="muted">Il modulo salva il file nel workspace e prepara il workflow backend per l&apos;analisi.</Text>
+            <Text as="h2" variant="h2">
+              Carica PDF
+            </Text>
+            <Text variant="muted">
+              Il modulo salva il file nel workspace e prepara il workflow
+              backend per l&apos;analisi.
+            </Text>
           </div>
 
-          <Input ref={fileInputRef} type="file" accept="application/pdf,.pdf" onChange={onFileChange} />
-          <Button className="w-full" onClick={() => void uploadDocument()} disabled={isUploading}>
-            {isUploading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+          <Input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            onChange={onFileChange}
+          />
+          <Button
+            className="w-full"
+            onClick={() => void uploadDocument()}
+            disabled={isUploading}
+          >
+            {isUploading ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
             Carica documento
           </Button>
 
@@ -468,7 +549,9 @@ export function MeasureReportPanel() {
               className="mt-2"
               value={selectedDocumentType}
               onChange={setSelectedDocumentType}
-              options={config?.document_types ?? [{ value: "auto", label: "Auto" }]}
+              options={
+                config?.document_types ?? [{ value: "auto", label: "Auto" }]
+              }
             />
           </div>
 
@@ -476,24 +559,47 @@ export function MeasureReportPanel() {
             variant="outline"
             className="w-full"
             onClick={() => void analyzeSelectedDocument()}
-            disabled={!selectedDocument || selectedIsProcessing || hasProcessing || isAnalyzing}
+            disabled={
+              !selectedDocument ||
+              selectedIsProcessing ||
+              hasProcessing ||
+              isAnalyzing
+            }
           >
-            {isAnalyzing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileSearch className="h-4 w-4" />}
+            {isAnalyzing ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileSearch className="h-4 w-4" />
+            )}
             Avvia analisi
           </Button>
 
-          {feedback ? <Text className="rounded-[var(--radius-md)] bg-status-success-bg px-3 py-2 text-status-success-text">{feedback}</Text> : null}
-          {error ? <Text className="rounded-[var(--radius-md)] bg-status-danger-bg px-3 py-2 text-status-danger-text">{error}</Text> : null}
+          {feedback ? (
+            <Text className="rounded-[var(--radius-md)] bg-status-success-bg px-3 py-2 text-status-success-text">
+              {feedback}
+            </Text>
+          ) : null}
+          {error ? (
+            <Text className="rounded-[var(--radius-md)] bg-status-danger-bg px-3 py-2 text-status-danger-text">
+              {error}
+            </Text>
+          ) : null}
         </Card>
 
         <Card className="space-y-4 p-5">
           <div className="flex items-center justify-between">
             <div>
-              <Text as="h2" variant="h2">Documenti</Text>
-              <Text variant="muted">{documents.length} file nel workspace corrente.</Text>
+              <Text as="h2" variant="h2">
+                Documenti
+              </Text>
+              <Text variant="muted">
+                {documents.length} file nel workspace corrente.
+              </Text>
             </div>
             {selectedDocument ? (
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClasses(selectedDocument.status)}`}>
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClasses(selectedDocument.status)}`}
+              >
                 {statusLabel(selectedDocument.status)}
               </span>
             ) : null}
@@ -528,9 +634,14 @@ export function MeasureReportPanel() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 space-y-1">
-                      <Text className="truncate text-text-primary">{document.original_filename}</Text>
+                      <Text className="truncate text-text-primary">
+                        {document.original_filename}
+                      </Text>
                       <Text variant="caption">
-                        Richiesto: {document.document_type_requested} {document.document_type_effective ? `| Effettivo: ${document.document_type_effective}` : ""}
+                        Richiesto: {document.document_type_requested}{" "}
+                        {document.document_type_effective
+                          ? `| Effettivo: ${document.document_type_effective}`
+                          : ""}
                       </Text>
                     </div>
                     <Button
@@ -543,12 +654,18 @@ export function MeasureReportPanel() {
                         setDocumentToDelete(document);
                       }}
                     >
-                      {deletingDocId === document.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      {deletingDocId === document.id ? (
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
                     </Button>
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusClasses(document.status)}`}>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusClasses(document.status)}`}
+                    >
                       {statusLabel(document.status)}
                     </span>
                     <span className="rounded-full bg-bg-muted px-2.5 py-1 text-[11px] font-semibold text-text-secondary">
@@ -564,21 +681,30 @@ export function MeasureReportPanel() {
         <Card className="space-y-4 p-5">
           {!selectedDocument ? (
             <div className="flex min-h-[360px] items-center justify-center rounded-[var(--radius-lg)] border border-dashed border-border-default bg-bg-muted">
-              <Text variant="muted">Seleziona un documento per vedere risultato e preview.</Text>
+              <Text variant="muted">
+                Seleziona un documento per vedere risultato e preview.
+              </Text>
             </div>
           ) : (
             <>
               <div className="space-y-2">
-                <Text as="h2" variant="h2">{selectedDocument.original_filename}</Text>
+                <Text as="h2" variant="h2">
+                  {selectedDocument.original_filename}
+                </Text>
                 <Text variant="muted">
-                  Prompt agente: {selectedDocument.prompt_agent_key || "non ancora usato"} | Righe fuori tolleranza: {selectedDocument.rows_count}
+                  Prompt agente:{" "}
+                  {selectedDocument.prompt_agent_key || "non ancora usato"} |
+                  Righe fuori tolleranza: {selectedDocument.rows_count}
                 </Text>
               </div>
 
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                 <div className="space-y-3 rounded-[var(--radius-lg)] border border-border-default bg-bg-muted p-4">
                   <Text className="text-text-primary">Output strutturato</Text>
-                  <Text variant="muted">{selectedDocument.analysis_summary || "Nessuna sintesi disponibile."}</Text>
+                  <Text variant="muted">
+                    {selectedDocument.analysis_summary ||
+                      "Nessuna sintesi disponibile."}
+                  </Text>
                   {selectedDocument.last_error ? (
                     <Text className="rounded-[var(--radius-md)] bg-status-danger-bg px-3 py-2 text-status-danger-text">
                       {selectedDocument.last_error}
@@ -591,10 +717,19 @@ export function MeasureReportPanel() {
                     ) : null}
 
                     {selectedDocument.out_of_tolerance_rows.map((row) => (
-                      <div key={`${selectedDocument.id}-${row.row_index}`} className="rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-3">
-                        <Text className="text-text-primary">{row.row_text}</Text>
-                        {row.note ? <Text variant="caption">Nota: {row.note}</Text> : null}
-                        {row.page_hint ? <Text variant="caption">Pagina: {row.page_hint}</Text> : null}
+                      <div
+                        key={`${selectedDocument.id}-${row.row_index}`}
+                        className="rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-3"
+                      >
+                        <Text className="text-text-primary">
+                          {row.row_text}
+                        </Text>
+                        {row.note ? (
+                          <Text variant="caption">Nota: {row.note}</Text>
+                        ) : null}
+                        {row.page_hint ? (
+                          <Text variant="caption">Pagina: {row.page_hint}</Text>
+                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -623,7 +758,21 @@ export function MeasureReportPanel() {
           )}
         </Card>
       </div>
-      <BirgusDialog open={documentToDelete !== null} message={documentToDelete ? `Eliminare "${documentToDelete.original_filename}"?` : ""} confirmLabel="Elimina" onCancel={() => setDocumentToDelete(null)} onConfirm={() => { const document = documentToDelete; setDocumentToDelete(null); if (document) void deleteDocument(document); }} />
+      <BirgusDialog
+        open={documentToDelete !== null}
+        message={
+          documentToDelete
+            ? `Eliminare "${documentToDelete.original_filename}"?`
+            : ""
+        }
+        confirmLabel="Elimina"
+        onCancel={() => setDocumentToDelete(null)}
+        onConfirm={() => {
+          const document = documentToDelete;
+          setDocumentToDelete(null);
+          if (document) void deleteDocument(document);
+        }}
+      />
     </div>
   );
 }

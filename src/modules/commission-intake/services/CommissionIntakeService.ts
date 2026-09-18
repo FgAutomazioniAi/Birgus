@@ -59,7 +59,11 @@ export class CommissionIntakeService {
   }): Promise<CommissionRecordEntity> {
     const record = await this.repository.findRecordById(params);
     if (!record) {
-      throw new AppError("Commessa non trovata o non accessibile.", "COMMISSION_RECORD_NOT_FOUND", 404);
+      throw new AppError(
+        "Commessa non trovata o non accessibile.",
+        "COMMISSION_RECORD_NOT_FOUND",
+        404,
+      );
     }
 
     return record;
@@ -88,10 +92,11 @@ export class CommissionIntakeService {
     formVersionId?: string | null;
   }): Promise<CommissionRecordEntity> {
     const title = this.normalizeTitle(params.title);
-    const templateVersion = await this.repository.resolvePublishedTemplateVersion({
-      workspaceId: params.workspaceId,
-      formVersionId: params.formVersionId ?? null,
-    });
+    const templateVersion =
+      await this.repository.resolvePublishedTemplateVersion({
+        workspaceId: params.workspaceId,
+        formVersionId: params.formVersionId ?? null,
+      });
     const record = await this.repository.createRecord({
       workspaceId: params.workspaceId,
       title,
@@ -107,7 +112,9 @@ export class CommissionIntakeService {
       sourceSystem: this.normalizeOptional(params.sourceSystem),
       externalReference: this.normalizeOptional(params.externalReference),
       expectedDeliveryAt: params.expectedDeliveryAt ?? null,
-      estimatedBudgetAmount: this.normalizeOptional(params.estimatedBudgetAmount),
+      estimatedBudgetAmount: this.normalizeOptional(
+        params.estimatedBudgetAmount,
+      ),
       currency: this.normalizeCurrency(params.currency),
       metadata: params.metadata,
       ownerUserId: params.ownerUserId ?? params.actorUserId,
@@ -161,18 +168,46 @@ export class CommissionIntakeService {
   }): Promise<CommissionRecordEntity> {
     const record = await this.repository.updateRecord({
       ...params,
-      code: params.code === undefined ? undefined : this.normalizeOptional(params.code) ?? undefined,
-      title: params.title === undefined ? undefined : this.normalizeTitle(params.title),
-      description: params.description === undefined ? undefined : this.normalizeOptional(params.description),
-      statusLabel: params.statusLabel === undefined ? undefined : this.normalizeOptional(params.statusLabel),
-      sourceSystem: params.sourceSystem === undefined ? undefined : this.normalizeOptional(params.sourceSystem),
-      externalReference: params.externalReference === undefined ? undefined : this.normalizeOptional(params.externalReference),
-      estimatedBudgetAmount: params.estimatedBudgetAmount === undefined ? undefined : this.normalizeOptional(params.estimatedBudgetAmount),
-      currency: params.currency === undefined ? undefined : this.normalizeCurrency(params.currency),
+      code:
+        params.code === undefined
+          ? undefined
+          : (this.normalizeOptional(params.code) ?? undefined),
+      title:
+        params.title === undefined
+          ? undefined
+          : this.normalizeTitle(params.title),
+      description:
+        params.description === undefined
+          ? undefined
+          : this.normalizeOptional(params.description),
+      statusLabel:
+        params.statusLabel === undefined
+          ? undefined
+          : this.normalizeOptional(params.statusLabel),
+      sourceSystem:
+        params.sourceSystem === undefined
+          ? undefined
+          : this.normalizeOptional(params.sourceSystem),
+      externalReference:
+        params.externalReference === undefined
+          ? undefined
+          : this.normalizeOptional(params.externalReference),
+      estimatedBudgetAmount:
+        params.estimatedBudgetAmount === undefined
+          ? undefined
+          : this.normalizeOptional(params.estimatedBudgetAmount),
+      currency:
+        params.currency === undefined
+          ? undefined
+          : this.normalizeCurrency(params.currency),
     });
 
     if (!record) {
-      throw new AppError("Commessa non trovata o non modificabile.", "COMMISSION_RECORD_NOT_FOUND", 404);
+      throw new AppError(
+        "Commessa non trovata o non modificabile.",
+        "COMMISSION_RECORD_NOT_FOUND",
+        404,
+      );
     }
 
     await this.auditLogService?.record({
@@ -195,7 +230,11 @@ export class CommissionIntakeService {
   }): Promise<void> {
     const deleted = await this.repository.softDeleteRecord(params);
     if (!deleted) {
-      throw new AppError("Commessa non trovata o non modificabile.", "COMMISSION_RECORD_NOT_FOUND", 404);
+      throw new AppError(
+        "Commessa non trovata o non modificabile.",
+        "COMMISSION_RECORD_NOT_FOUND",
+        404,
+      );
     }
 
     await this.auditLogService?.record({
@@ -267,7 +306,11 @@ export class CommissionIntakeService {
       throw new AppError("File vuoto.", "COMMISSION_ATTACHMENT_EMPTY", 400);
     }
     if (params.bytes.length > 25 * 1024 * 1024) {
-      throw new AppError("File troppo grande: massimo 25 MB.", "COMMISSION_ATTACHMENT_TOO_LARGE", 400);
+      throw new AppError(
+        "File troppo grande: massimo 25 MB.",
+        "COMMISSION_ATTACHMENT_TOO_LARGE",
+        400,
+      );
     }
 
     const fileName = this.resolveFileName(params.fileName);
@@ -315,7 +358,12 @@ export class CommissionIntakeService {
       action: "commission_attachment.upload",
       entityType: "CommissionAttachment",
       entityId: attachment.id,
-      payload: { recordId: params.recordId, checklistId: params.checklistId, fieldKey: params.fieldKey ?? null, fileName },
+      payload: {
+        recordId: params.recordId,
+        checklistId: params.checklistId,
+        fieldKey: params.fieldKey ?? null,
+        fileName,
+      },
     });
 
     return attachment;
@@ -329,7 +377,11 @@ export class CommissionIntakeService {
   }): Promise<void> {
     const deleted = await this.repository.deleteAttachment(params);
     if (!deleted) {
-      throw new AppError("Allegato non trovato o non modificabile.", "COMMISSION_ATTACHMENT_NOT_FOUND", 404);
+      throw new AppError(
+        "Allegato non trovato o non modificabile.",
+        "COMMISSION_ATTACHMENT_NOT_FOUND",
+        404,
+      );
     }
 
     if (deleted.storagePath.startsWith("garage://")) {
@@ -394,7 +446,11 @@ export class CommissionIntakeService {
       userId: params.userId,
     });
     if (!view.checklist) {
-      throw new AppError("Questa commessa non ha una checklist da bloccare.", "COMMISSION_CHECKLIST_NOT_FOUND", 404);
+      throw new AppError(
+        "Questa commessa non ha una checklist da bloccare.",
+        "COMMISSION_CHECKLIST_NOT_FOUND",
+        404,
+      );
     }
 
     return this.acquireLock({
@@ -440,7 +496,11 @@ export class CommissionIntakeService {
     });
 
     if (!lock) {
-      throw new AppError("Il blocco della checklist non è più attivo.", "COMMISSION_LOCK_LOST", 409);
+      throw new AppError(
+        "Il blocco della checklist non è più attivo.",
+        "COMMISSION_LOCK_LOST",
+        409,
+      );
     }
 
     return lock;
@@ -473,7 +533,11 @@ export class CommissionIntakeService {
   private normalizeTitle(value: string): string {
     const title = value.trim().replace(/\s+/g, " ");
     if (title.length < 2) {
-      throw new AppError("Il titolo della commessa è troppo breve.", "COMMISSION_TITLE_INVALID", 400);
+      throw new AppError(
+        "Il titolo della commessa è troppo breve.",
+        "COMMISSION_TITLE_INVALID",
+        400,
+      );
     }
 
     return title;
@@ -488,7 +552,9 @@ export class CommissionIntakeService {
     return normalized.length > 0 ? normalized : null;
   }
 
-  private normalizeDisplayName(value: string | null | undefined): string | null {
+  private normalizeDisplayName(
+    value: string | null | undefined,
+  ): string | null {
     if (typeof value !== "string") {
       return null;
     }
@@ -504,7 +570,11 @@ export class CommissionIntakeService {
     }
 
     if (!/^[A-Za-z]{3}$/.test(normalized)) {
-      throw new AppError("La valuta deve usare il codice ISO a 3 lettere.", "COMMISSION_CURRENCY_INVALID", 400);
+      throw new AppError(
+        "La valuta deve usare il codice ISO a 3 lettere.",
+        "COMMISSION_CURRENCY_INVALID",
+        400,
+      );
     }
 
     return normalized.toUpperCase();
@@ -528,17 +598,23 @@ export class CommissionIntakeService {
   }
 
   private resolveFileName(fileName: string): string {
-    const normalized = fileName.replace(/\\/g, "/").split("/").pop()?.trim() ?? "";
-    const safeName = normalized.replace(/[^a-zA-Z0-9._ -]/g, "_").replace(/\s+/g, " ").slice(0, 180);
+    const normalized =
+      fileName.replace(/\\/g, "/").split("/").pop()?.trim() ?? "";
+    const safeName = normalized
+      .replace(/[^a-zA-Z0-9._ -]/g, "_")
+      .replace(/\s+/g, " ")
+      .slice(0, 180);
     return safeName || "allegato.bin";
   }
 
   private sanitizePathSegment(value: string): string {
-    return value
-      .normalize("NFKD")
-      .toLowerCase()
-      .replace(/[^a-z0-9._-]+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "") || "na";
+    return (
+      value
+        .normalize("NFKD")
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "") || "na"
+    );
   }
 }

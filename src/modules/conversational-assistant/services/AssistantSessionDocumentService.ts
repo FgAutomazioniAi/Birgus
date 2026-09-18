@@ -21,7 +21,9 @@ export interface AssistantSessionDocumentView {
 }
 
 export class AssistantSessionDocumentService {
-  public constructor(private readonly documentIntelligenceService: DocumentIntelligenceService) {}
+  public constructor(
+    private readonly documentIntelligenceService: DocumentIntelligenceService,
+  ) {}
 
   public async listSessionDocuments(params: {
     workspaceId: string;
@@ -64,9 +66,13 @@ export class AssistantSessionDocumentService {
       documentId: row.document_id,
       fileName: row.display_name ?? row.document.filename ?? "documento",
       contentType: row.document.file_type.mime_type,
-      sizeBytes: row.document.size_bytes === null ? null : Number(row.document.size_bytes),
+      sizeBytes:
+        row.document.size_bytes === null
+          ? null
+          : Number(row.document.size_bytes),
       knowledgeDocumentId: row.document.knowledge_documents[0]?.id ?? null,
-      extractionStatus: row.document.knowledge_documents[0]?.extraction_status ?? null,
+      extractionStatus:
+        row.document.knowledge_documents[0]?.extraction_status ?? null,
       createdAt: row.created_at,
     }));
   }
@@ -94,7 +100,11 @@ export class AssistantSessionDocumentService {
       },
     });
     if (!session) {
-      throw new AppError("Sessione assistente non trovata.", "ASSISTANT_SESSION_NOT_FOUND", 404);
+      throw new AppError(
+        "Sessione assistente non trovata.",
+        "ASSISTANT_SESSION_NOT_FOUND",
+        404,
+      );
     }
 
     const storage = StorageSelector.create();
@@ -122,7 +132,10 @@ export class AssistantSessionDocumentService {
       },
     });
 
-    const storagePath = GaragePath.toStoragePath(stored.bucket, stored.objectKey);
+    const storagePath = GaragePath.toStoragePath(
+      stored.bucket,
+      stored.objectKey,
+    );
     const [fileType, fileStatus, node, moduleRecord] = await Promise.all([
       prisma.fileType.upsert({
         where: { key: extension },
@@ -197,13 +210,16 @@ export class AssistantSessionDocumentService {
       },
     });
 
-    await this.documentIntelligenceService.refreshDocumentKnowledge(params.workspaceId, document.id);
+    await this.documentIntelligenceService.refreshDocumentKnowledge(
+      params.workspaceId,
+      document.id,
+    );
     const view = await this.listSessionDocuments({
       workspaceId: params.workspaceId,
       sessionId: params.sessionId,
     });
-    return view.find((item) => item.id === link.id)
-      ?? {
+    return (
+      view.find((item) => item.id === link.id) ?? {
         id: link.id,
         documentId: document.id,
         fileName,
@@ -212,31 +228,52 @@ export class AssistantSessionDocumentService {
         knowledgeDocumentId: null,
         extractionStatus: null,
         createdAt: new Date(),
-      };
+      }
+    );
   }
 
-  private validateUpload(fileName: string, mimeType: string, bytes: Buffer): void {
+  private validateUpload(
+    fileName: string,
+    mimeType: string,
+    bytes: Buffer,
+  ): void {
     if (!bytes.length) {
       throw new AppError("File vuoto.", "ASSISTANT_DOCUMENT_EMPTY", 400);
     }
     if (bytes.length > MAX_ASSISTANT_DOCUMENT_BYTES) {
-      throw new AppError("File troppo grande. Limite: 15 MB.", "ASSISTANT_DOCUMENT_TOO_LARGE", 413);
+      throw new AppError(
+        "File troppo grande. Limite: 15 MB.",
+        "ASSISTANT_DOCUMENT_TOO_LARGE",
+        413,
+      );
     }
-    if (this.isPdf(fileName, mimeType, bytes) || this.isTextLike(fileName, mimeType)) {
+    if (
+      this.isPdf(fileName, mimeType, bytes) ||
+      this.isTextLike(fileName, mimeType)
+    ) {
       return;
     }
 
-    throw new AppError("Formato non supportato: carica PDF o file testuali.", "ASSISTANT_DOCUMENT_UNSUPPORTED", 400);
+    throw new AppError(
+      "Formato non supportato: carica PDF o file testuali.",
+      "ASSISTANT_DOCUMENT_UNSUPPORTED",
+      400,
+    );
   }
 
   private isPdf(fileName: string, mimeType: string, bytes: Buffer): boolean {
-    const hasPdfNameOrMime = mimeType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
-    return hasPdfNameOrMime && bytes.subarray(0, 5).toString("latin1") === "%PDF-";
+    const hasPdfNameOrMime =
+      mimeType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
+    return (
+      hasPdfNameOrMime && bytes.subarray(0, 5).toString("latin1") === "%PDF-"
+    );
   }
 
   private isTextLike(fileName: string, mimeType: string): boolean {
-    return mimeType.startsWith("text/")
-      || TEXT_EXTENSIONS.has(this.extensionOf(fileName));
+    return (
+      mimeType.startsWith("text/") ||
+      TEXT_EXTENSIONS.has(this.extensionOf(fileName))
+    );
   }
 
   private resolveContentType(fileName: string, mimeType: string): string {
@@ -255,8 +292,11 @@ export class AssistantSessionDocumentService {
   }
 
   private sanitizeFileName(fileName: string): string {
-    const normalized = fileName.replace(/\\/g, "/").split("/").pop()?.trim() ?? "";
-    const safeName = normalized.replace(/[^a-zA-Z0-9._ -]/g, "_").replace(/\s+/g, " ");
+    const normalized =
+      fileName.replace(/\\/g, "/").split("/").pop()?.trim() ?? "";
+    const safeName = normalized
+      .replace(/[^a-zA-Z0-9._ -]/g, "_")
+      .replace(/\s+/g, " ");
     return safeName || "documento.txt";
   }
 }

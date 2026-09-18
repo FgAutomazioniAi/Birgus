@@ -17,7 +17,13 @@ test("WorkflowRunExecutorService sends Brainyware database inference without a p
     brainywareClient: {
       inferStateless: async (request: Record<string, unknown>) => {
         requests.push(request);
-        return { reply: "Risposta", mode: "database", connectionId: "db-1", persistentSession: false, provider: "brainyware" };
+        return {
+          reply: "Risposta",
+          mode: "database",
+          connectionId: "db-1",
+          persistentSession: false,
+          provider: "brainyware",
+        };
       },
     } as never,
     brainyWorkspaceDatabaseConnectionService: {
@@ -28,35 +34,69 @@ test("WorkflowRunExecutorService sends Brainyware database inference without a p
       }),
     } as never,
   }) as unknown as {
-    executeBrainywareInferenceTool: (context: unknown, node: unknown) => Promise<Record<string, unknown>>;
+    executeBrainywareInferenceTool: (
+      context: unknown,
+      node: unknown,
+    ) => Promise<Record<string, unknown>>;
   };
 
-  const result = await service.executeBrainywareInferenceTool({
-    workspaceId: "workspace-1",
-    userId: "user-1",
-    inputPayload: {},
-    nodeOutputs: new Map([["input", { text: "Dati collegati" }]]),
-    incomingNodeKeys: new Map([["brainy", ["input"]]]),
-    incomingFieldBindings: new Map([["brainy", new Map([["input_text", [{ sourceKey: "input", selectedOutputKey: "text" }]]])]]),
-  }, {
-    node_key: "brainy",
-    configuration: { mode: "database", connection_id: "db-1", instructions: "Sintetizza" },
-  });
+  const result = await service.executeBrainywareInferenceTool(
+    {
+      workspaceId: "workspace-1",
+      userId: "user-1",
+      inputPayload: {},
+      nodeOutputs: new Map([["input", { text: "Dati collegati" }]]),
+      incomingNodeKeys: new Map([["brainy", ["input"]]]),
+      incomingFieldBindings: new Map([
+        [
+          "brainy",
+          new Map([
+            ["input_text", [{ sourceKey: "input", selectedOutputKey: "text" }]],
+          ]),
+        ],
+      ]),
+    },
+    {
+      node_key: "brainy",
+      configuration: {
+        mode: "database",
+        connection_id: "db-1",
+        instructions: "Sintetizza",
+      },
+    },
+  );
 
-  assert.deepEqual(requests, [{
-    message: "Dati collegati",
-    mode: "database",
-    connectionId: "db-1",
-    model: undefined,
-    instructions: "Sintetizza",
-    locale: "italiano",
-    temperature: undefined,
-    maxTokens: undefined,
-  }]);
+  assert.deepEqual(requests, [
+    {
+      message: "Dati collegati",
+      mode: "database",
+      connectionId: "db-1",
+      model: undefined,
+      instructions: "Sintetizza",
+      locale: "italiano",
+      temperature: undefined,
+      maxTokens: undefined,
+    },
+  ]);
   assert.equal(result.text, "Risposta");
   assert.deepEqual(result.published_outputs, [
-    { key: "text", label: "Risposta Brainyware", kind: "text", value: "Risposta" },
-    { key: "metadata", label: "Metadati inferenza", kind: "data", value: { mode: "database", connectionId: "db-1", model: null, persistentSession: false } },
+    {
+      key: "text",
+      label: "Risposta Brainyware",
+      kind: "text",
+      value: "Risposta",
+    },
+    {
+      key: "metadata",
+      label: "Metadati inferenza",
+      kind: "data",
+      value: {
+        mode: "database",
+        connectionId: "db-1",
+        model: null,
+        persistentSession: false,
+      },
+    },
   ]);
 });
 
@@ -75,7 +115,10 @@ test("WorkflowRunExecutorService passes connected text input to LangChain chat n
       nodeConfig: Record<string, unknown>,
       inputPayload: Record<string, unknown>,
       previousOutput: Record<string, unknown>,
-      incomingOutputs: { byNodeKey: Record<string, Record<string, unknown>>; items: Array<Record<string, unknown>> },
+      incomingOutputs: {
+        byNodeKey: Record<string, Record<string, unknown>>;
+        items: Array<Record<string, unknown>>;
+      },
     ) => Promise<Record<string, unknown>>;
   };
 
@@ -113,20 +156,29 @@ test("WorkflowRunExecutorService combines every named AI chat input into a reada
     ) => Promise<Record<string, unknown>>;
   };
 
-  const input = await service.buildLangchainToolInput("chat", { instructions: "Confronta i documenti" }, {}, {}, {
-    byNodeKey: {},
-    byTargetHandle: {},
-    byTargetHandleItems: {
-      input_text: [
-        { text: "Ciao mondo!", input_label: "Documento ordine" },
-        { text: "Hello world", input_label: "Preventivo" },
-        { text: "Hola mundo!", input_label: "Note tecniche" },
-      ],
+  const input = await service.buildLangchainToolInput(
+    "chat",
+    { instructions: "Confronta i documenti" },
+    {},
+    {},
+    {
+      byNodeKey: {},
+      byTargetHandle: {},
+      byTargetHandleItems: {
+        input_text: [
+          { text: "Ciao mondo!", input_label: "Documento ordine" },
+          { text: "Hello world", input_label: "Preventivo" },
+          { text: "Hola mundo!", input_label: "Note tecniche" },
+        ],
+      },
+      items: [],
     },
-    items: [],
-  });
+  );
 
-  assert.equal(input.input_text, "[Documento ordine]\nCiao mondo!\n\n[Preventivo]\nHello world\n\n[Note tecniche]\nHola mundo!");
+  assert.equal(
+    input.input_text,
+    "[Documento ordine]\nCiao mondo!\n\n[Preventivo]\nHello world\n\n[Note tecniche]\nHola mundo!",
+  );
 });
 
 test("WorkflowRunExecutorService gives connected formatter inputs precedence over stale manual values", async () => {
@@ -144,7 +196,11 @@ test("WorkflowRunExecutorService gives connected formatter inputs precedence ove
       nodeConfig: Record<string, unknown>,
       inputPayload: Record<string, unknown>,
       previousOutput: Record<string, unknown>,
-      incomingOutputs: { byNodeKey: Record<string, Record<string, unknown>>; byTargetHandle: Record<string, Record<string, unknown>>; items: Array<Record<string, unknown>> },
+      incomingOutputs: {
+        byNodeKey: Record<string, Record<string, unknown>>;
+        byTargetHandle: Record<string, Record<string, unknown>>;
+        items: Array<Record<string, unknown>>;
+      },
     ) => Promise<Record<string, unknown>>;
   };
 
@@ -177,7 +233,10 @@ test("WorkflowRunExecutorService formats templates from connected fields and rej
     pythonModulesClient: {} as never,
     runtimeAccessPolicy: {} as never,
   }) as unknown as {
-    executeTemplateFormattingTool: (context: unknown, node: unknown) => Record<string, unknown>;
+    executeTemplateFormattingTool: (
+      context: unknown,
+      node: unknown,
+    ) => Record<string, unknown>;
   };
   const context = {
     inputPayload: {},
@@ -186,7 +245,15 @@ test("WorkflowRunExecutorService formats templates from connected fields and rej
       ["template", { text: "Oggetto\n{{content}}" }],
     ]),
     incomingNodeKeys: new Map([["formatter", ["content", "template"]]]),
-    incomingFieldBindings: new Map([["formatter", new Map([["content", [{ sourceKey: "content", selectedOutputKey: null }]], ["template", [{ sourceKey: "template", selectedOutputKey: null }]]])]]),
+    incomingFieldBindings: new Map([
+      [
+        "formatter",
+        new Map([
+          ["content", [{ sourceKey: "content", selectedOutputKey: null }]],
+          ["template", [{ sourceKey: "template", selectedOutputKey: null }]],
+        ]),
+      ],
+    ]),
   };
 
   const result = service.executeTemplateFormattingTool(context, {
@@ -196,7 +263,15 @@ test("WorkflowRunExecutorService formats templates from connected fields and rej
   assert.equal(result.formatted_text, "Oggetto\ncontenuto collegato");
 
   assert.throws(
-    () => service.executeTemplateFormattingTool({ ...context, nodeOutputs: new Map(), incomingFieldBindings: new Map() }, { node_key: "formatter", configuration: { template: "{{content}}" } }),
+    () =>
+      service.executeTemplateFormattingTool(
+        {
+          ...context,
+          nodeOutputs: new Map(),
+          incomingFieldBindings: new Map(),
+        },
+        { node_key: "formatter", configuration: { template: "{{content}}" } },
+      ),
     /Contenuto mancante/,
   );
 });
@@ -211,35 +286,94 @@ test("WorkflowRunExecutorService routes verify-and-route branches exclusively by
     pythonModulesClient: {} as never,
     runtimeAccessPolicy: {} as never,
   }) as unknown as {
-    executeVerifyAndRouteTool: (context: unknown, node: unknown) => Record<string, unknown>;
-    shouldExecuteNode: (nodeId: string, edges: Array<Record<string, unknown>>, context: unknown) => boolean;
+    executeVerifyAndRouteTool: (
+      context: unknown,
+      node: unknown,
+    ) => Record<string, unknown>;
+    shouldExecuteNode: (
+      nodeId: string,
+      edges: Array<Record<string, unknown>>,
+      context: unknown,
+    ) => boolean;
   };
-  const verifier = { id: "verify-id", node_key: "verify", module_tool: { handler_key: "workflow_logic.verify_and_route" } };
+  const verifier = {
+    id: "verify-id",
+    node_key: "verify",
+    module_tool: { handler_key: "workflow_logic.verify_and_route" },
+  };
   const context = {
     inputPayload: {},
-    nodeOutputs: new Map([["amount", {
-      published_outputs: [
-        { key: "amount", label: "Importo offerta", kind: "data", value: 150 },
-        { key: "text", label: "Nota", kind: "text", value: "150 euro" },
+    nodeOutputs: new Map([
+      [
+        "amount",
+        {
+          published_outputs: [
+            {
+              key: "amount",
+              label: "Importo offerta",
+              kind: "data",
+              value: 150,
+            },
+            { key: "text", label: "Nota", kind: "text", value: "150 euro" },
+          ],
+        },
       ],
-    }]]),
+    ]),
     incomingNodeKeys: new Map([["verify", ["amount"]]]),
-    incomingFieldBindings: new Map([["verify", new Map([["rule_0", [{ sourceKey: "amount", selectedOutputKey: "amount" }]]])]]),
+    incomingFieldBindings: new Map([
+      [
+        "verify",
+        new Map([
+          ["rule_0", [{ sourceKey: "amount", selectedOutputKey: "amount" }]],
+        ]),
+      ],
+    ]),
     workflowNodesByKey: new Map([["verify", verifier]]),
   };
-  const result = service.executeVerifyAndRouteTool(context, { node_key: "verify", configuration: { rules: [{ label: "Importo offerta", operator: "greater_than", value: "100" }] } });
+  const result = service.executeVerifyAndRouteTool(context, {
+    node_key: "verify",
+    configuration: {
+      rules: [
+        { label: "Importo offerta", operator: "greater_than", value: "100" },
+      ],
+    },
+  });
   assert.equal(result.valid, true);
-  assert.deepEqual(result.checked_fields, [{ key: "field_1", label: "Importo offerta", value: 150 }]);
+  assert.deepEqual(result.checked_fields, [
+    { key: "field_1", label: "Importo offerta", value: 150 },
+  ]);
   assert.deepEqual(result.published_outputs, [
-    { key: "text", label: "Tutti i dati verificati", kind: "text", value: "[Importo offerta]\n150" },
-    { key: "bundle", label: "Raccolta dati verificati", kind: "data", value: { "Importo offerta": 150 } },
+    {
+      key: "text",
+      label: "Tutti i dati verificati",
+      kind: "text",
+      value: "[Importo offerta]\n150",
+    },
+    {
+      key: "bundle",
+      label: "Raccolta dati verificati",
+      kind: "data",
+      value: { "Importo offerta": 150 },
+    },
     { key: "field_1", label: "Importo offerta", kind: "data", value: 150 },
   ]);
 
   context.nodeOutputs.set("verify", result);
   const edges = [
-    { source_node_id: "verify-id", target_node_id: "on-valid", source_handle: "valid", condition_payload: null, is_enabled: true },
-    { source_node_id: "verify-id", target_node_id: "on-invalid", source_handle: "invalid", condition_payload: null, is_enabled: true },
+    {
+      source_node_id: "verify-id",
+      target_node_id: "on-valid",
+      source_handle: "valid",
+      condition_payload: null,
+      is_enabled: true,
+    },
+    {
+      source_node_id: "verify-id",
+      target_node_id: "on-invalid",
+      source_handle: "invalid",
+      condition_payload: null,
+      is_enabled: true,
+    },
   ];
   assert.equal(service.shouldExecuteNode("on-valid", edges, context), true);
   assert.equal(service.shouldExecuteNode("on-invalid", edges, context), false);
@@ -262,37 +396,53 @@ test("WorkflowRunExecutorService creates a decision request with the workflow co
       },
     } as never,
   }) as unknown as {
-    executeDecisionRequestTool: (context: unknown, node: unknown) => Promise<never>;
+    executeDecisionRequestTool: (
+      context: unknown,
+      node: unknown,
+    ) => Promise<never>;
   };
   const context = {
     workspaceId: "workspace-1",
     runId: "run-1",
     userId: "user-1",
     inputPayload: {},
-    nodeOutputs: new Map([["verify", { status: "attention_required", valid: false }]]),
+    nodeOutputs: new Map([
+      ["verify", { status: "attention_required", valid: false }],
+    ]),
     incomingNodeKeys: new Map([["decision", ["verify"]]]),
     incomingFieldBindings: new Map(),
   };
 
   await assert.rejects(
-    () => service.executeDecisionRequestTool(context, {
-      id: "decision-node-1",
-      node_key: "decision",
-      configuration: { title: "Controlla invio", message: "Destinatario mancante", priority: "high", assigneeUserId: "user-2" },
-    }),
+    () =>
+      service.executeDecisionRequestTool(context, {
+        id: "decision-node-1",
+        node_key: "decision",
+        configuration: {
+          title: "Controlla invio",
+          message: "Destinatario mancante",
+          priority: "high",
+          assigneeUserId: "user-2",
+        },
+      }),
     /attesa di una decisione/,
   );
-  assert.deepEqual(requests, [{
-    workspaceId: "workspace-1",
-    workflowRunId: "run-1",
-    workflowNodeId: "decision-node-1",
-    createdByUserId: "user-1",
-    assignedUserId: "user-2",
-    title: "Controlla invio",
-    message: "Destinatario mancante",
-    priority: "high",
-    input: { latest: { status: "attention_required", valid: false }, incoming: { verify: { status: "attention_required", valid: false } } },
-  }]);
+  assert.deepEqual(requests, [
+    {
+      workspaceId: "workspace-1",
+      workflowRunId: "run-1",
+      workflowNodeId: "decision-node-1",
+      createdByUserId: "user-1",
+      assignedUserId: "user-2",
+      title: "Controlla invio",
+      message: "Destinatario mancante",
+      priority: "high",
+      input: {
+        latest: { status: "attention_required", valid: false },
+        incoming: { verify: { status: "attention_required", valid: false } },
+      },
+    },
+  ]);
 });
 
 test("WorkflowRunExecutorService exposes agent results through a stable published output contract", () => {
@@ -305,8 +455,13 @@ test("WorkflowRunExecutorService exposes agent results through a stable publishe
     pythonModulesClient: {} as never,
     runtimeAccessPolicy: {} as never,
   }) as unknown as {
-    publishNodeOutput: (node: { node_key: string; node_kind: string; output_kind: string | null }, value: unknown) => Record<string, unknown>;
-    collectPublishedOutputs: (items: Array<Record<string, unknown>>) => Array<{ key: string; label: string; kind: string; value: unknown }>;
+    publishNodeOutput: (
+      node: { node_key: string; node_kind: string; output_kind: string | null },
+      value: unknown,
+    ) => Record<string, unknown>;
+    collectPublishedOutputs: (
+      items: Array<Record<string, unknown>>,
+    ) => Array<{ key: string; label: string; kind: string; value: unknown }>;
     normalizeNodeOutput: (value: unknown) => Record<string, unknown>;
   };
 
@@ -316,13 +471,15 @@ test("WorkflowRunExecutorService exposes agent results through a stable publishe
   );
   const published = service.collectPublishedOutputs([agentOutput]);
 
-  assert.deepEqual(published, [{
-    key: "text",
-    label: "Risposta IA",
-    kind: "text",
-    value: "Le papere sanno nuotare.",
-    mimeType: null,
-  }]);
+  assert.deepEqual(published, [
+    {
+      key: "text",
+      label: "Risposta IA",
+      kind: "text",
+      value: "Le papere sanno nuotare.",
+      mimeType: null,
+    },
+  ]);
 
   const normalized = service.normalizeNodeOutput(agentOutput);
   assert.deepEqual(service.collectPublishedOutputs([normalized]), published);
@@ -338,22 +495,39 @@ test("WorkflowRunExecutorService reports wrapped Telegram delivery as sent", () 
     pythonModulesClient: {} as never,
     runtimeAccessPolicy: {} as never,
   }) as unknown as {
-    publishNodeOutput: (node: { node_key: string; node_kind: string; output_kind: string | null }, value: unknown) => Record<string, unknown>;
-    collectPublishedOutputs: (items: Array<Record<string, unknown>>) => Array<{ key: string; label: string; kind: string; value: unknown }>;
+    publishNodeOutput: (
+      node: { node_key: string; node_kind: string; output_kind: string | null },
+      value: unknown,
+    ) => Record<string, unknown>;
+    collectPublishedOutputs: (
+      items: Array<Record<string, unknown>>,
+    ) => Array<{ key: string; label: string; kind: string; value: unknown }>;
   };
 
   const result = service.publishNodeOutput(
     { node_key: "send_telegram", node_kind: "TOOL", output_kind: null },
-    { ok: true, module: "messaging_engine", action: "send_telegram", output: { status: "sent", chat_id: "148682114", provider: "telegram" } },
+    {
+      ok: true,
+      module: "messaging_engine",
+      action: "send_telegram",
+      output: { status: "sent", chat_id: "148682114", provider: "telegram" },
+    },
   );
 
-  assert.deepEqual(service.collectPublishedOutputs([result]), [{
-    key: "delivery_status",
-    label: "Esito invio",
-    kind: "delivery_status",
-    value: { sent: true, status: "sent", recipient: "148682114", message: null },
-    mimeType: null,
-  }]);
+  assert.deepEqual(service.collectPublishedOutputs([result]), [
+    {
+      key: "delivery_status",
+      label: "Esito invio",
+      kind: "delivery_status",
+      value: {
+        sent: true,
+        status: "sent",
+        recipient: "148682114",
+        message: null,
+      },
+      mimeType: null,
+    },
+  ]);
 });
 
 test("WorkflowRunExecutorService maps field handles to the matching document inputs", () => {
@@ -370,12 +544,21 @@ test("WorkflowRunExecutorService maps field handles to the matching document inp
       nodeConfig: Record<string, unknown>,
       inputPayload: Record<string, unknown>,
       previousOutput: Record<string, unknown>,
-      incoming: { byNodeKey: Record<string, Record<string, unknown>>; byTargetHandle: Record<string, Record<string, unknown>>; items: Array<Record<string, unknown>> },
+      incoming: {
+        byNodeKey: Record<string, Record<string, unknown>>;
+        byTargetHandle: Record<string, Record<string, unknown>>;
+        items: Array<Record<string, unknown>>;
+      },
     ) => Record<string, unknown>;
   };
 
   const input = service.buildGenericDocumentInput(
-    { content: "contenuto manuale", title: "titolo manuale", file_name: "manuale.docx", format: "pdf" },
+    {
+      content: "contenuto manuale",
+      title: "titolo manuale",
+      file_name: "manuale.docx",
+      format: "pdf",
+    },
     {},
     {},
     {
@@ -407,21 +590,32 @@ test("WorkflowRunExecutorService interprets browser schedule times in Europe/Rom
     parseScheduleDateTime: (value: string) => Date | null;
   };
 
-  assert.equal(service.parseScheduleDateTime("2026-08-27T10:44")?.toISOString(), "2026-08-27T08:44:00.000Z");
+  assert.equal(
+    service.parseScheduleDateTime("2026-08-27T10:44")?.toISOString(),
+    "2026-08-27T08:44:00.000Z",
+  );
 });
 
 test("ScheduledWorkflowDeliveryService rejects stale schedules and unsafe repeat intervals", () => {
-  const service = new ScheduledWorkflowDeliveryService({} as never) as unknown as {
-    validateScheduleTiming: (runAt: Date, repeatEverySeconds: number | null) => void;
+  const service = new ScheduledWorkflowDeliveryService(
+    {} as never,
+  ) as unknown as {
+    validateScheduleTiming: (
+      runAt: Date,
+      repeatEverySeconds: number | null,
+    ) => void;
   };
 
   assert.throws(
-    () => service.validateScheduleTiming(new Date(Date.now() - 2 * 60_000), null),
+    () =>
+      service.validateScheduleTiming(new Date(Date.now() - 2 * 60_000), null),
     /gia' trascorso/,
   );
   assert.throws(
     () => service.validateScheduleTiming(new Date(Date.now() + 2 * 60_000), 30),
     /ripetizione minima/,
   );
-  assert.doesNotThrow(() => service.validateScheduleTiming(new Date(Date.now() + 2 * 60_000), 3600));
+  assert.doesNotThrow(() =>
+    service.validateScheduleTiming(new Date(Date.now() + 2 * 60_000), 3600),
+  );
 });

@@ -46,7 +46,7 @@ export function PageHelpHint({ text }: PageHelpHintProps) {
         aria-label={t("common.quickHelpPage")}
         title={t("common.quickHelp")}
         onClick={() => setOpen((prev) => !prev)}
-        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border-default bg-bg-surface text-text-secondary transition-colors hover:bg-bg-muted hover:text-brand-primary"
+        className="inline-flex h-5 w-5 items-center justify-center p-0 text-text-muted transition-colors hover:text-brand-primary"
       >
         <CircleHelp size={15} />
       </button>

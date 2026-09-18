@@ -10,12 +10,17 @@ export class DocumentArchiveService {
   private readonly repository: DocumentArchiveRepository;
   private readonly objectStorage: ProjectBinaryStorage;
 
-  public constructor(repository: DocumentArchiveRepository, objectStorage: ProjectBinaryStorage) {
+  public constructor(
+    repository: DocumentArchiveRepository,
+    objectStorage: ProjectBinaryStorage,
+  ) {
     this.repository = repository;
     this.objectStorage = objectStorage;
   }
 
-  public async putProjectVersionFile(command: PutProjectFileCommand): Promise<DocumentEntity> {
+  public async putProjectVersionFile(
+    command: PutProjectFileCommand,
+  ): Promise<DocumentEntity> {
     if (!FileKind.ALL.includes(command.fileKind)) {
       throw new AppError("Unsupported file kind.", "FILE_KIND_INVALID", 400);
     }
@@ -44,20 +49,28 @@ export class DocumentArchiveService {
       },
     });
 
-    const storagePath = GaragePath.toStoragePath(storedObject.bucket, storedObject.objectKey);
+    const storagePath = GaragePath.toStoragePath(
+      storedObject.bucket,
+      storedObject.objectKey,
+    );
 
-    const { document, previousStoragePath } = await this.repository.upsertProjectFileRecord({
-      workspaceId: command.workspaceId,
-      projectId: command.projectId,
-      versionLabel: command.versionLabel,
-      fileKind: command.fileKind,
-      fileName: command.fileName,
-      storagePath,
-      sizeBytes: command.bytes.length,
-      uploadedByUserId: command.uploadedByUserId,
-    });
+    const { document, previousStoragePath } =
+      await this.repository.upsertProjectFileRecord({
+        workspaceId: command.workspaceId,
+        projectId: command.projectId,
+        versionLabel: command.versionLabel,
+        fileKind: command.fileKind,
+        fileName: command.fileName,
+        storagePath,
+        sizeBytes: command.bytes.length,
+        uploadedByUserId: command.uploadedByUserId,
+      });
 
-    if (previousStoragePath && previousStoragePath.startsWith("garage://") && previousStoragePath !== storagePath) {
+    if (
+      previousStoragePath &&
+      previousStoragePath.startsWith("garage://") &&
+      previousStoragePath !== storagePath
+    ) {
       try {
         const parsed = GaragePath.parse(previousStoragePath);
         await this.objectStorage.deleteObject(parsed.bucket, parsed.objectKey);
@@ -108,7 +121,11 @@ export class DocumentArchiveService {
     versionLabel: string;
     fileKind: (typeof FileKind.ALL)[number];
     fileName?: string;
-  }): Promise<{ document: DocumentEntity; bytes: Buffer; contentType: string | null } | null> {
+  }): Promise<{
+    document: DocumentEntity;
+    bytes: Buffer;
+    contentType: string | null;
+  } | null> {
     const document = await this.repository.getCurrentProjectFile(params);
     if (!document) {
       return null;
@@ -134,7 +151,10 @@ export class DocumentArchiveService {
     }
 
     const parsed = GaragePath.parse(storagePath);
-    const object = await this.objectStorage.getObject(parsed.bucket, parsed.objectKey);
+    const object = await this.objectStorage.getObject(
+      parsed.bucket,
+      parsed.objectKey,
+    );
     return {
       bytes: object.bytes,
       contentType: object.contentType,

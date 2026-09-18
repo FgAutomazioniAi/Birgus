@@ -86,7 +86,9 @@ async function main(): Promise<void> {
             name: prompt.name,
             label: prompt.label,
             original_prompt: prompt.originalPrompt,
-            active_prompt: existing.active_prompt?.trim() ? existing.active_prompt : prompt.originalPrompt,
+            active_prompt: existing.active_prompt?.trim()
+              ? existing.active_prompt
+              : prompt.originalPrompt,
             is_enabled: true,
             updated_by_user_id: adminUser.id,
             deleted_at: null,
@@ -128,7 +130,9 @@ async function main(): Promise<void> {
 
   console.log("Module agent prompts synchronized:");
   for (const item of summary) {
-    console.log(`- [${item.action}] ${item.workspaceName} :: ${item.moduleKey} :: ${item.agentKey}`);
+    console.log(
+      `- [${item.action}] ${item.workspaceName} :: ${item.moduleKey} :: ${item.agentKey}`,
+    );
   }
 }
 

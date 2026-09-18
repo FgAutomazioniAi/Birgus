@@ -5,7 +5,10 @@ import { AUTH_CONFIGURED_COOKIE_NAME } from "@/lib/auth/constants";
 import { APP_ROUTES } from "@/lib/routes";
 
 const getApiBaseUrl = () =>
-  (process.env.BIRGUS_API_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  (process.env.BIRGUS_API_BASE_URL ?? "http://localhost:3000").replace(
+    /\/$/,
+    "",
+  );
 
 export default async function LoginPage() {
   const cookieStore = await cookies();

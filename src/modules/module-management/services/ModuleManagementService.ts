@@ -11,19 +11,39 @@ export class ModuleManagementService {
     this.repository = repository;
   }
 
-  public async listWorkspaceModules(workspaceId: string): Promise<WorkspaceModuleState[]> {
+  public async listWorkspaceModules(
+    workspaceId: string,
+  ): Promise<WorkspaceModuleState[]> {
     return this.repository.listWorkspaceModules(workspaceId);
   }
 
-  public async listUserModules(workspaceId: string, userId: string): Promise<UserModuleState[]> {
+  public async listUserModules(
+    workspaceId: string,
+    userId: string,
+  ): Promise<UserModuleState[]> {
     return this.repository.listUserModules(workspaceId, userId);
   }
 
-  public async enableModule(workspaceId: string, moduleKey: string, configuredByUserId: string): Promise<void> {
+  public async enableModule(
+    workspaceId: string,
+    moduleKey: string,
+    configuredByUserId: string,
+  ): Promise<void> {
     const moduleKeys = activationGroupFor(moduleKey);
-    const missingDependencies = [...new Set((await Promise.all(
-      moduleKeys.map((key) => this.repository.listMissingDependenciesForEnable(workspaceId, key)),
-    )).flat())];
+    const missingDependencies = [
+      ...new Set(
+        (
+          await Promise.all(
+            moduleKeys.map((key) =>
+              this.repository.listMissingDependenciesForEnable(
+                workspaceId,
+                key,
+              ),
+            ),
+          )
+        ).flat(),
+      ),
+    ];
     if (missingDependencies.length > 0) {
       throw new AppError(
         `Cannot enable '${moduleKey}'. Missing dependencies: ${missingDependencies.join(", ")}.`,
@@ -32,14 +52,37 @@ export class ModuleManagementService {
       );
     }
 
-    await Promise.all(moduleKeys.map((key) => this.repository.setWorkspaceModule(workspaceId, key, true, configuredByUserId)));
+    await Promise.all(
+      moduleKeys.map((key) =>
+        this.repository.setWorkspaceModule(
+          workspaceId,
+          key,
+          true,
+          configuredByUserId,
+        ),
+      ),
+    );
   }
 
-  public async disableModule(workspaceId: string, moduleKey: string, configuredByUserId: string): Promise<void> {
+  public async disableModule(
+    workspaceId: string,
+    moduleKey: string,
+    configuredByUserId: string,
+  ): Promise<void> {
     const moduleKeys = activationGroupFor(moduleKey);
-    const enabledDependents = [...new Set((await Promise.all(
-      moduleKeys.map((key) => this.repository.listEnabledDependents(workspaceId, key)),
-    )).flat().filter((key) => !moduleKeys.includes(key)))];
+    const enabledDependents = [
+      ...new Set(
+        (
+          await Promise.all(
+            moduleKeys.map((key) =>
+              this.repository.listEnabledDependents(workspaceId, key),
+            ),
+          )
+        )
+          .flat()
+          .filter((key) => !moduleKeys.includes(key)),
+      ),
+    ];
     if (enabledDependents.length > 0) {
       throw new AppError(
         `Cannot disable '${moduleKey}'. Dependent modules still enabled: ${enabledDependents.join(", ")}.`,
@@ -48,10 +91,21 @@ export class ModuleManagementService {
       );
     }
 
-    await Promise.all(moduleKeys.map((key) => this.repository.setWorkspaceModule(workspaceId, key, false, configuredByUserId)));
+    await Promise.all(
+      moduleKeys.map((key) =>
+        this.repository.setWorkspaceModule(
+          workspaceId,
+          key,
+          false,
+          configuredByUserId,
+        ),
+      ),
+    );
   }
 
-  public async isModuleEnabledInAnyActiveWorkspace(moduleKey: string): Promise<boolean> {
+  public async isModuleEnabledInAnyActiveWorkspace(
+    moduleKey: string,
+  ): Promise<boolean> {
     return this.repository.isModuleEnabledInAnyActiveWorkspace(moduleKey);
   }
 
@@ -89,7 +143,15 @@ export class ModuleManagementService {
     );
   }
 
-  public async clearUserOverride(workspaceId: string, targetUserId: string, moduleKey: string): Promise<void> {
-    await this.repository.clearUserModuleOverride(workspaceId, targetUserId, moduleKey);
+  public async clearUserOverride(
+    workspaceId: string,
+    targetUserId: string,
+    moduleKey: string,
+  ): Promise<void> {
+    await this.repository.clearUserModuleOverride(
+      workspaceId,
+      targetUserId,
+      moduleKey,
+    );
   }
 }

@@ -2,6 +2,7 @@
 key: measure_report
 ui: Measure Report
 ---
+
 # measure_report
 
 Analisi di report dimensionali/di misura, con classificazione del formato e persistenza delle righe fuori tolleranza.

@@ -6,11 +6,12 @@ import { ActiveDocumentsService } from "../../modules/document-archive/services/
 import { DocumentArchiveService } from "../../modules/document-archive/services/DocumentArchiveService.js";
 import { ProjectBinaryStorage } from "../../storage/ProjectBinaryStorage.js";
 import { AuthModule } from "../auth/auth.module.js";
+import { AuditNestModule } from "../audit/audit.module.js";
 import { PROJECT_BINARY_STORAGE } from "../common/tokens.js";
 import { NestDocumentArchiveController } from "./document-archive.controller.js";
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, AuditNestModule],
   controllers: [NestDocumentArchiveController],
   providers: [
     {
@@ -23,11 +24,16 @@ import { NestDocumentArchiveController } from "./document-archive.controller.js"
     },
     {
       provide: ArchivedItemsService,
-      useFactory: (storage: ProjectBinaryStorage) => new ArchivedItemsService(storage),
+      useFactory: (storage: ProjectBinaryStorage) =>
+        new ArchivedItemsService(storage),
       inject: [PROJECT_BINARY_STORAGE],
     },
     ActiveDocumentsService,
   ],
-  exports: [DocumentArchiveService, ArchivedItemsService, ActiveDocumentsService],
+  exports: [
+    DocumentArchiveService,
+    ArchivedItemsService,
+    ActiveDocumentsService,
+  ],
 })
 export class DocumentArchiveNestModule {}

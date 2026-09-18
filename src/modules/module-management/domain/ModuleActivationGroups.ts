@@ -7,7 +7,9 @@ const OPERATIONAL_PLANNING_MODULE_KEYS = [
 const groups = [OPERATIONAL_PLANNING_MODULE_KEYS] as const;
 
 export function activationGroupFor(moduleKey: string): readonly string[] {
-  return groups.find((group) => group.includes(moduleKey as never)) ?? [moduleKey];
+  return (
+    groups.find((group) => group.includes(moduleKey as never)) ?? [moduleKey]
+  );
 }
 
 export function isGroupedActivation(moduleKey: string): boolean {

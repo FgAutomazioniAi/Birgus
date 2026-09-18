@@ -11,7 +11,8 @@ import { NestAgentsController } from "./agents.controller.js";
   providers: [
     {
       provide: ModuleAgentService,
-      useFactory: (repository: PrismaModuleAgentRepository) => new ModuleAgentService(repository),
+      useFactory: (repository: PrismaModuleAgentRepository) =>
+        new ModuleAgentService(repository),
       inject: [PrismaModuleAgentRepository],
     },
   ],

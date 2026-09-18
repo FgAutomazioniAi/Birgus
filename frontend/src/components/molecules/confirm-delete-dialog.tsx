@@ -41,12 +41,32 @@ export function ConfirmDeleteDialog({
   const canConfirm = typedText.trim() === expectedText.trim() && !isBusy;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-bg-overlay p-4" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.target === event.currentTarget && !isBusy) onCancel(); }}>
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-bg-overlay p-4"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !isBusy) onCancel();
+      }}
+    >
       <div className="w-full max-w-lg border border-border-default bg-bg-surface p-5 shadow-elevated">
-        <div className="flex items-center gap-3"><BirgusLogo className="h-9 w-9 shrink-0" /><div><h3 className="text-base font-bold text-text-primary">Birgus dice:</h3><p className="text-sm font-semibold text-text-secondary">{title ?? t("common.confirmDelete")}</p></div></div>
-        <p className="mt-1 text-xs text-text-muted">{t("common.confirmDeletePrompt")}</p>
+        <div className="flex items-center gap-3">
+          <BirgusLogo className="h-9 w-9 shrink-0" />
+          <div>
+            <h3 className="text-base font-bold text-text-primary">
+              Birgus dice:
+            </h3>
+            <p className="text-sm font-semibold text-text-secondary">
+              {title ?? t("common.confirmDelete")}
+            </p>
+          </div>
+        </div>
+        <p className="mt-1 text-xs text-text-muted">
+          {t("common.confirmDeletePrompt")}
+        </p>
         <p className="mt-3 text-xs text-text-secondary">
-          {t("common.typeExactly")} <span className="font-mono font-semibold">{expectedText}</span>
+          {t("common.typeExactly")}{" "}
+          <span className="font-mono font-semibold">{expectedText}</span>
         </p>
 
         <div className="mt-3">
@@ -59,7 +79,12 @@ export function ConfirmDeleteDialog({
         </div>
 
         <div className="mt-4 flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isBusy}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancel}
+            disabled={isBusy}
+          >
             {t("auth.cancel")}
           </Button>
           <Button

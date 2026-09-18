@@ -2,6 +2,7 @@
 key: ddt_processing
 ui: DDT Reader
 ---
+
 # ddt_processing
 
 Elaborazione dei documenti di trasporto: acquisizione, OCR, estrazione strutturata e storico della lettura.

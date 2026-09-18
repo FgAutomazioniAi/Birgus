@@ -2,6 +2,7 @@
 key: workflow_management
 ui: Workflow
 ---
+
 # workflow_management
 
 Motore e canvas di automazione generico: definisce grafi, esegue nodi autorizzati, conserva run e mette in attesa i casi che richiedono una decisione umana.

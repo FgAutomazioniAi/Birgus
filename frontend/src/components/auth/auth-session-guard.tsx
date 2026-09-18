@@ -18,7 +18,10 @@ const isProtectedApiRequest = (input: RequestInfo | URL): boolean => {
         ? input.toString()
         : input.url;
 
-  return requestUrl.startsWith("/api/") || requestUrl.startsWith(`${window.location.origin}/api/`);
+  return (
+    requestUrl.startsWith("/api/") ||
+    requestUrl.startsWith(`${window.location.origin}/api/`)
+  );
 };
 
 const withWorkspaceHeader = (
@@ -66,7 +69,9 @@ const redirectToLogin = () => {
   }
 };
 
-const inspectUnauthorizedResponse = async (response: Response): Promise<void> => {
+const inspectUnauthorizedResponse = async (
+  response: Response,
+): Promise<void> => {
   if (response.status !== 401) {
     return;
   }
@@ -95,7 +100,10 @@ export function AuthSessionGuard({ workspaceId }: { workspaceId: string }) {
       const requestWithWorkspace = isProtectedApiRequest(input)
         ? withWorkspaceHeader(input, init, workspaceId)
         : { input, init };
-      const response = await originalFetch(requestWithWorkspace.input, requestWithWorkspace.init);
+      const response = await originalFetch(
+        requestWithWorkspace.input,
+        requestWithWorkspace.init,
+      );
 
       if (isProtectedApiRequest(input)) {
         void inspectUnauthorizedResponse(response);

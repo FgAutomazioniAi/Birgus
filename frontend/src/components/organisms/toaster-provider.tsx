@@ -40,13 +40,33 @@ const TOAST_POSITIONS: readonly ToastPosition[] = [
 
 const ToasterContext = createContext<ToasterContextValue | null>(null);
 
-export const toastPositionOptions = (language: UiLanguage): Array<{ label: string; value: ToastPosition }> => [
-  { value: "top-left", label: translate(language, "notifications.position.topLeft") },
-  { value: "top-center", label: translate(language, "notifications.position.topCenter") },
-  { value: "top-right", label: translate(language, "notifications.position.topRight") },
-  { value: "bottom-left", label: translate(language, "notifications.position.bottomLeft") },
-  { value: "bottom-center", label: translate(language, "notifications.position.bottomCenter") },
-  { value: "bottom-right", label: translate(language, "notifications.position.bottomRight") },
+export const toastPositionOptions = (
+  language: UiLanguage,
+): Array<{ label: string; value: ToastPosition }> => [
+  {
+    value: "top-left",
+    label: translate(language, "notifications.position.topLeft"),
+  },
+  {
+    value: "top-center",
+    label: translate(language, "notifications.position.topCenter"),
+  },
+  {
+    value: "top-right",
+    label: translate(language, "notifications.position.topRight"),
+  },
+  {
+    value: "bottom-left",
+    label: translate(language, "notifications.position.bottomLeft"),
+  },
+  {
+    value: "bottom-center",
+    label: translate(language, "notifications.position.bottomCenter"),
+  },
+  {
+    value: "bottom-right",
+    label: translate(language, "notifications.position.bottomRight"),
+  },
 ];
 
 export function isToastPosition(value: string): value is ToastPosition {
@@ -58,10 +78,13 @@ const readStoredPosition = (): ToastPosition => {
   return stored && isToastPosition(stored) ? stored : DEFAULT_TOAST_POSITION;
 };
 
-const readStoredEnabled = (): boolean => localStorage.getItem(TOAST_ENABLED_STORAGE_KEY) !== "false";
+const readStoredEnabled = (): boolean =>
+  localStorage.getItem(TOAST_ENABLED_STORAGE_KEY) !== "false";
 
 export function ToasterProvider({ children }: { children: ReactNode }) {
-  const [position, setPositionState] = useState<ToastPosition>(DEFAULT_TOAST_POSITION);
+  const [position, setPositionState] = useState<ToastPosition>(
+    DEFAULT_TOAST_POSITION,
+  );
   const [enabled, setEnabledState] = useState(true);
 
   useEffect(() => {
@@ -72,25 +95,39 @@ export function ToasterProvider({ children }: { children: ReactNode }) {
 
     const syncPositionFromDatabase = async () => {
       try {
-        const response = await fetch("/api/user/preferences", { cache: "no-store" });
+        const response = await fetch("/api/user/preferences", {
+          cache: "no-store",
+        });
         if (!response.ok) {
           return;
         }
 
         const data = (await response.json()) as UserPreferenceApiResponse;
-        if (!data.notificationPosition || !isToastPosition(data.notificationPosition)) {
+        if (
+          !data.notificationPosition ||
+          !isToastPosition(data.notificationPosition)
+        ) {
           if (typeof data.notificationPopups === "boolean") {
             setEnabledState(data.notificationPopups);
-            localStorage.setItem(TOAST_ENABLED_STORAGE_KEY, String(data.notificationPopups));
+            localStorage.setItem(
+              TOAST_ENABLED_STORAGE_KEY,
+              String(data.notificationPopups),
+            );
           }
           return;
         }
 
         setPositionState(data.notificationPosition);
-        localStorage.setItem(TOAST_POSITION_STORAGE_KEY, data.notificationPosition);
+        localStorage.setItem(
+          TOAST_POSITION_STORAGE_KEY,
+          data.notificationPosition,
+        );
         if (typeof data.notificationPopups === "boolean") {
           setEnabledState(data.notificationPopups);
-          localStorage.setItem(TOAST_ENABLED_STORAGE_KEY, String(data.notificationPopups));
+          localStorage.setItem(
+            TOAST_ENABLED_STORAGE_KEY,
+            String(data.notificationPopups),
+          );
         }
       } catch {
         // fallback su preferenza locale in caso di errore rete/non autenticato.
@@ -144,7 +181,14 @@ export function ToasterProvider({ children }: { children: ReactNode }) {
   return (
     <ToasterContext.Provider value={value}>
       {children}
-      {enabled ? <Toaster position={position} richColors duration={4000} swipeDirections={["top", "right", "bottom", "left"]} /> : null}
+      {enabled ? (
+        <Toaster
+          position={position}
+          richColors
+          duration={4000}
+          swipeDirections={["top", "right", "bottom", "left"]}
+        />
+      ) : null}
     </ToasterContext.Provider>
   );
 }
@@ -152,7 +196,9 @@ export function ToasterProvider({ children }: { children: ReactNode }) {
 export function useToasterPreferences() {
   const context = useContext(ToasterContext);
   if (!context) {
-    throw new Error("useToasterPreferences deve essere usato dentro ToasterProvider.");
+    throw new Error(
+      "useToasterPreferences deve essere usato dentro ToasterProvider.",
+    );
   }
   return context;
 }

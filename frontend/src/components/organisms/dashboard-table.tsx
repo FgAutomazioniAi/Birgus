@@ -15,7 +15,11 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button, Card, CheckboxControl, Text } from "@/components/atoms";
-import { PageHelpHint, SearchField, SelectDropdown } from "@/components/molecules";
+import {
+  PageHelpHint,
+  SearchField,
+  SelectDropdown,
+} from "@/components/molecules";
 import { useLanguage } from "@/components/organisms/language-provider";
 import { cn } from "@/lib/cn";
 import { downloadTablePdf } from "@/lib/pdf-export";
@@ -45,7 +49,12 @@ interface UserPreferencesResponse {
 
 const ROWS_PER_PAGE_OPTIONS = [5, 10, 20, 40] as const;
 const TABLE_COLUMNS_STORAGE_KEY = "vl_projects_table_columns_v1";
-const DEFAULT_PROJECT_COLUMN_ORDER: ProjectColumnKey[] = ["project", "versionsCount", "date", "actions"];
+const DEFAULT_PROJECT_COLUMN_ORDER: ProjectColumnKey[] = [
+  "project",
+  "versionsCount",
+  "date",
+  "actions",
+];
 
 const PROJECT_COLUMN_DEFS: ProjectColumnDef[] = [
   {
@@ -87,7 +96,9 @@ export function DashboardTable() {
   const [rowsPerPage, setRowsPerPage] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [isColumnsMenuOpen, setIsColumnsMenuOpen] = useState(false);
-  const [columnOrder, setColumnOrder] = useState<ProjectColumnKey[]>(DEFAULT_PROJECT_COLUMN_ORDER);
+  const [columnOrder, setColumnOrder] = useState<ProjectColumnKey[]>(
+    DEFAULT_PROJECT_COLUMN_ORDER,
+  );
   const [hiddenColumns, setHiddenColumns] = useState<ProjectColumnKey[]>([]);
   const [isPreferencesReady, setIsPreferencesReady] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -129,24 +140,40 @@ export function DashboardTable() {
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
-  const applyColumnConfig = (config: Partial<StoredColumnConfig> | null | undefined) => {
+  const applyColumnConfig = (
+    config: Partial<StoredColumnConfig> | null | undefined,
+  ) => {
     if (!config) {
       return;
     }
 
     const parsedOrder = Array.isArray(config.order)
-      ? config.order.filter((column): column is ProjectColumnKey => isProjectColumnKey(String(column)))
+      ? config.order.filter((column): column is ProjectColumnKey =>
+          isProjectColumnKey(String(column)),
+        )
       : [];
     const uniqueOrder = Array.from(new Set(parsedOrder));
-    const nextOrder = DEFAULT_PROJECT_COLUMN_ORDER.filter((column) => uniqueOrder.includes(column));
-    const missing = DEFAULT_PROJECT_COLUMN_ORDER.filter((column) => !nextOrder.includes(column));
+    const nextOrder = DEFAULT_PROJECT_COLUMN_ORDER.filter((column) =>
+      uniqueOrder.includes(column),
+    );
+    const missing = DEFAULT_PROJECT_COLUMN_ORDER.filter(
+      (column) => !nextOrder.includes(column),
+    );
     setColumnOrder([...nextOrder, ...missing]);
 
     const parsedHidden = Array.isArray(config.hidden)
-      ? config.hidden.filter((column): column is ProjectColumnKey => isProjectColumnKey(String(column)))
+      ? config.hidden.filter((column): column is ProjectColumnKey =>
+          isProjectColumnKey(String(column)),
+        )
       : [];
-    const optionalColumns = new Set(PROJECT_COLUMN_DEFS.filter((column) => !column.required).map((column) => column.key));
-    setHiddenColumns(parsedHidden.filter((column) => optionalColumns.has(column)));
+    const optionalColumns = new Set(
+      PROJECT_COLUMN_DEFS.filter((column) => !column.required).map(
+        (column) => column.key,
+      ),
+    );
+    setHiddenColumns(
+      parsedHidden.filter((column) => optionalColumns.has(column)),
+    );
   };
 
   useEffect(() => {
@@ -165,14 +192,22 @@ export function DashboardTable() {
   }, []);
 
   useEffect(() => {
-    const payload: StoredColumnConfig = { order: columnOrder, hidden: hiddenColumns };
-    window.localStorage.setItem(TABLE_COLUMNS_STORAGE_KEY, JSON.stringify(payload));
+    const payload: StoredColumnConfig = {
+      order: columnOrder,
+      hidden: hiddenColumns,
+    };
+    window.localStorage.setItem(
+      TABLE_COLUMNS_STORAGE_KEY,
+      JSON.stringify(payload),
+    );
   }, [columnOrder, hiddenColumns]);
 
   useEffect(() => {
     const loadPreferences = async () => {
       try {
-        const response = await fetch("/api/user/preferences", { cache: "no-store" });
+        const response = await fetch("/api/user/preferences", {
+          cache: "no-store",
+        });
         if (!response.ok) {
           return;
         }
@@ -181,7 +216,12 @@ export function DashboardTable() {
         applyColumnConfig(data.colonneProgetti);
 
         const preferredRows = data.righeProgetti;
-        if (preferredRows && ROWS_PER_PAGE_OPTIONS.includes(preferredRows as (typeof ROWS_PER_PAGE_OPTIONS)[number])) {
+        if (
+          preferredRows &&
+          ROWS_PER_PAGE_OPTIONS.includes(
+            preferredRows as (typeof ROWS_PER_PAGE_OPTIONS)[number],
+          )
+        ) {
           setRowsPerPage(preferredRows);
         }
       } catch {
@@ -249,7 +289,10 @@ export function DashboardTable() {
     setCurrentPage(1);
   }, [rowsPerPage, searchTerm]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredProjects.length / rowsPerPage));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredProjects.length / rowsPerPage),
+  );
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -280,7 +323,11 @@ export function DashboardTable() {
           body: JSON.stringify({ confirmText: project.project }),
         });
         if (!response.ok) {
-          const payload = (await response.json().catch(() => ({ message: "Errore archiviazione progetto" }))) as { message?: string };
+          const payload = (await response
+            .json()
+            .catch(() => ({ message: "Errore archiviazione progetto" }))) as {
+            message?: string;
+          };
           throw new Error(payload.message ?? "Errore archiviazione progetto");
         }
       },
@@ -293,7 +340,9 @@ export function DashboardTable() {
       return;
     }
 
-    setHiddenColumns((prev) => (prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]));
+    setHiddenColumns((prev) =>
+      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key],
+    );
   };
 
   const moveColumn = (key: ProjectColumnKey, direction: "up" | "down") => {
@@ -339,13 +388,19 @@ export function DashboardTable() {
       });
       toast.success("PDF progetti generato con successo.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Errore durante l'esportazione progetti.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Errore durante l'esportazione progetti.",
+      );
     } finally {
       setIsExporting(false);
     }
   };
 
-  const firstVisibleRow = filteredProjects.length ? (currentPage - 1) * rowsPerPage + 1 : 0;
+  const firstVisibleRow = filteredProjects.length
+    ? (currentPage - 1) * rowsPerPage + 1
+    : 0;
   const lastVisibleRow = filteredProjects.length
     ? Math.min(currentPage * rowsPerPage, filteredProjects.length)
     : 0;
@@ -400,12 +455,18 @@ export function DashboardTable() {
 
               {isColumnsMenuOpen && (
                 <div className="absolute right-0 top-12 z-20 w-80 rounded-[var(--radius-md)] border border-border-default bg-bg-surface p-3 shadow-elevated">
-                  <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">Configura colonne</p>
-                  <p className="mt-1 text-xs text-text-muted">Mostra, nascondi e riordina le colonne della tabella.</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">
+                    Configura colonne
+                  </p>
+                  <p className="mt-1 text-xs text-text-muted">
+                    Mostra, nascondi e riordina le colonne della tabella.
+                  </p>
 
                   <div className="mt-3 space-y-2">
                     {columnOrder.map((key, index) => {
-                      const column = PROJECT_COLUMN_DEFS.find((item) => item.key === key);
+                      const column = PROJECT_COLUMN_DEFS.find(
+                        (item) => item.key === key,
+                      );
                       if (!column) {
                         return null;
                       }
@@ -421,12 +482,25 @@ export function DashboardTable() {
                               type="checkbox"
                               checked={!hidden}
                               disabled={column.required}
-                              onChange={() => toggleColumnVisibility(column.key)}
+                              onChange={() =>
+                                toggleColumnVisibility(column.key)
+                              }
                             />
-                            <span className={cn("font-medium", column.required ? "text-text-primary" : "text-text-secondary")}>
+                            <span
+                              className={cn(
+                                "font-medium",
+                                column.required
+                                  ? "text-text-primary"
+                                  : "text-text-secondary",
+                              )}
+                            >
                               {column.label}
                             </span>
-                            {column.required && <span className="text-[10px] font-bold uppercase text-brand-primary">LOCK</span>}
+                            {column.required && (
+                              <span className="text-[10px] font-bold uppercase text-brand-primary">
+                                LOCK
+                              </span>
+                            )}
                           </label>
 
                           <div className="flex items-center gap-1">
@@ -477,7 +551,10 @@ export function DashboardTable() {
                     key={column.key}
                     className={cn(
                       "px-6 py-4 text-xs font-bold uppercase tracking-wider text-text-muted",
-                      column.key === visibleColumns[visibleColumns.length - 1]?.key ? "text-right" : "text-left",
+                      column.key ===
+                        visibleColumns[visibleColumns.length - 1]?.key
+                        ? "text-right"
+                        : "text-left",
                     )}
                   >
                     {column.label}
@@ -488,20 +565,32 @@ export function DashboardTable() {
 
             <tbody className="divide-y divide-border-subtle">
               {paginatedProjects.map((project) => (
-                <tr key={project.id} className="group transition-colors hover:bg-bg-muted/60">
+                <tr
+                  key={project.id}
+                  className="group transition-colors hover:bg-bg-muted/60"
+                >
                   {visibleColumns.map((column) => (
-                    <td key={`${project.id}-${column.key}`} className={cn("px-6 py-4", column.cellClassName)}>
+                    <td
+                      key={`${project.id}-${column.key}`}
+                      className={cn("px-6 py-4", column.cellClassName)}
+                    >
                       {column.key === "actions" ? (
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => router.push(APP_ROUTES.projectVersions(project.id))}
+                            onClick={() =>
+                              router.push(
+                                APP_ROUTES.projectVersions(project.id),
+                              )
+                            }
                             className="rounded-lg p-1.5 text-brand-primary transition-colors hover:bg-status-info-bg"
                             title="Apri versionamenti"
                           >
                             <Eye size={18} />
                           </button>
                           <button
-                            onClick={() => router.push(APP_ROUTES.projectEdit(project.id))}
+                            onClick={() =>
+                              router.push(APP_ROUTES.projectEdit(project.id))
+                            }
                             className="rounded-lg p-1.5 text-brand-primary transition-colors hover:bg-status-info-bg"
                             title="Modifica dati progetto"
                           >
@@ -518,13 +607,22 @@ export function DashboardTable() {
                       ) : column.key === "project" ? (
                         <button
                           type="button"
-                          onClick={() => router.push(APP_ROUTES.projectVersions(project.id))}
+                          onClick={() =>
+                            router.push(APP_ROUTES.projectVersions(project.id))
+                          }
                           className="text-sm font-semibold text-brand-primary hover:underline"
                         >
                           {project.project}
                         </button>
                       ) : (
-                        <span className={cn("text-sm", column.key === "date" ? "text-text-muted" : "text-text-secondary")}>
+                        <span
+                          className={cn(
+                            "text-sm",
+                            column.key === "date"
+                              ? "text-text-muted"
+                              : "text-text-secondary",
+                          )}
+                        >
                           {column.render(project)}
                         </span>
                       )}
@@ -535,7 +633,10 @@ export function DashboardTable() {
 
               {isLoading && (
                 <tr>
-                  <td colSpan={totalVisibleColumns} className="px-6 py-12 text-center text-text-muted">
+                  <td
+                    colSpan={totalVisibleColumns}
+                    className="px-6 py-12 text-center text-text-muted"
+                  >
                     Caricamento progetti in corso...
                   </td>
                 </tr>
@@ -543,7 +644,10 @@ export function DashboardTable() {
 
               {!isLoading && !filteredProjects.length && (
                 <tr>
-                  <td colSpan={totalVisibleColumns} className="px-6 py-12 text-center text-text-muted">
+                  <td
+                    colSpan={totalVisibleColumns}
+                    className="px-6 py-12 text-center text-text-muted"
+                  >
                     Nessun progetto trovato.
                   </td>
                 </tr>
@@ -555,7 +659,8 @@ export function DashboardTable() {
         <div className="flex flex-col items-start justify-between gap-3 border-t border-border-subtle p-4 sm:flex-row sm:items-center">
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-xs text-text-muted">
-              {firstVisibleRow} - {lastVisibleRow} su {filteredProjects.length} progetti
+              {firstVisibleRow} - {lastVisibleRow} su {filteredProjects.length}{" "}
+              progetti
             </p>
             <label className="flex items-center gap-2 text-xs text-text-muted">
               <span>Righe</span>
@@ -585,7 +690,9 @@ export function DashboardTable() {
               Precedente
             </button>
             <button
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+              }
               disabled={!canGoNext}
               className={cn(
                 "rounded-lg border px-3 py-1 text-xs font-medium",
@@ -599,7 +706,6 @@ export function DashboardTable() {
           </div>
         </div>
       </Card>
-
     </div>
   );
 }

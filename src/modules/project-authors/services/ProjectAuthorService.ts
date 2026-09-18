@@ -10,7 +10,10 @@ export class ProjectAuthorService {
   private readonly repository: ProjectAuthorRepository;
   private readonly auditLogService: AuditLogService | null;
 
-  public constructor(repository: ProjectAuthorRepository, auditLogService?: AuditLogService | null) {
+  public constructor(
+    repository: ProjectAuthorRepository,
+    auditLogService?: AuditLogService | null,
+  ) {
     this.repository = repository;
     this.auditLogService = auditLogService ?? null;
   }
@@ -19,19 +22,35 @@ export class ProjectAuthorService {
     return this.repository.list(workspaceId);
   }
 
-  public async getById(workspaceId: string, authorId: number): Promise<ProjectAuthorEntity> {
+  public async getById(
+    workspaceId: string,
+    authorId: number,
+  ): Promise<ProjectAuthorEntity> {
     const item = await this.repository.findById(workspaceId, authorId);
     if (!item) {
-      throw new AppError("Project author not found.", "PROJECT_AUTHOR_NOT_FOUND", 404);
+      throw new AppError(
+        "Project author not found.",
+        "PROJECT_AUTHOR_NOT_FOUND",
+        404,
+      );
     }
 
     return item;
   }
 
-  public async create(command: CreateProjectAuthorCommand): Promise<ProjectAuthorEntity> {
-    const firstName = this.normalizeRequiredName(command.firstName, "PROJECT_AUTHOR_NAME_INVALID");
+  public async create(
+    command: CreateProjectAuthorCommand,
+  ): Promise<ProjectAuthorEntity> {
+    const firstName = this.normalizeRequiredName(
+      command.firstName,
+      "PROJECT_AUTHOR_NAME_INVALID",
+    );
     const lastName = this.normalizeOptionalValue(command.lastName);
-    const displayName = this.resolveDisplayName(firstName, lastName, command.displayName);
+    const displayName = this.resolveDisplayName(
+      firstName,
+      lastName,
+      command.displayName,
+    );
     const author = await this.repository.create({
       workspaceId: command.workspaceId,
       firstName,
@@ -53,10 +72,19 @@ export class ProjectAuthorService {
     return author;
   }
 
-  public async update(command: UpdateProjectAuthorCommand): Promise<ProjectAuthorEntity> {
-    const firstName = this.normalizeRequiredName(command.firstName, "PROJECT_AUTHOR_NAME_INVALID");
+  public async update(
+    command: UpdateProjectAuthorCommand,
+  ): Promise<ProjectAuthorEntity> {
+    const firstName = this.normalizeRequiredName(
+      command.firstName,
+      "PROJECT_AUTHOR_NAME_INVALID",
+    );
     const lastName = this.normalizeOptionalValue(command.lastName);
-    const displayName = this.resolveDisplayName(firstName, lastName, command.displayName);
+    const displayName = this.resolveDisplayName(
+      firstName,
+      lastName,
+      command.displayName,
+    );
     const author = await this.repository.update({
       workspaceId: command.workspaceId,
       authorId: command.authorId,
@@ -67,7 +95,11 @@ export class ProjectAuthorService {
     });
 
     if (!author) {
-      throw new AppError("Project author not found.", "PROJECT_AUTHOR_NOT_FOUND", 404);
+      throw new AppError(
+        "Project author not found.",
+        "PROJECT_AUTHOR_NOT_FOUND",
+        404,
+      );
     }
 
     await this.auditLogService?.record({
@@ -83,10 +115,18 @@ export class ProjectAuthorService {
     return author;
   }
 
-  public async delete(workspaceId: string, authorId: number, actorUserId?: string | null): Promise<void> {
+  public async delete(
+    workspaceId: string,
+    authorId: number,
+    actorUserId?: string | null,
+  ): Promise<void> {
     const removed = await this.repository.softDelete(workspaceId, authorId);
     if (!removed) {
-      throw new AppError("Project author not found.", "PROJECT_AUTHOR_NOT_FOUND", 404);
+      throw new AppError(
+        "Project author not found.",
+        "PROJECT_AUTHOR_NOT_FOUND",
+        404,
+      );
     }
 
     await this.auditLogService?.record({
@@ -113,7 +153,11 @@ export class ProjectAuthorService {
     return value.trim().replace(/\s+/g, " ");
   }
 
-  private resolveDisplayName(firstName: string, lastName: string, explicitDisplayName: string): string {
+  private resolveDisplayName(
+    firstName: string,
+    lastName: string,
+    explicitDisplayName: string,
+  ): string {
     const normalized = explicitDisplayName.trim().replace(/\s+/g, " ");
     if (normalized) {
       return normalized;

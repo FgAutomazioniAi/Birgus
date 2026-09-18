@@ -1,6 +1,12 @@
 import { z } from "zod";
 
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 
 export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -13,4 +19,7 @@ export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   ]),
 );
 
-export const jsonObjectSchema = z.record(z.string().min(1).max(200), jsonValueSchema);
+export const jsonObjectSchema = z.record(
+  z.string().min(1).max(200),
+  jsonValueSchema,
+);

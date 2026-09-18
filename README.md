@@ -79,12 +79,12 @@ L'indirizzo principale usa la porta scelta durante il setup, normalmente `http:/
 
 ## Ruoli iniziali
 
-| Ruolo | Ambito | 2FA |
-| --- | --- | --- |
-| Developer | Intera installazione | Obbligatoria |
-| Superuser | Gestione completa del proprio workspace | Facoltativa |
-| Admin | Operazioni amministrative del workspace | Facoltativa |
-| Operatore | Operazioni applicative assegnate | Facoltativa |
+| Ruolo     | Ambito                                  | 2FA          |
+| --------- | --------------------------------------- | ------------ |
+| Developer | Intera installazione                    | Obbligatoria |
+| Superuser | Gestione completa del proprio workspace | Facoltativa  |
+| Admin     | Operazioni amministrative del workspace | Facoltativa  |
+| Operatore | Operazioni applicative assegnate        | Facoltativa  |
 
 ## Provider AI
 

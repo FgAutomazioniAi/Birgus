@@ -6,7 +6,10 @@ import { DocumentArchiveRepository } from "../repositories/DocumentArchiveReposi
 
 const ROOT_PATH = "/documents";
 
-const FILE_KIND_META: Record<FileKindValue, { defaultFileName: string; extension: string }> = {
+const FILE_KIND_META: Record<
+  FileKindValue,
+  { defaultFileName: string; extension: string }
+> = {
   "email-pdf": { defaultFileName: "email.pdf", extension: "pdf" },
   "quotation-docx": { defaultFileName: "preventivo.docx", extension: "docx" },
   "quotation-pdf": { defaultFileName: "preventivo.pdf", extension: "pdf" },
@@ -14,7 +17,9 @@ const FILE_KIND_META: Record<FileKindValue, { defaultFileName: string; extension
   "tech-pdf": { defaultFileName: "specifica-tecnica.pdf", extension: "pdf" },
 };
 
-export class PrismaDocumentArchiveRepository implements DocumentArchiveRepository {
+export class PrismaDocumentArchiveRepository
+  implements DocumentArchiveRepository
+{
   public async getCurrentProjectFile(params: {
     workspaceId: string;
     projectId: string;
@@ -23,7 +28,11 @@ export class PrismaDocumentArchiveRepository implements DocumentArchiveRepositor
     fileName?: string;
   }): Promise<DocumentEntity | null> {
     const prisma = PrismaClientManager.getClient();
-    const nodePath = this.buildNodePath(params.projectId, params.versionLabel, params.fileKind);
+    const nodePath = this.buildNodePath(
+      params.projectId,
+      params.versionLabel,
+      params.fileKind,
+    );
 
     const node = await prisma.node.findFirst({
       where: {
@@ -73,7 +82,10 @@ export class PrismaDocumentArchiveRepository implements DocumentArchiveRepositor
     storagePath: string;
     sizeBytes: number;
     uploadedByUserId: string | null;
-  }): Promise<{ document: DocumentEntity; previousStoragePath: string | null }> {
+  }): Promise<{
+    document: DocumentEntity;
+    previousStoragePath: string | null;
+  }> {
     const prisma = PrismaClientManager.getClient();
     const normalizedVersion = this.normalizeVersionLabel(params.versionLabel);
 
@@ -85,7 +97,9 @@ export class PrismaDocumentArchiveRepository implements DocumentArchiveRepositor
     );
 
     const meta = FILE_KIND_META[params.fileKind];
-    const resolvedFileName = (params.fileName.trim() || meta.defaultFileName).trim();
+    const resolvedFileName = (
+      params.fileName.trim() || meta.defaultFileName
+    ).trim();
 
     const [fileType, fileStatus, existing] = await Promise.all([
       prisma.fileType.upsert({
@@ -270,10 +284,22 @@ export class PrismaDocumentArchiveRepository implements DocumentArchiveRepositor
     versionLabel: string,
     fileKind: FileKindValue,
   ): Promise<{ id: string; depth: number }> {
-    const root = await this.ensureNode(workspaceId, null, "documents", ROOT_PATH, 0);
+    const root = await this.ensureNode(
+      workspaceId,
+      null,
+      "documents",
+      ROOT_PATH,
+      0,
+    );
 
     const projectPath = `${ROOT_PATH}/${projectId}`;
-    const projectNode = await this.ensureNode(workspaceId, root.id, projectId, projectPath, 1);
+    const projectNode = await this.ensureNode(
+      workspaceId,
+      root.id,
+      projectId,
+      projectPath,
+      1,
+    );
 
     const versionPath = `${projectPath}/${versionLabel}`;
     const versionNode = await this.ensureNode(
@@ -334,12 +360,19 @@ export class PrismaDocumentArchiveRepository implements DocumentArchiveRepositor
     });
   }
 
-  private buildNodePath(projectId: string, versionLabel: string, fileKind: FileKindValue): string {
+  private buildNodePath(
+    projectId: string,
+    versionLabel: string,
+    fileKind: FileKindValue,
+  ): string {
     return `${ROOT_PATH}/${projectId}/${this.normalizeVersionLabel(versionLabel)}/${fileKind}`;
   }
 
   private normalizeVersionLabel(value: string): string {
-    const normalized = value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
+    const normalized = value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-");
     return normalized || "v1";
   }
 

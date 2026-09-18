@@ -10,7 +10,9 @@ export class ModuleAgentService {
     this.repository = repository;
   }
 
-  public async listModuleAgents(workspaceId: string): Promise<ModuleAgentEntity[]> {
+  public async listModuleAgents(
+    workspaceId: string,
+  ): Promise<ModuleAgentEntity[]> {
     return this.repository.listModuleAgents(workspaceId);
   }
 
@@ -22,10 +24,16 @@ export class ModuleAgentService {
     return this.repository.resolveActivePrompt(params);
   }
 
-  public async updateModuleAgentPrompt(command: UpdateModuleAgentPromptCommand): Promise<ModuleAgentEntity> {
+  public async updateModuleAgentPrompt(
+    command: UpdateModuleAgentPromptCommand,
+  ): Promise<ModuleAgentEntity> {
     const normalizedPrompt = command.activePrompt.trim();
     if (normalizedPrompt.length === 0) {
-      throw new AppError("Il prompt attivo non puo essere vuoto.", "MODULE_AGENT_PROMPT_EMPTY", 400);
+      throw new AppError(
+        "Il prompt attivo non puo essere vuoto.",
+        "MODULE_AGENT_PROMPT_EMPTY",
+        400,
+      );
     }
 
     const updated = await this.repository.updateModuleAgentPrompt({
@@ -42,8 +50,16 @@ export class ModuleAgentService {
     return updated;
   }
 
-  public async resetModuleAgentPrompt(workspaceId: string, agentId: string, updatedByUserId: string): Promise<ModuleAgentEntity> {
-    const updated = await this.repository.resetModuleAgentPrompt(workspaceId, agentId, updatedByUserId);
+  public async resetModuleAgentPrompt(
+    workspaceId: string,
+    agentId: string,
+    updatedByUserId: string,
+  ): Promise<ModuleAgentEntity> {
+    const updated = await this.repository.resetModuleAgentPrompt(
+      workspaceId,
+      agentId,
+      updatedByUserId,
+    );
     if (!updated) {
       throw new AppError("Agente non trovato.", "MODULE_AGENT_NOT_FOUND", 404);
     }

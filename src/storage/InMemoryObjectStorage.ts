@@ -1,10 +1,17 @@
 import { createHash } from "node:crypto";
 
-import { GetObjectOutput, ObjectDescriptor, PutObjectInput } from "./ObjectStorage.js";
+import {
+  GetObjectOutput,
+  ObjectDescriptor,
+  PutObjectInput,
+} from "./ObjectStorage.js";
 import { ProjectBinaryStorage } from "./ProjectBinaryStorage.js";
 
 export class InMemoryObjectStorage implements ProjectBinaryStorage {
-  private readonly objects: Map<string, { bytes: Buffer; contentType: string; metadata: Record<string, string> }>;
+  private readonly objects: Map<
+    string,
+    { bytes: Buffer; contentType: string; metadata: Record<string, string> }
+  >;
 
   public constructor() {
     this.objects = new Map();
@@ -29,7 +36,10 @@ export class InMemoryObjectStorage implements ProjectBinaryStorage {
     };
   }
 
-  public async getObject(bucket: string, objectKey: string): Promise<GetObjectOutput> {
+  public async getObject(
+    bucket: string,
+    objectKey: string,
+  ): Promise<GetObjectOutput> {
     const key = this.composeKey(bucket, objectKey);
     const entry = this.objects.get(key);
 
@@ -48,7 +58,10 @@ export class InMemoryObjectStorage implements ProjectBinaryStorage {
     };
   }
 
-  public async headObject(bucket: string, objectKey: string): Promise<ObjectDescriptor> {
+  public async headObject(
+    bucket: string,
+    objectKey: string,
+  ): Promise<ObjectDescriptor> {
     const key = this.composeKey(bucket, objectKey);
     const entry = this.objects.get(key);
 

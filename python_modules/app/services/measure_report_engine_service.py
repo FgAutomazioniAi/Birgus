@@ -240,7 +240,11 @@ class MeasureReportEngineService:
         try:
             with tempfile.TemporaryDirectory(prefix="measure_report_pages_") as temp_dir:
                 temp_path = Path(temp_dir)
-                effective_max_image_size = max(self._settings.measure_report_max_image_size, 2200) if effective_type == "vicivision" else self._settings.measure_report_max_image_size
+                effective_max_image_size = (
+                    max(self._settings.measure_report_max_image_size, 2200)
+                    if effective_type == "vicivision"
+                    else self._settings.measure_report_max_image_size
+                )
                 page_images = render_pdf_pages_to_images(
                     pdf_path=temp_pdf_path,
                     output_dir=temp_path,

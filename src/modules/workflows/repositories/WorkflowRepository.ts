@@ -1,5 +1,9 @@
 import { ModuleToolEntity } from "../domain/ModuleToolEntity.js";
-import { ModuleWorkflowEntity, ModuleWorkflowEdgeEntity, ModuleWorkflowNodeEntity } from "../domain/ModuleWorkflowEntity.js";
+import {
+  ModuleWorkflowEntity,
+  ModuleWorkflowEdgeEntity,
+  ModuleWorkflowNodeEntity,
+} from "../domain/ModuleWorkflowEntity.js";
 import { ModuleWorkflowRunEntity } from "../domain/ModuleWorkflowRunEntity.js";
 
 export type WorkflowDefinitionInput = {
@@ -46,14 +50,39 @@ export type WorkflowDefinitionInput = {
 };
 
 export interface WorkflowRepository {
-  listModuleTools(workspaceId: string, moduleKey?: string): Promise<ModuleToolEntity[]>;
-  listWorkflows(workspaceId: string, moduleKey?: string): Promise<ModuleWorkflowEntity[]>;
-  findWorkflowById(workspaceId: string, workflowId: string): Promise<ModuleWorkflowEntity | null>;
-  findWorkflowByKey(workspaceId: string, moduleKey: string, workflowKey: string): Promise<ModuleWorkflowEntity | null>;
-  saveWorkflowDefinition(input: WorkflowDefinitionInput): Promise<ModuleWorkflowEntity>;
-  deletePersonalWorkflow(workspaceId: string, workflowId: string, actorUserId: string): Promise<void>;
-  listWorkflowRuns(workspaceId: string, workflowId?: string): Promise<ModuleWorkflowRunEntity[]>;
-  findWorkflowRunById(workspaceId: string, runId: string): Promise<ModuleWorkflowRunEntity | null>;
+  listModuleTools(
+    workspaceId: string,
+    moduleKey?: string,
+  ): Promise<ModuleToolEntity[]>;
+  listWorkflows(
+    workspaceId: string,
+    moduleKey?: string,
+  ): Promise<ModuleWorkflowEntity[]>;
+  findWorkflowById(
+    workspaceId: string,
+    workflowId: string,
+  ): Promise<ModuleWorkflowEntity | null>;
+  findWorkflowByKey(
+    workspaceId: string,
+    moduleKey: string,
+    workflowKey: string,
+  ): Promise<ModuleWorkflowEntity | null>;
+  saveWorkflowDefinition(
+    input: WorkflowDefinitionInput,
+  ): Promise<ModuleWorkflowEntity>;
+  deletePersonalWorkflow(
+    workspaceId: string,
+    workflowId: string,
+    actorUserId: string,
+  ): Promise<void>;
+  listWorkflowRuns(
+    workspaceId: string,
+    workflowId?: string,
+  ): Promise<ModuleWorkflowRunEntity[]>;
+  findWorkflowRunById(
+    workspaceId: string,
+    runId: string,
+  ): Promise<ModuleWorkflowRunEntity | null>;
   createWorkflowRun(params: {
     workspaceId: string;
     workflowId: string;

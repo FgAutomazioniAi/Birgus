@@ -1,5 +1,10 @@
 import { BrainyPanel } from "@/features/brainy/brainy-panel";
+import { Suspense } from "react";
 
 export default function BrainyPage() {
-  return <BrainyPanel />;
+  return (
+    <Suspense>
+      <BrainyPanel />
+    </Suspense>
+  );
 }

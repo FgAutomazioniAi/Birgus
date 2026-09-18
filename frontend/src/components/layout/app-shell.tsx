@@ -39,7 +39,10 @@ export function AppShell({ children, currentUser }: AppShellProps) {
   }, []);
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-bg-page" data-workspace-id={currentUser.workspaceId}>
+    <div
+      className="flex h-dvh overflow-hidden bg-bg-page"
+      data-workspace-id={currentUser.workspaceId}
+    >
       <AuthSessionGuard workspaceId={currentUser.workspaceId} />
       <Sidebar
         open={sidebarOpen}
@@ -53,7 +56,9 @@ export function AppShell({ children, currentUser }: AppShellProps) {
       <main
         className={[
           "flex h-dvh min-w-0 flex-1 flex-col overflow-x-clip transition-all duration-300",
-          sidebarCollapsed ? "lg:ml-20 lg:w-[calc(100%-5rem)] lg:flex-none" : "lg:ml-64 lg:w-[calc(100%-16rem)] lg:flex-none",
+          sidebarCollapsed
+            ? "lg:ml-20 lg:w-[calc(100%-5rem)] lg:flex-none"
+            : "lg:ml-64 lg:w-[calc(100%-16rem)] lg:flex-none",
         ].join(" ")}
       >
         <TopNav
@@ -64,9 +69,15 @@ export function AppShell({ children, currentUser }: AppShellProps) {
         />
         <ModuleAccessProvider enabledModuleKeys={currentUser.enabledModuleKeys}>
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 lg:p-8">
-            <div className="mx-auto min-w-0 w-full max-w-[1780px]">{children}</div>
+            <div className="mx-auto min-w-0 w-full max-w-[1780px]">
+              {children}
+            </div>
           </div>
-          <FloatingAssistant enabled={currentUser.enabledModuleKeys.includes("conversational_assistant")} />
+          <FloatingAssistant
+            enabled={currentUser.enabledModuleKeys.includes(
+              "conversational_assistant",
+            )}
+          />
         </ModuleAccessProvider>
       </main>
     </div>

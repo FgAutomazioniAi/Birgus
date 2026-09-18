@@ -1,4 +1,11 @@
-import { Controller, Get, HttpCode, Inject, Param, UseGuards } from "@nestjs/common";
+import {
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  UseGuards,
+} from "@nestjs/common";
 import { z } from "zod";
 
 import { AppError } from "../../core/errors/AppError.js";
@@ -32,7 +39,9 @@ export class NestOrchestratorController {
       return job;
     }
 
-    const workflowRun = await this.workflowService.getWorkflowRun(requestContext.workspace.workspaceId, jobId).catch(() => null);
+    const workflowRun = await this.workflowService
+      .getWorkflowRun(requestContext.workspace.workspaceId, jobId)
+      .catch(() => null);
     if (!workflowRun) {
       throw new AppError("Job non trovato.", "ORCHESTRATOR_JOB_NOT_FOUND", 404);
     }
@@ -42,25 +51,41 @@ export class NestOrchestratorController {
 
   private getJobId(jobId: string): string {
     if (!jobId || !jobId.trim()) {
-      throw new AppError("Job ID mancante.", "ORCHESTRATOR_JOB_ID_REQUIRED", 400);
+      throw new AppError(
+        "Job ID mancante.",
+        "ORCHESTRATOR_JOB_ID_REQUIRED",
+        400,
+      );
     }
 
     return z.string().uuid().parse(jobId.trim());
   }
 
-  private serializeWorkflowRunAsJob(run: ModuleWorkflowRunEntity): Record<string, unknown> {
+  private serializeWorkflowRunAsJob(
+    run: ModuleWorkflowRunEntity,
+  ): Record<string, unknown> {
     const status = run.status.toLowerCase();
-    const latestStep = [...run.steps].reverse().find((step) => step.status !== "QUEUED") ?? run.steps.at(-1) ?? null;
-    const completedSteps = run.steps.filter((step) => step.status === "COMPLETED").length;
+    const latestStep =
+      [...run.steps].reverse().find((step) => step.status !== "QUEUED") ??
+      run.steps.at(-1) ??
+      null;
+    const completedSteps = run.steps.filter(
+      (step) => step.status === "COMPLETED",
+    ).length;
     const totalSteps = Math.max(run.steps.length, 1);
-    const progress = status === "completed" || status === "failed"
-      ? 100
-      : status === "queued"
-        ? 1
-        : Math.max(5, Math.min(95, Math.round((completedSteps / totalSteps) * 95)));
-    const message = run.errorMessage
-      ?? latestStep?.errorMessage
-      ?? (latestStep ? `Workflow: ${latestStep.stepKey}` : "Workflow in coda.");
+    const progress =
+      status === "completed" || status === "failed"
+        ? 100
+        : status === "queued"
+          ? 1
+          : Math.max(
+              5,
+              Math.min(95, Math.round((completedSteps / totalSteps) * 95)),
+            );
+    const message =
+      run.errorMessage ??
+      latestStep?.errorMessage ??
+      (latestStep ? `Workflow: ${latestStep.stepKey}` : "Workflow in coda.");
 
     return {
       job_id: run.id,

@@ -22,7 +22,16 @@ export class ActiveDocumentsService {
     container: ActiveDocumentContainer;
     query?: string;
     knowledge?: "all" | "indexed" | "not_indexed";
-  }): Promise<{ selectedContainer: ActiveDocumentContainer; containers: Array<{ key: ActiveDocumentContainer; label: string; description: string; count: number }>; documents: ActiveDocumentDto[] }> {
+  }): Promise<{
+    selectedContainer: ActiveDocumentContainer;
+    containers: Array<{
+      key: ActiveDocumentContainer;
+      label: string;
+      description: string;
+      count: number;
+    }>;
+    documents: ActiveDocumentDto[];
+  }> {
     const prisma = PrismaClientManager.getClient();
     const rows = await prisma.document.findMany({
       where: {
@@ -54,7 +63,10 @@ export class ActiveDocumentsService {
     });
 
     const workflowRunIds = rows
-      .filter((row) => row.domain_entity_type === "WorkflowRun" && row.domain_entity_id)
+      .filter(
+        (row) =>
+          row.domain_entity_type === "WorkflowRun" && row.domain_entity_id,
+      )
       .map((row) => row.domain_entity_id as string);
     const workflowKeyByRunId = new Map<string, string>();
     if (workflowRunIds.length > 0) {
@@ -68,8 +80,12 @@ export class ActiveDocumentsService {
     }
 
     const documents = rows.map((row): ActiveDocumentDto => {
-      const workflowKey = row.domain_entity_id ? workflowKeyByRunId.get(row.domain_entity_id) : null;
-      const isPlayground = workflowKey === "workflow_playground" || workflowKey?.startsWith("playground_") === true;
+      const workflowKey = row.domain_entity_id
+        ? workflowKeyByRunId.get(row.domain_entity_id)
+        : null;
+      const isPlayground =
+        workflowKey === "workflow_playground" ||
+        workflowKey?.startsWith("playground_") === true;
       const knowledge = row.knowledge_documents[0];
       const knowledgeStatus = !knowledge
         ? "not_indexed"
@@ -85,36 +101,75 @@ export class ActiveDocumentsService {
         moduleName: row.module?.name ?? null,
         moduleKey: row.module?.key ?? null,
         nodePath: row.node.path_cache,
-        container: isPlayground ? "playgrounds" : row.module_id !== null ? "modules" : "other",
+        container: isPlayground
+          ? "playgrounds"
+          : row.module_id !== null
+            ? "modules"
+            : "other",
         knowledgeStatus,
       };
     });
 
     const visibleDocuments = documents.filter((document) => {
-      if (params.container !== "all" && document.container !== params.container) {
+      if (
+        params.container !== "all" &&
+        document.container !== params.container
+      ) {
         return false;
       }
-      if (params.knowledge === "indexed" && document.knowledgeStatus !== "indexed") {
+      if (
+        params.knowledge === "indexed" &&
+        document.knowledgeStatus !== "indexed"
+      ) {
         return false;
       }
-      return !(params.knowledge === "not_indexed" && document.knowledgeStatus === "indexed");
+      return !(
+        params.knowledge === "not_indexed" &&
+        document.knowledgeStatus === "indexed"
+      );
     });
 
     return {
       selectedContainer: params.container,
       containers: [
-        { key: "all", label: "Tutto", description: "Tutti i documenti disponibili", count: documents.length },
-        { key: "modules", label: "Moduli salvati", description: "Documenti prodotti o gestiti dai moduli", count: documents.filter((document) => document.container === "modules").length },
-        { key: "playgrounds", label: "Playground", description: "Documenti dei workflow liberi", count: documents.filter((document) => document.container === "playgrounds").length },
+        {
+          key: "all",
+          label: "Tutto",
+          description: "Tutti i documenti disponibili",
+          count: documents.length,
+        },
+        {
+          key: "modules",
+          label: "Moduli salvati",
+          description: "Documenti prodotti o gestiti dai moduli",
+          count: documents.filter(
+            (document) => document.container === "modules",
+          ).length,
+        },
+        {
+          key: "playgrounds",
+          label: "Playground",
+          description: "Documenti dei workflow liberi",
+          count: documents.filter(
+            (document) => document.container === "playgrounds",
+          ).length,
+        },
       ],
       documents: visibleDocuments,
     };
   }
 
-  public async deleteDocument(params: { workspaceId: string; documentId: string }): Promise<void> {
+  public async deleteDocument(params: {
+    workspaceId: string;
+    documentId: string;
+  }): Promise<void> {
     const prisma = PrismaClientManager.getClient();
     const document = await prisma.document.findFirst({
-      where: { id: params.documentId, workspace_id: params.workspaceId, deleted_at: null },
+      where: {
+        id: params.documentId,
+        workspace_id: params.workspaceId,
+        deleted_at: null,
+      },
       select: { id: true },
     });
     if (!document) {
@@ -131,7 +186,10 @@ export class ActiveDocumentsService {
           ],
         },
       });
-      await tx.document.update({ where: { id: document.id }, data: { deleted_at: new Date() } });
+      await tx.document.update({
+        where: { id: document.id },
+        data: { deleted_at: new Date() },
+      });
     });
   }
 }

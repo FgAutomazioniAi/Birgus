@@ -2,7 +2,9 @@ import { PrismaClientManager } from "../../../database/PrismaClientManager.js";
 import { ProjectRevisionEntity } from "../domain/ProjectRevisionEntity.js";
 import { ProjectRevisionRepository } from "../repositories/ProjectRevisionRepository.js";
 
-export class PrismaProjectRevisionRepository implements ProjectRevisionRepository {
+export class PrismaProjectRevisionRepository
+  implements ProjectRevisionRepository
+{
   public async list(workspaceId: string): Promise<ProjectRevisionEntity[]> {
     const prisma = PrismaClientManager.getClient();
     const rows = await prisma.projectRevision.findMany({
@@ -13,7 +15,10 @@ export class PrismaProjectRevisionRepository implements ProjectRevisionRepositor
     return rows.map((row) => this.mapRow(row));
   }
 
-  public async findById(workspaceId: string, revisionId: number): Promise<ProjectRevisionEntity | null> {
+  public async findById(
+    workspaceId: string,
+    revisionId: number,
+  ): Promise<ProjectRevisionEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.projectRevision.findFirst({
       where: { workspace_id: workspaceId, id: revisionId },
@@ -22,7 +27,10 @@ export class PrismaProjectRevisionRepository implements ProjectRevisionRepositor
     return row ? this.mapRow(row) : null;
   }
 
-  public async create(params: { workspaceId: string; code: string }): Promise<ProjectRevisionEntity> {
+  public async create(params: {
+    workspaceId: string;
+    code: string;
+  }): Promise<ProjectRevisionEntity> {
     const prisma = PrismaClientManager.getClient();
     const row = await prisma.projectRevision.create({
       data: { workspace_id: params.workspaceId, code: params.code },
@@ -31,7 +39,11 @@ export class PrismaProjectRevisionRepository implements ProjectRevisionRepositor
     return this.mapRow(row);
   }
 
-  public async update(params: { workspaceId: string; revisionId: number; code: string }): Promise<ProjectRevisionEntity | null> {
+  public async update(params: {
+    workspaceId: string;
+    revisionId: number;
+    code: string;
+  }): Promise<ProjectRevisionEntity | null> {
     const prisma = PrismaClientManager.getClient();
     const existing = await prisma.projectRevision.findFirst({
       where: { workspace_id: params.workspaceId, id: params.revisionId },
@@ -50,7 +62,10 @@ export class PrismaProjectRevisionRepository implements ProjectRevisionRepositor
     return this.mapRow(row);
   }
 
-  public async delete(workspaceId: string, revisionId: number): Promise<boolean> {
+  public async delete(
+    workspaceId: string,
+    revisionId: number,
+  ): Promise<boolean> {
     const prisma = PrismaClientManager.getClient();
     const result = await prisma.projectRevision.deleteMany({
       where: { workspace_id: workspaceId, id: revisionId },
@@ -59,7 +74,12 @@ export class PrismaProjectRevisionRepository implements ProjectRevisionRepositor
     return result.count > 0;
   }
 
-  private mapRow(row: { id: number; workspace_id: string; code: string; created_at: Date }): ProjectRevisionEntity {
+  private mapRow(row: {
+    id: number;
+    workspace_id: string;
+    code: string;
+    created_at: Date;
+  }): ProjectRevisionEntity {
     return new ProjectRevisionEntity({
       id: row.id,
       workspaceId: row.workspace_id,
